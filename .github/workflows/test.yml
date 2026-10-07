@@ -1,0 +1,71 @@
+name: Rust tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      backend_repository:
+        description: Optional owner/repository for the real SFU integration job (must contain backend/)
+        required: false
+        default: ''
+      backend_ref:
+        description: Backend revision for the real SFU integration job
+        required: false
+        default: '41cb00e'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # The manifest requires GTK >= 4.12 and libadwaita >= 1.6.
+    container: fedora:44
+    timeout-minutes: 30
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Install Rust and native build dependencies
+        run: dnf install -y git gcc rust cargo pkgconf-pkg-config openssl-devel gtk4-devel libadwaita-devel python3-gobject python3-gstreamer1 gstreamer1-plugins-base gstreamer1-plugins-good gstreamer1-plugins-bad-free libnice-gstreamer1 xorg-x11-server-Xvfb xorg-x11-xauth dbus-daemon
+      - uses: actions/checkout@v4
+      - name: Compile application and run unit and integration tests
+        run: cargo test --locked
+      - name: Check login, chat workflows and adaptive layouts under a virtual display
+        run: dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+      - name: Check private screen portal permissions and cleanup
+        run: dbus-run-session -- python3 tests/portal_probe.py
+      - name: Check native audio worker cleanup using synthetic capture
+        run: cargo test --locked native_voice -- --ignored
+
+  voice-sfu:
+    if: github.event_name == 'workflow_dispatch' && inputs.backend_repository != ''
+    runs-on: ubuntu-latest
+    container: fedora:44
+    timeout-minutes: 20
+    steps:
+      - name: Install native media runtime
+        run: dnf install -y git gcc gdk-pixbuf2 python3-gobject python3-gstreamer1 gstreamer1-plugins-base gstreamer1-plugins-good gstreamer1-plugins-bad-free libnice-gstreamer1
+      - uses: actions/checkout@v4
+        with:
+          path: papo-gtk
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.backend_repository }}
+          ref: ${{ inputs.backend_ref }}
+          path: papo-backend
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: papo-backend/backend/go.mod
+          cache-dependency-path: papo-gtk/tests/voice-sfu/go.sum
+      - name: Build isolated SFU and local TURN fixture
+        working-directory: papo-gtk/tests/voice-sfu
+        run: go build -mod=readonly -o /tmp/papo-voice-sfu .
+      - name: Exchange real decoded audio using direct ICE and forced TURN relay
+        working-directory: papo-gtk
+        run: python3 tests/voice_probe.py
+      - name: Exchange decoded camera and screen video, switch publishers and repeat capture
+        working-directory: papo-gtk
+        run: |
+          python3 tests/video_probe.py
+          python3 tests/video_probe.py --relay

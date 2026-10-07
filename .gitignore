@@ -1,0 +1,8 @@
+/target
+
+__pycache__/
+
+# Local environment files must not be published with the client.
+.env
+.env.*
+!.env.example

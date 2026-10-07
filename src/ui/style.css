@@ -1,0 +1,66 @@
+/* Semantic colors keep light, dark, accent and high-contrast preferences native. */
+.papo-app { background: @window_bg_color; }
+.papo-rail { background: mix(@sidebar_bg_color, @window_fg_color, .075); padding: 12px 8px; border-right: 1px solid alpha(@window_fg_color, .08); }
+.papo-rail button { min-width: 40px; min-height: 40px; padding: 2px; border-radius: 22px; }
+.papo-rail button:checked { background: @accent_bg_color; color: @accent_fg_color; border-radius: 14px; }
+.papo-rail button:hover { border-radius: 14px; }
+.papo-rail separator { margin: 4px 8px; }
+.papo-notification-count { background: @accent_bg_color; color: @accent_fg_color; border-radius: 12px; padding: 1px 5px; font-size: 10px; font-weight: bold; }
+.papo-channel-panel { background: @sidebar_bg_color; color: @sidebar_fg_color; }
+.papo-server-heading { padding: 8px 12px; min-height: 40px; border-bottom: 1px solid alpha(@window_fg_color, .08); }
+.papo-server-heading > button { padding: 0; }
+.papo-navigation-search { margin: 12px; padding: 8px 12px; border-radius: 8px; }
+.papo-navigation list, .papo-members list { background: transparent; }
+.papo-navigation row, .papo-members row { border-radius: 7px; margin: 1px 8px; padding: 0; }
+.papo-navigation row:selected { background: alpha(@accent_bg_color, .16); color: @accent_color; }
+.papo-channel-unread { font-weight: 700; }
+.papo-category { padding-top: 14px; padding-bottom: 6px; }
+.papo-direct-row { margin: 1px 8px; }
+.papo-direct-row > button { padding: 7px 8px; border-radius: 7px; }
+.papo-direct-row > button.selected { background: alpha(@accent_bg_color, .16); color: @accent_color; }
+.papo-section-heading { margin: 12px 16px 6px; }
+.papo-user-footer { background: alpha(@window_fg_color, .035); padding: 10px 8px; border-top: 1px solid alpha(@window_fg_color, .08); }
+.papo-user-footer button { padding: 4px; }
+.papo-chat { background: @window_bg_color; }
+.papo-chat-heading { min-height: 56px; padding: 0 12px; border-bottom: 1px solid alpha(@window_fg_color, .08); }
+.papo-channel-symbol { font-size: 22px; font-weight: 600; }
+.papo-chat-history { background: transparent; padding: 8px 0; }
+.papo-chat-history row { padding: 0; border-radius: 0; background-color: transparent; transition: background-color 900ms ease-out, box-shadow 900ms ease-out; }
+.papo-chat-history row:hover, .papo-chat-history row:focus-within { background: alpha(@window_fg_color, .035); }
+.papo-message-avatar { padding: 0; min-height: 0; min-width: 0; border-radius: 50%; }
+.papo-author-button { padding: 0; min-height: 0; min-width: 0; }
+.papo-message-header { min-height: 20px; }
+.papo-message-text { line-height: 1.35; }
+.papo-message-text, .papo-message-text text { background: transparent; }
+.papo-reply-reference { padding: 0; min-height: 18px; margin-bottom: 2px; }
+.papo-reply-reference image { -gtk-icon-size: 14px; opacity: .65; }
+.papo-message-highlight, .papo-chat-history row.papo-message-highlight:hover,
+.papo-chat-history row.papo-message-highlight:focus-within { transition: background-color 0ms, box-shadow 0ms; background-color: alpha(@warning_color, .22); box-shadow: inset 3px 0 @warning_color; }
+.papo-link-preview { padding: 10px; border-left: 3px solid @accent_bg_color; }
+.papo-voice-dock { background: @sidebar_bg_color; padding: 8px; border-top: 1px solid alpha(@window_fg_color,.10); }
+.papo-voice-dock button { min-height: 28px; min-width: 28px; padding: 4px; }
+.papo-navigation row.papo-voice-member { margin-left: 34px; }
+.papo-voice-member button { padding: 2px; min-height: 22px; min-width: 22px; }
+.papo-voice-speaking { color: @success_color; }
+.papo-message-actions { background: @window_bg_color; border: 1px solid alpha(@window_fg_color, .15); border-radius: 8px; padding: 2px; margin: 0 16px; box-shadow: 0 2px 5px alpha(black, .12); }
+.papo-message-actions button, .papo-message-actions menubutton > button { min-height: 28px; min-width: 28px; padding: 2px; }
+.papo-reaction { background: alpha(@window_fg_color, .05); border: 1px solid alpha(@window_fg_color, .08); padding: 3px 8px; min-height: 22px; }
+.papo-reaction.own { background: alpha(@accent_bg_color, .15); border-color: alpha(@accent_bg_color, .6); color: @accent_color; }
+.papo-date-divider { margin: 16px 24px 12px; }
+.papo-composer { margin: 12px 16px 16px; padding: 6px; border: 1px solid alpha(@window_fg_color, .10); border-radius: 12px; background: alpha(@window_fg_color, .04); }
+.papo-history-banner { margin: 4px 16px 0; padding: 2px 8px; border-radius: 8px; background: alpha(@accent_bg_color,.12); }
+.papo-inline-image { border-radius: 10px; }
+.papo-composer:focus-within { border-color: @accent_bg_color; }
+.papo-composer entry { background: transparent; border: none; box-shadow: none; padding: 8px 4px; }
+.papo-composer button, .papo-composer menubutton > button { min-height: 32px; min-width: 32px; padding: 4px; }
+.papo-members { background: @secondary_sidebar_bg_color; color: @secondary_sidebar_fg_color; }
+.papo-members-heading { min-height: 56px; padding: 0 16px; border-bottom: 1px solid alpha(@window_fg_color, .08); }
+.papo-status-dot { background: @sidebar_bg_color; border-radius: 50%; padding: 1px; }
+.papo-menu button { padding: 8px 12px; border-radius: 6px; }
+.papo-login { background: @window_bg_color; }
+.papo-login-brand { background: alpha(@accent_bg_color, .13); color: @accent_color; border-radius: 24px; padding: 20px; }
+
+.papo-menu button.papo-destructive { color: @destructive_color; }
+.papo-menu button.papo-destructive:hover { background: alpha(@destructive_color,.12); }
+
+.papo-voice-speaking-badge { background: @sidebar_bg_color; color: @success_color; padding: 2px; border-radius: 50%; }

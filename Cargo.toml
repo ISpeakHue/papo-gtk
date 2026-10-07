@@ -1,0 +1,66 @@
+[package]
+name = "papo-gtk"
+version = "0.1.0"
+edition = "2021"
+authors = ["Papo Contributors"]
+description = "GTK 4 frontend for the Papo chat server"
+license = "GPL-3.0-only"
+
+[[bin]]
+name = "papo-gtk"
+path = "src/main.rs"
+
+[dependencies]
+# GTK 4 + libadwaita (uses gtk-rs/gtk4-rs and relm4)
+gtk = { version = "0.9", package = "gtk4", features = ["v4_12"] }
+adw = { version = "0.7", package = "libadwaita", features = ["v1_6"] }
+relm4 = { version = "0.9", features = ["macros"] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# HTTP client (cookie-jar for session cookies)
+reqwest = { version = "0.12", features = ["json", "cookies", "stream", "multipart"] }
+
+# WebSocket
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Date/time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Unique IDs
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Async channels / utils
+tokio-stream = "0.1"
+futures-util = "0.3"
+
+# Secret storage (keyring / libsecret)
+keyring = { version = "3", features = ["sync-secret-service", "crypto-rust", "vendored"] }
+
+# Image decoding for avatars (base64 PNG/JPEG/WebP/GIF)
+base64 = "0.22"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
+
+# Error handling
+anyhow = "1"
+thiserror = "1"
+
+# Config / settings persistence (TOML)
+toml = "0.8"
+
+# XDG dirs for cache/config paths
+dirs = "5"
+
+[profile.release]
+strip = true
+opt-level = 3
+lto = "thin"

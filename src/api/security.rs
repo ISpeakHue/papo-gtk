@@ -31,22 +31,22 @@ impl ApiClient {
     pub async fn change_own_password(&self, user: Uuid, password: &str) -> Result<()> {
         anyhow::ensure!(!password.is_empty(), "Informe a nova senha.");
         // Self-reset returns {response:string}; it does not issue an admin recovery link.
-        Self::security_response(self.inner.post(self.url(&format!("/users/{user}/reset"))).send().await?).await?;
+        Self::security_response(self.inner.post(self.url(&format!("/users/{user}/reset"))).send_paced(&self.requests).await?).await?;
         Self::security_response(self.inner.put(self.url(&format!("/users/{user}/password")))
-            .json(&serde_json::json!({"password":password})).send().await?).await
+            .json(&serde_json::json!({"password":password})).send_paced(&self.requests).await?).await
     }
     pub async fn recover_password(&self, token: &str, password: &str) -> Result<()> {
         let token = recovery_token(token)?;
         anyhow::ensure!(!password.is_empty(), "Informe a nova senha.");
         Self::security_response(self.inner.post(self.url("/auth/password_reset"))
-            .json(&serde_json::json!({"token":token,"password":password})).send().await?).await
+            .json(&serde_json::json!({"token":token,"password":password})).send_paced(&self.requests).await?).await
     }
     pub async fn connected_devices(&self) -> Result<Vec<Connection>> {
-        let response: ConnectedDevicesResponse = Self::decode(self.inner.get(self.url("/auth/connected_devices")).send().await?, "sessões conectadas").await?;
+        let response: ConnectedDevicesResponse = Self::decode(self.inner.get(self.url("/auth/connected_devices")).send_paced(&self.requests).await?, "sessões conectadas").await?;
         Ok(response.connections)
     }
     pub async fn drop_connection(&self, id: &str) -> Result<DropConnectionResponse> {
         anyhow::ensure!(id == "ALL" || Uuid::parse_str(id).is_ok(), "Sessão inválida.");
-        Self::decode(self.inner.post(self.url("/auth/drop_connection")).json(&DropConnectionRequest { connection_id: id.into() }).send().await?, "revogar sessão").await
+        Self::decode(self.inner.post(self.url("/auth/drop_connection")).json(&DropConnectionRequest { connection_id: id.into() }).send_paced(&self.requests).await?, "revogar sessão").await
     }
 }

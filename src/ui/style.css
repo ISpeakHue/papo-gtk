@@ -64,3 +64,10 @@
 .papo-menu button.papo-destructive:hover { background: alpha(@destructive_color,.12); }
 
 .papo-voice-speaking-badge { background: @sidebar_bg_color; color: @success_color; padding: 2px; border-radius: 50%; }
+
+.papo-mention-suggestions { margin: 0 16px; padding: 6px; background: @popover_bg_color; border: 1px solid alpha(@window_fg_color,.12); border-radius: 10px; }
+.papo-mention-suggestions button { padding: 8px 12px; }
+.papo-voice-member .papo-voice-speaking { background: alpha(@success_color,.15); border-radius: 5px; padding: 2px 4px; font-weight: bold; }
+.papo-inline-image { padding: 0; min-width: 0; min-height: 0; }
+.papo-media-frame { border-radius: 10px; background: alpha(@window_fg_color,.06); }
+.papo-media-play { border-radius: 50%; min-width: 48px; min-height: 48px; }

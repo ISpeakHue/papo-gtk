@@ -35,6 +35,81 @@ HTTP server, including failures, retries, confirmations, and permission changes:
 dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
 ```
 
+## Bug report 5
+
+The default suite checks Giphy token/page/CDN parsing and rejects arbitrary hosts
+and malformed identifiers. Generated GIF fixtures check multiple frames, delays,
+decoded sizes and input limits. Emoji and link tests include Unicode caret offsets,
+custom name case, literal code and balanced URL punctuation. Read cursor tests
+cover timestamp precedence, non-advancing pages and bounded pagination. The entry
+and departure WAV assets are distinct, short PCM clips.
+
+The `ui_smoke` workflow now also checks:
+
+- Emoji suggestions retain typing focus, insert Unicode and `:OMEGALUL:`, and
+  coexist with mention keyboard navigation.
+- HTTP links activate on a click; dragging or selecting text does not open them.
+  Tests intercept the URI launch callback rather than starting a browser.
+- A read cursor outside the latest history page requests older history once,
+  survives a newer read snapshot, and selects the first unread row. Fully read
+  channels open at the bottom.
+- Matching live sends and duplicate HTTP confirmations reveal the latest message.
+- GitHub preview bounds end before the next message row.
+- Video starts unmuted at nonzero volume, decodes audio and video, and picture
+  clicks pause/resume it. Native playback controls remain available.
+- GIF thumbnails and viewers use changing paintables. Clicking inside the image
+  keeps it open; clicking the background closes it. Releasing a paintable releases
+  its frame timer.
+- Local speaking events show the microphone indicator before a server speaker
+  update, mute clears it, and departure cues play once with sounds enabled.
+
+`python3 tests/voice_probe.py` additionally requires local speaking transitions
+from the actual native worker and their clearing on mute, for both direct ICE and
+forced TURN relay. It uses synthetic capture. Build the fixture as documented in
+the voice section before running it.
+
+The public example `giphy:VxdNf4DadRSsMYAfnv` was also decoded from its downloaded
+200-pixel rendition. To repeat that optional check, download it to a local file
+and run `PAPO_GIPHY_SAMPLE=/path/to/sample.gif cargo test --locked supplied_giphy_sample -- --nocapture`.
+The normal suite uses generated fixtures and requires no Giphy network access.
+See [BUG_FIXES_5.md](BUG_FIXES_5.md) for the full report and resource limits.
+
+## Login request budget
+
+All REST requests share a session-wide scheduler, including cloned clients,
+avatars, emoji pages, previews and downloads. Request starts are spaced by at
+least 125 ms (at most eight per second). FIFO admission prevents background
+pagination and downloads from continually overtaking a foreground read.
+HTTP 429 imposes a shared cooldown;
+`Retry-After` seconds and HTTP dates are supported. Read-only requests can retry
+twice, with one- and two-second backoff when the backend supplies no header.
+Headers requesting more than five seconds return the error immediately while
+preserving the cooldown for subsequent requests. Mutations, uploads and account
+login are never replayed automatically. The two profile/summary batch POST
+endpoints are read-only and can retry.
+
+Startup subscribes to WebSocket before loading its access snapshot. If the socket
+is unavailable, HTTP starts after two seconds. The first successful subscription
+does not duplicate startup; subsequent connections still reconcile missed events.
+Members, direct messages and notifications start after access loading succeeds.
+Channel overrides come from `/channels`; only omitted/null overrides use the
+legacy per-channel endpoint. In-flight access refreshes coalesce into one pending
+follow-up so permission changes are still reconciled. Server emojis are reused
+across channel switches for 60 seconds; opening the picker/manager, explicit
+refresh, emoji mutations and reconnect can update them sooner.
+
+The default `api::requests::tests` cover pacing across clones/media, foreground
+progress during background downloads, bounded 429
+recovery, shared cooldowns after rejected mutations, non-replayed account login,
+safe profile-batch retries, HTTP-date parsing, and legacy permission fallback.
+A 70-channel fixture requires one channel request instead of 71. The GTK workflow
+checks one startup snapshot after the first socket connection, no redundant
+override reads, opening within five seconds on the local mock server, cached
+empty emoji lists across channel switches, eight refresh triggers coalescing into
+two snapshots, and live permission revocation. A pending DM open must survive
+concurrent permission refresh; automatic channel selection must not cancel it.
+These local timing checks do not measure production-server latency.
+
 ## Native chat layout
 
 The GTK workflow also maps the redesigned chat into a real window. It checks
@@ -49,7 +124,7 @@ It also covers the reported bugs in [BUG_FIXES.md](BUG_FIXES.md): preserving
 message widgets and scroll anchors through typing, live arrivals and pagination;
 explicit notification navigation; keyboard focus scrolling; reply/copy/context
 actions; role labels; the older-message banner; native text/voice row activation;
-compact image previews and viewer cleanup; search filters; and profile controls
+responsive image previews and viewer cleanup; search filters; and profile controls
 visible on opening. Mention renames and edits to replied-to messages must still
 update cached rows.
 
@@ -69,10 +144,22 @@ tooltips and request deduplication, typed/manual mentions and retained typing
 focus, native inline WebM video/audio decoding, close/delete/file cleanup,
 rejection of delayed downloads, and off-thread image result invalidation while
 GTK timers continue to run. Highlight checks require the same row before, during
-and after emphasis. Call-cue PCM validation runs headlessly; muted cue decoding
+and after emphasis. Call-cue PCM validation runs headlessly; discard-sink cue decoding
 and disabled sound behavior run in the GTK workflow. Speaking indicators preserve
 participant buttons during updates. A 10,000-message headless fixture verifies
 bulk merging, deduplication, chronology and realtime event replay.
+
+[BUG_FIXES_4.md](BUG_FIXES_4.md) covers empty nickname fallbacks, native
+character-by-character @ completion without moving typing focus, keyboard
+selection, actual picture/player allocations and narrow media frames. It checks
+small source decoding, enabled room-entry cues, duplicate cue suppression,
+speaking indicators with either avatar setting and muted/silent transitions.
+The cue helper must decode real PCM through a discard sink and reap its process
+after completion or cancellation, including rapid repeated starts/stops.
+Duplicate HTTP/WebSocket echoes must preserve reactions and history replay while
+skipping unchanged renders. A mapped burst of 20 messages checks widget, text and
+caret retention with a large preview payload; render signatures exclude encoded
+images. The real SFU audio probe below separately checks active-speaker events.
 
 The media fixtures are original, small and bundled; see
 [tests/fixtures/README.md](tests/fixtures/README.md). Regenerating the video needs
@@ -93,7 +180,8 @@ Previews are written to `/tmp/papo-design-dark.png`, `papo-design-light.png`,
 `papo-design-narrow-call.png`. Additional previews are `papo-design-search.png`,
 `papo-design-profile.png`, `papo-design-inline-image.png` and
 `papo-design-history-banner.png`, `papo-design-sidebar-call.png` and
-`papo-design-call-settings.png` in the same directory. Software rendering avoids compositor-specific
+`papo-design-call-settings.png`, `papo-design-inline-image-narrow.png`,
+`papo-design-inline-video.png` and `papo-design-mention-suggestions.png` in the same directory. Software rendering avoids compositor-specific
 offscreen rendering artifacts. See [DESIGN.md](DESIGN.md) for navigation,
 shortcuts and design references. High-contrast appearance, larger desktop text
 scales and physical touch interaction remain manual checks.

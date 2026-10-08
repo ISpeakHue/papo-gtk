@@ -31,7 +31,7 @@ impl MainWindowModel {
                 if let Some(v)=self.search.view.as_ref().filter(|v|v.window.is_visible()){v.window.present();return;}
                 if let Some(job)=self.search.job.take(){job.abort();} self.search.token=None;
                 let view_token=Uuid::new_v4();
-                let native=adw::Window::builder().title("Pesquisar mensagens").default_width(700).default_height(740).build();
+                let native=adw::Window::builder().title("Pesquisar mensagens").default_width(540).default_height(520).build();
                 let window:gtk::Window=native.clone().upcast();
                 if let Some(parent)=root.root().and_downcast::<gtk::Window>(){window.set_transient_for(Some(&parent));}
                 let toolbar=adw::ToolbarView::new();let header=adw::HeaderBar::new();header.set_title_widget(Some(&adw::WindowTitle::new("Pesquisar mensagens","")));toolbar.add_top_bar(&header);native.set_content(Some(&toolbar));

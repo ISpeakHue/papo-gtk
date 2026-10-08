@@ -68,6 +68,22 @@ impl History {
         false
     }
 
+    /// Report whether an HTTP/WS arrival actually changes the selected history.
+    pub fn upsert(&mut self,message:Message)->bool {
+        if Some(message.channel_id)!=self.channel_id||self.deleted.contains(&message.id){return false;}
+        if self.pending.is_some(){self.changes.push(Change::Upsert(message.clone()));}
+        self.merge_upsert(message)
+    }
+
+    fn merge_upsert(&mut self,message:Message)->bool {
+        if let Some(index)=self.messages.iter().position(|m|m.id==message.id){
+            let previous=self.messages[index].created_at;
+            let changed=merge_message(&mut self.messages[index],message);
+            if self.messages[index].created_at!=previous{let updated=self.messages.remove(index);let at=self.messages.binary_search_by_key(&(updated.created_at,updated.id),|m|(m.created_at,m.id)).unwrap_or_else(|at|at);self.messages.insert(at,updated);}
+            changed
+        }else{let at=self.messages.binary_search_by_key(&(message.created_at,message.id),|m|(m.created_at,m.id)).unwrap_or_else(|at|at);self.messages.insert(at,message);true}
+    }
+
     pub fn apply(&mut self, change: Change) {
         if let Change::Upsert(message) = &change {
             if Some(message.channel_id) != self.channel_id || self.deleted.contains(&message.id) {
@@ -78,12 +94,7 @@ impl History {
             self.changes.push(change.clone());
         }
         match change {
-            Change::Upsert(message) => {
-                if let Some(index)=self.messages.iter().position(|m|m.id==message.id){
-                    let previous=self.messages[index].created_at;merge_message(&mut self.messages[index],message);
-                    if self.messages[index].created_at!=previous{let updated=self.messages.remove(index);let at=self.messages.binary_search_by_key(&(updated.created_at,updated.id),|m|(m.created_at,m.id)).unwrap_or_else(|at|at);self.messages.insert(at,updated);}
-                }else{let at=self.messages.binary_search_by_key(&(message.created_at,message.id),|m|(m.created_at,m.id)).unwrap_or_else(|at|at);self.messages.insert(at,message);}
-            }
+            Change::Upsert(message) => {self.merge_upsert(message);}
             Change::Edit(id, content, edited_at) => {
                 if let Some(message) = self.messages.iter_mut().find(|m| m.id == id) {
                     if edited_at.is_none() || message.edited_at <= edited_at {
@@ -144,12 +155,13 @@ impl History {
     }
 }
 
-fn merge_message(existing:&mut Message,mut message:Message){
-    if message.previews.is_none(){message.previews=existing.previews.take();}
-    if message.reactions.is_none(){message.reactions=existing.reactions.take();}
-    if message.user_reactions.is_none(){message.user_reactions=existing.user_reactions.take();}
-    if existing.edited_at>message.edited_at{message.content=existing.content.take();message.edited_at=existing.edited_at;}
-    *existing=message;
+fn merge_message(existing:&mut Message,mut message:Message)->bool {
+    if message.previews.is_none(){message.previews=existing.previews.clone();}
+    if message.reactions.is_none(){message.reactions=existing.reactions.clone();}
+    if message.user_reactions.is_none(){message.user_reactions=existing.user_reactions.clone();}
+    if existing.edited_at>message.edited_at{message.content=existing.content.clone();message.edited_at=existing.edited_at;}
+    if *existing==message{return false;}
+    *existing=message;true
 }
 
 #[derive(Default)]
@@ -203,6 +215,15 @@ mod tests {
             edited_at: None, reply_to: None, attachments: None,
             previews: None, reactions: None, user_reactions: None,
         }
+    }
+
+    #[test]
+    fn duplicate_send_echo_skips_updates_but_replays_during_fetch(){
+        let channel=Uuid::new_v4();let mut history=History::default();history.select(channel);let original=message(channel,1);
+        assert!(history.upsert(original.clone()));assert!(!history.upsert(original.clone()));
+        history.apply(Change::Reaction(original.id,MessageReactionSummary{emoji_id:None,unicode:Some("❤️".into()),count:1}));assert!(!history.upsert(original.clone()),"a bare HTTP echo preserves realtime reactions");
+        let request=Uuid::new_v4();history.begin(request);assert!(!history.upsert(original.clone()));history.finish(request,vec![],false);assert_eq!(history.messages.len(),1,"unchanged arrivals still replay over a history snapshot");
+        let mut edit=original.clone();edit.content=Some("edited".into());assert!(history.upsert(edit));history.apply(Change::Delete(original.id));assert!(!history.upsert(original));
     }
 
     #[test]fn large_history_pages_merge_once_deduplicate_and_replay_events(){

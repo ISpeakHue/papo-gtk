@@ -122,7 +122,7 @@ pub struct UserSummary {
 impl UserSummary {
     /// Returns nickname if set, otherwise username.
     pub fn display_name(&self) -> &str {
-        self.nickname.as_deref().unwrap_or(&self.username)
+        self.nickname.as_deref().filter(|name| !name.trim().is_empty()).unwrap_or(&self.username)
     }
 }
 
@@ -148,7 +148,7 @@ pub struct UserProfile {
 
 impl UserProfile {
     pub fn display_name(&self) -> &str {
-        self.nickname.as_deref().unwrap_or(&self.username)
+        self.nickname.as_deref().filter(|name| !name.trim().is_empty()).unwrap_or(&self.username)
     }
 }
 
@@ -168,6 +168,12 @@ pub struct WhoamiResponse {
     pub roles: Option<Vec<RoleSummary>>,
     pub settings: Option<WhoamiSettings>,
     pub connection_violation: Option<bool>,
+}
+
+impl WhoamiResponse {
+    pub fn display_name(&self) -> &str {
+        self.nickname.as_deref().filter(|name| !name.trim().is_empty()).unwrap_or(&self.username)
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -253,5 +259,14 @@ mod tests {
             roles: None,
         };
         assert_eq!(user_with_nick.display_name(), "John D.");
+        for nickname in ["", " ", "\t\n"] {
+            let mut user = user_with_nick.clone();
+            user.nickname = Some(nickname.into());
+            assert_eq!(user.display_name(), "johndoe");
+            let profile: UserProfile = serde_json::from_value(serde_json::json!({
+                "id":user.id,"username":"johndoe","nickname":nickname,"created_at":Utc::now()
+            })).unwrap();
+            assert_eq!(profile.display_name(), "johndoe");
+        }
     }
 }

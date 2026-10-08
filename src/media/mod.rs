@@ -8,6 +8,9 @@ use tracing::warn;
 pub mod avatars;
 pub mod sound;
 pub mod preview;
+pub mod frame;
+pub mod animation;
+pub mod giphy;
 
 /// Bound encoded input, dimensions and decoded cache size before creating a texture.
 pub fn bounded_texture(bytes: &[u8]) -> Option<Texture> {
@@ -16,10 +19,15 @@ pub fn bounded_texture(bytes: &[u8]) -> Option<Texture> {
 #[derive(Debug)]
 pub struct PreparedImage{pub width:u32,pub height:u32,pub pixels:Vec<u8>}
 impl PreparedImage{
-    pub fn decode(bytes:&[u8],width:u32,height:u32)->Option<Self>{
+    pub fn decode(bytes:&[u8],width:u32,height:u32)->Option<Self>{Self::decode_impl(bytes,width,height,true)}
+    /// Chat frames handle enlargement at presentation time. Other native image
+    /// widgets retain their established decoding size (notably avatars).
+    pub fn decode_thumbnail(bytes:&[u8],width:u32,height:u32)->Option<Self>{Self::decode_impl(bytes,width,height,false)}
+    fn decode_impl(bytes:&[u8],width:u32,height:u32,enlarge:bool)->Option<Self>{
         if bytes.len()>4<<20{return None;}
         let format=image::guess_format(bytes).ok()?;let(w,h)=image::ImageReader::with_format(std::io::Cursor::new(bytes),format).into_dimensions().ok()?;
         if w==0||h==0||w>4096||h>4096||u64::from(w)*u64::from(h)>16_777_216{return None;}
+        let (width,height)=if enlarge{(width,height)}else{(width.min(w),height.min(h))};
         let pixels=image::load_from_memory_with_format(bytes,format).ok()?.thumbnail(width,height).to_rgba8();let(w,h)=pixels.dimensions();Some(Self{width:w,height:h,pixels:pixels.into_raw()})
     }
     pub fn texture(self)->Texture{use gtk::prelude::*;gtk::gdk::MemoryTexture::new(self.width as i32,self.height as i32,gtk::gdk::MemoryFormat::R8g8b8a8,&Bytes::from_owned(self.pixels),self.width as usize*4).upcast()}
@@ -28,17 +36,15 @@ pub fn bounded_texture_size(bytes:&[u8],width:u32,height:u32)->Option<Texture>{P
 
 /// Compact static emoji textures. Bound decoding and discard large source blobs.
 pub fn emoji_texture(b64: &str) -> Option<Texture> {
-    use gtk::prelude::*;
-    if b64.len() > 350_000 { return None; }
-    let data = BASE64_STANDARD.decode(b64).ok()?;
-    let format = image::guess_format(&data).ok()?;
-    let reader = image::ImageReader::with_format(std::io::Cursor::new(&data), format);
-    let (width, height) = reader.into_dimensions().ok()?;
-    if width == 0 || height == 0 || width > 512 || height > 512 { return None; }
-    let pixels = image::load_from_memory_with_format(&data, format).ok()?.thumbnail(32, 32).to_rgba8();
-    let (width, height) = (pixels.width(), pixels.height());
-    Some(gtk::gdk::MemoryTexture::new(width as i32, height as i32, gtk::gdk::MemoryFormat::R8g8b8a8,
-        &Bytes::from_owned(pixels.into_raw()), width as usize * 4).upcast())
+    prepare_emoji(b64).map(PreparedImage::texture)
+}
+pub fn prepare_emoji(b64:&str)->Option<PreparedImage>{
+    if b64.len()>350_000{return None;}
+    let data=BASE64_STANDARD.decode(b64).ok()?;
+    let format=image::guess_format(&data).ok()?;
+    let(w,h)=image::ImageReader::with_format(std::io::Cursor::new(&data),format).into_dimensions().ok()?;
+    if w==0||h==0||w>512||h>512{return None;}
+    PreparedImage::decode_thumbnail(&data,32,32)
 }
 
 /// Reuse decoded textures when rebuilding rows, with a fallback for missing avatars.
@@ -132,5 +138,17 @@ mod tests {
     #[test]
     fn test_texture_from_invalid_base64() {
         assert!(texture_from_base64("!!!invalid-base-64!!!").is_none());
+    }
+}
+
+#[cfg(test)]
+mod prepared_image_tests {
+    #[test]
+    fn decoding_preserves_small_sources_and_bounds_large_images(){
+        for (width,height,expected) in [(32,32,(32,32)),(1024,256,(680,170)),(800,1200,(307,460))]{
+            let mut bytes=std::io::Cursor::new(Vec::new());image::DynamicImage::new_rgba8(width,height).write_to(&mut bytes,image::ImageFormat::Png).unwrap();
+            let image=super::PreparedImage::decode_thumbnail(&bytes.into_inner(),680,460).unwrap();
+            assert_eq!((image.width,image.height),expected);assert_eq!(image.pixels.len(),(image.width*image.height*4) as usize);
+        }
     }
 }

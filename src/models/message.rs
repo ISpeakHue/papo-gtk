@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 // ── Attachment ───────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct Attachment {
     pub id: Uuid,
     pub mime_type: String,
@@ -19,7 +19,7 @@ pub struct Attachment {
 
 // ── Link preview ─────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct LinkPreview {
     pub id: Uuid,
     pub url: String,
@@ -38,14 +38,14 @@ pub struct LinkPreview {
 
 // ── Reactions ────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct MessageReactionSummary {
     pub emoji_id: Option<Uuid>,
     pub unicode: Option<String>,
     pub count: i32,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct MessageUserReaction {
     pub id: Uuid,
     pub emoji_id: Option<Uuid>,
@@ -71,7 +71,7 @@ pub struct PinnedList { pub channel_id: Uuid, pub pinned: Vec<Message> }
 
 // ── Message ──────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct Message {
     pub id: Uuid,
     pub channel_id: Uuid,

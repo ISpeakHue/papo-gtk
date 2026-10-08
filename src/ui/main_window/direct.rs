@@ -52,6 +52,7 @@ impl MainWindowModel {
         let mut a=crate::models::Access::direct();a.manage_server=self.server_access.manage_server;a.manage_channels=self.server_access.manage_channels;a.manage_roles=self.server_access.manage_roles;a.ban=self.server_access.ban;a.everyone=self.server_access.everyone;a
     }
     pub(super) fn direct_cancel_selection(&mut self){self.direct.selection=None;}
+    pub(super) fn direct_selection_pending(&self)->bool{self.direct.selection.is_some()}
     pub(super) fn can_read_target(&self,id:Uuid)->bool{
         self.direct.items.iter().any(|d|d.id==id)||self.access.get(&id).is_some_and(|a|a.read)&&self.channels.iter().any(|c|c.id==id)
     }
@@ -203,10 +204,10 @@ pub(crate) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::Mai
     main.emit(MainWindowMsg::Direct(DirectMsg::Listed{token:old_token,version,result:Ok(vec![])}));pump(context);assert_eq!(main.model().direct.items[0].unread_count,4);
     main.emit(MainWindowMsg::Direct(DirectMsg::Hide(dm)));until(context,||main.model().direct.request.is_none()&&main.model().direct.items.is_empty()&&main.model().active_channel_id.is_none());
     main.emit(MainWindowMsg::Direct(DirectMsg::Open(peer)));until(context,||main.model().active_channel_id==Some(dm)&&composer().text()=="DM draft");
-    assert!(descendants(main.model().chat.widget().upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::TextView>()).any(|v|v.buffer().text(&v.buffer().start_iter(),&v.buffer().end_iter(),false)=="DM test"),"hiding a DM preserves its history");
+    until(context,||descendants(main.model().chat.widget().upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::TextView>()).any(|v|v.buffer().text(&v.buffer().start_iter(),&v.buffer().end_iter(),false)=="DM test"));
     main.emit(MainWindowMsg::Direct(DirectMsg::Block(peer,true)));until(context,||main.model().direct.busy.is_empty()&&main.model().direct.items.is_empty()&&main.model().active_channel_id.is_none());
     main.emit(MainWindowMsg::Direct(DirectMsg::Open(peer)));until(context,||main.model().direct.selection.is_none());assert!(main.model().direct.items.is_empty());assert!(!main.model().channels.is_empty());
-    main.emit(MainWindowMsg::Direct(DirectMsg::Blocks));until(context,||main.model().direct.blocks_request.is_none()&&main.model().direct.blocks.is_some());let w=main.model().direct.blocks.as_ref().unwrap().window.clone();find_button(w.upcast_ref(),"Desbloquear Bob").emit_clicked();until(context,||main.model().direct.busy.is_empty()&&main.model().direct.blocks_request.is_none());
+    main.emit(MainWindowMsg::Direct(DirectMsg::Blocks));until(context,||main.model().direct.blocks_request.is_none()&&main.model().direct.blocks.is_some());let w=main.model().direct.blocks.as_ref().unwrap().window.clone();find_button(w.upcast_ref(),"Desbloquear Bob").emit_clicked();until(context,||!main.model().direct.blocked_peers.contains(&peer)&&main.model().direct.busy.is_empty()&&main.model().direct.blocks_request.is_none());
     main.emit(MainWindowMsg::Direct(DirectMsg::Open(peer)));until(context,||main.model().active_channel_id==Some(dm));main.emit(MainWindowMsg::WsReceived(WsEvent::Reconnected));until(context,||main.model().direct.request.is_none()&&main.model().access_request.is_none());assert_eq!(main.model().active_channel_id,Some(dm));
     main.emit(MainWindowMsg::Direct(DirectMsg::Hide(dm)));until(context,||main.model().direct.items.is_empty()&&main.model().direct.request.is_none());main.emit(MainWindowMsg::ChannelSelected(public));pump(context);assert_eq!(composer().text(),"server draft");
     if let Ok(w)=profile.downcast::<gtk::Window>(){w.close();}w.close();

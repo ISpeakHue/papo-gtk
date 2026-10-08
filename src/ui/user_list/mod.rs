@@ -186,7 +186,7 @@ fn rebuild_members_list(list_box: &gtk::ListBox, users: &[UserSummary],
         let name_box = gtk::Box::new(gtk::Orientation::Vertical, 2);
         name_box.set_valign(gtk::Align::Center);name_box.set_hexpand(true);
 
-        let name_label = gtk::Label::new(Some(presence.get(&user.id).and_then(|entry| entry.nickname.as_deref()).unwrap_or(user.display_name())));
+        let name_label = gtk::Label::new(Some(presence.get(&user.id).and_then(|entry| entry.nickname.as_deref().filter(|name|!name.trim().is_empty())).unwrap_or(user.display_name())));
         name_label.set_xalign(0.0);
         if let Some(roles)=user.roles.as_deref(){crate::ui::style::role_color(&name_label,roles);}
         name_label.set_ellipsize(pango::EllipsizeMode::End);

@@ -101,10 +101,10 @@ impl ApiClient {
             form = form.part("attachments", reqwest::multipart::Part::stream_with_length(reqwest::Body::wrap_stream(stream), selected.size).file_name(selected.name.clone()));
         }
         Self::decode(self.inner.post(self.url("/messages")).timeout(Duration::from_secs(600))
-        .multipart(form).send().await?, "enviar arquivos").await
+        .multipart(form).send_paced(&self.requests).await?, "enviar arquivos").await
     }
     pub async fn media_bytes(&self, path: &str, maximum: usize) -> Result<Vec<u8>> {
-        let response = Self::check_response(self.inner.get(self.url(path)).send().await?, "carregar mídia").await?;
+        let response = Self::check_response(self.inner.get(self.url(path)).send_paced(&self.requests).await?, "carregar mídia").await?;
         anyhow::ensure!(response.content_length().unwrap_or(0) <= maximum as u64, "Imagem muito grande.");
         let mut stream = response.bytes_stream();
         let mut bytes = Vec::new();
@@ -116,7 +116,7 @@ impl ApiClient {
         Ok(bytes)
     }
     pub async fn download_temporary(&self, endpoint: &str, maximum: u64) -> Result<TemporaryFile> {
-        let response = Self::check_response(self.inner.get(self.url(endpoint)).timeout(Duration::from_secs(600)).send().await?, "baixar mídia").await?;
+        let response = Self::check_response(self.inner.get(self.url(endpoint)).timeout(Duration::from_secs(600)).send_paced(&self.requests).await?, "baixar mídia").await?;
         anyhow::ensure!(response.content_length().unwrap_or(0) <= maximum, "Arquivo muito grande.");
         let path = std::env::temp_dir().join(format!("papo-media-{}", Uuid::new_v4()));
         let mut options = tokio::fs::OpenOptions::new();
@@ -138,13 +138,13 @@ impl ApiClient {
     pub async fn update_profile(&self, id: Uuid, request: &UpdateUserRequest) -> Result<()> {
         anyhow::ensure!(request.nickname.chars().count() <= 32 && request.status.chars().count() <= 64
         && request.description.chars().count() <= 512 && request.typing.as_deref().unwrap_or("").chars().count() <= 64, "Perfil excede os limites de caracteres.");
-        Self::check_response(self.inner.put(self.url(&format!("/users/{id}"))).json(request).send().await?, "salvar perfil").await?;
+        Self::check_response(self.inner.put(self.url(&format!("/users/{id}"))).json(request).send_paced(&self.requests).await?, "salvar perfil").await?;
         Ok(())
     }
     pub async fn update_status(&self, id: Uuid, status: Option<UserStatus>) -> Result<()> {
         Self::check_response(self.inner.put(self.url(&format!("/users/{id}/status"))).json(&UpdateStatusRequest {
             status
-        }).send().await?, "salvar presença").await?;
+        }).send_paced(&self.requests).await?, "salvar presença").await?;
         Ok(())
     }
     pub async fn update_image(&self, id: Uuid, banner: bool, bytes: &[u8]) -> Result<()> {
@@ -165,19 +165,19 @@ impl ApiClient {
                 "avatar": value, "avatar_format": format
             }))
         };
-        Self::check_response(self.inner.put(self.url(&format!("/users/{id}/{endpoint}"))).json(&body).send().await?, "salvar imagem").await?;
+        Self::check_response(self.inner.put(self.url(&format!("/users/{id}/{endpoint}"))).json(&body).send_paced(&self.requests).await?, "salvar imagem").await?;
         Ok(())
     }
     pub async fn save_settings(&self, config: &UserConfig) -> Result<UserSettings> {
         Self::decode(self.inner.put(self.url("/users/settings")).json(&serde_json::json!( {
             "config": config.complete()
-        })).send().await?, "salvar preferências").await
+        })).send_paced(&self.requests).await?, "salvar preferências").await
     }
     pub async fn channel_notifications(&self, channel: Uuid, user: Uuid, notification_settings: NotificationSettings) -> Result<()> {
         Self::check_response(self.inner.post(self.url(&format!("/channels/{channel}/user/{user}/settings")))
         .json(&UpdateChannelUserSettingRequest {
             notification_settings
-        }).send().await?, "preferências do canal").await?;
+        }).send_paced(&self.requests).await?, "preferências do canal").await?;
         Ok(())
     }
 }

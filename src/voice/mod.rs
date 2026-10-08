@@ -9,6 +9,7 @@ pub struct Device {pub id:String,pub name:String}
 #[derive(Clone,Deserialize)]
 #[serde(tag="type")]
 pub enum EngineEvent {
+    #[serde(rename="speaking")]Speaking{active:bool},
     #[serde(rename="started")]Started{pid:u32},
     #[serde(rename="voice_offer")]Offer{sdp:String},
     #[serde(rename="voice_answer")]Answer{sdp:String},

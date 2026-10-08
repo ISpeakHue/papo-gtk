@@ -19,6 +19,8 @@ mod discovery;
 mod administration;
 mod moderation;
 mod voice;
+mod requests;
+use requests::{PacedRequest, RequestScheduler};
 
 /// Preserve status and RFC 7807 problem codes so expired sessions reach the login view.
 #[derive(Debug, thiserror::Error)]
@@ -45,6 +47,7 @@ pub struct ApiClient {
     inner: Client,
     base: Url,
     cookies: Arc<Jar>,
+    requests: Arc<RequestScheduler>,
 }
 impl std::fmt::Debug for ApiClient{fn fmt(&self,f:&mut std::fmt::Formatter)->std::fmt::Result{f.debug_struct("ApiClient").field("base",&self.base).finish_non_exhaustive()}}
 
@@ -63,7 +66,7 @@ impl ApiClient {
         }
         let inner = builder.build()
             .context("building reqwest client")?;
-        Ok(Self { inner, base, cookies })
+        Ok(Self { inner, base, cookies, requests: Arc::new(RequestScheduler::default()) })
     }
 
     fn is_loopback(url: &Url) -> bool {
@@ -203,7 +206,7 @@ impl ApiClient {
         let resp = self
             .inner
             .get(self.url("/health"))
-            .send()
+            .send_paced(&self.requests)
             .await
             .context("GET /health")?;
         let resp = Self::check_response(resp, "GET /health").await?;
@@ -231,7 +234,7 @@ impl ApiClient {
             .json(&LoginServerRequest {
                 server_password: password.to_owned(),
             })
-            .send()
+            .send_paced(&self.requests)
             .await
             .context("POST /auth/login_server")?;
         let resp = Self::check_response(resp, "POST /auth/login_server").await?;
@@ -247,7 +250,7 @@ impl ApiClient {
                 username: username.to_owned(),
                 password: password.to_owned(),
             })
-            .send()
+            .send_paced(&self.requests)
             .await
             .context("POST /auth/login")?;
         let resp = Self::check_response(resp, "POST /auth/login").await?;
@@ -263,7 +266,7 @@ impl ApiClient {
                 username: username.to_owned(),
                 password: password.to_owned(),
             })
-            .send()
+            .send_paced(&self.requests)
             .await
             .context("POST /auth/register")?;
         let resp = Self::check_response(resp, "POST /auth/register").await?;
@@ -287,7 +290,7 @@ impl ApiClient {
         let resp = self
             .inner
             .get(self.url("/auth/whoami"))
-            .send()
+            .send_paced(&self.requests)
             .await
             .context("GET /auth/whoami")?;
         let resp = Self::check_response(resp, "GET /auth/whoami").await?;
@@ -298,7 +301,7 @@ impl ApiClient {
         let resp = self
             .inner
             .post(self.url("/auth/logout"))
-            .send()
+            .send_paced(&self.requests)
             .await
             .context("POST /auth/logout")?;
         Self::check_response(resp, "POST /auth/logout").await?;
@@ -306,29 +309,41 @@ impl ApiClient {
     }
 
     pub async fn refresh(&self) -> Result<RefreshResponse> {
-        Self::decode(self.inner.post(self.url("/auth/refresh")).send().await?, "refresh").await
+        Self::decode(self.inner.post(self.url("/auth/refresh")).send_paced(&self.requests).await?, "refresh").await
     }
 
     pub async fn get_server(&self) -> Result<Server> {
-        Self::decode(self.inner.get(self.url("/server")).send().await?, "server").await
+        Self::decode(self.inner.get(self.url("/server")).send_paced(&self.requests).await?, "server").await
     }
 
     pub async fn list_channels(&self) -> Result<Vec<Channel>> {
         #[derive(serde::Deserialize)]
         struct Wrapper { channels: Vec<Channel> }
-        let wrapper: Wrapper = Self::decode(self.inner.get(self.url("/channels")).send().await?, "channels").await?;
+        let wrapper: Wrapper = Self::decode(self.inner.get(self.url("/channels")).send_paced(&self.requests).await?, "channels").await?;
         Ok(wrapper.channels)
     }
 
     pub async fn list_roles(&self) -> Result<Vec<Role>> {
         #[derive(serde::Deserialize)] struct Response { roles: Vec<Role> }
-        let response: Response = Self::decode(self.inner.get(self.url("/roles")).send().await?, "roles").await?;
+        let response: Response = Self::decode(self.inner.get(self.url("/roles")).send_paced(&self.requests).await?, "roles").await?;
         Ok(response.roles)
+    }
+
+    /// Current backends include overrides in /channels. Only older responses
+    /// that omit them need the per-channel endpoint; an empty list is complete.
+    pub async fn channels_with_permissions(&self) -> Result<Vec<Channel>> {
+        let mut channels = self.list_channels().await?;
+        for channel in &mut channels {
+            if channel.permissions.is_none() {
+                channel.permissions = Some(self.channel_permissions(channel.id).await?);
+            }
+        }
+        Ok(channels)
     }
 
     pub async fn channel_permissions(&self, id: Uuid) -> Result<Vec<ChannelPermissionEntry>> {
         #[derive(serde::Deserialize)] struct Response { channel_id: Uuid, permissions: Vec<ChannelPermissionEntry> }
-        let response: Response = Self::decode(self.inner.get(self.url(&format!("/channels/{id}/permissions"))).send().await?, "channel permissions").await?;
+        let response: Response = Self::decode(self.inner.get(self.url(&format!("/channels/{id}/permissions"))).send_paced(&self.requests).await?, "channel permissions").await?;
         anyhow::ensure!(response.channel_id == id, "Permissões retornadas para outro canal.");
         Ok(response.permissions)
     }
@@ -340,7 +355,7 @@ impl ApiClient {
             url.query_pairs_mut().append_pair("since", &cursor.created_at.to_rfc3339())
                 .append_pair("last_id", &cursor.id.to_string());
         }
-        let response: MessageListResponse = Self::decode(self.inner.get(url).send().await?, "messages").await?;
+        let response: MessageListResponse = Self::decode(self.inner.get(url).send_paced(&self.requests).await?, "messages").await?;
         anyhow::ensure!(response.channel_id == channel_id, "A API retornou mensagens de outro canal.");
         Ok(response)
     }
@@ -349,19 +364,19 @@ impl ApiClient {
         let mut form = reqwest::multipart::Form::new().text("channel_id", request.channel_id.to_string());
         if let Some(content) = &request.content { form = form.text("content", content.clone()); }
         if let Some(reply) = request.reply_to { form = form.text("reply_to", reply.to_string()); }
-        Self::decode(self.inner.post(self.url("/messages")).multipart(form).send().await?, "send message").await
+        Self::decode(self.inner.post(self.url("/messages")).multipart(form).send_paced(&self.requests).await?, "send message").await
     }
 
     pub async fn delete_message(&self, message_id: Uuid) -> Result<()> {
         Self::check_response(self.inner.delete(self.url(&format!("/messages/{message_id}")))
-            .send().await?, "delete message").await?;
+            .send_paced(&self.requests).await?, "delete message").await?;
         Ok(())
     }
 
     pub async fn edit_message(&self, message_id: Uuid, content: &str) -> Result<Message> {
         anyhow::ensure!(content.chars().count() <= 8192, "Use até 8192 caracteres.");
         let message: Message = Self::decode(self.inner.put(self.url(&format!("/messages/{message_id}")))
-            .json(&UpdateMessageRequest { content: content.into() }).send().await?, "edit message").await?;
+            .json(&UpdateMessageRequest { content: content.into() }).send_paced(&self.requests).await?, "edit message").await?;
         anyhow::ensure!(message.id == message_id, "Edição retornada para outra mensagem.");
         Ok(message)
     }
@@ -371,32 +386,32 @@ impl ApiClient {
         Self::check_response(self.inner.post(self.url(&format!(
             "/channels/{channel_id}/messages/{message_id}/reactions")))
             .json(&ReactionRequest { emoji_id, unicode: unicode.map(str::to_owned) })
-            .send().await?, "add reaction").await?;
+            .send_paced(&self.requests).await?, "add reaction").await?;
         Ok(())
     }
 
     pub async fn pin_message(&self, channel_id: Uuid, message_id: Uuid) -> Result<()> {
         Self::check_response(self.inner.post(self.url(&format!(
-            "/channels/{channel_id}/messages/{message_id}/pin"))).send().await?, "pin message").await?;
+            "/channels/{channel_id}/messages/{message_id}/pin"))).send_paced(&self.requests).await?, "pin message").await?;
         Ok(())
     }
 
     pub async fn unpin_message(&self, channel: Uuid, message: Uuid) -> Result<()> {
         Self::check_response(self.inner.delete(self.url(&format!("/channels/{channel}/messages/{message}/pin")))
-            .send().await?, "unpin message").await?;
+            .send_paced(&self.requests).await?, "unpin message").await?;
         Ok(())
     }
 
     pub async fn pinned_messages(&self, channel: Uuid) -> Result<Vec<Message>> {
         let response: PinnedList = Self::decode(self.inner.get(self.url(&format!("/channels/{channel}/pinned")))
-            .send().await?, "pinned messages").await?;
+            .send_paced(&self.requests).await?, "pinned messages").await?;
         anyhow::ensure!(response.channel_id == channel && response.pinned.iter().all(|m| m.channel_id == channel), "Mensagens fixadas retornadas para outro canal.");
         Ok(response.pinned)
     }
 
     pub async fn remove_reaction(&self, channel: Uuid, message: Uuid, emoji_id: Option<Uuid>, unicode: Option<&str>) -> Result<()> {
         Self::check_response(self.inner.delete(self.url(&format!("/channels/{channel}/messages/{message}/reactions")))
-            .json(&ReactionRequest { emoji_id, unicode: unicode.map(str::to_owned) }).send().await?, "remove reaction").await?;
+            .json(&ReactionRequest { emoji_id, unicode: unicode.map(str::to_owned) }).send_paced(&self.requests).await?, "remove reaction").await?;
         Ok(())
     }
 
@@ -404,7 +419,7 @@ impl ApiClient {
         let mut url = self.url(&format!("/channels/{channel}/messages/{message}/reactions"));
         url.query_pairs_mut().append_pair("order", "desc");
         if let Some(c) = cursor { url.query_pairs_mut().append_pair("since", &c.created_at.to_rfc3339()).append_pair("last_id", &c.id.to_string()); }
-        let page: ReactionList = Self::decode(self.inner.get(url).send().await?, "reaction participants").await?;
+        let page: ReactionList = Self::decode(self.inner.get(url).send_paced(&self.requests).await?, "reaction participants").await?;
         anyhow::ensure!(page.message_id == message, "Reações retornadas para outra mensagem.");
         Ok(page)
     }
@@ -433,7 +448,7 @@ impl ApiClient {
         let mut url = self.url("/emojis");
         url.query_pairs_mut().append_pair("order", "asc");
         if let Some(c) = cursor { url.query_pairs_mut().append_pair("since", &c.created_at.to_rfc3339()).append_pair("last_id", &c.id.to_string()); }
-        Self::decode(self.inner.get(url).send().await?, "emojis").await
+        Self::decode(self.inner.get(url).send_paced(&self.requests).await?, "emojis").await
     }
 
     pub async fn all_emojis(&self) -> Result<Vec<Emoji>> {
@@ -451,11 +466,11 @@ impl ApiClient {
     }
 
     pub async fn create_emoji(&self, request: &CreateEmojiRequest) -> Result<Emoji> {
-        Self::decode(self.inner.post(self.url("/emojis")).json(request).send().await?, "create emoji").await
+        Self::decode(self.inner.post(self.url("/emojis")).json(request).send_paced(&self.requests).await?, "create emoji").await
     }
 
     pub async fn delete_emoji(&self, id: Uuid) -> Result<()> {
-        Self::check_response(self.inner.delete(self.url(&format!("/emojis/{id}"))).send().await?, "delete emoji").await?;
+        Self::check_response(self.inner.delete(self.url(&format!("/emojis/{id}"))).send_paced(&self.requests).await?, "delete emoji").await?;
         Ok(())
     }
 
@@ -471,7 +486,7 @@ impl ApiClient {
         url.query_pairs_mut().append_pair("order", "asc");
         if let Some(since) = since { url.query_pairs_mut().append_pair("since", since); }
         if let Some(id) = last_id { url.query_pairs_mut().append_pair("last_id", &id.to_string()); }
-        Self::decode(self.inner.get(url).send().await?, "users").await
+        Self::decode(self.inner.get(url).send_paced(&self.requests).await?, "users").await
     }
 
     pub async fn list_all_users(&self) -> Result<Vec<UserSummary>> {
@@ -491,12 +506,12 @@ impl ApiClient {
 
     pub async fn user_summaries(&self, ids: Vec<Uuid>) -> Result<Vec<UserSummary>> {
         Self::decode(self.inner.post(self.url("/users/user_summary_batch"))
-            .json(&ProfileBatchRequest { ids }).send().await?, "user summaries").await
+            .json(&ProfileBatchRequest { ids }).send_paced(&self.requests).await?, "user summaries").await
     }
 
     pub async fn get_user_profile(&self, user_id: Uuid) -> Result<UserProfile> {
         Self::decode(self.inner.get(self.url(&format!("/users/{user_id}/profile")))
-            .send().await?, "user profile").await
+            .send_paced(&self.requests).await?, "user profile").await
     }
 
     /// Full profiles contain avatar blobs; compact user summaries do not.
@@ -506,7 +521,7 @@ impl ApiClient {
         for batch in ids.chunks(50) {
             let response: ProfileBatchResponse = Self::decode(
                 self.inner.post(self.url("/users/profile_batch"))
-                    .json(&ProfileBatchRequest { ids: batch.to_vec() }).send().await?,
+                    .json(&ProfileBatchRequest { ids: batch.to_vec() }).send_paced(&self.requests).await?,
                 "user profiles",
             ).await?;
             profiles.extend(response.profiles);
@@ -516,7 +531,7 @@ impl ApiClient {
 
     pub async fn get_media(&self, sha_hash: &str) -> Result<Vec<u8>> {
         let response = Self::check_response(self.inner.get(self.url(&format!("/media/{sha_hash}")))
-            .send().await?, "media").await?;
+            .send_paced(&self.requests).await?, "media").await?;
         Ok(response.bytes().await?.to_vec())
     }
 

@@ -1,0 +1,36 @@
+//! Bug report 5: mapped composer, links, unread positioning, send races and embeds.
+use super::*;
+use actions::tests::{descendants,find_button,pump,until};
+use adw::prelude::*;
+fn settle(context:&gtk::glib::MainContext){for _ in 0..60{pump(context);std::thread::sleep(std::time::Duration::from_millis(5));}}
+pub(crate) fn exercise(context:&gtk::glib::MainContext){
+    super::text::exercise(context);
+    let user=Uuid::new_v4();let channel=Uuid::new_v4();let created="2026-10-08T12:00:00Z";
+    let target=|read:Option<Uuid>,last:Option<Uuid>|serde_json::from_value::<Channel>(serde_json::json!({"id":channel,"name":"bug5","created_at":created,"last_read_message":read,"last_message":last.map(|id|serde_json::json!({"id":id,"created_at":created}))})).unwrap();
+    let chat=ChatModel::builder().launch(ChatInit{user_id:Some(user),..Default::default()}).detach();chat.emit(ChatMsg::SetAccess{user_id:user,access:crate::models::Access::resolve(user,Some(user),&[],&[],&[])});chat.emit(ChatMsg::SetChannel(target(None,None)));pump(context);
+    let window=adw::Window::builder().default_width(800).default_height(640).content(chat.widget()).build();window.present();settle(context);
+    let entry=descendants(chat.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Entry>().ok()).unwrap();
+    assert!(chat.model().unicode_emojis.len()>1500,"the installed GTK catalog should expose all Unicode emoji names");
+    entry.grab_focus();entry.set_text(":smi");entry.set_position(-1);settle(context);assert!(chat.model().emoji_visible);assert!(entry.state_flags().contains(gtk::StateFlags::FOCUS_WITHIN),"typing ':' must not move focus");
+    let panel=descendants(chat.widget().upcast_ref()).into_iter().find(|w|w.widget_name()=="emoji-suggestions").unwrap();let button=first_mention_button(&panel).unwrap();button.emit_clicked();settle(context);assert!(!chat.model().emoji_visible);assert!(!entry.text().starts_with(':'));assert!(entry.state_flags().contains(gtk::StateFlags::FOCUS_WITHIN));
+    let emoji:crate::models::Emoji=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"name":"OMEGALUL","format":"PNG","created_at":created})).unwrap();
+    chat.state().get_mut().model.actions.emojis.push(emoji);entry.set_text("é :ome");entry.set_position(-1);settle(context);let button=first_mention_button(&panel).unwrap();button.emit_clicked();settle(context);assert_eq!(entry.text(),"é :OMEGALUL: ");
+    find_button(chat.widget().upcast_ref(),"Emojis (digite : para filtrar)").emit_clicked();settle(context);assert!(chat.model().emoji_visible);assert!(find_button(&panel,"Todos os emojis Unicode…").is_visible());
+    chat.emit(ChatMsg::CloseEmojis);entry.set_text("");settle(context);
+    let messages:Vec<Message>=(0..50).map(|i|serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"channel_id":channel,"author_id":user,"created_at":chrono::DateTime::parse_from_rfc3339(created).unwrap()+chrono::Duration::seconds(i),"content":format!("Mensagem {i}: https://example.test/hello") })).unwrap()).collect();
+    chat.emit(ChatMsg::SetChannel(target(Some(messages[19].id),Some(messages[49].id))));let request=Uuid::new_v4();chat.emit(ChatMsg::BeginHistory{request_id:request,cursor:None});chat.emit(ChatMsg::HistoryLoaded{request_id:request,append:false,result:Ok(MessageListResponse{channel_id:channel,has_more:true,messages:messages[30..].to_vec()})});settle(context);
+    assert!(chat.model().initial_read.is_some()&&chat.model().older_requested,"an unread cursor outside the latest page requests one older page");
+    chat.emit(ChatMsg::UpdateChannel(target(Some(messages[49].id),Some(messages[49].id))));let older=Uuid::new_v4();chat.emit(ChatMsg::BeginHistory{request_id:older,cursor:Some(MessageCursor::from(&messages[30]))});chat.emit(ChatMsg::HistoryLoaded{request_id:older,append:true,result:Ok(MessageListResponse{channel_id:channel,has_more:false,messages:messages[..30].to_vec()})});settle(context);assert!(chat.model().initial_read.is_none());
+    let all=descendants(chat.widget().upcast_ref());let list=all.iter().find_map(|w|w.downcast_ref::<gtk::ListBox>().filter(|w|w.has_css_class("papo-chat-history"))).unwrap();let scroll=all.iter().find_map(|w|w.downcast_ref::<gtk::ScrolledWindow>()).unwrap();let adj=scroll.vadjustment();
+    let unread=all.iter().find(|w|w.widget_name()==format!("message-{}",messages[20].id)).unwrap().compute_bounds(list).unwrap();assert!((adj.value()-f64::from(unread.y())+24.0).abs()<2.0,"switching opens at the first unread message");assert!(entry.state_flags().contains(gtk::StateFlags::FOCUS_WITHIN));
+    let view=all.iter().find_map(|w|w.downcast_ref::<gtk::TextView>()).unwrap();let buffer=view.buffer();let text=buffer.text(&buffer.start_iter(),&buffer.end_iter(),true);let offset=text.find("https:").unwrap();assert!(!buffer.iter_at_offset(text[..offset].chars().count() as i32).tags().is_empty(),"URLs have native blue/underlined tags");
+    let pending={let mut state=chat.state().get_mut();state.model.draft.text=messages[49].content.clone().unwrap();state.model.draft.begin().unwrap()};
+    chat.emit(ChatMsg::AddMessage(messages[49].clone()));settle(context);assert!(chat.model().viewport.following(),"a matching live confirmation should reveal the pending send immediately");
+    adj.set_value(200.0);settle(context);
+    // The WebSocket already inserted the exact message before the POST returned.
+    chat.emit(ChatMsg::SendFinished{request_id:pending,channel_id:channel,result:Ok(messages[49].clone())});settle(context);assert!(chat.model().viewport.following());assert!((adj.upper()-adj.page_size()-adj.value()).abs()<2.0,"own message always brings the viewport to latest, even when upsert reports no change");
+    let mut github=messages[48].clone();github.previews=Some(vec![serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"url":"https://github.com/ISpeakHue/papo-gtk","kind":"og","title":"Papo GTK","description":"GitHub preview regression with a description that wraps across lines.","provider_name":"GitHub","fetched_at":created})).unwrap()]);chat.emit(ChatMsg::ApplyChange(Change::Upsert(github)));settle(context);
+    let all=descendants(chat.widget().upcast_ref());let card=all.iter().find(|w|w.has_css_class("papo-link-preview")).unwrap().compute_bounds(list).unwrap();let below=all.iter().find(|w|w.widget_name()==format!("message-{}",messages[49].id)).unwrap().compute_bounds(list).unwrap();assert!(card.y()+card.height()<=below.y(),"GitHub embed must end before the next message begins");
+    chat.emit(ChatMsg::SetChannel(target(Some(messages[49].id),Some(messages[49].id))));let request=Uuid::new_v4();chat.emit(ChatMsg::BeginHistory{request_id:request,cursor:None});chat.emit(ChatMsg::HistoryLoaded{request_id:request,append:false,result:Ok(MessageListResponse{channel_id:channel,has_more:false,messages})});settle(context);assert!(chat.model().viewport.following(),"fully read channels open at the latest message");
+    window.set_content(None::<&gtk::Widget>);window.close();until(context,||!window.is_visible());
+}

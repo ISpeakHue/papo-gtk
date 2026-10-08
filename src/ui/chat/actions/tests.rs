@@ -150,7 +150,7 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
                     else if route == "/auth/whoami" {let mut profile=b.profile.clone();profile["settings"]=json!({"version":1,"config":b.config});(200,profile)}
                     else if route == "/server" {if b.server_missing{(404,json!({"detail":"No server"}))}else{let mut server=b.server_value.clone();if b.restricted{server["owner_id"]=Value::Null;}(200,server)}}
                     else if route == "/roles" { (200,json!({"roles":b.admin_roles})) }
-                    else if route == "/channels" {let mut channels=b.admin_channels.clone();for c in &mut channels{if c["id"]==CHANNEL{c["notification_settings"]=b.channel_setting.clone();}}(200,json!({"channels":channels}))}
+                    else if route == "/channels" {let mut channels=b.admin_channels.clone();for c in &mut channels{if c["id"]==CHANNEL{c["notification_settings"]=b.channel_setting.clone();}if b.restricted{c["permissions"]=json!([{ "role_id":EMOJI,"role_name":"restricted","permissions":{"read_channel":false}}]);}else if c["permissions"].is_null(){c["permissions"]=json!([]);}}(200,json!({"channels":channels}))}
                     else if route.ends_with("/permissions") { (200,json!({"channel_id":route.split('/').nth(2).unwrap(),"permissions":if b.restricted {vec![json!({"role_id":EMOJI,"role_name":"restricted","permissions":{"read_channel":false}})]} else {b.admin_channels.iter().find(|c|c["id"]==route.split('/').nth(2).unwrap()).and_then(|c|c["permissions"].as_array()).cloned().unwrap_or_default()}})) }
                     else if route == "/users" { (200,json!({"users":[b.profile.clone(),peer],"has_more":false})) }
                     else if route == "/users/user_summary_batch" {let users:Vec<_>=vec![b.profile.clone(),peer].into_iter().filter(|u|body["ids"].as_array().is_some_and(|ids|ids.contains(&u["id"]))).collect();(200,json!(users))}
@@ -218,7 +218,7 @@ pub(crate) fn exercise(context: &gtk::glib::MainContext) {
     chat.emit(ChatMsg::Action(ActionMsg::PinsLoaded { epoch, token:pin_request, result:Ok(vec![message.clone()]) })); pump(context);
     assert!(chat.model().actions.pinned.is_empty());
     chat.emit(ChatMsg::SetAccess { user_id:user, access:crate::models::Access::resolve(user,Some(user),&[],&[],&[]) });
-    chat.emit(ChatMsg::SetChannel(channel)); chat.emit(ChatMsg::AddMessage(message.clone()));
+    chat.emit(ChatMsg::SetChannel(channel.clone())); chat.emit(ChatMsg::AddMessage(message.clone()));
     until(context,|| chat.model().actions.pins_ready);
     // Upload keeps its draft on error and custom images replace placeholder labels.
     find_button(chat.widget().upcast_ref(),"Emojis").emit_clicked(); pump(context);
@@ -272,6 +272,17 @@ pub(crate) fn exercise(context: &gtk::glib::MainContext) {
     find_button(chat.model().actions.confirmation.as_ref().unwrap().upcast_ref(),"Excluir emoji").emit_clicked();
     until(context,|| chat.model().actions.emojis.is_empty());
     assert!(chat.model().actions.textures.is_empty());
+    // Server emojis are cached across channel switches, including an empty list.
+    until(context,||chat.model().actions.emojis_request.is_none());
+    assert!(chat.model().actions.emojis_loaded.is_some());
+    let emoji_calls=backend.lock().unwrap().requests.iter().filter(|(_,p,_)|p.starts_with("/emojis?")).count();
+    let other:Channel=serde_json::from_value(json!({"id":"12345678-1234-4234-8234-123456789ac2","name":"other","created_at":DATE})).unwrap();
+    chat.emit(ChatMsg::SetChannel(other));
+    until(context,||chat.model().actions.pins_ready);
+    chat.emit(ChatMsg::SetChannel(channel.clone()));
+    until(context,||chat.model().actions.pins_ready);
+    assert_eq!(backend.lock().unwrap().requests.iter().filter(|(_,p,_)|p.starts_with("/emojis?")).count(),emoji_calls);
+    chat.emit(ChatMsg::AddMessage(message.clone()));pump(context);
     // Navigation continues into older pages using the ordinary history output.
     let outputs = Arc::new(Mutex::new(Vec::new())); let capture = outputs.clone();
     let navigation_chat = ChatModel::builder().launch(ChatInit::default()).connect_receiver(move |_,o| capture.lock().unwrap().push(o));
@@ -307,8 +318,23 @@ pub(crate) fn exercise(context: &gtk::glib::MainContext) {
     use crate::ui::main_window::{MainWindowInit,MainWindowModel,MainWindowMsg};
     let current_user = serde_json::from_value(json!({"id":USER,"username":"alice","created_at":DATE})).unwrap();
     let outputs=Arc::new(Mutex::new(Vec::new()));let captured=outputs.clone();
+    let startup_baseline=backend.lock().unwrap().requests.len();
+    let started=std::time::Instant::now();
     let main = MainWindowModel::builder().launch(MainWindowInit { current_user,api_client:api.clone() }).connect_receiver(move|_,output|captured.lock().unwrap().push(output));
+    // A first connection starts one snapshot; it does not replay the startup wave.
+    main.emit(MainWindowMsg::WsReceived(crate::ws::WsEvent::ConnectionReady(Uuid::new_v4())));
+    main.emit(MainWindowMsg::WsReceived(crate::ws::WsEvent::Reconnected));
     until(context,|| descendants(main.widget().upcast_ref()).iter().filter_map(|w| w.downcast_ref::<gtk::Button>()).any(|b| b.label().as_deref() == Some("Editar")));
+    until(context,||main.model().users.len()==2);
+    {
+        let guard=backend.lock().unwrap();let startup=&guard.requests[startup_baseline..];
+        assert_eq!(startup.iter().filter(|(_,p,_)|p=="/channels").count(),1,"first connection must not duplicate the access snapshot");
+        assert_eq!(startup.iter().filter(|(_,p,_)|p=="/auth/whoami").count(),1);
+        assert_eq!(startup.iter().filter(|(_,p,_)|p.starts_with("/users?")).count(),1);
+        assert!(!startup.iter().any(|(_,p,_)|p.ends_with("/permissions")),"embedded overrides must not be fetched again");
+    }
+    assert!(started.elapsed()<std::time::Duration::from_secs(5),"opening must not wait for the 30-second access poll");
+    crate::ui::main_window::layout::tests::exercise_refresh_budget(&main,context,&backend);
     crate::ui::main_window::layout::tests::exercise(&main,context);
     let inactive_history_baseline=backend.lock().unwrap().requests.iter().filter(|(_,path,_)|path.starts_with("/channels/12345678-1234-4234-8234-123456789ac2/messages")).count();
     crate::ui::main_window::account::exercise_preferences_and_profiles(&main,context);

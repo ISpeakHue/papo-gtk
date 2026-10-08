@@ -4,7 +4,7 @@ use adw::prelude::*;
 use std::{cell::{Cell,RefCell},rc::Rc};
 
 #[derive(Clone)]
-pub(super) enum Position { Bottom, Message(Uuid), Anchor{ id:Option<Uuid>,offset:f64,value:f64 } }
+pub(super) enum Position { Bottom, Message(Uuid), Unread(Uuid), Anchor{ id:Option<Uuid>,offset:f64,value:f64 } }
 pub(super) struct Viewport {
     following:Rc<Cell<bool>>,pending:Rc<RefCell<Option<Position>>>,generation:Rc<Cell<u64>>,
     wheel:Rc<RefCell<Option<adw::TimedAnimation>>>,
@@ -24,22 +24,22 @@ impl Viewport {
         });
         let controller=gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
         controller.set_propagation_phase(gtk::PropagationPhase::Capture);
-        let pending=self.pending.clone();let generation=self.generation.clone();let wheel=self.wheel.clone();let weak=scroll.downgrade();
-        controller.connect_scroll(move |controller,_,dy|{
+        let pending=self.pending.clone();let generation=self.generation.clone();let wheel=self.wheel.clone();let weak=scroll.downgrade();let input=sender.input_sender().clone();
+        controller.connect_scroll(move |controller,_,dy|{let _=input.send(ChatMsg::CancelInitialRead);
             pending.borrow_mut().take();generation.set(generation.get().wrapping_add(1));
             let Some(scroll)=weak.upgrade()else{return gtk::glib::Propagation::Proceed;};
             if controller.unit()!=gtk::gdk::ScrollUnit::Wheel{stop_wheel(&wheel);return gtk::glib::Propagation::Proceed;}
             animate_wheel(&scroll,&wheel,dy);gtk::glib::Propagation::Stop
         });scroll.add_controller(controller);
         let click=gtk::GestureClick::new();click.set_button(1);click.set_propagation_phase(gtk::PropagationPhase::Capture);let pending=self.pending.clone();let generation=self.generation.clone();
-        let wheel=self.wheel.clone();click.connect_pressed(move |_,_,_,_|{pending.borrow_mut().take();generation.set(generation.get().wrapping_add(1));stop_wheel(&wheel);});scroll.add_controller(click);
+        let input=sender.input_sender().clone();let wheel=self.wheel.clone();click.connect_pressed(move |_,_,_,_|{let _=input.send(ChatMsg::CancelInitialRead);pending.borrow_mut().take();generation.set(generation.get().wrapping_add(1));stop_wheel(&wheel);});scroll.add_controller(click);
         // GTK's automatic focus scrolling also runs during layout changes. Only
         // reveal a focused row when the user explicitly navigates with keys.
         let keys=gtk::EventControllerKey::new();keys.set_propagation_phase(gtk::PropagationPhase::Capture);
-        let pending=self.pending.clone();let generation=self.generation.clone();let weak=scroll.downgrade();let wheel=self.wheel.clone();
+        let pending=self.pending.clone();let generation=self.generation.clone();let weak=scroll.downgrade();let wheel=self.wheel.clone();let input=sender.input_sender().clone();
         keys.connect_key_pressed(move |_,key,_,_|{
             let reveal=matches!(key,gtk::gdk::Key::Tab|gtk::gdk::Key::ISO_Left_Tab|gtk::gdk::Key::Up|gtk::gdk::Key::Down|gtk::gdk::Key::Home|gtk::gdk::Key::End);
-            if reveal||matches!(key,gtk::gdk::Key::Page_Up|gtk::gdk::Key::Page_Down){
+            if reveal||matches!(key,gtk::gdk::Key::Page_Up|gtk::gdk::Key::Page_Down){let _=input.send(ChatMsg::CancelInitialRead);
                 pending.borrow_mut().take();generation.set(generation.get().wrapping_add(1));
                 stop_wheel(&wheel);
                 if reveal{if let Some(scroll)=weak.upgrade(){reveal_keyboard_focus(&scroll,generation.clone(),generation.get());}}
@@ -58,7 +58,15 @@ impl Viewport {
     }
     pub fn restore(&self,scroll:&gtk::ScrolledWindow,list:&gtk::ListBox,position:Position,sender:&ComponentSender<ChatModel>){
         stop_wheel(&self.wheel);
+        if matches!(position,Position::Unread(_)|Position::Message(_)){self.following.set(false);}
         let generation=self.generation.get().wrapping_add(1);self.generation.set(generation);*self.pending.borrow_mut()=Some(position);
+        // Explicit latest navigation must take effect even if an unchanged,
+        // temporarily occluded history has no new allocation frame yet.
+        if matches!(*self.pending.borrow(),Some(Position::Bottom)){
+            let adj=scroll.vadjustment();adj.set_value((adj.upper()-adj.page_size()).max(adj.lower()));
+            self.following.set(true);sender.input(ChatMsg::ViewportChanged(false));
+        }
+        scroll.queue_draw();
         let pending=self.pending.clone();let current=self.generation.clone();let following=self.following.clone();let list=list.downgrade();let s=sender.clone();let frames=Cell::new(0);
         scroll.add_tick_callback(move |scroll,_|{
             if current.get()!=generation{return gtk::glib::ControlFlow::Break;}
@@ -69,6 +77,7 @@ impl Viewport {
             let value=match position{
                 Position::Bottom=>adj.upper()-adj.page_size(),
                 Position::Message(id)=>find(id).and_then(|row|{row.grab_focus();row.compute_bounds(&list)}).map_or(adj.value(),|r|f64::from(r.y())-24.0),
+                Position::Unread(id)=>find(id).and_then(|row|row.compute_bounds(&list)).map_or(adj.value(),|r|f64::from(r.y())-24.0),
                 Position::Anchor{id,offset,value}=>id.and_then(find).and_then(|row|row.compute_bounds(&list)).map_or(value,|r|f64::from(r.y())-offset),
             };
             adj.set_value(value.max(adj.lower()).min((adj.upper()-adj.page_size()).max(adj.lower())));
@@ -105,4 +114,40 @@ fn reveal_keyboard_focus(scroll:&gtk::ScrolledWindow,generation:Rc<Cell<u64>>,ex
             }focus=widget.parent();
         }gtk::glib::ControlFlow::Break
     });
+}
+
+/// Snapshot the read cursor before observing history can advance it.
+#[derive(Clone)]
+pub(super) struct ReadBoundary{message:Option<Uuid>,at:Option<chrono::DateTime<chrono::Utc>>,unread:bool,cursor:Option<MessageCursor>,pages:usize}
+impl ReadBoundary{
+    pub fn new(target:&ConversationTarget)->Self{match target{
+        ConversationTarget::Channel(c)=>Self{message:c.last_read_message,at:c.last_read_at,unread:c.has_unread(),cursor:None,pages:0},
+        ConversationTarget::Direct(d)=>Self{message:d.last_read_message,at:d.last_read_at,unread:d.unread_count>0||d.last_message.as_ref().is_some_and(|m|Some(m.id)!=d.last_read_message),cursor:None,pages:0},
+    }}
+    pub fn older(&mut self,messages:&[Message],has_more:bool)->Option<MessageCursor>{
+        if !self.unread||!has_more||self.pages>=20||(self.message.is_none()&&self.at.is_none()){return None;}
+        if self.message.is_some_and(|id|messages.iter().any(|m|m.id==id)){return None;}
+        let cursor=messages.first().map(MessageCursor::from)?;
+        if self.at.is_some_and(|at|cursor.created_at<=at)||self.cursor.is_some_and(|old|(cursor.created_at,cursor.id)>=(old.created_at,old.id)){return None;}
+        self.cursor=Some(cursor);self.pages+=1;Some(cursor)
+    }
+    pub fn position(&self,messages:&[Message])->Position{
+        if !self.unread{return Position::Bottom;}
+        let next=self.message.and_then(|id|messages.iter().position(|m|m.id==id)).map(|index|messages.get(index+1))
+            .unwrap_or_else(||messages.iter().find(|m|self.at.is_none_or(|at|m.created_at>at)));
+        next.map_or(Position::Bottom,|m|Position::Unread(m.id))
+    }
+}
+#[cfg(test)]mod read_tests{
+    use super::*;
+    #[test]fn unread_search_is_serial_and_stops_on_cursor_or_bounds(){
+        let message:Message=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"channel_id":Uuid::new_v4(),"created_at":"2026-10-08T12:00:00Z"})).unwrap();
+        let mut boundary=ReadBoundary{message:Some(Uuid::new_v4()),at:None,unread:true,cursor:None,pages:0};assert!(boundary.older(&[message.clone()],true).is_some());assert!(boundary.older(&[message.clone()],true).is_none(),"identical pages cannot loop");boundary.cursor=None;boundary.message=Some(message.id);assert!(boundary.older(&[message.clone()],true).is_none());boundary.message=Some(Uuid::new_v4());boundary.pages=20;assert!(boundary.older(&[message],true).is_none());
+    }
+    #[test]fn unread_cursor_wins_over_read_operation_time(){
+        let a:Message=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"channel_id":Uuid::new_v4(),"created_at":"2026-10-08T12:00:00Z"})).unwrap();let mut b=a.clone();b.id=Uuid::new_v4();b.created_at+=chrono::Duration::seconds(1);
+        let boundary=ReadBoundary{message:Some(a.id),at:Some(b.created_at+chrono::Duration::seconds(5)),unread:true,cursor:None,pages:0};
+        assert!(matches!(boundary.position(&[a.clone(),b.clone()]),Position::Unread(id) if id==b.id));
+        assert!(matches!(ReadBoundary{unread:false,..boundary}.position(&[a,b]),Position::Bottom));
+    }
 }

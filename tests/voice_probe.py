@@ -42,6 +42,8 @@ async def run(relay, device=None):
     connected = set()
     routes = {}
     speakers = set()
+    local_speakers = set()
+    local_muted = False
     candidates = set()
     muted = False
     left = False
@@ -86,6 +88,11 @@ async def run(relay, device=None):
                     await send(sfu, {"peer": label, "event": event})
                 elif kind == "connection" and event["state"] == "connected":
                     connected.add(label)
+                elif kind == "speaking":
+                    if event["active"]:
+                        local_speakers.add(label)
+                    elif label == "a":
+                        local_muted = True
                 elif kind == "audio" and event["energy"] > 0.0001:
                     assert any(r["track_id"] == event["track_id"] for r in routes.get(label, [])), "audio must have a current SFU route"
                     audible.add(label)
@@ -93,7 +100,7 @@ async def run(relay, device=None):
                     raise AssertionError("Native worker: " + event["message"])
                 elif kind == "eof":
                     raise AssertionError("native worker exited unexpectedly: " + str(await clients[label].wait()))
-            if audible == connected == speakers == {"a", "b"} and not started:
+            if audible == connected == speakers == local_speakers == {"a", "b"} and not started:
                 assert not relay or candidates == {"a", "b"}, "relay-only peers must use TURN"
                 assert speakers == {"a", "b"}, "real RFC6464 active speaker detection"
                 started = True
@@ -101,7 +108,7 @@ async def run(relay, device=None):
                 await send(sfu, {"peer": "a", "event": {"type": "voice_mute", "muted": True}})
             if started and muted and not routes.get("b") and not left:
                 await send(sfu, {"peer": "b", "event": {"type": "voice_leave"}})
-            if left and not routes.get("a"):
+            if left and not routes.get("a") and local_muted:
                 print(("TURN relay" if relay else "Direct ICE") + ": bidirectional decoded audio, routes, active speakers, mute and leave passed")
                 return
         raise AssertionError("audio probe timed out")

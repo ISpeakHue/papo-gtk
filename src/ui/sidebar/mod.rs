@@ -186,7 +186,7 @@ impl Component for SidebarModel {
                             set_spacing:8,
                             gtk::Overlay {
                                 #[name="avatar_widget"]
-                                adw::Avatar {set_icon_name:Some("avatar-default-symbolic"),set_size:32,set_show_initials:false,#[watch] set_text:Some(model.current_user.nickname.as_deref().unwrap_or(&model.current_user.username))},
+                                adw::Avatar {set_icon_name:Some("avatar-default-symbolic"),set_size:32,set_show_initials:false,#[watch] set_text:Some(model.current_user.display_name())},
                                 add_overlay = &gtk::Image {
                                     #[watch] set_icon_name:Some(match model.current_user.status {Some(UserStatus::Away)=>"user-idle-symbolic",Some(UserStatus::Busy)=>"user-busy-symbolic",_=>"user-available-symbolic"}),
                                     set_pixel_size:10,set_halign:gtk::Align::End,set_valign:gtk::Align::End,add_css_class:"papo-status-dot",
@@ -195,7 +195,7 @@ impl Component for SidebarModel {
                             gtk::Box {
                                 set_orientation:gtk::Orientation::Vertical,set_valign:gtk::Align::Center,set_hexpand:true,
                                 gtk::Label {
-                                    #[watch] set_text:model.current_user.nickname.as_deref().unwrap_or(&model.current_user.username),
+                                    #[watch] set_text:model.current_user.display_name(),
                                     set_xalign:0.0,add_css_class:"heading",set_ellipsize:pango::EllipsizeMode::End,
                                 },
                                 gtk::Label {
@@ -328,6 +328,10 @@ fn rebuild_channel_list(
         let is_category = matches!(channel.channel_type, Some(ChannelType::Category));
         let is_voice = matches!(channel.channel_type, Some(ChannelType::Voice));
 
+        let key=format!("channel-{}",channel.id);let signature=format!("{}|{:?}|{}",channel.name,channel.channel_type,channel.has_unread());
+        if let Some((old_signature,row))=cache.get(&key).filter(|(old,_)|*old==signature){
+            desired.push((old_signature.clone(),row.clone()));
+        } else {
         let row = gtk::ListBoxRow::new();
         row.set_widget_name(&format!("channel-{}",channel.id));
         if is_voice{row.add_css_class("papo-voice-channel");}
@@ -383,18 +387,21 @@ fn rebuild_channel_list(
 
         row.set_child(Some(&box_row));
 
-        desired.push((format!("{:?}",channel),row));
+        desired.push((signature,row));
+        }
         if is_voice{if let Some(room)=rooms.iter().find(|r|r.id==channel.id){for member in &room.members{
-            let row=gtk::ListBoxRow::new();row.set_widget_name(&format!("voice-member-{}-{}",channel.id,member.id));row.set_activatable(false);row.set_selectable(false);row.add_css_class("papo-voice-member");
-            let line=gtk::Box::new(gtk::Orientation::Horizontal,4);let open=gtk::Button::new();open.add_css_class("flat");open.set_hexpand(true);open.set_tooltip_text(Some("Abrir perfil"));let content=gtk::Box::new(gtk::Orientation::Horizontal,6);
-            let avatar=crate::media::avatar_image(avatars.get(&member.id),24);avatar.set_text(Some(&member.name));let avatar_box=gtk::Overlay::new();avatar_box.set_child(Some(&avatar));avatar_box.set_visible(show_avatars);let speaking=gtk::Image::from_icon_name("microphone-sensitivity-high-symbolic");speaking.set_pixel_size(10);speaking.set_halign(gtk::Align::End);speaking.set_valign(gtk::Align::End);speaking.add_css_class("papo-voice-speaking-badge");speaking.set_widget_name("voice-speaking-icon");speaking.set_tooltip_text(Some("Falando"));speaking.set_visible(member.speaking&&!member.muted);avatar_box.add_overlay(&speaking);content.append(&avatar_box);let fallback=gtk::Image::from_icon_name("microphone-sensitivity-high-symbolic");fallback.set_widget_name("voice-speaking-fallback");fallback.set_pixel_size(14);fallback.set_tooltip_text(Some("Falando"));fallback.add_css_class("papo-voice-speaking");fallback.set_visible(member.speaking&&!member.muted&&!show_avatars);content.append(&fallback);let name=gtk::Label::new(Some(&member.name));name.set_xalign(0.0);name.set_hexpand(true);name.set_ellipsize(pango::EllipsizeMode::End);name.add_css_class("caption");name.set_widget_name("voice-member-name");if member.speaking{name.add_css_class("papo-voice-speaking");}content.append(&name);if member.muted{content.append(&gtk::Image::from_icon_name("microphone-disabled-symbolic"));}open.set_child(Some(&content));let s=sender.clone();let id=member.id;open.connect_clicked(move |_|s.input(SidebarMsg::OpenProfile(id)));line.append(&open);
-            for (active,kind,icon,label) in [(member.camera,"video","camera-video-symbolic","Ver câmera"),(member.screen,"screen","video-display-symbolic","Ver tela")]{if active{let watch=gtk::Button::from_icon_name(icon);watch.add_css_class("flat");watch.set_tooltip_text(Some(label));let s=sender.clone();watch.connect_clicked(move |_|s.input(SidebarMsg::WatchVoice{user:id,kind}));line.append(&watch);}}
-            row.set_child(Some(&line));
+            let key=format!("voice-member-{}-{}",channel.id,member.id);
             let mut signature_member=member.clone();signature_member.speaking=false;
             let signature=format!("{:?}-{}-{}",signature_member,show_avatars,avatars.get(&member.id).map_or(0,|t|t.as_ptr() as usize));
-            if let Some((old_signature,old))=cache.get(row.widget_name().as_str()){if *old_signature==signature{
+            if let Some((_,old))=cache.get(&key).filter(|(old,_)|*old==signature){
                 update_voice_speaker(old.upcast_ref(),member.speaking&&!member.muted,show_avatars);
-            }}
+                desired.push((signature,old.clone()));continue;
+            }
+            let row=gtk::ListBoxRow::new();row.set_widget_name(&format!("voice-member-{}-{}",channel.id,member.id));row.set_activatable(false);row.set_selectable(false);row.add_css_class("papo-voice-member");
+            let line=gtk::Box::new(gtk::Orientation::Horizontal,4);let open=gtk::Button::new();open.add_css_class("flat");open.set_hexpand(true);open.set_tooltip_text(Some("Abrir perfil"));let content=gtk::Box::new(gtk::Orientation::Horizontal,6);
+            let avatar=crate::media::avatar_image(avatars.get(&member.id),24);avatar.set_text(Some(&member.name));let avatar_box=gtk::Overlay::new();avatar_box.set_child(Some(&avatar));avatar_box.set_visible(show_avatars);let speaking=gtk::Image::from_icon_name("microphone-sensitivity-high-symbolic");speaking.set_pixel_size(10);speaking.set_halign(gtk::Align::End);speaking.set_valign(gtk::Align::End);speaking.add_css_class("papo-voice-speaking-badge");speaking.set_widget_name("voice-speaking-icon");speaking.set_tooltip_text(Some("Falando"));speaking.set_visible(member.speaking&&!member.muted);avatar_box.add_overlay(&speaking);content.append(&avatar_box);let fallback=gtk::Image::from_icon_name("microphone-sensitivity-high-symbolic");fallback.set_widget_name("voice-speaking-fallback");fallback.set_pixel_size(16);fallback.set_tooltip_text(Some("Falando"));fallback.add_css_class("papo-voice-speaking");fallback.set_visible(member.speaking&&!member.muted);content.append(&fallback);let name=gtk::Label::new(Some(&member.name));name.set_xalign(0.0);name.set_hexpand(true);name.set_ellipsize(pango::EllipsizeMode::End);name.add_css_class("caption");name.set_widget_name("voice-member-name");if member.speaking&&!member.muted{name.add_css_class("papo-voice-speaking");}content.append(&name);if member.muted{content.append(&gtk::Image::from_icon_name("microphone-disabled-symbolic"));}open.set_child(Some(&content));let s=sender.clone();let id=member.id;open.connect_clicked(move |_|s.input(SidebarMsg::OpenProfile(id)));line.append(&open);
+            for (active,kind,icon,label) in [(member.camera,"video","camera-video-symbolic","Ver câmera"),(member.screen,"screen","video-display-symbolic","Ver tela")]{if active{let watch=gtk::Button::from_icon_name(icon);watch.add_css_class("flat");watch.set_tooltip_text(Some(label));let s=sender.clone();watch.connect_clicked(move |_|s.input(SidebarMsg::WatchVoice{user:id,kind}));line.append(&watch);}}
+            row.set_child(Some(&line));
             desired.push((signature,row));
         }}}
 
@@ -405,7 +412,7 @@ fn rebuild_channel_list(
         let row=cache.remove(&key).filter(|(old,_)|*old==signature).map_or(built,|(_,row)|row);
         next.insert(key,(signature,row.clone()));rows.push(row);
     }
-    let mut child=list_box.first_child();while let Some(w)=child{child=w.next_sibling();if !rows.iter().any(|r|r.upcast_ref::<gtk::Widget>()==&w){list_box.remove(&w);}}
+    let keep:std::collections::HashSet<_>=rows.iter().cloned().collect();let mut child=list_box.first_child();while let Some(w)=child{child=w.next_sibling();if !w.downcast_ref::<gtk::ListBoxRow>().is_some_and(|r|keep.contains(r)){list_box.remove(&w);}}
     for (index,row) in rows.iter().enumerate(){if list_box.row_at_index(index as i32).as_ref()!=Some(row){if row.parent().is_some(){list_box.remove(row);}list_box.insert(row,index as i32);}}
     list_box.unselect_all();if let Some(id)=selected_id{if let Some((_,row))=next.get(&format!("channel-{id}")){if row.is_selectable(){list_box.select_row(Some(row));}}}
     *cache=next;
@@ -414,7 +421,7 @@ fn rebuild_channel_list(
 fn update_voice_speaker(widget:&gtk::Widget,speaking:bool,show_avatars:bool){
     match widget.widget_name().as_str(){
         "voice-member-name"=>{if speaking{widget.add_css_class("papo-voice-speaking");}else{widget.remove_css_class("papo-voice-speaking");}},
-        "voice-speaking-icon"=>widget.set_visible(speaking),"voice-speaking-fallback"=>widget.set_visible(speaking&&!show_avatars),_=>{},
+        "voice-speaking-icon"=>widget.set_visible(speaking),"voice-speaking-fallback"=>widget.set_visible(speaking),_=>{},
     }
     let mut child=widget.first_child();while let Some(w)=child{update_voice_speaker(&w,speaking,show_avatars);child=w.next_sibling();}
 }

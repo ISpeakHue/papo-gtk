@@ -113,7 +113,7 @@ impl MainWindowModel {
                 w.set_default_size(720,780);
                 let scroll = gtk::ScrolledWindow::new();
                 scroll.set_vexpand(true);scroll.set_hscrollbar_policy(gtk::PolicyType::Never);
-                let content = gtk::Box::new(gtk::Orientation::Vertical, 8);
+                let content = gtk::Box::new(gtk::Orientation::Vertical, 8);content.set_valign(gtk::Align::Start);
                 scroll.set_child(Some(&content));
                 body.append(&scroll);
                 let error = gtk::Label::new(Some("Carregando perfil…"));
@@ -584,7 +584,7 @@ pub(crate) fn exercise_preferences_and_profiles(main: &Controller<MainWindowMode
     until(context, ||main.model().account.profile.as_ref().is_some_and(|v|v.fields.is_some()));
     let profile=main.model().account.profile.as_ref().unwrap().window.clone();assert!(profile.default_height()>=720);crate::ui::main_window::layout::tests::preview(&profile,"profile",context);
     let image_button=find_button(profile.upcast_ref(),"Alterar avatar");until(context,||image_button.height()>0);
-    let bounds=image_button.compute_bounds(&profile).unwrap();assert!(bounds.y()+bounds.height()<profile.height() as f32,"profile image controls should be visible when the window opens");
+    let bounds=image_button.compute_bounds(&profile).unwrap();assert!(bounds.y()+bounds.height()<profile.height() as f32,"profile image controls should be visible when the window opens: button={bounds:?}, window={}x{}",profile.width(),profile.height());
     let old = main.model().account.profile.as_ref().unwrap().token;
     {
         let m = main.model();

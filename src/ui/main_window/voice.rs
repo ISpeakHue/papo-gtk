@@ -17,7 +17,7 @@ pub(super) struct Voice {
     pub(super) connection:Option<Uuid>,selected:Option<Uuid>,call:Option<Call>,pending_leave:Option<(Uuid,Uuid,Instant)>,
     members:HashMap<Uuid,HashMap<Uuid,VoiceMember>>,speakers:HashMap<Uuid,HashSet<Uuid>>,pub(super) presence:HashMap<Uuid,Vec<Uuid>>,routes:HashMap<String,Uuid>,
     jobs:Vec<tokio::task::JoinHandle<()>>,
-    cue:crate::media::sound::CallCue,video:VideoControls,
+    cue:crate::media::sound::CallCue,video:VideoControls,local_speaking:bool,
     #[cfg(test)]test_engine:bool,
 }
 impl Drop for Voice{fn drop(&mut self){self.settings.close();self.video.clear();self.video.viewer_window.close();self.call=None;for j in self.jobs.drain(..){j.abort();}}}
@@ -40,7 +40,7 @@ impl Voice {
         let info=gtk::Label::new(Some("O microfone começa silenciado. Trocar o dispositivo encerra a chamada para liberar o microfone anterior."));info.set_wrap(true);info.set_xalign(0.0);body.append(&info);let label=gtk::Label::new(Some("Microfone"));label.set_xalign(0.0);body.append(&label);
         let devices=gtk::DropDown::from_strings(&["Microfone padrão do sistema"]);let s2=s.clone();devices.connect_selected_notify(move |_|s2.input(MainWindowMsg::Voice(VoiceMsg::Device)));body.append(&devices);body.append(&button("","Atualizar microfones",s,||VoiceMsg::ReloadDevices));
         let video=VideoControls::new(&body,&controls,s);
-        Self{cue:Default::default(),video,panel,title,status,join,leave,mute,settings,settings_button,devices,device_list:vec![],device:None,device_request:None,connection:None,selected:None,call:None,pending_leave:None,members:Default::default(),speakers:Default::default(),presence:Default::default(),routes:Default::default(),jobs:vec![],#[cfg(test)]test_engine:false}
+        Self{local_speaking:false,cue:Default::default(),video,panel,title,status,join,leave,mute,settings,settings_button,devices,device_list:vec![],device:None,device_request:None,connection:None,selected:None,call:None,pending_leave:None,members:Default::default(),speakers:Default::default(),presence:Default::default(),routes:Default::default(),jobs:vec![],#[cfg(test)]test_engine:false}
 
     }
 }
@@ -49,13 +49,16 @@ impl MainWindowModel {
         self.voice.connection==Some(connection)&&self.ws_tx.try_send(ws::WsCommand::Voice{connection,text:value.to_string()}).is_ok()
     }
     pub(super) fn stop_voice(&mut self,leave:bool,message:&str){
+        let had_call=self.voice.call.is_some();let mut joined=false;
         if let Some(call)=self.voice.call.take(){
+            joined=matches!(call.phase,Phase::Negotiating|Phase::Connected);
             // Drop capture and transports before any further UI or network work.
             let channel=call.channel;let connection=call.connection;drop(call);
             self.voice.routes.clear();
             if leave&&self.voice_frame(connection,serde_json::json!({"type":"voice_leave","channel_id":channel})){self.voice.pending_leave=Some((channel,connection,Instant::now()));}
         }
-        self.voice.cue.stop();self.voice.video.clear();self.voice.status.set_text(message);self.render_voice();
+        self.voice.local_speaking=false;
+        if joined{self.voice.cue.play_leave(self.account.config.notifications.as_ref().and_then(|n|n.sound).unwrap_or(true));}else if had_call{self.voice.cue.stop();}self.voice.video.clear();self.voice.status.set_text(message);self.render_voice();
     }
     pub(super) fn voice_disconnected(&mut self){self.voice.connection=None;self.voice.pending_leave=None;self.voice.members.clear();self.voice.speakers.clear();self.voice.presence.clear();self.stop_voice(false,"Conexão encerrada. Entre na voz novamente após reconectar.");}
     pub(super) fn publish_voice_channels(&self){
@@ -71,8 +74,8 @@ impl MainWindowModel {
     pub(super) fn voice_allowed(&self,id:Uuid)->bool{self.access.get(&id).is_some_and(|a|a.voice)&&self.managed_channels.iter().any(|c|c.id==id&&c.channel_type==Some(ChannelType::Voice))}
     pub(super) fn render_voice(&self){
         let rooms=self.managed_channels.iter().filter(|c|self.voice_allowed(c.id)).map(|channel|{
-            let mut ids:HashSet<_>=self.voice.members.get(&channel.id).into_iter().flat_map(|m|m.keys().copied()).collect();ids.extend(self.voice.presence.iter().filter(|(_,channels)|channels.contains(&channel.id)).map(|(id,_)|*id));let mut ids:Vec<_>=ids.into_iter().collect();ids.sort();
-            crate::ui::sidebar::VoiceRoom{id:channel.id,members:ids.into_iter().map(|id|{let state=self.voice.members.get(&channel.id).and_then(|m|m.get(&id));crate::ui::sidebar::VoiceParticipant{id,name:self.users.iter().find(|u|u.id==id).map(|u|u.display_name().to_owned()).unwrap_or_else(||id.to_string()),muted:state.is_some_and(|m|m.muted),speaking:self.voice.speakers.get(&channel.id).is_some_and(|s|s.contains(&id)),camera:id!=self.current_user.id&&state.is_some_and(|m|m.camera_on)&&self.voice.call.as_ref().is_some_and(|c|c.channel==channel.id&&c.phase==Phase::Connected),screen:id!=self.current_user.id&&state.is_some_and(|m|m.screen_sharing)&&self.voice.call.as_ref().is_some_and(|c|c.channel==channel.id&&c.phase==Phase::Connected)}}).collect()}
+            let mut ids:HashSet<_>=self.voice.members.get(&channel.id).into_iter().flat_map(|m|m.keys().copied()).collect();ids.extend(self.voice.presence.iter().filter(|(_,channels)|channels.contains(&channel.id)).map(|(id,_)|*id));if self.voice.call.as_ref().is_some_and(|c|c.channel==channel.id){ids.insert(self.current_user.id);}let mut ids:Vec<_>=ids.into_iter().collect();ids.sort();
+            crate::ui::sidebar::VoiceRoom{id:channel.id,members:ids.into_iter().map(|id|{let state=self.voice.members.get(&channel.id).and_then(|m|m.get(&id));crate::ui::sidebar::VoiceParticipant{id,name:self.users.iter().find(|u|u.id==id).map(|u|u.display_name().to_owned()).unwrap_or_else(||id.to_string()),muted:if id==self.current_user.id{self.voice.call.as_ref().filter(|c|c.channel==channel.id).map_or(state.is_some_and(|m|m.muted),|c|c.muted)}else{state.is_some_and(|m|m.muted)},speaking:if id==self.current_user.id&&self.voice.call.as_ref().is_some_and(|c|c.channel==channel.id){self.voice.local_speaking&&self.voice.call.as_ref().is_some_and(|c|!c.muted)}else{self.voice.speakers.get(&channel.id).is_some_and(|s|s.contains(&id))},camera:id!=self.current_user.id&&state.is_some_and(|m|m.camera_on)&&self.voice.call.as_ref().is_some_and(|c|c.channel==channel.id&&c.phase==Phase::Connected),screen:id!=self.current_user.id&&state.is_some_and(|m|m.screen_sharing)&&self.voice.call.as_ref().is_some_and(|c|c.channel==channel.id&&c.phase==Phase::Connected)}}).collect()}
         }).collect();self.sidebar.emit(SidebarMsg::VoiceRooms(rooms));
         let id=self.voice.call.as_ref().map(|c|c.channel).or(self.voice.selected);
         let Some(id)=id else{self.voice.panel.set_visible(false);return;};
@@ -108,7 +111,7 @@ impl MainWindowModel {
         self.voice.jobs.retain(|j|!j.is_finished());
         match msg {
             VoiceMsg::Video(msg)=>self.video_event(msg,s),
-            #[cfg(test)]VoiceMsg::TestEngine=>self.voice.test_engine=true,
+            #[cfg(test)]VoiceMsg::TestEngine=>{self.voice.test_engine=true;self.voice.cue.use_test_sink();},
             VoiceMsg::Select(id)=>{if !self.voice_allowed(id){return;}if self.voice.call.as_ref().is_some_and(|c|c.channel!=id){self.voice.status.set_text("Saia da chamada atual antes de escolher outra sala.");return;}self.voice.selected=Some(id);self.voice.panel.set_visible(true);self.render_voice();s.input(MainWindowMsg::Voice(VoiceMsg::ReloadDevices));s.input(MainWindowMsg::Voice(VoiceMsg::Video(VideoMsg::Reload)));}
             VoiceMsg::Settings=>{if let Some(parent)=self.sidebar.widget().root().and_downcast::<gtk::Window>(){self.voice.settings.set_transient_for(Some(&parent));}self.voice.settings.present();s.input(MainWindowMsg::Voice(VoiceMsg::ReloadDevices));s.input(MainWindowMsg::Voice(VoiceMsg::Video(VideoMsg::Reload)));},
             VoiceMsg::ReloadDevices=>{let request=Uuid::new_v4();self.voice.device_request=Some(request);self.voice.jobs.push(tokio::spawn(async move{let result=crate::voice::devices().await;let _=s.input_sender().send(MainWindowMsg::Voice(VoiceMsg::Devices{request,result}));}));}
@@ -128,11 +131,11 @@ impl MainWindowModel {
             VoiceMsg::Mute=>{
                 let Some(c)=self.voice.call.as_ref().filter(|c|matches!(c.phase,Phase::Negotiating|Phase::Connected))else{return;};let muted=self.voice.mute.is_active();if muted==c.muted{return;}
                 if !self.voice_frame(c.connection,serde_json::json!({"type":"voice_mute","channel_id":c.channel,"muted":muted})){self.stop_voice(true,"Sem conexão para alterar o microfone.");return;}
-                let c=self.voice.call.as_mut().unwrap();c.muted=muted;if let Some(engine)=&c.engine{if !engine.send(serde_json::json!({"type":"mute","muted":muted})){self.stop_voice(true,"O processo de áudio não responde.");}}
+                if muted{self.voice.local_speaking=false;}let c=self.voice.call.as_mut().unwrap();c.muted=muted;if let Some(engine)=&c.engine{if !engine.send(serde_json::json!({"type":"mute","muted":muted})){self.stop_voice(true,"O processo de áudio não responde.");}}self.render_voice();
             }
             VoiceMsg::Engine{call,event}=>{
                 let Some(c)=self.voice.call.as_ref().filter(|c|c.id==call)else{return;};let channel=c.channel;let connection=c.connection;
-                let frame=match event{EngineEvent::Offer{sdp}=>Some(serde_json::json!({"type":"voice_offer","channel_id":channel,"sdp":sdp})),EngineEvent::Answer{sdp}=>Some(serde_json::json!({"type":"voice_answer","channel_id":channel,"sdp":sdp})),EngineEvent::Candidate{candidate,sdp_mid,sdp_mline_index}=>Some(serde_json::json!({"type":"voice_ice_candidate","channel_id":channel,"candidate":candidate,"sdp_mid":sdp_mid,"sdp_mline_index":sdp_mline_index})),EngineEvent::Connection{state}=>{if state=="connected"{let first=self.voice.call.as_ref().is_some_and(|c|c.phase!=Phase::Connected);self.voice.call.as_mut().unwrap().phase=Phase::Connected;if first{let enabled=self.account.config.notifications.as_ref().and_then(|n|n.sound).unwrap_or(true);self.voice.cue.play(enabled);}self.voice.status.set_text("Voz conectada.");self.render_voice();}None},EngineEvent::Track{..}|EngineEvent::Started{..}=>None,event @ (EngineEvent::Negotiated|EngineEvent::MediaIntent{..}|EngineEvent::MediaState{..}|EngineEvent::MediaError{..}|EngineEvent::VideoFrame{..}|EngineEvent::VideoReset{..})=>{self.video_engine(event);None},EngineEvent::Error{message}=>{self.stop_voice(true,&message);None}};
+                let frame=match event{EngineEvent::Speaking{active}=>{self.voice.local_speaking=active&&self.voice.call.as_ref().is_some_and(|c|!c.muted);self.render_voice();None},EngineEvent::Offer{sdp}=>Some(serde_json::json!({"type":"voice_offer","channel_id":channel,"sdp":sdp})),EngineEvent::Answer{sdp}=>Some(serde_json::json!({"type":"voice_answer","channel_id":channel,"sdp":sdp})),EngineEvent::Candidate{candidate,sdp_mid,sdp_mline_index}=>Some(serde_json::json!({"type":"voice_ice_candidate","channel_id":channel,"candidate":candidate,"sdp_mid":sdp_mid,"sdp_mline_index":sdp_mline_index})),EngineEvent::Connection{state}=>{if state=="connected"{self.voice.call.as_mut().unwrap().phase=Phase::Connected;self.voice.status.set_text("Voz conectada.");self.render_voice();}None},EngineEvent::Track{..}|EngineEvent::Started{..}=>None,event @ (EngineEvent::Negotiated|EngineEvent::MediaIntent{..}|EngineEvent::MediaState{..}|EngineEvent::MediaError{..}|EngineEvent::VideoFrame{..}|EngineEvent::VideoReset{..})=>{self.video_engine(event);None},EngineEvent::Error{message}=>{self.stop_voice(true,&message);None}};
                 if let Some(frame)=frame{if !self.voice_frame(connection,frame){self.stop_voice(true,"Não foi possível enviar a sinalização de voz.");}}
             }
         }
@@ -147,10 +150,12 @@ impl MainWindowModel {
                 let c=self.voice.call.as_mut().unwrap();c.phase=Phase::Negotiating;let call=c.id;let ice=c.ice.take().unwrap();let config=serde_json::json!({"type":"start","ice_servers":ice.ice_servers,"device":self.voice.device,"muted":true});
                 #[cfg(test)]let start=!self.voice.test_engine;#[cfg(not(test))]let start=true;
                 if start{c.engine=Some(Engine::start(config,move|event|s.input(MainWindowMsg::Voice(VoiceMsg::Engine{call,event}))));}
+                let enabled=self.account.config.notifications.as_ref().and_then(|n|n.sound).unwrap_or(true);
+                self.voice.cue.play(enabled);
                 self.voice.status.set_text("Conectando áudio · microfone silenciado…");
             }
             VoiceEvent::Answer{..}|VoiceEvent::Offer{..}|VoiceEvent::Candidate{..}=>{if ours{if let Some(engine)=self.voice.call.as_ref().and_then(|c|c.engine.as_ref()){let value=serde_json::to_value(event).unwrap();if !engine.send(value){self.stop_voice(true,"O processo de áudio não responde.");}}}}
-            VoiceEvent::State{member,..}=>{if member.user_id==self.current_user.id&&ours{let c=self.voice.call.as_mut().unwrap();c.muted=member.muted;if let Some(engine)=&c.engine{if !engine.send(serde_json::json!({"type":"mute","muted":member.muted})){self.stop_voice(true,"O processo de áudio não responde.");}}}self.voice.members.entry(channel).or_default().insert(member.user_id,member);}
+            VoiceEvent::State{member,..}=>{if member.user_id==self.current_user.id&&ours{if member.muted{self.voice.local_speaking=false;}let c=self.voice.call.as_mut().unwrap();c.muted=member.muted;if let Some(engine)=&c.engine{if !engine.send(serde_json::json!({"type":"mute","muted":member.muted})){self.stop_voice(true,"O processo de áudio não responde.");}}}self.voice.members.entry(channel).or_default().insert(member.user_id,member);}
             VoiceEvent::Leave{user_id,..}=>{
                 if let Some(m)=self.voice.members.get_mut(&channel){m.remove(&user_id);}if let Some(s)=self.voice.speakers.get_mut(&channel){s.remove(&user_id);}if let Some(channels)=self.voice.presence.get_mut(&user_id){channels.retain(|id|*id!=channel);}
                 if user_id==self.current_user.id{if self.voice.pending_leave.is_some_and(|(id,_,_)|id==channel){self.voice.pending_leave=None;}else if ours{self.stop_voice(false,"A participação na voz foi encerrada.");}}

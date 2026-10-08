@@ -193,6 +193,8 @@ mod tests {
 
         crate::ui::chat::actions::tests::exercise(&context);
         crate::ui::chat::bugs::exercise(&context);
+        crate::ui::chat::bugs5::exercise(&context);
+        crate::media::animation::exercise(&context);
         crate::media::sound::exercise(&context);
 
         // Authenticating must actually switch the watched stack to the main view.

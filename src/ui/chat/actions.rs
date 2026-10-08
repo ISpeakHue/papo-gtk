@@ -13,11 +13,14 @@ pub(super) struct Actions {
     pub pinned: Vec<Message>,
     pub pins_ready: bool,
     pins_request: Option<Uuid>,
+    pins_again: bool,
     pins_window: Option<(gtk::Window, gtk::Box)>,
     pub emojis: Vec<Emoji>,
     pub textures: HashMap<Uuid, gtk::gdk::Texture>,
     pub reaction_hints:std::rc::Rc<std::cell::RefCell<HashMap<(Uuid,Option<Uuid>,Option<String>),String>>>,
     emojis_request: Option<Uuid>,
+    emojis_loaded: Option<std::time::Instant>,
+    emojis_again: bool,
     pub busy: HashSet<Uuid>,
     reaction_requests: HashMap<Uuid, Uuid>,
     reaction_dirty: HashSet<Uuid>,
@@ -57,6 +60,7 @@ pub enum ActionMsg {
     ToggleReaction { id: Uuid, emoji_id: Option<Uuid>, unicode: Option<String> },
     ReactionsLoaded { epoch: Uuid, token: Uuid, id: Uuid, mutation: bool, result: anyhow::Result<Vec<ReactionGroup>> },
     OpenEmojiManager, ReloadEmojis,
+    EmojiPage{token:Uuid,emojis:Vec<Emoji>,images:Vec<(Uuid,crate::media::PreparedImage)>},
     EmojisLoaded { token: Uuid, result: anyhow::Result<Vec<Emoji>> },
     ChooseEmojiFile(Uuid), EmojiFileLoaded { token: Uuid, result: anyhow::Result<Vec<u8>> },
     UploadEmoji(Uuid), ConfirmDeleteEmoji(Uuid), DeleteEmoji { token: Uuid, id: Uuid },
@@ -95,7 +99,7 @@ impl Actions {
     pub fn is_pinned(&self, id: Uuid) -> bool { self.pinned.iter().any(|m| m.id == id) }
     pub fn reset_channel(&mut self) {
         self.epoch = Uuid::new_v4(); self.pinned.clear(); self.pins_ready = false;
-        self.pins_request = None; self.busy.clear(); self.reaction_requests.clear(); self.reaction_dirty.clear(); self.reaction_groups.clear();self.reaction_hints.borrow_mut().clear();
+        self.pins_request = None; self.pins_again = false; self.busy.clear(); self.reaction_requests.clear(); self.reaction_dirty.clear(); self.reaction_groups.clear();self.reaction_hints.borrow_mut().clear();
         self.navigation = None; self.highlight = None; self.navigation_cursor = None;
         if let Some(view) = self.edit.take() { view.window.close(); }
         if let Some(w) = self.confirmation.take() { w.close(); }
@@ -117,17 +121,36 @@ impl ChatModel {
     fn request_pins(&mut self, sender: &ComponentSender<Self>) {
         let (Some(api), Some(channel)) = (self.actions.api.clone(), self.active_channel.as_ref().map(|c| c.id())) else { return; };
         if !self.access.read { return; }
+        if self.actions.pins_request.is_some() { self.actions.pins_again = true; return; }
         let epoch = self.actions.epoch; let token = Uuid::new_v4(); self.actions.pins_request = Some(token);
         let sender = sender.clone(); tokio::spawn(async move {
             let result = api.pinned_messages(channel).await;
             sender.input(ChatMsg::Action(ActionMsg::PinsLoaded { epoch, token, result }));
         });
     }
-    fn request_emojis(&mut self, sender: &ComponentSender<Self>) {
+    pub(super) fn request_emojis(&mut self, sender: &ComponentSender<Self>) {
+        if self.actions.emojis_request.is_some() { self.actions.emojis_again = true; return; }
         let Some(api) = self.actions.api.clone() else { return; };
         let token = Uuid::new_v4(); self.actions.emojis_request = Some(token);
         let sender = sender.clone(); tokio::spawn(async move {
-            let result = api.all_emojis().await;
+            let result=async{
+                let mut cursor:Option<MessageCursor>=None;let mut all:Vec<Emoji>=vec![];
+                loop{
+                    let page=api.emoji_page(cursor).await?;
+                    let next=page.emojis.iter().max_by_key(|e|(e.created_at,e.id)).map(|e|MessageCursor{id:e.id,created_at:e.created_at});
+                    let (emojis,images)=tokio::task::spawn_blocking(move ||{
+                        let mut emojis=page.emojis;let mut images=vec![];
+                        for e in &mut emojis{if let Some(blob)=e.image_blob.take(){if let Some(image)=crate::media::prepare_emoji(&blob){images.push((e.id,image));}}}
+                        (emojis,images)
+                    }).await?;
+                    for e in &emojis{if !all.iter().any(|old|old.id==e.id){all.push(e.clone());}}
+                    anyhow::ensure!(all.len()<=500,"A API excedeu o limite de 500 emojis.");
+                    sender.input(ChatMsg::Action(ActionMsg::EmojiPage{token,emojis,images}));
+                    if !page.has_more{return Ok(all);}
+                    anyhow::ensure!(next.is_some()&&cursor.is_none_or(|c|next.is_some_and(|n|(n.created_at,n.id)>(c.created_at,c.id))),"Paginação de emojis não avançou.");
+                    cursor=next;
+                }
+            }.await;
             sender.input(ChatMsg::Action(ActionMsg::EmojisLoaded { token, result }));
         });
     }
@@ -146,7 +169,10 @@ impl ChatModel {
 
     pub(super) fn handle_action(&mut self, action: ActionMsg, sender: &ComponentSender<Self>, root: &gtk::Box) {
         match action {
-            ActionMsg::Reload => { self.request_pins(sender); self.request_emojis(sender); }
+            ActionMsg::Reload => {
+                if self.actions.pins_request.is_none() { self.request_pins(sender); }
+                if self.actions.emojis_loaded.map_or(true, |time| time.elapsed() >= std::time::Duration::from_secs(60)) && self.actions.emojis_request.is_none() { self.request_emojis(sender); }
+            }
             ActionMsg::OpenEdit(message) => {
                 let Some(user) = self.user_id else { return; };
                 if !self.access.can_edit(user, message.author_id) || self.active_channel.as_ref().map(|c| c.id()) != Some(message.channel_id) { return; }
@@ -255,6 +281,7 @@ impl ChatModel {
                     Err(error) => { if current { self.actions.pins_ready = false; if let Some((_, list)) = &self.actions.pins_window { clear(list); list.append(&label(&format!("Não foi possível carregar: {error}"))); } } self.action_error(error, sender, current); }
                     _ => {}
                 }
+                if current && std::mem::take(&mut self.actions.pins_again) { self.request_pins(sender); }
             }
             ActionMsg::Navigate(id) => {
                 if !self.access.read { return; }
@@ -332,6 +359,12 @@ impl ChatModel {
                 self.render_manager(sender); self.request_emojis(sender); w.present();
             }
             ActionMsg::ReloadEmojis => self.request_emojis(sender),
+            ActionMsg::EmojiPage{token,emojis,images}=>{
+                if self.actions.emojis_request!=Some(token){return;}
+                for (id,image) in images{if !self.actions.textures.contains_key(&id){self.actions.textures.insert(id,image.texture());}}
+                for e in emojis{if let Some(old)=self.actions.emojis.iter_mut().find(|old|old.id==e.id){*old=e;}else{self.actions.emojis.push(e);}}
+                self.render_picker(sender);self.render_manager(sender);
+            },
             ActionMsg::EmojisLoaded { token, result } => {
                 let current = self.actions.emojis_request == Some(token); if current { self.actions.emojis_request = None; }
                 match result {
@@ -344,11 +377,13 @@ impl ChatModel {
                             // Emoji blobs are immutable by ID; retain compact textures only.
                             e.image_blob = None;
                         }
+                        self.actions.emojis_loaded = Some(std::time::Instant::now());
                         self.actions.emojis = emojis; self.render_picker(sender); self.render_manager(sender);
                     }
                     Err(error) => { if current { if let Some(m) = &self.actions.manager { m.error.set_text(&error.to_string()); } if let Some((_, list, _)) = &self.actions.picker { list.append(&label(&format!("Emojis personalizados indisponíveis: {error}"))); } } self.action_error(error, sender, current); }
                     _ => {}
                 }
+                if current && std::mem::take(&mut self.actions.emojis_again) { self.request_emojis(sender); }
             }
             ActionMsg::ChooseEmojiFile(token) => {
                 let Some(m) = self.actions.manager.as_ref().filter(|m| m.token == token) else { return; };

@@ -152,7 +152,7 @@ class Engine:
             return
         capture = Gst.parse_bin_from_description(
             "audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=2 ! "
-            "volume name=microphone ! level audio-level-meta=true ! opusenc bitrate=32000 ! "
+            "volume name=microphone ! level name=local_level audio-level-meta=true post-messages=true interval=100000000 ! opusenc bitrate=32000 ! "
             'rtpopuspay name=pay pt=96 ! capsfilter name=rtpcaps caps="application/x-rtp,media=audio,encoding-name=OPUS,'
             'clock-rate=48000,encoding-params=(string)2,payload=(int)96"', True)
         # Advertise a stable sending SSRC before offer creation; Pion needs
@@ -497,7 +497,22 @@ class Engine:
                 return False
             GLib.timeout_add_seconds(5, check)
 
+    def set_speaking(self, active):
+        if getattr(self, "speaking", False) != active:
+            self.speaking = active
+            emit({"type": "speaking", "active": active})
+
     def bus_message(self, _, message):
+        if message.type == Gst.MessageType.ELEMENT and message.src.get_name() == "local_level":
+            structure = message.get_structure()
+            if structure and structure.get_name() == "level":
+                rms = structure.get_value("rms")
+                now = time.monotonic()
+                muted = self.microphone.get_property("mute")
+                if not muted and rms and max(rms) > -45:
+                    self.last_speech = now
+                self.set_speaking(not muted and now - getattr(self, "last_speech", 0) < 0.3)
+            return
         if message.type == Gst.MessageType.ERROR:
             if "--diagnostics" in sys.argv:
                 print(message.src.get_path_string(), message.parse_error(), file=sys.stderr)
@@ -539,6 +554,9 @@ class Engine:
                 self.frame_pending = False
             elif kind == "mute":
                 self.microphone.set_property("mute", bool(event["muted"]))
+                if event["muted"]:
+                    self.last_speech = 0
+                    self.set_speaking(False)
             elif kind == "voice_audio_routes":
                 self.routes = {route["track_id"] for route in event.get("routes", [])}
                 for track, volume in self.outputs:

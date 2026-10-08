@@ -44,18 +44,29 @@ pub(crate) mod tests {
     use super::*;
     use crate::ui::chat::actions::tests::{pump,until,descendants,find_button};
 
-    fn snapshot(window:&impl IsA<gtk::Window>,name:&str){
+    fn snapshot(window:&impl IsA<gtk::Window>,name:&str,context:&gtk::glib::MainContext){
         if std::env::var_os("PAPO_DESIGN_PREVIEW").is_none(){return;}
         let window=window.as_ref();
         let content=window.upcast_ref::<gtk::Widget>();
-        let paintable=gtk::WidgetPaintable::new(Some(content));let snapshot=gtk::Snapshot::new();
-        paintable.snapshot(&snapshot,content.width() as f64,content.height() as f64);
-        let node=snapshot.to_node().unwrap_or_else(||panic!("mapped window must render: {name}; mapped={}, size={}x{}",window.is_mapped(),window.width(),window.height()));
+        let paintable=gtk::WidgetPaintable::new(Some(content));content.queue_draw();
+        let node=std::cell::RefCell::new(None);
+        until(context,||{let snapshot=gtk::Snapshot::new();paintable.snapshot(&snapshot,content.width() as f64,content.height() as f64);*node.borrow_mut()=snapshot.to_node();node.borrow().is_some()});
+        let node=node.into_inner().unwrap();
         let texture=window.renderer().unwrap().render_texture(&node,Some(&gtk::graphene::Rect::new(0.0,0.0,content.width() as f32,content.height() as f32)));
         texture.save_to_png(format!("/tmp/papo-design-{name}.png")).unwrap();
     }
     fn settle(context:&gtk::glib::MainContext){for _ in 0..120{pump(context);std::thread::sleep(Duration::from_millis(5));}}
-    pub(crate) fn preview(window:&impl IsA<gtk::Window>,name:&str,context:&gtk::glib::MainContext){if std::env::var_os("PAPO_DESIGN_PREVIEW").is_some(){settle(context);snapshot(window,name);}}
+    pub(crate) fn preview(window:&impl IsA<gtk::Window>,name:&str,context:&gtk::glib::MainContext){if std::env::var_os("PAPO_DESIGN_PREVIEW").is_some(){settle(context);snapshot(window,name,context);}}
+
+    pub(crate) fn exercise_refresh_budget(main:&Controller<MainWindowModel>,context:&gtk::glib::MainContext,backend:&std::sync::Arc<std::sync::Mutex<crate::ui::chat::actions::tests::Backend>>){
+        until(context,||main.model().access_request.is_none());
+        let baseline=backend.lock().unwrap().requests.len();
+        for _ in 0..8 { main.emit(MainWindowMsg::RefreshAccess); }
+        until(context,||main.model().access_request.is_none()&&backend.lock().unwrap().requests[baseline..].iter().filter(|(_,path,_)|path=="/channels").count()>=2);
+        let backend=backend.lock().unwrap();let calls=&backend.requests[baseline..];
+        assert_eq!(calls.iter().filter(|(_,path,_)|path=="/channels").count(),2,"a burst of refresh triggers needs one active snapshot and one follow-up");
+        assert!(!calls.iter().any(|(_,path,_)|path.ends_with("/permissions")));
+    }
 
     pub(crate) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::MainContext){
         until(context,||main.model().users.len()>=2);
@@ -78,7 +89,7 @@ pub(crate) mod tests {
         until(context,||window.width()>1100);settle(context);
         assert!(!main.model().layout.navigation.is_collapsed());assert!(!main.model().layout.members.is_collapsed());
         let style=adw::StyleManager::default();let scheme=style.color_scheme();
-        style.set_color_scheme(adw::ColorScheme::ForceDark);settle(context);snapshot(&window,"dark");
+        style.set_color_scheme(adw::ColorScheme::ForceDark);settle(context);snapshot(&window,"dark",context);
         for (id,visible) in [(added[0],true),(added[1],false),(added[2],true)]{
             let row=descendants(main.widget().upcast_ref()).into_iter().find(|w|w.widget_name()==format!("message-{id}")).unwrap();
             let header=descendants(&row).into_iter().find(|w|w.has_css_class("papo-message-header")).unwrap();assert_eq!(header.get_visible(),visible,"consecutive messages group only for the same author");
@@ -92,14 +103,14 @@ pub(crate) mod tests {
         main.widget().activate_action("papo.channels",None).unwrap();pump(context);assert!(!main.model().sidebar.model().direct_mode);
         main.widget().activate_action("papo.members",None).unwrap();pump(context);assert!(!main.model().layout.members.shows_sidebar());
         main.widget().activate_action("papo.members",None).unwrap();pump(context);assert!(main.model().layout.members.shows_sidebar());
-        style.set_color_scheme(adw::ColorScheme::ForceLight);settle(context);snapshot(&window,"light");
+        style.set_color_scheme(adw::ColorScheme::ForceLight);settle(context);snapshot(&window,"light",context);
         window.set_default_size(900,760);until(context,||window.width()<=1100);settle(context);assert!(!main.model().layout.navigation.is_collapsed());assert!(main.model().layout.members.is_collapsed());assert!(!main.model().layout.members.shows_sidebar());
         window.set_default_size(540,760);until(context,||window.width()<=760);settle(context);assert!(main.model().layout.navigation.is_collapsed());assert!(!main.model().layout.navigation.shows_sidebar());
-        main.widget().activate_action("papo.navigation",None).unwrap();settle(context);assert!(main.model().layout.navigation.shows_sidebar());snapshot(&window,"narrow-navigation");
+        main.widget().activate_action("papo.navigation",None).unwrap();settle(context);assert!(main.model().layout.navigation.shows_sidebar());snapshot(&window,"narrow-navigation",context);
         main.emit(MainWindowMsg::ChannelSelected(saved_channels.iter().find(|c|c.id==selected).unwrap().clone()));settle(context);assert!(!main.model().layout.navigation.shows_sidebar());
-        style.set_color_scheme(adw::ColorScheme::ForceDark);settle(context);snapshot(&window,"narrow");
+        style.set_color_scheme(adw::ColorScheme::ForceDark);settle(context);snapshot(&window,"narrow",context);
         // Opening media controls does not force a wider chat window.
-        let panel=main.model().voice.panel.clone();panel.set_visible(true);main.widget().activate_action("papo.navigation",None).unwrap();settle(context);assert!(panel.is_mapped());assert!(window.width()<=760);assert!(panel.measure(gtk::Orientation::Horizontal,-1).0<=360);snapshot(&window,"narrow-call");panel.set_visible(false);main.widget().activate_action("papo.navigation",None).unwrap();settle(context);
+        let panel=main.model().voice.panel.clone();panel.set_visible(true);main.widget().activate_action("papo.navigation",None).unwrap();settle(context);assert!(panel.is_mapped());assert!(window.width()<=760);assert!(panel.measure(gtk::Orientation::Horizontal,-1).0<=360);snapshot(&window,"narrow-call",context);panel.set_visible(false);main.widget().activate_action("papo.navigation",None).unwrap();settle(context);
         window.set_default_size(1280,760);until(context,||window.width()>1100);settle(context);assert!(!main.model().layout.navigation.is_collapsed());assert!(!main.model().layout.members.is_collapsed());
         // Use the ListBox signal GTK emits for clicks, rather than direct component messages.
         if let Some(other)=saved_channels.iter().find(|c|c.id!=selected&&matches!(c.channel_type,None|Some(crate::models::ChannelType::Text))){

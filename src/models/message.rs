@@ -1,4 +1,4 @@
-//! Message, attachment, link-preview and reaction models.
+//! Message, attachment, embed and reaction models.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -15,25 +15,6 @@ pub struct Attachment {
     pub thumbnail_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
     pub moderation_status: Option<String>,
-}
-
-// ── Link preview ─────────────────────────────────────────────────────────────
-
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-pub struct LinkPreview {
-    pub id: Uuid,
-    pub url: String,
-    pub kind: String,
-    pub title: Option<String>,
-    pub description: Option<String>,
-    pub provider_name: Option<String>,
-    pub embed_url: Option<String>,
-    pub video_url: Option<String>,
-    pub image_mime_type: Option<String>,
-    pub image_size_bytes: Option<i64>,
-    pub fetched_at: DateTime<Utc>,
-    /// Only present on GET /link-previews/:id
-    pub image_data: Option<String>,
 }
 
 // ── Reactions ────────────────────────────────────────────────────────────────
@@ -83,7 +64,8 @@ pub struct Message {
     /// ID of the message being replied to (may point to deleted message).
     pub reply_to: Option<Uuid>,
     pub attachments: Option<Vec<Attachment>>,
-    pub previews: Option<Vec<LinkPreview>>,
+    #[serde(alias="previews")]
+    pub embeds: Option<Vec<super::Embed>>,
     pub reactions: Option<Vec<MessageReactionSummary>>,
     pub user_reactions: Option<Vec<MessageUserReaction>>,
 }
@@ -102,11 +84,13 @@ pub struct CreateMessageRequest {
     pub channel_id: Uuid,
     pub content: Option<String>,
     pub reply_to: Option<Uuid>,
+    pub embeds:Vec<super::EmbedInput>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct UpdateMessageRequest {
     pub content: String,
+    pub embeds:Vec<super::EmbedInput>,
 }
 
 

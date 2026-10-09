@@ -1,6 +1,7 @@
 //! Main application window coordinating the sidebar, chat area, and online user list.
 
 pub(crate) mod layout;
+mod members;
 use layout::Layout;
 pub(crate) mod voice;
 use voice::{Voice,VoiceMsg};
@@ -24,7 +25,7 @@ use uuid::Uuid;
 
 use crate::api::ApiClient;
 use crate::media::avatars::AvatarCache;
-use crate::models::{Channel, Server, UserSummary, WhoamiResponse, MessageCursor, LinkPreview, UserProfile};
+use crate::models::{Channel, Server, UserSummary, WhoamiResponse, MessageCursor, Embed};
 use crate::ui::chat::state::Change;
 use std::collections::HashMap;
 use std::time::{Instant, Duration};
@@ -48,6 +49,7 @@ pub struct AccessSnapshot {
     access: HashMap<Uuid, crate::models::Access>,
     server_access: crate::models::Access,
     read_version: u64,
+    member_version:u64,
 }
 
 pub struct MainWindowModel {
@@ -66,6 +68,7 @@ pub struct MainWindowModel {
     ws_listener: Option<tokio::task::JoinHandle<()>>,
     preview_requests: HashMap<(Uuid, Uuid), Uuid>,
     avatars: AvatarCache,
+    members: members::Members,
     account: Account,
     direct: Direct,
     administration: Administration,
@@ -105,16 +108,16 @@ pub enum MainWindowMsg {
     LiveRead{request:Uuid,channel_id:Uuid,result:anyhow::Result<crate::models::MessageListResponse>},
     // Initial fetch results
     AccessLoaded { request_id: Uuid, result: anyhow::Result<AccessSnapshot> },
-    UsersLoaded(Vec<UserSummary>),
-    UsersUpdated(Vec<UserSummary>),
-    AvatarsLoaded { request_id: Uuid, ids: Vec<Uuid>, result: anyhow::Result<Vec<UserProfile>> },
+    FlushMembers,
+    MembersLoaded { token: Uuid, full: bool, ids: Vec<Uuid>, result: anyhow::Result<Vec<UserSummary>> },
+    AvatarsLoaded { request_id: Uuid, ids: Vec<Uuid>, result: anyhow::Result<Vec<(Uuid,Option<crate::media::PreparedImage>)>> },
     OperationFailed(anyhow::Error),
     ActionError(anyhow::Error),
     RefreshAccess,
     StartLoading,
     Navigate { channel_id: Uuid, message_id: Uuid },
     UserActivity,
-    PreviewLoaded { channel_id: Uuid, message_id: Uuid, preview_id: Uuid, request_id: Uuid, result: anyhow::Result<LinkPreview> },
+    PreviewLoaded { channel_id: Uuid, message_id: Uuid, preview_id: Uuid, request_id: Uuid, result: anyhow::Result<Embed> },
 
     // User interactions from children
     ChannelSelected(Channel),
@@ -180,6 +183,7 @@ impl Component for MainWindowModel {
         let chat = ChatModel::builder()
             .launch(ChatInit { api: Some(init.api_client.clone()), user_id: Some(init.current_user.id), ..ChatInit::default() })
             .forward(sender.input_sender(), |output| match output {
+                ChatOutput::Search=>MainWindowMsg::Search(SearchMsg::Open),
                 ChatOutput::Notifications=>MainWindowMsg::Notification(NoticeMsg::Open),
                 ChatOutput::HistoryObserved{channel_id,messages,latest}=>MainWindowMsg::HistoryObserved{channel_id,messages,latest},
                 ChatOutput::UserTyping(channel_id) => MainWindowMsg::SendTyping(channel_id),
@@ -196,8 +200,7 @@ impl Component for MainWindowModel {
 
         let user_list = UserListModel::builder().launch(UserListInit::default()).forward(sender.input_sender(), |id| MainWindowMsg::Account(AccountMsg::Profile(id)));
         let (mut ws_rx, ws_tx) = ws::spawn(init.api_client.clone());
-        let mut avatars = AvatarCache::default();
-        avatars.seed(init.current_user.id, init.current_user.avatar_blob.as_deref());
+        let avatars = AvatarCache::default();
         let voice=Voice::new(&sender);
         sidebar.emit(SidebarMsg::VoiceDock(voice.panel.clone()));
         let layout=Layout::new(sidebar.widget(),chat.widget(),user_list.widget(),&sender);
@@ -214,7 +217,7 @@ impl Component for MainWindowModel {
             refresh_task: None,
             ws_listener: None,
             preview_requests: HashMap::new(),
-            avatars,
+            avatars,members:Default::default(),
             account: Account::default(),
             direct:Direct::default(),administration:Administration::default(),moderation:Moderation::default(),voice,
             server_access:Default::default(),roles:Vec::new(),managed_channels:Vec::new(),setup:false,
@@ -233,6 +236,7 @@ impl Component for MainWindowModel {
         layout::shortcuts(&root,&sender);
         model.account.config=model.current_user.settings.as_ref().map(|s|s.config.complete()).unwrap_or_default();
         model.apply_config(&root);
+        model.load_avatar_blob(model.current_user.id,model.current_user.avatar_blob.clone(),sender.clone());
         model.publish_avatars();
         // Capture real input throughout the window; timers never mark a user active.
         let keys = gtk::EventControllerKey::new();
@@ -276,19 +280,13 @@ impl Component for MainWindowModel {
             tokio::time::sleep(Duration::from_secs(2)).await;
             let _ = input.send(MainWindowMsg::StartLoading);
         });
-        // Refresh once per twelve hours, serially, well before the 24-hour expiry.
         let client = init.api_client.clone();
         let username=model.current_user.username.clone();
         let input = sender.input_sender().clone();
         model.refresh_task = Some(tokio::spawn(async move {
-            loop {
-                tokio::time::sleep(Duration::from_secs(12 * 60 * 60)).await;
-                let previous=client.auth_cookie();
-                match client.refresh().await {
-                    Err(error)=>{if input.send(MainWindowMsg::OperationFailed(error)).is_err(){break;}},
-                    Ok(_)=>{if let Some(previous)=previous{if crate::session::rotated(&client,&username,&previous).await.is_err(){tracing::warn!("Could not update remembered session in desktop keyring");}}},
-                }
-            }
+            crate::session::refresh::run(client,username,move |error| {
+                input.send(MainWindowMsg::OperationFailed(error)).is_ok()
+            }).await;
         }));
 
         ComponentParts { model, widgets }
@@ -307,10 +305,10 @@ impl Component for MainWindowModel {
             MainWindowMsg::Administration(msg)=>self.admin_event(msg,sender,root),
             MainWindowMsg::Search(msg)=>self.search_event(msg,root,sender),
             MainWindowMsg::Notification(msg)=>self.notification_event(msg,root,sender),
-            MainWindowMsg::HistoryObserved{channel_id,messages,latest}=>self.history_observed(channel_id,messages,latest,&sender),
+            MainWindowMsg::HistoryObserved{channel_id,messages,latest}=>{self.load_avatars(messages.iter().filter_map(|m|m.author_id).collect(),false,sender.clone());self.history_observed(channel_id,messages,latest,&sender);},
             MainWindowMsg::LiveRead{request,channel_id,result}=>{
                 if self.notifications.read_request!=Some(request){return;}self.notifications.read_request=None;
-                match result {Ok(page)=>{self.history_observed(channel_id,page.messages.clone(),true,&sender);if self.active_channel_id==Some(channel_id){for message in page.messages{self.chat.emit(ChatMsg::AddMessage(message));}}},Err(e)=>{self.notifications.read_pending=true;sender.input(MainWindowMsg::OperationFailed(e));}}
+                match result {Ok(page)=>{self.history_observed(channel_id,page.messages.clone(),true,&sender);if self.active_channel_id==Some(channel_id){self.chat.emit(ChatMsg::SnapshotLoaded{request,messages:Some(page.messages)});}},Err(e)=>{self.chat.emit(ChatMsg::SnapshotLoaded{request,messages:None});self.notifications.read_pending=true;sender.input(MainWindowMsg::OperationFailed(e));}}
             }
             MainWindowMsg::Security(msg) => self.security_event(msg,&sender,root),
             MainWindowMsg::Account(msg) => {self.account_event(msg,&sender,root);self.deliver_notices(sender.clone());self.render_inbox(&sender);},
@@ -319,8 +317,11 @@ impl Component for MainWindowModel {
                 self.access_request = None;
                 if std::mem::take(&mut self.access_refresh_again) { self.refresh_channels(sender.clone()); }
                 match result {
-                    Ok(AccessSnapshot { user, server, roles, channels, access, server_access, read_version }) => {
+                    Ok(AccessSnapshot { user, server, roles, channels, access, server_access, read_version, member_version }) => {
                         let mut user=user;
+                        if self.members.changed_after(user.id,member_version){
+                            user.nickname=self.current_user.nickname.clone();user.status=self.current_user.status.clone();user.status_message=self.current_user.status_message.clone();user.typing=self.current_user.typing.clone();user.avatar_blob=self.current_user.avatar_blob.clone();user.avatar_format=self.current_user.avatar_format.clone();user.status_updated_at=self.current_user.status_updated_at;
+                        }
                         user.settings=Some(crate::models::WhoamiSettings {version:1,config:self.account.config.clone()});
                         user.connection_violation=Some(user.connection_violation.unwrap_or(false)||self.current_user.connection_violation.unwrap_or(false));
                         self.current_user = user;
@@ -372,24 +373,25 @@ impl Component for MainWindowModel {
                     }
                 }
             }
-            MainWindowMsg::UsersLoaded(users) => {
-                self.users = users;
-                self.publish_users();
-                self.load_avatars(self.users.iter().map(|user| user.id).collect(), false, sender);
+            MainWindowMsg::FlushMembers => {
+                self.members.debounce=false;
+                let ids:Vec<_>=self.members.queued.drain().collect();
+                for ids in ids.chunks(50){self.fetch_members(ids.to_vec(),sender.clone());}
             }
-            MainWindowMsg::UsersUpdated(users) => {
-                for user in users {
-                    if let Some(existing) = self.users.iter_mut().find(|item| item.id == user.id) { *existing = user; }
-                    else { self.users.push(user); }
+            MainWindowMsg::MembersLoaded { token, full, ids, result } => {
+                let (users,error)=match result{Ok(users)=>(Some(users),None),Err(error)=>(None,Some(error))};
+                if self.members.finish(token,full,&ids,users,&mut self.users){
+                    self.publish_users();self.render_inbox(&sender);
+                    self.load_avatars(self.users.iter().map(|u|u.id).collect(),false,sender.clone());
                 }
-                self.publish_users();
-                self.load_avatars(self.users.iter().map(|user| user.id).collect(), false, sender);
+                if full&&std::mem::take(&mut self.members.full_again){self.refresh_users(sender.clone(),None);}
+                if let Some(error)=error{sender.input(MainWindowMsg::OperationFailed(error));}
             }
             MainWindowMsg::AvatarsLoaded { request_id, ids, result } => {
                 match result {
                     Ok(profiles) => {
                         if self.avatars.finish(request_id, &ids, profiles) {
-                            self.publish_avatars();
+                            self.publish_avatars();self.render_inbox(&sender);
                         }
                     }
                     Err(error) => {
@@ -445,6 +447,7 @@ impl Component for MainWindowModel {
                 if self.notifications.read_pending&&self.notifications.read_request.is_none()&&root.root().and_downcast::<gtk::Window>().is_some_and(|w|w.is_active()){
                     if let Some(channel_id)=self.active_channel_id.filter(|id|self.can_read_target(*id)){
                         let request=Uuid::new_v4();self.notifications.read_request=Some(request);self.notifications.read_pending=false;
+                        self.chat.emit(ChatMsg::BeginSnapshot(request));
                         let api=self.api_client.clone();self.notifications.jobs.push(tokio::spawn(async move{let result=api.list_messages(channel_id,None).await;sender.input(MainWindowMsg::LiveRead{request,channel_id,result});}));
                     }
                 }
@@ -474,7 +477,7 @@ impl Component for MainWindowModel {
                     self.last_activity = None;
                     self.refresh_notifications(None,sender.clone());
                     self.refresh_direct(sender.clone());
-                    if let Some(channel_id) = self.active_channel_id { self.load_history(channel_id, None, sender.clone()); }
+                    if self.active_channel_id.is_some(){self.chat.emit(ChatMsg::Resync);}
                     self.refresh_channels(sender.clone());
                     self.chat.emit(ChatMsg::Action(crate::ui::chat::actions::ActionMsg::Reload));
                     self.chat.emit(ChatMsg::Action(crate::ui::chat::actions::ActionMsg::ReloadEmojis));
@@ -494,7 +497,7 @@ impl Component for MainWindowModel {
                         self.notifications.journal.message(&message,&mut self.channels);self.notifications.inbox.observe(message.clone());
                         self.publish_voice_channels();
                         self.deliver_notices(sender.clone());self.render_inbox(&sender);
-                        if Some(message.channel_id) == self.active_channel_id {self.notifications.read_pending=true;self.chat.emit(ChatMsg::AddMessage(message));}
+                        if Some(message.channel_id) == self.active_channel_id {if let Some(id)=message.author_id{self.load_avatars(vec![id],false,sender.clone());}self.notifications.read_pending=true;self.chat.emit(ChatMsg::AddMessage(message));}
                     } else {self.notifications.inbox.observe(message);self.refresh_direct(sender);}
                 }
                 WsEvent::MessageEdit { id, content, channel_id, edited_at } => {
@@ -512,9 +515,23 @@ impl Component for MainWindowModel {
                 WsEvent::PresenceUpdate(entry) => { self.voice_presence(&entry);
                     let id = entry.user_id;
                     self.direct.presence.insert(id,entry.status);self.sidebar.emit(SidebarMsg::Presence(self.direct.presence.clone()));
+                    let previous=self.user_list.model().presence.get(&id).cloned();
+                    let profile_changed=entry.online()&&self.users.iter_mut().find(|u|u.id==id).is_some_and(|user|{
+                        // Optional fields are omitted by several presence events.
+                        // Confirm removals through a coalesced summary fetch;
+                        // a sparse status/voice update must not erase a nickname.
+                        let changed=entry.nickname.as_ref().is_some_and(|v|Some(v)!=user.nickname.as_ref())
+                            ||entry.status_message.as_ref().is_some_and(|v|Some(v)!=user.status_message.as_ref())
+                            ||entry.typing.as_ref().is_some_and(|v|Some(v)!=user.typing.as_ref())
+                            ||previous.as_ref().is_some_and(|old|(old.nickname.is_some()&&entry.nickname.is_none())||(old.status_message.is_some()&&entry.status_message.is_none())||(old.typing.is_some()&&entry.typing.is_none()));
+                        if let Some(value)=&entry.nickname{user.nickname=Some(value.clone());}
+                        if let Some(value)=&entry.status_message{user.status_message=Some(value.clone());}
+                        if let Some(value)=&entry.typing{user.typing=Some(value.clone());}
+                        changed
+                    });
                     self.user_list.emit(UserListMsg::UpdatePresence(entry));
                     sender.input(MainWindowMsg::Account(AccountMsg::RefreshProfile(id)));
-                    self.refresh_users(sender, Some(id));
+                    if profile_changed{self.publish_users();self.refresh_users(sender,Some(id));}
                 }
                 WsEvent::AvatarUpdate { user_id } => {
                     sender.input(MainWindowMsg::Account(AccountMsg::RefreshProfile(user_id)));
@@ -540,7 +557,7 @@ impl Component for MainWindowModel {
                         self.preview_requests.insert((message_id, preview_id), request_id);
                         let client = self.api_client.clone();
                         tokio::spawn(async move {
-                            let result = client.get_link_preview(preview_id).await;
+                            let result = client.get_embed(preview_id).await;
                             sender.input(MainWindowMsg::PreviewLoaded { channel_id, message_id, preview_id, request_id, result });
                         });
                     }
@@ -549,6 +566,9 @@ impl Component for MainWindowModel {
                     self.preview_requests.remove(&(message_id, preview_id));
                     self.chat.emit(ChatMsg::ApplyChange(Change::RemovePreview(message_id, preview_id)));
                 }
+                WsEvent::EmbedsUpdate {channel_id,message_id,embeds}=>{
+                    if Some(channel_id)==self.active_channel_id&&self.can_read_target(channel_id){self.chat.emit(ChatMsg::ApplyChange(Change::Embeds(message_id,embeds)));}
+                },
                 WsEvent::PreviewUpdate { channel_id, message_id, preview } => {
                     self.preview_requests.remove(&(message_id, preview.id));
                     if Some(channel_id) == self.active_channel_id { self.chat.emit(ChatMsg::ApplyChange(Change::Preview(message_id, preview))); }
@@ -613,13 +633,14 @@ impl MainWindowModel {
         self.access_request = Some(request_id);
         let client = self.api_client.clone();
         let read_version=self.notifications.journal.version;
+        let member_version=self.members.version();
         tokio::spawn(async move {
             let result = async {
                 let user = client.whoami().await?;
                 let server = match client.get_server().await {
                     Ok(s)=>Some(s),Err(e)if e.downcast_ref::<crate::api::ApiError>().is_some_and(|e|e.status==reqwest::StatusCode::NOT_FOUND)=>None,Err(e)=>return Err(e),
                 };
-                if server.is_none(){return Ok(AccessSnapshot{user,server,roles:vec![],channels:vec![],access:HashMap::new(),server_access:Default::default(),read_version});}
+                if server.is_none(){return Ok(AccessSnapshot{user,server,roles:vec![],channels:vec![],access:HashMap::new(),server_access:Default::default(),read_version,member_version});}
                 let roles = client.list_roles().await?;
                 let mut channels = client.channels_with_permissions().await?;
                 let mut access = HashMap::new();
@@ -630,30 +651,52 @@ impl MainWindowModel {
                 }
                 let server_access = crate::models::Access::resolve(user.id, server.as_ref().and_then(|s|s.owner_id),
                     user.roles.as_deref().unwrap_or(&[]), &roles, &[]).without_channel();
-                Ok(AccessSnapshot { user, server, roles, channels, access, server_access, read_version })
+                Ok(AccessSnapshot { user, server, roles, channels, access, server_access, read_version, member_version })
             }.await;
             sender.input(MainWindowMsg::AccessLoaded { request_id, result });
         });
     }
 
-    fn refresh_users(&self, sender: ComponentSender<Self>, id: Option<Uuid>) {
-        let client = self.api_client.clone();
-        tokio::spawn(async move {
-            let result = if let Some(id) = id { client.user_summaries(vec![id]).await } else { client.list_all_users().await };
-            match result {
-                Ok(users) => sender.input(if id.is_some() { MainWindowMsg::UsersUpdated(users) } else { MainWindowMsg::UsersLoaded(users) }),
-                Err(error) => sender.input(MainWindowMsg::OperationFailed(error)),
+    fn refresh_users(&mut self, sender: ComponentSender<Self>, id: Option<Uuid>) {
+        self.members.jobs.retain(|j|!j.is_finished());
+        if let Some(id)=id{
+            self.members.invalidate(id);self.members.queued.insert(id);
+            if !self.members.debounce{
+                self.members.debounce=true;
+                self.members.jobs.push(tokio::spawn(async move{tokio::time::sleep(Duration::from_millis(250)).await;sender.input(MainWindowMsg::FlushMembers);}));
             }
-        });
+        }else if let Some((token,_))=self.members.begin_full(){
+            let client=self.api_client.clone();
+            self.members.jobs.push(tokio::spawn(async move{let result=client.list_all_users().await;sender.input(MainWindowMsg::MembersLoaded{token,full:true,ids:vec![],result});}));
+        }
+    }
+    fn fetch_members(&mut self,ids:Vec<Uuid>,sender:ComponentSender<Self>){
+        let token=self.members.begin(&ids);let client=self.api_client.clone();
+        self.members.jobs.push(tokio::spawn(async move{let result=client.user_summaries(ids.clone()).await;sender.input(MainWindowMsg::MembersLoaded{token,full:false,ids,result});}));
     }
 
+    fn load_avatar_blob(&mut self,id:Uuid,blob:Option<String>,sender:ComponentSender<Self>){
+        if let Some((request_id,ids))=self.avatars.begin(&[id],true){
+            self.members.jobs.push(tokio::spawn(async move{let image=crate::media::avatars::prepare_blob(blob,crate::media::avatars::AVATAR_EDGE).await;sender.input(MainWindowMsg::AvatarsLoaded{request_id,ids,result:Ok(vec![(id,image)])});}));
+        }
+    }
     fn load_avatars(&mut self, ids: Vec<Uuid>, force: bool, sender: ComponentSender<Self>) {
+        // Authors and online members precede offline fallback avatars. The
+        // budget also bounds initial work on servers with thousands of members.
+        let authors=self.chat.model().avatar_authors();
+        let mut ids=ids;ids.sort_by_key(|id|(*id!=self.current_user.id,!authors.contains(id),self.direct.presence.get(id).is_none_or(|s|*s==crate::ws::PresenceStatus::Offline)));
+        ids.truncate(crate::media::avatars::AVATAR_LIMIT);
         if let Some((request_id, ids)) = self.avatars.begin(&ids, force) {
             let client = self.api_client.clone();
-            tokio::spawn(async move {
-                let result = client.user_profiles(&ids).await;
-                sender.input(MainWindowMsg::AvatarsLoaded { request_id, ids, result });
-            });
+            self.members.jobs.retain(|j|!j.is_finished());
+            self.members.jobs.push(tokio::spawn(async move {
+                for (batch,chunk) in ids.chunks(16).enumerate(){
+                    let result=match client.user_profiles(chunk).await{Ok(profiles)=>Ok(crate::media::avatars::prepare_profiles(profiles).await),Err(e)=>Err(e)};
+                    let failed=result.is_err();
+                    sender.input(MainWindowMsg::AvatarsLoaded { request_id, ids:if failed{ids[batch*16..].to_vec()}else{chunk.to_vec()}, result });
+                    if failed{break;}
+                }
+            }));
         }
     }
 

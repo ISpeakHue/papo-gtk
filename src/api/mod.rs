@@ -48,6 +48,7 @@ pub struct ApiClient {
     base: Url,
     cookies: Arc<Jar>,
     requests: Arc<RequestScheduler>,
+    session_owner: Arc<std::sync::Mutex<Uuid>>,
 }
 impl std::fmt::Debug for ApiClient{fn fmt(&self,f:&mut std::fmt::Formatter)->std::fmt::Result{f.debug_struct("ApiClient").field("base",&self.base).finish_non_exhaustive()}}
 
@@ -66,7 +67,7 @@ impl ApiClient {
         }
         let inner = builder.build()
             .context("building reqwest client")?;
-        Ok(Self { inner, base, cookies, requests: Arc::new(RequestScheduler::default()) })
+        Ok(Self { inner, base, cookies, requests: Arc::new(RequestScheduler::default()), session_owner: Arc::new(std::sync::Mutex::new(Uuid::new_v4())) })
     }
 
     fn is_loopback(url: &Url) -> bool {
@@ -308,6 +309,17 @@ impl ApiClient {
         Ok(())
     }
 
+    pub(crate) fn session_owner(&self) -> Uuid { *self.session_owner.lock().unwrap() }
+    pub(crate) fn adopt_session_owner(&self, owner: Uuid) { *self.session_owner.lock().unwrap()=owner; }
+    /// JWT claims are scheduling hints only; authorization remains server-side.
+    pub(crate) fn session_expiry(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        use base64::Engine;
+        let token=self.auth_cookie()?;
+        let payload=base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(token.split('.').nth(1)?).ok()?;
+        let claims:serde_json::Value=serde_json::from_slice(&payload).ok()?;
+        chrono::DateTime::from_timestamp(claims.get("exp")?.as_i64()?,0)
+    }
+
     pub async fn refresh(&self) -> Result<RefreshResponse> {
         Self::decode(self.inner.post(self.url("/auth/refresh")).send_paced(&self.requests).await?, "refresh").await
     }
@@ -348,6 +360,20 @@ impl ApiClient {
         Ok(response.permissions)
     }
 
+    /// Revalidate retained pages without discarding the reader's cached rows.
+    /// Sequential requests share the normal request budget and cancellation.
+    pub async fn reconcile_messages(&self,channel_id:Uuid,oldest:Option<MessageCursor>)->Result<MessageListResponse>{
+        let mut cursor=None;let mut messages=Vec::new();
+        loop{
+            let page=self.list_messages(channel_id,cursor).await?;
+            let next=page.messages.iter().min_by_key(|m|(m.created_at,m.id)).map(MessageCursor::from);
+            let covered=oldest.is_none_or(|old|next.is_some_and(|next|(next.created_at,next.id)<=(old.created_at,old.id)));
+            messages.extend(page.messages);
+            if !page.has_more||covered{return Ok(MessageListResponse{channel_id,messages,has_more:page.has_more});}
+            anyhow::ensure!(next.is_some()&&next!=cursor,"O servidor retornou uma página sem avanço no histórico.");
+            cursor=next;
+        }
+    }
     pub async fn list_messages(&self, channel_id: Uuid, cursor: Option<MessageCursor>) -> Result<MessageListResponse> {
         let mut url = self.url(&format!("/channels/{channel_id}/messages"));
         url.query_pairs_mut().append_pair("order", "desc");
@@ -361,7 +387,9 @@ impl ApiClient {
     }
 
     pub async fn send_message(&self, request: &CreateMessageRequest) -> Result<Message> {
+        features::validate_message(request.content.as_deref(),&[],&request.embeds)?;
         let mut form = reqwest::multipart::Form::new().text("channel_id", request.channel_id.to_string());
+        if !request.embeds.is_empty(){form=form.text("embeds",serde_json::to_string(&request.embeds)?);}
         if let Some(content) = &request.content { form = form.text("content", content.clone()); }
         if let Some(reply) = request.reply_to { form = form.text("reply_to", reply.to_string()); }
         Self::decode(self.inner.post(self.url("/messages")).multipart(form).send_paced(&self.requests).await?, "send message").await
@@ -374,9 +402,13 @@ impl ApiClient {
     }
 
     pub async fn edit_message(&self, message_id: Uuid, content: &str) -> Result<Message> {
+        self.edit_message_embeds(message_id,content,&[]).await
+    }
+    pub async fn edit_message_embeds(&self,message_id:Uuid,content:&str,embeds:&[EmbedInput])->Result<Message>{
+        crate::models::validate_embeds(embeds)?;
         anyhow::ensure!(content.chars().count() <= 8192, "Use até 8192 caracteres.");
         let message: Message = Self::decode(self.inner.put(self.url(&format!("/messages/{message_id}")))
-            .json(&UpdateMessageRequest { content: content.into() }).send_paced(&self.requests).await?, "edit message").await?;
+            .json(&UpdateMessageRequest { content: content.into(),embeds:embeds.to_vec() }).send_paced(&self.requests).await?, "edit message").await?;
         anyhow::ensure!(message.id == message_id, "Edição retornada para outra mensagem.");
         Ok(message)
     }
@@ -474,9 +506,9 @@ impl ApiClient {
         Ok(())
     }
 
-    pub async fn get_link_preview(&self, id: Uuid) -> Result<LinkPreview> {
-        let bytes = self.media_bytes(&format!("/link-previews/{id}"), 8 << 20).await?;
-        let preview: LinkPreview = serde_json::from_slice(&bytes).context("Prévia inválida")?;
+    pub async fn get_embed(&self, id: Uuid) -> Result<Embed> {
+        let bytes = self.media_bytes(&format!("/embeds/{id}"), 8 << 20).await?;
+        let preview: Embed = serde_json::from_slice(&bytes).context("Prévia inválida")?;
         anyhow::ensure!(preview.id == id, "Prévia retornada para outro link.");
         Ok(preview)
     }

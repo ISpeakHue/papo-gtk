@@ -16,9 +16,10 @@ pub(super) struct Actions {
     pins_again: bool,
     pins_window: Option<(gtk::Window, gtk::Box)>,
     pub emojis: Vec<Emoji>,
+    pub emoji_names:HashMap<String,Uuid>,
     pub textures: HashMap<Uuid, gtk::gdk::Texture>,
     pub reaction_hints:std::rc::Rc<std::cell::RefCell<HashMap<(Uuid,Option<Uuid>,Option<String>),String>>>,
-    emojis_request: Option<Uuid>,
+    pub(super) emojis_request: Option<Uuid>,
     emojis_loaded: Option<std::time::Instant>,
     emojis_again: bool,
     pub busy: HashSet<Uuid>,
@@ -28,6 +29,8 @@ pub(super) struct Actions {
     edit: Option<EditView>,
     confirmation: Option<gtk::Window>,
     picker: Option<(gtk::Window, gtk::Box, Uuid)>,
+    pub(super) composer_picker:Option<(gtk::Window,gtk::Box)>,
+    pub(super) embed_editor:Option<(gtk::Window,super::embed_editor::Editors,gtk::Label)>,
     participants: Option<(gtk::Window, gtk::Box, Uuid)>,
     manager: Option<EmojiManager>,
     pub navigation: Option<Uuid>,
@@ -38,6 +41,7 @@ pub(super) struct Actions {
 struct EditView {
     token: Uuid, message: Message, window: gtk::Window, buffer: gtk::TextBuffer,
     save: gtk::Button, error: gtk::Label, text: gtk::TextView, pending: bool,
+    embeds:super::embed_editor::Editors,
 }
 struct EmojiManager {
     token: Uuid, window: gtk::Window, list: gtk::Box, name: gtk::Entry,
@@ -105,6 +109,8 @@ impl Actions {
         if let Some(w) = self.confirmation.take() { w.close(); }
         if let Some((w, _)) = self.pins_window.take() { w.close(); }
         if let Some((w, _, _)) = self.picker.take() { w.close(); }
+        if let Some((w,_))=self.composer_picker.take(){w.close();}
+        if let Some((w,_,_))=self.embed_editor.take(){w.close();}
         if let Some((w, _, _)) = self.participants.take() { w.close(); }
     }
 }
@@ -181,11 +187,14 @@ impl ChatModel {
                 let token = Uuid::new_v4(); let (w, outer) = window(root, "Editar mensagem");
                 let text = gtk::TextView::new(); text.set_wrap_mode(gtk::WrapMode::WordChar);
                 text.buffer().set_text(message.content.as_deref().unwrap_or(""));
-                let scroll = gtk::ScrolledWindow::new(); scroll.set_vexpand(true); scroll.set_child(Some(&text)); outer.append(&scroll);
+                w.set_default_size(500,650);let form=gtk::Box::new(gtk::Orientation::Vertical,8);
+                form.append(&gtk::ScrolledWindow::builder().min_content_height(100).child(&text).build());
+                let embeds=super::embed_editor::Editors::new(message.embeds.iter().flatten().filter(|e|e.source_type=="custom").map(crate::models::EmbedInput::from_embed).collect());form.append(&embeds.root);
+                let scroll = gtk::ScrolledWindow::new(); scroll.set_vexpand(true); scroll.set_child(Some(&form)); outer.append(&scroll);
                 let error = label(""); error.add_css_class("error"); outer.append(&error);
                 let save = button("Salvar edição", sender, move || ActionMsg::SaveEdit(token)); save.add_css_class("suggested-action"); outer.append(&save);
                 outer.append(&button("Cancelar edição", sender, move || ActionMsg::CancelEdit(token)));
-                self.actions.edit = Some(EditView { token, message, window: w.clone(), buffer: text.buffer(), save, error, text, pending: false });
+                self.actions.edit = Some(EditView { token, message, window: w.clone(), buffer: text.buffer(), save, error, text, pending: false,embeds });
                 w.present();
             }
             ActionMsg::CancelEdit(token) => {
@@ -197,21 +206,30 @@ impl ChatModel {
                 if !self.access.can_edit(user, edit.message.author_id) { edit.error.set_text("Sem permissão para editar esta mensagem."); return; }
                 let text = edit.buffer.text(&edit.buffer.start_iter(), &edit.buffer.end_iter(), false).to_string();
                 if text.chars().count() > 8192 { edit.error.set_text("Use até 8192 caracteres."); return; }
+                let embeds=match edit.embeds.read(){Ok(embeds)=>embeds,Err(e)=>{edit.error.set_text(&e.to_string());return;}};
                 edit.pending = true; edit.text.set_sensitive(false); edit.save.set_sensitive(false); edit.error.set_text("Salvando…");
+                edit.embeds.root.set_sensitive(false);
                 let id = edit.message.id; let epoch = self.actions.epoch; let sender = sender.clone();
-                tokio::spawn(async move { let result = api.edit_message(id, &text).await;
+                tokio::spawn(async move { let result = api.edit_message_embeds(id, &text,&embeds).await;
                     sender.input(ChatMsg::Action(ActionMsg::EditFinished { epoch, token, result })); });
             }
             ActionMsg::EditFinished { epoch, token, result } => {
                 let current = epoch == self.actions.epoch;
                 match result {
                     Ok(message) if current => {
-                        self.history.apply(Change::Edit(message.id, message.content.unwrap_or_default(), message.edited_at));
+                        // A delayed PUT must not restore custom cards removed by
+                        // a newer edit received over the socket.
+                        let stale=self.history.messages.iter().find(|m|m.id==message.id).is_some_and(|m|m.edited_at>message.edited_at);
+                        if !stale{
+                            let mut embeds:Vec<_>=self.history.messages.iter().find(|m|m.id==message.id).into_iter().flat_map(|m|m.embeds.iter().flatten()).filter(|e|e.source_type!="custom").cloned().collect();
+                            embeds.extend(message.embeds.clone().unwrap_or_default());self.history.apply(Change::Embeds(message.id,embeds));
+                            self.history.apply(Change::Edit(message.id, message.content.unwrap_or_default(), message.edited_at));
+                        }
                         if self.actions.edit.as_ref().is_some_and(|e| e.token == token) { self.actions.edit.take().unwrap().window.close(); }
                     }
                     Err(error) => {
                         if current { if let Some(edit) = self.actions.edit.as_mut().filter(|e| e.token == token) {
-                            edit.pending = false; edit.text.set_sensitive(true); edit.save.set_sensitive(true); edit.error.set_text(&error.to_string());
+                            edit.pending = false; edit.text.set_sensitive(true);edit.embeds.root.set_sensitive(true); edit.save.set_sensitive(true); edit.error.set_text(&error.to_string());
                         } }
                         self.action_error(error, sender, current);
                     }
@@ -243,7 +261,7 @@ impl ChatModel {
                 let current = epoch == self.actions.epoch;
                 if current { self.actions.busy.remove(&id); }
                 match result {
-                    Ok(()) if current => { self.history.apply(Change::Delete(id)); self.actions.pinned.retain(|m| m.id != id); self.request_pins(sender); }
+                    Ok(()) if current => { self.delete_message(id); self.request_pins(sender); }
                     Err(error) => self.action_error(error, sender, current), _ => {}
                 }
             }
@@ -292,7 +310,7 @@ impl ChatModel {
             ActionMsg::OpenPicker(id) => {
                 let _ = sender.output(ChatOutput::RefreshAccess);
                 if !self.access.send { return; }
-                let (w, outer) = window(root, "Escolher reação"); let list = scroll_box(&outer);
+                let (w, list) = window(root, "Escolher reação");w.set_default_size(360,420);
                 if let Some((old, _, _)) = self.actions.picker.replace((w.clone(), list, id)) { old.close(); }
                 self.render_picker(sender); self.request_emojis(sender); w.present();
             }
@@ -363,6 +381,7 @@ impl ChatModel {
                 if self.actions.emojis_request!=Some(token){return;}
                 for (id,image) in images{if !self.actions.textures.contains_key(&id){self.actions.textures.insert(id,image.texture());}}
                 for e in emojis{if let Some(old)=self.actions.emojis.iter_mut().find(|old|old.id==e.id){*old=e;}else{self.actions.emojis.push(e);}}
+                self.actions.emoji_names=self.actions.emojis.iter().map(|e|(e.name.clone(),e.id)).collect();
                 self.render_picker(sender);self.render_manager(sender);
             },
             ActionMsg::EmojisLoaded { token, result } => {
@@ -378,7 +397,7 @@ impl ChatModel {
                             e.image_blob = None;
                         }
                         self.actions.emojis_loaded = Some(std::time::Instant::now());
-                        self.actions.emojis = emojis; self.render_picker(sender); self.render_manager(sender);
+                        self.actions.emojis = emojis; self.actions.emoji_names=self.actions.emojis.iter().map(|e|(e.name.clone(),e.id)).collect(); self.render_picker(sender); self.render_manager(sender);
                     }
                     Err(error) => { if current { if let Some(m) = &self.actions.manager { m.error.set_text(&error.to_string()); } if let Some((_, list, _)) = &self.actions.picker { list.append(&label(&format!("Emojis personalizados indisponíveis: {error}"))); } } self.action_error(error, sender, current); }
                     _ => {}
@@ -471,23 +490,24 @@ impl ChatModel {
         }
     }
     fn render_picker(&self, sender: &ComponentSender<Self>) {
-        let Some((_, list, id)) = &self.actions.picker else { return; }; clear(list);
-        let id = *id;
-        list.append(&label("Emojis Unicode"));
-        let flow = gtk::FlowBox::new(); flow.set_selection_mode(gtk::SelectionMode::None); flow.set_max_children_per_line(8);
-        for value in ["❤️", "👍", "👎", "😀", "😂", "🎉", "🔥", "👀", "🙏", "✅", "❌", "😢", "🤔", "👏", "🚀", "💯", "🥳", "😮", "☕", "🐈"] {
-            let b = button(value, sender, move || ActionMsg::ToggleReaction { id, emoji_id: None, unicode: Some(value.into()) });
-            b.set_sensitive(self.access.send && !self.actions.busy.contains(&id)); flow.insert(&b, -1);
-        } list.append(&flow);
-        let custom = gtk::Entry::new(); custom.set_placeholder_text(Some("Outro emoji Unicode (cole aqui)")); custom.set_max_length(16); custom.set_sensitive(self.access.send && !self.actions.busy.contains(&id));
-        let s = sender.clone(); custom.connect_activate(move |entry| { s.input(ChatMsg::Action(ActionMsg::ToggleReaction { id, emoji_id: None, unicode: Some(entry.text().to_string()) })); }); list.append(&custom);
-        list.append(&label("Emojis personalizados"));
-        for emoji in &self.actions.emojis {
-            let emoji_id = emoji.id; let b = button(&format!(":{}:", emoji.name), sender, move || ActionMsg::ToggleReaction { id, emoji_id: Some(emoji_id), unicode: None });
-            if let Some(t) = self.actions.textures.get(&emoji.id) { let row = gtk::Box::new(gtk::Orientation::Horizontal, 8); row.append(&emoji_image(t)); row.append(&label(&emoji.name)); b.set_child(Some(&row)); }
-            b.set_sensitive(self.access.send && !self.actions.busy.contains(&id)); list.append(&b);
+        if let Some((window,list,id))=&self.actions.picker {
+            let id=*id;let output=sender.input_sender().clone();let window=window.downgrade();
+            emoji::picker(list,&self.unicode_emojis,&self.actions.emojis,&self.actions.textures,move |choice|{
+                let _=output.send(ChatMsg::Action(ActionMsg::ToggleReaction{id,emoji_id:choice.id,unicode:choice.id.is_none().then_some(choice.text)}));if let Some(window)=window.upgrade(){window.close();}
+            });
         }
-        if self.actions.emojis.is_empty() { list.append(&label("Nenhum emoji personalizado carregado.")); }
+        if let Some((window,list))=&self.actions.composer_picker {
+            let output=sender.input_sender().clone();let window=window.downgrade();
+            emoji::picker(list,&self.unicode_emojis,&self.actions.emojis,&self.actions.textures,move |choice|{let _=output.send(ChatMsg::InsertEmoji(choice.text));if let Some(window)=window.upgrade(){window.close();}});
+        }
+    }
+    pub(super) fn open_composer_picker(&mut self,root:&gtk::Box,sender:&ComponentSender<Self>){
+        if let Some((window,_))=self.actions.composer_picker.as_ref().filter(|(w,_)|w.is_visible()){window.present();return;}
+        let (window,list)=window(root,"Escolher emoji");window.set_default_size(360,420);
+        let output=sender.input_sender().clone();let epoch=self.actions.epoch;window.connect_close_request(move |_|{let _=output.send(ChatMsg::ComposerClosed(epoch));gtk::glib::Propagation::Proceed});
+        let keys=gtk::EventControllerKey::new();let weak=window.downgrade();keys.connect_key_pressed(move |_,key,_,_|{if key==gtk::gdk::Key::Escape{if let Some(window)=weak.upgrade(){window.close();}gtk::glib::Propagation::Stop}else{gtk::glib::Propagation::Proceed}});window.add_controller(keys);
+        self.actions.composer_picker=Some((window.clone(),list));self.render_picker(sender);
+        if self.actions.emojis_loaded.is_none()&&self.actions.emojis_request.is_none(){self.request_emojis(sender);}window.present();
     }
     pub(super) fn refresh_reaction_hints(&self){
         let mut hints=self.actions.reaction_hints.borrow_mut();hints.clear();

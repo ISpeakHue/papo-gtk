@@ -6,6 +6,7 @@
 pub mod auth;
 pub mod channel;
 pub mod message;
+pub mod embed;
 pub mod role;
 pub mod server;
 pub mod user;
@@ -17,6 +18,7 @@ pub mod discovery;
 pub use auth::*;
 pub use channel::*;
 pub use message::*;
+pub use embed::*;
 pub use role::*;
 pub use server::*;
 pub use user::*;

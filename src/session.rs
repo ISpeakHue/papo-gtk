@@ -2,10 +2,11 @@
 use crate::{api::ApiClient,models::WhoamiResponse};
 use anyhow::{Result,anyhow};
 use serde::{Serialize,Deserialize};
+pub mod refresh;
 const SERVICE:&str="br.com.papo.gtk.session.v1";
 static STORAGE:std::sync::Mutex<()>=std::sync::Mutex::new(());
 #[derive(Serialize,Deserialize)]
-struct SavedSession{version:u8,base:String,username:String,auth:String}
+struct SavedSession{version:u8,base:String,username:String,auth:String,#[serde(default)]owner:Option<uuid::Uuid>}
 fn account(base:&str,user:&str)->String{format!("{base}\n{user}")}
 
 #[cfg(not(test))]
@@ -25,29 +26,42 @@ fn write(key:&str,value:Option<&str>)->Result<()>{
 
 pub async fn save(api:&ApiClient,user:&str)->Result<()>{
     let Some(auth)=api.auth_cookie()else{return Ok(());};
-    let saved=SavedSession{version:1,base:api.base_url().into(),username:user.into(),auth};
+    let saved=SavedSession{version:1,base:api.base_url().into(),username:user.into(),auth,owner:Some(api.session_owner())};
     let key=account(&saved.base,user);let encoded=serde_json::to_string(&saved).map_err(|_|anyhow!("Não foi possível preparar a sessão."))?;
     tokio::task::spawn_blocking(move ||{let _guard=STORAGE.lock().map_err(|_|anyhow!("Chaveiro indisponível."))?;write(&key,Some(&encoded))}).await.map_err(|_|anyhow!("Chaveiro indisponível."))?
 }
-pub async fn forget(api:&ApiClient,user:&str)->Result<()>{
+/// Explicit user choice (e.g. unchecking Remember) clears any saved account.
+pub async fn forget_account(api:&ApiClient,user:&str)->Result<()>{
     let key=account(api.base_url(),user);tokio::task::spawn_blocking(move ||{let _guard=STORAGE.lock().map_err(|_|anyhow!("Chaveiro indisponível."))?;write(&key,None)}).await.map_err(|_|anyhow!("Chaveiro indisponível."))?
+}
+/// Delayed logout may remove only the credential owned by this session.
+pub async fn forget(api:&ApiClient,user:&str)->Result<()>{
+    let key=account(api.base_url(),user);let owner=api.session_owner();let auth=api.auth_cookie();
+    tokio::task::spawn_blocking(move ||{
+        let _guard=STORAGE.lock().map_err(|_|anyhow!("Chaveiro indisponível."))?;
+        let Some(encoded)=read(&key)? else{return Ok(());};
+        let Ok(saved)=serde_json::from_str::<SavedSession>(&encoded) else{return Ok(());};
+        if saved.owner==Some(owner)||(saved.owner.is_none()&&Some(saved.auth)==auth){write(&key,None)?;}
+        Ok(())
+    }).await.map_err(|_|anyhow!("Chaveiro indisponível."))?
 }
 /// Keep the remembered cookie in sync with refresh rotation. A late refresh
 /// must not recreate a logged-out credential or overwrite a newer login.
 pub async fn rotated(api:&ApiClient,user:&str,previous:&str)->Result<()>{
-    let Some(auth)=api.auth_cookie()else{return Ok(());};let base=api.base_url().to_owned();let user=user.to_owned();let key=account(&base,&user);let previous=previous.to_owned();
+    let Some(auth)=api.auth_cookie()else{return Ok(());};let base=api.base_url().to_owned();let user=user.to_owned();let key=account(&base,&user);let previous=previous.to_owned();let owner=api.session_owner();
     tokio::task::spawn_blocking(move ||{
         let _guard=STORAGE.lock().map_err(|_|anyhow!("Chaveiro indisponível."))?;
         let Some(encoded)=read(&key)?else{return Ok(());};let Ok(mut saved)=serde_json::from_str::<SavedSession>(&encoded)else{return Ok(());};
-        if saved.version!=1||saved.base!=base||saved.username!=user||saved.auth!=previous{return Ok(());}
-        saved.auth=auth;let encoded=serde_json::to_string(&saved).map_err(|_|anyhow!("Não foi possível preparar a sessão."))?;write(&key,Some(&encoded))
+        if saved.version!=1||saved.base!=base||saved.username!=user||saved.auth!=previous||saved.owner.is_some_and(|id|id!=owner){return Ok(());}
+        saved.auth=auth;saved.owner=Some(owner);let encoded=serde_json::to_string(&saved).map_err(|_|anyhow!("Não foi possível preparar a sessão."))?;write(&key,Some(&encoded))
     }).await.map_err(|_|anyhow!("Chaveiro indisponível."))?
 }
 pub async fn resume(api:&ApiClient,user:&str)->Result<Option<WhoamiResponse>>{
     let key=account(api.base_url(),user);let copy=key.clone();
     let Some(encoded)=tokio::task::spawn_blocking(move ||read(&copy)).await.map_err(|_|anyhow!("Chaveiro indisponível."))?? else{return Ok(None);};
     let saved=serde_json::from_str::<SavedSession>(&encoded).ok().filter(|s|s.version==1&&s.base==api.base_url()&&s.username==user);
-    let Some(saved)=saved else{forget(api,user).await?;return Ok(None);};
+    let Some(saved)=saved else{return Ok(None);};
+    if let Some(owner)=saved.owner{api.adopt_session_owner(owner);}
     if api.restore_auth_cookie(&saved.auth).is_err(){forget(api,user).await?;return Ok(None);}
     match api.whoami().await{
         Ok(profile) if profile.username==user=>{
@@ -105,5 +119,16 @@ pub async fn resume(api:&ApiClient,user:&str)->Result<Option<WhoamiResponse>>{
         let key=format!("test-{}",uuid::Uuid::new_v4());let entry=keyring::Entry::new(&format!("{SERVICE}.test"),&key).unwrap();
         struct Cleanup(keyring::Entry);impl Drop for Cleanup{fn drop(&mut self){let _=self.0.delete_credential();}}
         let entry=Cleanup(entry);entry.0.set_password("disposable-test-value").unwrap();assert_eq!(entry.0.get_password().unwrap(),"disposable-test-value");
+    }
+}
+
+#[cfg(test)]mod ownership_tests{
+    use super::*;
+    #[tokio::test]async fn old_logout_preserves_new_login_but_removes_its_own_rotated_cookie(){
+        let a=ApiClient::new(&format!("https://{}.test",uuid::Uuid::new_v4())).unwrap();a.restore_auth_cookie("session-a").unwrap();save(&a,"Alice").await.unwrap();
+        let b=ApiClient::new(a.base_url()).unwrap();b.restore_auth_cookie("session-b").unwrap();save(&b,"Alice").await.unwrap();
+        // A's cleanup runs after B has saved under the same key.
+        forget(&a,"Alice").await.unwrap();let saved:SavedSession=serde_json::from_str(&read(&account(a.base_url(),"Alice")).unwrap().unwrap()).unwrap();assert_eq!(saved.auth,"session-b");
+        b.restore_auth_cookie("session-b-rotated").unwrap();rotated(&b,"Alice","session-b").await.unwrap();forget(&b,"Alice").await.unwrap();assert!(read(&account(a.base_url(),"Alice")).unwrap().is_none());
     }
 }

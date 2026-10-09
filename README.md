@@ -4,7 +4,7 @@ A native desktop frontend for [papo-backend](https://github.com/Papo-Chat/papo-b
 built with Rust, GTK 4, libadwaita and Relm4.
 
 The application supports server and account authentication, channels and direct
-messages, attachments and link previews, reactions and mentions, member profiles,
+messages, attachments and rich link/custom embeds, reactions and mentions, member profiles,
 notifications, moderation, voice calls, cameras and screen sharing. The interface
 uses an adaptive server/channel sidebar and native GNOME controls.
 
@@ -49,6 +49,8 @@ Real SFU integration can be enabled through the workflow's manual inputs.
 See [TESTING.md](TESTING.md) for dependencies, commands and manual checks,
 [DESIGN.md](DESIGN.md) for interface decisions, and
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for feature implementation notes.
+See [EMBEDS.md](EMBEDS.md) for the updated embed API, custom-card controls and
+current backend media limitations.
 
 ## License
 

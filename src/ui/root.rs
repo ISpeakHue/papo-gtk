@@ -47,6 +47,39 @@ mod tests {
             if !context.pending() { break; }
             context.iteration(false);
         }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("report6"){
+            crate::ui::chat::bugs6::exercise(&context);window.close();return;
+        }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("send-video"){
+            crate::ui::chat::bugs6::exercise_send_feedback(&context);crate::ui::chat::video::exercise_fullscreen(&context);window.close();return;
+        }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("startup"){
+            crate::ui::chat::performance::exercise_startup(&context);crate::ui::sidebar::exercise_startup(&context);window.close();return;
+        }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("scroll-media"){
+            crate::ui::chat::performance::exercise_media_scroll(&context);window.close();return;
+        }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("channel-opening"){
+            crate::ui::chat::performance::exercise_opening(&context);window.close();return;
+        }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("smooth-updates"){
+            crate::ui::chat::performance::exercise_smooth_updates(&context);
+            crate::ui::chat::performance::exercise_media_scroll(&context);
+            crate::ui::chat::performance::exercise_opening(&context);
+            crate::ui::chat::performance::exercise_corrections(&context);window.close();return;
+        }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("embeds"){
+            crate::ui::chat::rich::exercise(&context);window.close();return;
+        }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("video-audio"){
+            crate::ui::chat::video::exercise_initial_audio();window.close();return;
+        }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("report5"){
+            crate::ui::chat::bugs5::exercise(&context);window.close();return;
+        }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("cache"){
+            crate::ui::chat::performance::exercise_cache(&context);window.close();return;
+        }
         assert!(window.content().unwrap().is::<adw::ToolbarView>());
         // AdwApplicationWindow also owns a hidden internal title bar. Inspect
         // the application's content, not that implementation detail.
@@ -164,9 +197,9 @@ mod tests {
                 "avatar_blob":blob
             })).unwrap();
             let (request, ids) = avatar_cache.begin(&[channel_id], true).unwrap();
-            assert!(avatar_cache.finish(request, &ids, vec![profile]));
+            assert!(avatar_cache.finish(request, &ids, vec![(profile.id,profile.avatar_blob.as_deref().and_then(crate::media::avatars::prepare))]));
             let texture = avatar_cache.textures[&channel_id].clone();
-            assert_eq!(texture.width(), dimension as i32);
+            assert_eq!(texture.width(), dimension.min(crate::media::avatars::AVATAR_EDGE) as i32);
             chat.emit(ChatMsg::SetAvatars(avatar_cache.textures.clone()));
             members.emit(UserListMsg::SetAvatars(avatar_cache.textures.clone()));
             drain();
@@ -179,11 +212,11 @@ mod tests {
         assert!(avatar_cache.finish(new_request, &ids, Vec::new()));
         assert!(!avatar_cache.finish(old_request, &ids, Vec::new()));
         for blob in [serde_json::Value::Null, serde_json::json!("invalid-base64!")] {
-            let profile = serde_json::from_value(serde_json::json!({
+            let profile:crate::models::UserProfile = serde_json::from_value(serde_json::json!({
                 "id":channel_id,"username":"alice","created_at":"2026-10-03T12:00:00Z","avatar_blob":blob
             })).unwrap();
             let (request, ids) = avatar_cache.begin(&[channel_id], true).unwrap();
-            avatar_cache.finish(request, &ids, vec![profile]);
+            avatar_cache.finish(request, &ids, vec![(profile.id,profile.avatar_blob.as_deref().and_then(crate::media::avatars::prepare))]);
             chat.emit(ChatMsg::SetAvatars(avatar_cache.textures.clone()));
             members.emit(UserListMsg::SetAvatars(avatar_cache.textures.clone()));
             drain();
@@ -194,6 +227,20 @@ mod tests {
         crate::ui::chat::actions::tests::exercise(&context);
         crate::ui::chat::bugs::exercise(&context);
         crate::ui::chat::bugs5::exercise(&context);
+        crate::ui::chat::bugs6::exercise(&context);
+        crate::ui::chat::rich::exercise(&context);
+        crate::ui::chat::video::exercise_initial_audio();
+        crate::ui::chat::bugs6::exercise_send_feedback(&context);
+        crate::ui::chat::video::exercise_fullscreen(&context);
+        crate::ui::chat::performance::exercise_startup(&context);
+        crate::ui::sidebar::exercise_startup(&context);
+        crate::ui::chat::performance::exercise_media_scroll(&context);
+        crate::ui::chat::performance::exercise_opening(&context);
+        crate::ui::chat::performance::exercise_smooth_updates(&context);
+        crate::ui::chat::performance::exercise(&context);
+        crate::ui::chat::performance::exercise_corrections(&context);
+        crate::ui::user_list::exercise_corrections(&context);
+        crate::media::avatars::exercise_corrections(&context);
         crate::media::animation::exercise(&context);
         crate::media::sound::exercise(&context);
 

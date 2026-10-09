@@ -3,14 +3,15 @@
 use uuid::Uuid;
 use std::collections::{HashSet,HashMap};
 
-use crate::models::{Message, LinkPreview, MessageReactionSummary};
+use crate::models::{Message, Embed, MessageReactionSummary};
 
 #[derive(Debug, Clone)]
 pub enum Change {
     Upsert(Message),
     Edit(Uuid, String, Option<chrono::DateTime<chrono::Utc>>),
     Reaction(Uuid, MessageReactionSummary),
-    Preview(Uuid, LinkPreview),
+    Preview(Uuid, Embed),
+    Embeds(Uuid, Vec<Embed>),
     RemovePreview(Uuid, Uuid),
     Moderation(Uuid, Uuid, String),
     Reactions(Uuid, Vec<crate::models::ReactionGroup>, Uuid),
@@ -24,9 +25,23 @@ pub struct History {
     pending: Option<Uuid>,
     changes: Vec<Change>,
     deleted: HashSet<Uuid>,
+    snapshots: HashMap<Uuid, Vec<Change>>,
+    dirty:HashSet<Uuid>,
+    media_revision:u64,
 }
 
 impl History {
+    pub fn media_revision(&self)->u64{self.media_revision}
+    pub fn mark_dirty(&mut self,id:Uuid){self.dirty.insert(id);}
+    pub fn take_dirty(&mut self)->HashSet<Uuid>{
+        let mut dirty=std::mem::take(&mut self.dirty);if dirty.is_empty(){return dirty;}
+        let changed=dirty.clone();
+        for (index,m) in self.messages.iter().enumerate(){if changed.contains(&m.id){if let Some(next)=self.messages.get(index+1){dirty.insert(next.id);}}}
+        // Use the original changes for reply dependencies; don't recursively
+        // dirty the entire grouping chain after one changed row.
+        for m in &self.messages{if m.reply_to.is_some_and(|id|changed.contains(&id)){dirty.insert(m.id);}}
+        dirty
+    }
     pub fn select(&mut self, channel_id: Uuid) {
         *self = Self { channel_id: Some(channel_id), ..Self::default() };
     }
@@ -41,18 +56,53 @@ impl History {
             return false;
         }
         self.pending = None;
+        self.media_revision=self.media_revision.wrapping_add(1);
         let changes = std::mem::take(&mut self.changes);
         let current = if append { std::mem::take(&mut self.messages) } else { Vec::new() };
         let mut merged:HashMap<Uuid,Message>=HashMap::with_capacity(messages.len()+current.len());
-        for message in messages.into_iter().chain(current){
+        for message in current.into_iter().chain(messages.into_iter().map(snapshot_message)){
             if Some(message.channel_id)!=self.channel_id||self.deleted.contains(&message.id){continue;}
             if let Some(existing)=merged.get_mut(&message.id){merge_message(existing,message);}else{merged.insert(message.id,message);}
         }
+        self.dirty.extend(merged.keys().copied());
         self.messages=merged.into_values().collect();self.messages.sort_by_key(|m|(m.created_at,m.id));
         for change in changes {
             self.apply(change);
         }
         true
+    }
+
+    /// Independent journals let a read receipt coexist with history pagination.
+    pub fn begin_snapshot(&mut self, request: Uuid) { self.snapshots.insert(request, Vec::new()); }
+    pub fn fail_snapshot(&mut self, request: Uuid) { self.snapshots.remove(&request); }
+    pub fn finish_snapshot(&mut self, request: Uuid, messages: Vec<Message>) -> bool {
+        let Some(changes) = self.snapshots.remove(&request) else { return false; };
+        for message in messages { self.upsert(snapshot_message(message)); }
+        for change in changes { self.apply(change); }
+        true
+    }
+    pub fn finish_reconcile(&mut self,request:Uuid,messages:Vec<Message>,exhausted:bool)->bool{
+        let Some(changes)=self.snapshots.remove(&request) else{return false;};
+        let live:HashSet<_>=changes.iter().filter_map(|c|if let Change::Upsert(m)=c{Some(m.id)}else{None}).collect();
+        let ids:HashSet<_>=messages.iter().map(|m|m.id).collect();
+        let lower=if exhausted{None}else{messages.iter().map(|m|(m.created_at,m.id)).min()};
+        let deleted:Vec<_>=self.messages.iter().filter(|m|!ids.contains(&m.id)&&!live.contains(&m.id)&&lower.is_none_or(|key|(m.created_at,m.id)>=key)).map(|m|m.id).collect();
+        for id in deleted{self.apply(Change::Delete(id));}
+        for m in messages{self.upsert(snapshot_message(m));}
+        for change in changes{self.apply(change);}
+        true
+    }
+    fn record(&mut self, change: &Change) {
+        if matches!(change,Change::Upsert(m) if m.embeds.is_some())||matches!(change,Change::Preview(..)|Change::Embeds(..)|Change::RemovePreview(..)|Change::Moderation(..)|Change::Delete(_)){
+            self.media_revision=self.media_revision.wrapping_add(1);
+        }
+        let id=match change{Change::Upsert(m)=>m.id,Change::Edit(id,..)|Change::Reaction(id,..)|Change::Reactions(id,..)|Change::Preview(id,..)|Change::Embeds(id,..)|Change::RemovePreview(id,..)|Change::Moderation(id,..)|Change::Delete(id)=>*id};
+        self.dirty.insert(id);
+        if matches!(change,Change::Delete(_)|Change::Moderation(_,_,_)){
+            if let Some(index)=self.messages.iter().position(|m|m.id==id){if let Some(next)=self.messages.get(index+1){self.dirty.insert(next.id);}}
+        }
+        if self.pending.is_some() { self.changes.push(change.clone()); }
+        for changes in self.snapshots.values_mut() { changes.push(change.clone()); }
     }
 
     pub fn is_deleted(&self, id: Uuid) -> bool { self.deleted.contains(&id) }
@@ -71,7 +121,7 @@ impl History {
     /// Report whether an HTTP/WS arrival actually changes the selected history.
     pub fn upsert(&mut self,message:Message)->bool {
         if Some(message.channel_id)!=self.channel_id||self.deleted.contains(&message.id){return false;}
-        if self.pending.is_some(){self.changes.push(Change::Upsert(message.clone()));}
+        self.record(&Change::Upsert(message.clone()));
         self.merge_upsert(message)
     }
 
@@ -90,9 +140,7 @@ impl History {
                 return;
             }
         }
-        if self.pending.is_some() {
-            self.changes.push(change.clone());
-        }
+        self.record(&change);
         match change {
             Change::Upsert(message) => {self.merge_upsert(message);}
             Change::Edit(id, content, edited_at) => {
@@ -124,15 +172,18 @@ impl History {
                     })).collect());
                 }
             }
+            Change::Embeds(id, embeds)=>{
+                if let Some(message)=self.messages.iter_mut().find(|m|m.id==id){message.embeds=Some(embeds);}
+            },
             Change::Preview(id, preview) => {
                 if let Some(message) = self.messages.iter_mut().find(|m| m.id == id) {
-                    let previews = message.previews.get_or_insert_with(Vec::new);
+                    let previews = message.embeds.get_or_insert_with(Vec::new);
                     if let Some(existing) = previews.iter_mut().find(|item| item.id == preview.id) { *existing = preview; }
                     else { previews.push(preview); }
                 }
             }
             Change::RemovePreview(id, preview_id) => {
-                if let Some(previews) = self.messages.iter_mut().find(|m| m.id == id).and_then(|m| m.previews.as_mut()) {
+                if let Some(previews) = self.messages.iter_mut().find(|m| m.id == id).and_then(|m| m.embeds.as_mut()) {
                     previews.retain(|preview| preview.id != preview_id);
                 }
             }
@@ -155,8 +206,17 @@ impl History {
     }
 }
 
+/// History endpoints are complete snapshots. Empty optional collections clear
+/// missed removals; sparse WS/send echoes continue to preserve omitted fields.
+fn snapshot_message(mut message:Message)->Message{
+    message.embeds.get_or_insert_with(Vec::new);
+    message.reactions.get_or_insert_with(Vec::new);
+    message.user_reactions.get_or_insert_with(Vec::new);
+    message
+}
+
 fn merge_message(existing:&mut Message,mut message:Message)->bool {
-    if message.previews.is_none(){message.previews=existing.previews.clone();}
+    if message.embeds.is_none(){message.embeds=existing.embeds.clone();}
     if message.reactions.is_none(){message.reactions=existing.reactions.clone();}
     if message.user_reactions.is_none(){message.user_reactions=existing.user_reactions.clone();}
     if existing.edited_at>message.edited_at{message.content=existing.content.clone();message.edited_at=existing.edited_at;}
@@ -167,6 +227,7 @@ fn merge_message(existing:&mut Message,mut message:Message)->bool {
 #[derive(Default)]
 pub struct Draft {
     pub text: String,
+    pub embeds:Vec<crate::models::EmbedInput>,
     pub files: Vec<crate::api::features::UploadFile>,
     pub reply: Option<Message>,
     pub error: Option<String>,
@@ -179,7 +240,7 @@ impl Draft {
     }
 
     pub fn begin(&mut self) -> Option<Uuid> {
-        if self.is_sending() || (self.text.trim().is_empty() && self.files.is_empty()) {
+        if self.is_sending() || (self.text.trim().is_empty() && self.files.is_empty()&&self.embeds.is_empty()) {
             return None;
         }
         let id = Uuid::new_v4();
@@ -194,7 +255,7 @@ impl Draft {
         }
         self.pending = None;
         match result {
-            Ok(()) => { self.text.clear(); self.files.clear(); self.reply = None; self.error = None; }
+            Ok(()) => { self.text.clear(); self.files.clear();self.embeds.clear(); self.reply = None; self.error = None; }
             Err(error) => self.error = Some(error),
         }
         true
@@ -213,7 +274,7 @@ mod tests {
             content: Some("original".into()),
             created_at: chrono::DateTime::from_timestamp(second, 0).unwrap(),
             edited_at: None, reply_to: None, attachments: None,
-            previews: None, reactions: None, user_reactions: None,
+            embeds: None, reactions: None, user_reactions: None,
         }
     }
 
@@ -224,6 +285,21 @@ mod tests {
         history.apply(Change::Reaction(original.id,MessageReactionSummary{emoji_id:None,unicode:Some("❤️".into()),count:1}));assert!(!history.upsert(original.clone()),"a bare HTTP echo preserves realtime reactions");
         let request=Uuid::new_v4();history.begin(request);assert!(!history.upsert(original.clone()));history.finish(request,vec![],false);assert_eq!(history.messages.len(),1,"unchanged arrivals still replay over a history snapshot");
         let mut edit=original.clone();edit.content=Some("edited".into());assert!(history.upsert(edit));history.apply(Change::Delete(original.id));assert!(!history.upsert(original));
+    }
+
+    #[test]fn complete_embed_lists_replay_over_both_pending_snapshot_types(){
+        let channel=Uuid::new_v4();let mut original=message(channel,1);
+        let embed:Embed=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"source_type":"custom","fetch_method":"manual","created_at":original.created_at,"title":"Old"})).unwrap();original.embeds=Some(vec![embed.clone()]);
+        let mut history=History::default();history.select(channel);history.upsert(original.clone());
+        let page=Uuid::new_v4();let read=Uuid::new_v4();history.begin(page);history.begin_snapshot(read);history.apply(Change::Embeds(original.id,vec![]));
+        assert!(history.finish_snapshot(read,vec![original.clone()]));assert!(history.messages[0].embeds.as_ref().unwrap().is_empty());
+        assert!(history.finish(page,vec![original.clone()],false));assert!(history.messages[0].embeds.as_ref().unwrap().is_empty());
+        let mut newer=embed;newer.id=Uuid::new_v4();history.apply(Change::Embeds(original.id,vec![newer.clone()]));assert_eq!(history.messages[0].embeds,Some(vec![newer]));
+        history.apply(Change::Delete(original.id));history.apply(Change::Embeds(original.id,vec![]));assert!(history.messages.is_empty());
+    }
+    #[test]fn embed_only_drafts_preserve_inputs_on_failure_and_clear_on_success(){
+        let mut draft=Draft{embeds:vec![crate::models::EmbedInput{title:"Rich".into(),..Default::default()}],..Default::default()};
+        let id=draft.begin().unwrap();assert!(draft.finish(id,Err("Try again".into())));assert_eq!(draft.embeds.len(),1);let id=draft.begin().unwrap();assert!(draft.finish(id,Ok(())));assert!(draft.embeds.is_empty());
     }
 
     #[test]fn large_history_pages_merge_once_deduplicate_and_replay_events(){
@@ -413,11 +489,11 @@ mod tests {
     fn preview_changes_replay_during_history_fetch() {
         let channel = Uuid::new_v4();
         let mut original = message(channel, 1);
-        let mut preview: LinkPreview = serde_json::from_value(serde_json::json!({
+        let mut preview: Embed = serde_json::from_value(serde_json::json!({
             "id": Uuid::new_v4(), "url":"https://example.test", "kind":"og", "title":"old",
             "fetched_at":"2026-10-03T12:00:00Z"
         })).unwrap();
-        original.previews = Some(vec![preview.clone()]);
+        original.embeds = Some(vec![preview.clone()]);
         let mut history = History::default();
         history.select(channel);
         let request = Uuid::new_v4();
@@ -425,11 +501,11 @@ mod tests {
         preview.title = Some("updated".into());
         history.apply(Change::Preview(original.id, preview.clone()));
         history.finish(request, vec![original.clone()], false);
-        assert_eq!(history.messages[0].previews.as_ref().unwrap()[0].title.as_deref(),Some("updated"));
+        assert_eq!(history.messages[0].embeds.as_ref().unwrap()[0].title.as_deref(),Some("updated"));
         history.begin(request);
         history.apply(Change::RemovePreview(original.id, preview.id));
         history.finish(request, vec![original], false);
-        assert!(history.messages[0].previews.as_ref().unwrap().is_empty());
+        assert!(history.messages[0].embeds.as_ref().unwrap().is_empty());
     }
 
     #[test]
@@ -486,6 +562,36 @@ mod tests {
         history.apply(Change::Edit(original.id,"new".into(),chrono::DateTime::from_timestamp(20,0)));
         history.apply(Change::Edit(original.id,"old".into(),chrono::DateTime::from_timestamp(10,0)));
         assert_eq!(history.messages[0].content.as_deref(),Some("new"));
+    }
+
+}
+
+#[cfg(test)]mod correction_tests{
+    use super::*;
+    fn message(channel:Uuid,time:i64)->Message{serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"channel_id":channel,"content":"original","created_at":chrono::DateTime::from_timestamp(time,0)})).unwrap()}
+    fn reaction(count:i32)->MessageReactionSummary{MessageReactionSummary{emoji_id:None,unicode:Some("❤️".into()),count}}
+    #[test]fn independent_reads_replay_reactions_and_removed_previews_during_pagination(){
+        let channel=Uuid::new_v4();let mut history=History::default();history.select(channel);
+        let mut old=message(channel,2);let preview=Uuid::new_v4();old.reactions=Some(vec![reaction(1)]);old.embeds=Some(vec![serde_json::from_value(serde_json::json!({"id":preview,"url":"https://example.test","kind":"og","fetched_at":"2026-10-08T12:00:00Z"})).unwrap()]);history.upsert(old.clone());
+        let page=Uuid::new_v4();history.begin(page);let read=Uuid::new_v4();history.begin_snapshot(read);
+        history.apply(Change::Reaction(old.id,reaction(2)));history.apply(Change::RemovePreview(old.id,preview));
+        assert!(history.finish_snapshot(read,vec![old.clone()]));assert_eq!(history.messages[0].reactions.as_ref().unwrap()[0].count,2);assert!(history.messages[0].embeds.as_ref().unwrap().is_empty());
+        assert!(history.finish(page,vec![old.clone(),message(channel,1)],true));assert_eq!(history.messages[1].reactions.as_ref().unwrap()[0].count,2);assert!(history.messages[1].embeds.as_ref().unwrap().is_empty());
+        let fresh=Uuid::new_v4();history.begin_snapshot(fresh);old.reactions=Some(vec![reaction(3)]);old.embeds=Some(vec![]);history.finish_snapshot(fresh,vec![old]);assert_eq!(history.messages[1].reactions.as_ref().unwrap()[0].count,3);
+    }
+    #[test]fn reconnect_retains_old_pages_reconciles_deletion_edges_and_replays_live_messages(){
+        let channel=Uuid::new_v4();let mut history=History::default();history.select(channel);let a=message(channel,1);let b=message(channel,2);let c=message(channel,3);
+        for m in [&a,&b,&c]{history.upsert(m.clone());}let request=Uuid::new_v4();history.begin_snapshot(request);let live=message(channel,4);history.upsert(live.clone());
+        let mut updated=b.clone();updated.content=Some("recovered edit".into());history.finish_reconcile(request,vec![a.clone(),updated],true);
+        assert_eq!(history.messages.iter().map(|m|m.id).collect::<Vec<_>>(),vec![a.id,b.id,live.id]);assert_eq!(history.messages[1].content.as_deref(),Some("recovered edit"));assert!(history.is_deleted(c.id));
+        history.select(Uuid::new_v4());assert!(!history.finish_reconcile(request,vec![c],true));assert!(history.messages.is_empty());
+    }
+    #[test]fn dirty_rows_include_grouping_neighbors_and_reply_dependents_without_dirtying_entire_history(){
+        let channel=Uuid::new_v4();let mut h=History::default();h.select(channel);let messages:Vec<_>=(0..1000).map(|i|message(channel,i)).collect();for m in &messages{h.upsert(m.clone());}let mut reply=message(channel,1001);reply.reply_to=Some(messages[400].id);h.upsert(reply.clone());h.take_dirty();
+        h.apply(Change::Reaction(messages[400].id,reaction(2)));let dirty=h.take_dirty();assert!(dirty.contains(&messages[400].id));assert!(dirty.contains(&messages[401].id));assert!(dirty.contains(&reply.id));assert_eq!(dirty.len(),3);
+    }
+    #[test]fn complete_snapshots_clear_missed_removals_while_sparse_echoes_preserve_live_fields(){
+        let channel=Uuid::new_v4();let mut h=History::default();h.select(channel);let mut original=message(channel,1);original.reactions=Some(vec![reaction(2)]);h.upsert(original.clone());let mut bare=original;bare.reactions=None;assert!(!h.upsert(bare.clone()));let request=Uuid::new_v4();h.begin_snapshot(request);h.finish_snapshot(request,vec![bare]);assert!(h.messages[0].reactions.as_ref().unwrap().is_empty());
     }
 
 }

@@ -38,7 +38,7 @@ impl Inbox {
     }
     pub fn observe(&mut self,m:Message){
         if self.deleted.contains(&m.id){return;}
-        for n in self.rows.values_mut().filter(|n|n.message_id==m.id){n.channel_id=Some(m.channel_id);}
+        for n in self.rows.values_mut().filter(|n|n.message_id==m.id){n.channel_id=Some(m.channel_id);n.author_id=m.author_id;}
         if !self.messages.contains_key(&m.id){self.message_order.push_back(m.id);}self.messages.insert(m.id,m);
         while self.message_order.len()>512 {if let Some(id)=self.message_order.pop_front(){self.messages.remove(&id);}}
     }

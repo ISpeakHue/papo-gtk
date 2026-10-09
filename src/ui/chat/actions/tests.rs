@@ -121,7 +121,7 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
                     else if route == format!("/users/{USER}/banner") {b.profile["banner_media"]=Value::Null;(200,json!({"response":"saved"}))}
                     else if route.ends_with("/settings") && method=="POST" {b.channel_setting=body["notification_settings"].clone();(200,json!({"response":"saved"}))}
                     else if route.starts_with("/attachments/")&&route.split('/').count()==3{(200,Value::Null)}
-                    else if route.starts_with("/link-previews/") {(200,json!({"id":EMOJI,"url":"https://example.test/","kind":"image","fetched_at":"2026-10-03T00:00:00Z","image_mime_type":"image/png","image_data":tiny_png_base64(),"video_url":"https://example.test/video.mp4","provider_name":"X","title":"g1 (@g1)","description":"Elefante-marinho boceja e coça a cabeça durante soneca em praia de SC"}))}
+                    else if route.starts_with("/embeds/") {(200,json!({"id":EMOJI,"source_type":"link","fetch_method":"opengraph","url":"https://example.test/","created_at":"2026-10-03T00:00:00Z","fetched_at":"2026-10-03T00:00:00Z","thumbnail":{"mime_type":"image/png"},"image_data":tiny_png_base64(),"video":{"url":"https://example.test/video.mp4","mime_type":"video/mp4"},"provider":"X","title":"g1 (@g1)","description":"Elefante-marinho boceja e coça a cabeça durante soneca em praia de SC"}))}
                     else if route == format!("/messages/{MESSAGE}") && method == "PUT" {
                         if b.deny_edit { (403,json!({"type":"https://test/forbidden","detail":"Editing denied"})) }
                         else if b.fail_edit { b.fail_edit = false; (500,json!({"detail":"Try again"})) }

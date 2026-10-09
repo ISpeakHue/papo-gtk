@@ -62,13 +62,14 @@ pub enum WsEvent {
     SessionExpired,
     NewPreview { message_id: Uuid, preview_id: Uuid },
     RemovePreview { message_id: Uuid, preview_id: Uuid },
-    PreviewUpdate { channel_id: Uuid, message_id: Uuid, preview: LinkPreview },
+    PreviewUpdate { channel_id: Uuid, message_id: Uuid, preview: Embed },
+    EmbedsUpdate { channel_id: Uuid, message_id: Uuid, embeds: Vec<Embed> },
     AttachmentModeration { channel_id: Uuid, message_id: Uuid, attachment_id: Uuid, status: String },
     /// WebSocket connected; refresh snapshots to recover any missed events.
     Reconnected,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct PresenceEntry {
     pub user_id: Uuid,
     pub status: PresenceStatus,
@@ -100,7 +101,15 @@ impl WsCommand {fn for_connection(self,id:Uuid)->Option<String>{match self{Self:
 ///
 /// Returns an `mpsc::Receiver` of [`WsEvent`] values and an `mpsc::Sender`
 /// that can be used to send raw text frames (e.g. heartbeats or typing).
-pub fn spawn(client: crate::api::ApiClient) -> (mpsc::Receiver<WsEvent>, mpsc::Sender<WsCommand>) {
+#[derive(Clone,Copy)]
+struct Deadlines { handshake:std::time::Duration, write:std::time::Duration, heartbeat:std::time::Duration, silence:std::time::Duration }
+impl Default for Deadlines{fn default()->Self{use std::time::Duration as D;Self{handshake:D::from_secs(10),write:D::from_secs(10),heartbeat:D::from_secs(25),silence:D::from_secs(75)}}}
+async fn send_frame<S>(write:&mut S,frame:WsMessage,events:&mpsc::Sender<WsEvent>,deadline:std::time::Duration)->bool
+where S:futures_util::Sink<WsMessage>+Unpin {
+    tokio::select!{_ = events.closed()=>false,result=tokio::time::timeout(deadline,write.send(frame))=>matches!(result,Ok(Ok(())))}
+}
+pub fn spawn(client: crate::api::ApiClient) -> (mpsc::Receiver<WsEvent>, mpsc::Sender<WsCommand>) {spawn_with_deadlines(client,Deadlines::default())}
+fn spawn_with_deadlines(client: crate::api::ApiClient,deadlines:Deadlines) -> (mpsc::Receiver<WsEvent>, mpsc::Sender<WsCommand>) {
     let (ev_tx, ev_rx) = mpsc::channel::<WsEvent>(256);
     let (cmd_tx, mut cmd_rx) = mpsc::channel::<WsCommand>(64);
 
@@ -122,7 +131,7 @@ pub fn spawn(client: crate::api::ApiClient) -> (mpsc::Receiver<WsEvent>, mpsc::S
             info!("Connecting to WebSocket");
             let connection = tokio::select! {
                 _ = ev_tx.closed() => return,
-                connection = connect_async(request) => connection,
+                connection = tokio::time::timeout(deadlines.handshake,connect_async(request)) => connection.unwrap_or_else(|_|Err(std::io::Error::new(std::io::ErrorKind::TimedOut,"WebSocket handshake timed out").into())),
             };
             match connection {
                 Ok((stream, _)) => {
@@ -136,20 +145,23 @@ pub fn spawn(client: crate::api::ApiClient) -> (mpsc::Receiver<WsEvent>, mpsc::S
                     }
 
                     let (mut write, mut read) = stream.split();
-                    let mut heartbeat = tokio::time::interval(tokio::time::Duration::from_secs(25));
+                    let mut heartbeat = tokio::time::interval(deadlines.heartbeat);
                     heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
+                    let mut last_ack=tokio::time::Instant::now();
                     loop {
                         tokio::select! {
                             _ = ev_tx.closed() => return,
+                            _ = tokio::time::sleep_until(last_ack+deadlines.silence) => {warn!("WebSocket heartbeat acknowledgment timed out");break;}
                             _ = heartbeat.tick() => {
-                                if write.send(WsMessage::Text(r#"{"type":"heartbeat"}"#.into())).await.is_err() { break; }
+                                if !send_frame(&mut write,WsMessage::Text(r#"{"type":"heartbeat"}"#.into()),&ev_tx,deadlines.write).await { break; }
                             }
                             // Incoming server frames
                             msg = read.next() => {
                                 let Some(msg) = msg else { break; };
                                 match msg {
                                     Ok(WsMessage::Text(txt)) => {
+                                        if serde_json::from_str::<serde_json::Value>(&txt).ok().is_some_and(|v|v.get("type").and_then(|t|t.as_str())==Some("heartbeat_ack")){last_ack=tokio::time::Instant::now();continue;}
                                         if let Some(event) = parse_event(&txt) {
                                             if ev_tx.send(event).await.is_err() {
                                                 return;
@@ -157,7 +169,7 @@ pub fn spawn(client: crate::api::ApiClient) -> (mpsc::Receiver<WsEvent>, mpsc::S
                                         }
                                     }
                                     Ok(WsMessage::Ping(payload)) => {
-                                        if write.send(WsMessage::Pong(payload)).await.is_err() { break; }
+                                        if !send_frame(&mut write,WsMessage::Pong(payload),&ev_tx,deadlines.write).await { break; }
                                     }
                                     Ok(WsMessage::Close(_)) => {
                                         warn!("WebSocket closed by server");
@@ -175,8 +187,8 @@ pub fn spawn(client: crate::api::ApiClient) -> (mpsc::Receiver<WsEvent>, mpsc::S
                                 match cmd {
                                     Some(command) => {
                                         let Some(txt)=command.for_connection(connection_id)else{continue;};
-                                        if let Err(e) = write.send(WsMessage::Text(txt.into())).await {
-                                            error!("WebSocket write error: {e}");
+                                        if !send_frame(&mut write,WsMessage::Text(txt.into()),&ev_tx,deadlines.write).await {
+                                            warn!("WebSocket write failed or timed out");
                                             break;
                                         }
                                     }
@@ -244,7 +256,7 @@ fn parse_event(text: &str) -> Option<WsEvent> {
         }),
         "message_edit" => {
             let id = parse_uuid(&raw.payload, "id")?;
-            let content = raw.payload["content"].as_str()?.to_owned();
+            let content = match raw.payload.get("content")?{serde_json::Value::Null=>String::new(),value=>value.as_str()?.to_owned()};
             let channel_id = parse_uuid(&raw.payload, "channel_id");
             let edited_at = raw.payload["edited_at"].as_str().and_then(|value| value.parse().ok());
             Some(WsEvent::MessageEdit { id, content, channel_id, edited_at })
@@ -295,6 +307,10 @@ fn parse_event(text: &str) -> Option<WsEvent> {
             let channel_id = parse_uuid(&raw.payload, "channel_id")?;
             Some(WsEvent::Typing { user_id, channel_id, is_typing: raw.payload["is_typing"].as_bool().unwrap_or(true) })
         }
+        "message_embeds_update" => Some(WsEvent::EmbedsUpdate {
+            channel_id:parse_uuid(&raw.payload,"channel_id")?,message_id:parse_uuid(&raw.payload,"message_id")?,
+            embeds:match raw.payload.get("embeds")?{serde_json::Value::Null=>Vec::new(),value=>serde_json::from_value(value.clone()).ok()?},
+        }),
         "new_preview" => Some(WsEvent::NewPreview {
             message_id: parse_uuid(&raw.payload, "message_id")?, preview_id: parse_uuid(&raw.payload, "preview_id")?,
         }),
@@ -454,6 +470,16 @@ mod backend_contract_tests {
         assert!(matches!(parse(json!({"type":"attachment_moderation_update","channel_id":ID,"message_id":ID,"attachment_id":ID,"status":"sensitive"})),WsEvent::AttachmentModeration { .. }));
     }
 
+    #[test]fn rich_embed_events_replace_lists_and_accept_null_clears(){
+        let channel=Uuid::new_v4();let message=Uuid::new_v4();let embed=serde_json::json!({"id":Uuid::new_v4(),"source_type":"custom","fetch_method":"manual","title":"Rich","created_at":"2026-10-09T12:00:00Z","fields":null});
+        for list in [serde_json::json!([embed]),serde_json::json!([]),serde_json::Value::Null]{
+            let text=serde_json::json!({"type":"message_embeds_update","channel_id":channel,"message_id":message,"embeds":list}).to_string();
+            let Some(WsEvent::EmbedsUpdate{channel_id,message_id,embeds})=parse_event(&text) else{panic!("rich event was dropped")};assert_eq!(channel_id,channel);assert_eq!(message_id,message);assert_eq!(embeds.len(),list.as_array().map_or(0,Vec::len));
+        }
+        assert!(parse_event(&serde_json::json!({"type":"message_embeds_update","channel_id":channel,"message_id":message}).to_string()).is_none());
+        assert!(matches!(parse_event(&serde_json::json!({"type":"message_edit","id":message,"channel_id":channel,"content":null}).to_string()),Some(WsEvent::MessageEdit{content,..}) if content.is_empty()));
+    }
+
     #[tokio::test]
     async fn ping_is_answered_and_revoked_session_stops_reconnecting() {
         use tokio::{net::TcpListener,io::AsyncWriteExt,time::{timeout,Duration}};
@@ -546,4 +572,47 @@ mod voice_reconnect_tests {
             commands.send(WsCommand::Voice{connection:new,text:r#"{"type":"voice_mute","muted":true}"#.into()}).await.unwrap();server.await.unwrap();drop(events);drop(commands);
         }).await.expect("voice reconnect fixture timed out");
     }
+}
+
+#[cfg(test)]mod liveness_tests{
+    use super::*;
+    use std::time::Duration;
+    use tokio::io::{AsyncReadExt,AsyncWriteExt};
+    fn deadlines()->Deadlines{Deadlines{handshake:Duration::from_millis(150),write:Duration::from_millis(150),heartbeat:Duration::from_millis(40),silence:Duration::from_millis(200)}}
+    #[tokio::test]async fn silent_peer_disconnects_even_while_draining_heartbeats(){
+        let listener=tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();let api=crate::api::ApiClient::new(&format!("http://{}",listener.local_addr().unwrap())).unwrap();
+        let peer=tokio::spawn(async move{let (socket,_)=listener.accept().await.unwrap();let mut ws=tokio_tungstenite::accept_async(socket).await.unwrap();let mut heartbeats=0;while let Some(Ok(msg))=ws.next().await{if msg.is_text(){heartbeats+=1;}}heartbeats});
+        let (mut events,commands)=spawn_with_deadlines(api,deadlines());
+        tokio::time::timeout(Duration::from_secs(2),async{while let Some(e)=events.recv().await{if matches!(e,WsEvent::Disconnected){break;}}}).await.unwrap();
+        drop(events);drop(commands);assert!(peer.await.unwrap()>=2);
+    }
+    #[tokio::test]async fn stalled_handshake_is_bounded_and_teardown_cancels_connection(){
+        let listener=tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();let api=crate::api::ApiClient::new(&format!("http://{}",listener.local_addr().unwrap())).unwrap();
+        let (events,commands)=spawn_with_deadlines(api,deadlines());let (mut socket,_)=listener.accept().await.unwrap();let mut bytes=[0;2048];assert!(socket.read(&mut bytes).await.unwrap()>0);
+        tokio::time::timeout(Duration::from_secs(1),async{loop{if socket.read(&mut bytes).await.unwrap()==0{break;}}}).await.unwrap();
+        drop(events);drop(commands);
+        let _=socket.shutdown().await;
+    }
+    #[tokio::test]async fn blocked_write_obeys_timeout_and_event_receiver_cancellation(){
+        struct Blocked;
+        impl futures_util::Sink<WsMessage> for Blocked{
+            type Error=std::io::Error;
+            fn poll_ready(self:std::pin::Pin<&mut Self>,_:&mut std::task::Context<'_>)->std::task::Poll<Result<(),Self::Error>>{std::task::Poll::Pending}
+            fn start_send(self:std::pin::Pin<&mut Self>,_:WsMessage)->Result<(),Self::Error>{unreachable!()}
+            fn poll_flush(self:std::pin::Pin<&mut Self>,_:&mut std::task::Context<'_>)->std::task::Poll<Result<(),Self::Error>>{std::task::Poll::Pending}
+            fn poll_close(self:std::pin::Pin<&mut Self>,_:&mut std::task::Context<'_>)->std::task::Poll<Result<(),Self::Error>>{std::task::Poll::Pending}
+        }
+        let (tx,rx)=mpsc::channel(1);let mut blocked=Blocked;
+        assert!(!send_frame(&mut blocked,WsMessage::Ping(vec![].into()),&tx,Duration::from_millis(20)).await);
+        drop(rx);tokio::time::timeout(Duration::from_millis(100),async{assert!(!send_frame(&mut blocked,WsMessage::Ping(vec![].into()),&tx,Duration::from_secs(10)).await);}).await.unwrap();
+    }
+    #[tokio::test]async fn acknowledgments_keep_a_healthy_connection_alive_and_drop_cancels_a_handshake(){
+        let listener=tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();let api=crate::api::ApiClient::new(&format!("http://{}",listener.local_addr().unwrap())).unwrap();
+        let peer=tokio::spawn(async move{let (socket,_)=listener.accept().await.unwrap();let mut ws=tokio_tungstenite::accept_async(socket).await.unwrap();while let Some(Ok(frame))=ws.next().await{if frame.is_text(){if ws.send(WsMessage::Text(r#"{"type":"heartbeat_ack"}"#.into())).await.is_err(){break;}}}});
+        let (mut events,commands)=spawn_with_deadlines(api,deadlines());
+        let result=tokio::time::timeout(Duration::from_millis(450),async{while let Some(e)=events.recv().await{if matches!(e,WsEvent::Disconnected){return;}}}).await;assert!(result.is_err(),"valid acknowledgments must renew the liveness deadline");drop(events);drop(commands);peer.await.unwrap();
+        let listener=tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();let api=crate::api::ApiClient::new(&format!("http://{}",listener.local_addr().unwrap())).unwrap();let (events,commands)=spawn_with_deadlines(api,Deadlines::default());let(mut socket,_)=listener.accept().await.unwrap();let mut bytes=[0;2048];assert!(socket.read(&mut bytes).await.unwrap()>0);drop(events);drop(commands);
+        tokio::time::timeout(Duration::from_millis(200),async{while socket.read(&mut bytes).await.unwrap()>0{}}).await.unwrap();
+    }
+
 }

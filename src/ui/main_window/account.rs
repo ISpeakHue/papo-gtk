@@ -4,9 +4,9 @@ use crate::models::*;
 use crate::ui::chat::actions::window;
 #[derive(Debug)]
 pub enum AccountMsg {
-    Profile(Uuid), RefreshProfile(Uuid), Preferences, ChannelPreferences, ProfileLoaded {
+    Profile(Uuid), RefreshProfile(Uuid), ProfileRefreshReady{token:Uuid,id:Uuid}, Preferences, ChannelPreferences, ProfileLoaded {
         token: Uuid, result: anyhow::Result<(UserProfile, Option<Vec<u8>>)>
-    }, SaveProfile(Uuid), Image {
+    }, ProfilePrepared{token:Uuid,result:anyhow::Result<(UserProfile,Option<Vec<u8>>,Option<crate::media::PreparedImage>)>}, SaveProfile(Uuid), Image {
         token: Uuid, banner: bool, remove: bool
     }, ImageSelected {
         token: Uuid, banner: bool, result: anyhow::Result<Vec<u8>>
@@ -27,6 +27,7 @@ pub(super) struct Account {
     profile: Option<ProfileView>, preferences: Option<PreferencesView>, channel: Option<(Uuid, gtk::Window, gtk::Box, gtk::Label)>, jobs: Vec<tokio::task::JoinHandle<()>>, mutation: Option<Uuid>, settings_pending: bool, channel_pending: bool, restore_fields: Option<(Uuid, UpdateUserRequest, u32)>, pub config: UserConfig, css: Option<gtk::CssProvider>,
 }
 struct ProfileView {
+    loading:bool,refresh_again:bool,refresh_scheduled:bool,
     token: Uuid, id: Uuid, window: gtk::Window, body: gtk::Box, error: gtk::Label, fields: Option<ProfileFields>, pending: bool, image_write: bool
 }
 struct ProfileFields {
@@ -100,8 +101,20 @@ impl MainWindowModel {
         self.account.jobs.retain(|j|!j.is_finished());
         match msg {
             AccountMsg::RefreshProfile(id) => {
-                if self.account.profile.as_ref().is_some_and(|v|v.id==id&&v.fields.is_none()&&v.window.is_visible()) {
-                    sender.input(MainWindowMsg::Account(AccountMsg::Profile(id)));
+                if id!=self.current_user.id{
+                    if let Some(v)=self.account.profile.as_mut().filter(|v|v.id==id&&v.fields.is_none()&&v.window.is_visible()){
+                        if v.loading{v.refresh_again=true;}
+                        else if !v.refresh_scheduled{
+                            v.refresh_scheduled=true;let token=v.token;let s=sender.clone();
+                            self.account.jobs.push(tokio::spawn(async move{tokio::time::sleep(Duration::from_millis(500)).await;s.input(MainWindowMsg::Account(AccountMsg::ProfileRefreshReady{token,id}));}));
+                        }
+                    }
+                }
+            }
+            AccountMsg::ProfileRefreshReady{token,id}=>{
+                if let Some(v)=self.account.profile.as_mut().filter(|v|v.token==token&&v.id==id&&v.window.is_visible()){
+                    v.refresh_scheduled=false;
+                    if v.loading{v.refresh_again=true;}else{sender.input(MainWindowMsg::Account(AccountMsg::Profile(id)));}
                 }
             }
             AccountMsg::Profile(id) => {
@@ -121,7 +134,7 @@ impl MainWindowModel {
                 body.append(&error);
                 w.present();
                 self.account.profile = Some(ProfileView {
-                    token, id, window: w, body: content, error, fields: None, pending: false, image_write: false
+                    token, id, window: w, body: content, error, fields: None, pending: false, image_write: false,loading:true,refresh_again:false,refresh_scheduled:false
                 });
                 let api = self.api_client.clone();
                 let s = sender.clone();
@@ -142,17 +155,23 @@ impl MainWindowModel {
                     }));
                 }));
             }
-            AccountMsg::ProfileLoaded {
-                token, result
-            } => {
+            AccountMsg::ProfileLoaded{token,result}=>{
+                if !self.account.profile.as_ref().is_some_and(|v|v.token==token&&v.window.is_visible()){return;}
+                let s=sender.clone();self.account.jobs.push(tokio::spawn(async move{
+                    let result=match result{Ok((profile,banner))=>{let image=crate::media::avatars::prepare_blob(profile.avatar_blob.clone(),192).await;Ok((profile,banner,image))},Err(e)=>Err(e)};
+                    s.input(MainWindowMsg::Account(AccountMsg::ProfilePrepared{token,result}));
+                }));
+            }
+            AccountMsg::ProfilePrepared{token,result} => {
                 let Some(v) = self.account.profile.as_mut().filter(|v|v.token==token&&v.window.is_visible())else {
                     return;
                 };
+                v.loading=false;if std::mem::take(&mut v.refresh_again){sender.input(MainWindowMsg::Account(AccountMsg::RefreshProfile(v.id)));}
                 match result {
                     Err(e) => {
                         v.error.set_text(&format!("Perfil indisponível: {e}"));
                         sender.input(MainWindowMsg::ActionError(e));
-                    }, Ok((p, banner)) => {
+                    }, Ok((p, banner, image)) => {
                         v.error.set_text("");
                         if let Some(t) = banner.as_deref().and_then(crate::media::bounded_texture) {
                             let picture = gtk::Picture::for_paintable(&t);
@@ -160,8 +179,7 @@ impl MainWindowModel {
                             picture.set_can_shrink(true);
                             v.body.append(&picture);
                         }
-                        self.avatars.seed(p.id, p.avatar_blob.as_deref());
-                        let avatar = self.avatars.textures.get(&p.id).cloned();
+                        let avatar=image.map(crate::media::PreparedImage::texture);
                         let identity=gtk::Box::new(gtk::Orientation::Horizontal,16);let picture=crate::media::avatar_image(avatar.as_ref(),80);picture.set_text(Some(p.display_name()));identity.append(&picture);
                         let names=gtk::Box::new(gtk::Orientation::Vertical,4);names.set_valign(gtk::Align::Center);let name=gtk::Label::new(Some(p.display_name()));name.add_css_class("title-2");name.set_xalign(0.0);name.set_ellipsize(gtk::pango::EllipsizeMode::End);if let Some(roles)=p.roles.as_deref(){crate::ui::style::role_color(&name,roles);}names.append(&name);let username=gtk::Label::new(Some(&format!("@{}",p.username)));username.add_css_class("dim-label");username.set_xalign(0.0);names.append(&username);identity.append(&names);v.body.append(&identity);
                         let badges=gtk::FlowBox::new();badges.set_selection_mode(gtk::SelectionMode::None);badges.set_min_children_per_line(1);badges.set_max_children_per_line(8);badges.set_halign(gtk::Align::Start);
@@ -379,8 +397,11 @@ impl MainWindowModel {
                         user.settings = Some(WhoamiSettings {
                             version: 1, config: self.account.config.clone()
                         });
-                        self.avatars.seed(user.id, user.avatar_blob.as_deref());
+                        self.load_avatar_blob(user.id,user.avatar_blob.clone(),sender.clone());
+                        self.members.invalidate(user.id);
+                        if let Some(summary)=self.users.iter_mut().find(|u|u.id==user.id){summary.nickname=user.nickname.clone();summary.status=user.status.clone();summary.status_message=user.status_message.clone();summary.typing=user.typing.clone();summary.status_updated_at=user.status_updated_at;}
                         self.current_user = user;
+                        self.publish_users();
                         self.publish_avatars();
                         self.sidebar.emit(SidebarMsg::SetCurrentUser(self.current_user.clone()));
                         self.refresh_channels(sender.clone());

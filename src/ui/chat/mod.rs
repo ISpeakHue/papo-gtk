@@ -1,4 +1,8 @@
 //! Chat view component — displays channel header, message history, attachments, link previews, reactions, and composer.
+mod window;
+pub(crate) mod video;
+pub(crate) mod rich;
+mod embed_editor;
 pub(crate) mod mentions;
 
 pub(crate) mod state;
@@ -10,6 +14,8 @@ mod emoji;
 use viewport::{Viewport,Position};
 #[cfg(test)]pub(crate) mod bugs;
 #[cfg(test)]pub(crate) mod bugs5;
+#[cfg(test)]pub(crate) mod bugs6;
+#[cfg(test)]pub(crate) mod performance;
 use transfers::{Transfers, TransferMsg};
 use actions::{Actions, ActionMsg};
 use state::{Change, Draft, History};
@@ -22,7 +28,7 @@ use std::time::Instant;
 use uuid::Uuid;
 
 use crate::media::{avatar_image, format_file_size};
-use crate::models::{Attachment, Channel, ConversationTarget, DirectConversation, LinkPreview, Message, MessageListResponse, MessageCursor, UserSummary};
+use crate::models::{Attachment, Channel, ConversationTarget, DirectConversation, Embed, Message, MessageListResponse, MessageCursor, UserSummary};
 
 #[derive(Debug, Clone, Default)]
 pub struct ChatInit {
@@ -35,9 +41,16 @@ pub struct ChatInit {
 pub struct ChatModel {
     pub active_channel: Option<ConversationTarget>,
     history: History,
+    history_ready: bool,
+    reconcile_request:Option<Uuid>,
+    media_render_pending: Option<Uuid>,
+    #[cfg(test)]
+    render_passes: usize,
+    #[cfg(test)]media_hydrations:usize,
     initial_read:Option<viewport::ReadBoundary>,
     viewport:Viewport,
     rendered:HashMap<String,(String,gtk::ListBoxRow)>,
+    render_window:window::RenderWindow,
     viewing_old:bool,
     emoji_visible:bool,emoji_manual:bool,emoji_dismissed:bool,emoji_signature:String,unicode_emojis:Vec<emoji::Choice>,
     mention_visible:bool,mention_manual:bool,mention_signature:String,mention_dismissed:bool,
@@ -61,10 +74,11 @@ pub struct ChatModel {
 
 #[derive(Debug)]
 pub enum ChatMsg {
-    CancelInitialRead,ViewportChanged(bool), Latest,
+    RenderMedia(Uuid),
+    CancelInitialRead,ViewportChanged(bool), MediaViewport, Latest,
     CopyMessage(String), ContextMenu(Uuid), ContextAt{ id:Uuid,x:f64,y:f64 },
     AutoOlder, ExpireHighlight{epoch:Uuid,id:Uuid,generation:u64},
-    Notifications, NotificationCount{count:usize,more:bool},
+    Search, Notifications, NotificationCount{count:usize,more:bool},
     Action(ActionMsg),
     Transfer(TransferMsg),
     SetConfig(crate::models::UserConfig),
@@ -85,12 +99,17 @@ pub enum ChatMsg {
     AddMessage(Message),
 
     DeleteMessage(Uuid),
+    Resync,
+    Reconciled{request:Uuid,result:anyhow::Result<MessageListResponse>},
+    BeginSnapshot(Uuid),
+    SnapshotLoaded { request: Uuid, messages: Option<Vec<Message>> },
     SetUsers(Vec<UserSummary>),
     SetAvatars(HashMap<Uuid, gtk::gdk::Texture>),
     UserTyping { user_id: Uuid, is_typing: bool },
     ClearStaleTyping,
     InputChanged(String),
-    OpenEmojis,CloseEmojis,EmojiSelected(String),UnicodePicker,
+    OpenEmojis,CloseEmojis,ComposerClosed(Uuid),EmojiSelected(String),InsertEmoji(String),UnicodePicker,
+    OpenEmbeds,SaveEmbeds(Uuid),EmbedsClosed(Uuid),
     MentionSelected(Option<Uuid>),OpenMentions,MentionCursorChanged,CloseMentions,
     SetReply(Option<Message>),
     SendClicked,
@@ -102,7 +121,7 @@ pub enum ChatMsg {
 
 #[derive(Debug)]
 pub enum ChatOutput {
-    Notifications,
+    Search, Notifications,
     HistoryObserved { channel_id: Uuid, messages: Vec<Message>, latest:bool },
     OpenProfile(Uuid),
     ChannelPreferences,
@@ -151,6 +170,7 @@ impl Component for ChatModel {
                     #[watch] set_sensitive:model.access.read&&model.active_channel.as_ref().is_some_and(|c|!c.is_direct()),
                     connect_clicked => ChatMsg::Action(ActionMsg::OpenPins),
                 },
+                gtk::Button {set_icon_name:"system-search-symbolic",set_has_frame:false,set_tooltip_text:Some("Buscar mensagens (Ctrl+K)"),connect_clicked => ChatMsg::Search},
                 gtk::Overlay {
                     gtk::Button {set_icon_name:"preferences-system-notifications-symbolic",set_has_frame:false,set_tooltip_text:Some("Notificações"),connect_clicked => ChatMsg::Notifications},
                     add_overlay = &gtk::Label {add_css_class:"papo-notification-count",set_halign:gtk::Align::End,set_valign:gtk::Align::Start,
@@ -225,22 +245,18 @@ impl Component for ChatModel {
                 set_margin_top: 4,
                 #[watch]
                 set_visible: model.draft.reply.is_some(),
-                add_css_class: "dim-label",
+                add_css_class: "papo-reply-banner",
 
                 gtk::Image {
                     set_icon_name: Some("mail-reply-sender-symbolic"),
                     set_pixel_size: 14,
                 },
 
+                gtk::Label {set_text:"Respondendo a:",add_css_class:"caption"},
+                #[name="reply_author"]
                 gtk::Label {
-                    #[watch]
-                    set_text: &format!(
-                        "Respondendo a: {}",
-                        model.draft.reply.as_ref().and_then(|m| m.author_id.and_then(|id| model.users_map.get(&id))).map(|u| u.display_name()).unwrap_or("Mensagem")
-                    ),
-                    set_hexpand: true,
-                    set_xalign: 0.0,
-                    add_css_class: "caption",
+                    #[watch] set_text:model.draft.reply.as_ref().and_then(|m|m.author_id.and_then(|id|model.users_map.get(&id))).map(|u|u.display_name()).unwrap_or("Mensagem"),
+                    set_hexpand:true,set_xalign:0.0,set_ellipsize:pango::EllipsizeMode::End,add_css_class:"heading",
                 },
 
                 gtk::Button {
@@ -288,15 +304,22 @@ impl Component for ChatModel {
             #[name = "selected_files"]
             gtk::Box { set_orientation: gtk::Orientation::Vertical, set_spacing: 4 },
             gtk::Label {
+                #[watch] set_visible:!model.draft.embeds.is_empty(),
+                #[watch] set_text:&format!("{} embed(s) personalizado(s)",model.draft.embeds.len()),
+                add_css_class:"caption",set_xalign:0.0,
+            },
+            #[name="send_progress"]
+            gtk::Label {
+                set_widget_name:"send-progress",
                 #[watch]
-                set_visible: model.draft.is_sending(),
+                set_visible: model.draft.is_sending()&&!model.draft.files.is_empty(),
                 #[watch]
-                set_text: &if model.draft.files.is_empty(){"Enviando mensagem…".into()}else{format!("Enviando: {} / {}", format_file_size(model.transfers.progress as i64), format_file_size(model.draft.files.iter().map(|f| f.size).sum::<u64>() as i64))},
+                set_text: &format!("Enviando: {} / {}", format_file_size(model.transfers.progress as i64), format_file_size(model.draft.files.iter().map(|f| f.size).sum::<u64>() as i64)),
             },
             gtk::Button {
                 set_label: "Cancelar envio",
                 #[watch]
-                set_visible: model.draft.is_sending(),
+                set_visible: model.draft.is_sending()&&!model.draft.files.is_empty(),
                 connect_clicked => ChatMsg::Transfer(TransferMsg::Cancel),
             },
             #[name="mention_panel"]
@@ -339,6 +362,11 @@ impl Component for ChatModel {
                     #[watch] set_sensitive:model.access.send&&!model.draft.is_sending(),
                     connect_clicked=>ChatMsg::OpenEmojis,
                 },
+                gtk::Button {
+                    set_icon_name:"document-properties-symbolic",set_has_frame:false,set_tooltip_text:Some("Embeds personalizados"),
+                    #[watch] set_sensitive:model.active_channel.is_some()&&model.access.send&&!model.draft.is_sending(),
+                    connect_clicked=>ChatMsg::OpenEmbeds,
+                },
                 #[name="mention_button"]
                 gtk::Button {
                     set_label: "@",
@@ -368,7 +396,7 @@ impl Component for ChatModel {
                     set_icon_name: "mail-send-symbolic",
                     add_css_class: "suggested-action",
                     #[watch]
-                    set_sensitive: model.active_channel.is_some() && model.access.send && (!model.draft.text.trim().is_empty() || !model.draft.files.is_empty()) && !model.draft.is_sending(),
+                    set_sensitive: model.active_channel.is_some() && model.access.send && (!model.draft.text.trim().is_empty() || !model.draft.files.is_empty()||!model.draft.embeds.is_empty()) && !model.draft.is_sending(),
                     set_tooltip_text: Some("Enviar mensagem"),
 
                     connect_clicked[sender] => move |_| {
@@ -381,6 +409,11 @@ impl Component for ChatModel {
 
     fn init(init: Self::Init, root: Self::Root, sender: ComponentSender<Self>) -> ComponentParts<Self> {
         let mut model = ChatModel {
+            history_ready: !init.messages.is_empty(),reconcile_request:None,render_window:Default::default(),
+            media_render_pending: None,
+            #[cfg(test)]
+            render_passes: 0,
+            #[cfg(test)]media_hydrations:0,
             initial_read:init.active_channel.clone().map(ConversationTarget::Channel).as_ref().map(viewport::ReadBoundary::new),
             emoji_visible:false,emoji_manual:false,emoji_dismissed:false,emoji_signature:String::new(),unicode_emojis:emoji::builtin(),
             active_channel: init.active_channel.clone().map(ConversationTarget::Channel),
@@ -408,6 +441,11 @@ impl Component for ChatModel {
 
         let widgets = view_output!();
         crate::ui::style::close_popovers_on_action(&root);
+        let outside=gtk::GestureClick::new();outside.set_button(1);outside.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let input=sender.input_sender().clone();outside.connect_pressed(move |_,_,_,_|{let _=input.send(ChatMsg::Transfer(TransferMsg::DismissImages));});
+        // Cover the whole application once rooted, including clicks on the same thumbnail.
+        let controller=outside.clone();root.connect_root_notify(move |root|{if let Some(parent)=root.root().and_downcast::<gtk::Window>(){if controller.widget().is_none(){parent.add_controller(controller.clone());}}else if let Some(parent)=controller.widget(){parent.remove_controller(&controller);}});
+
         let input=sender.input_sender().clone();widgets.message_entry.connect_notify_local(Some("cursor-position"),move |_,_|{let _=input.send(ChatMsg::MentionCursorChanged);});
         let keys=gtk::EventControllerKey::new();keys.set_propagation_phase(gtk::PropagationPhase::Capture);
         let input=sender.input_sender().clone();let mentions=widgets.mention_panel.downgrade();let emojis=widgets.emoji_panel.downgrade();
@@ -442,7 +480,15 @@ impl Component for ChatModel {
         }
         widgets.message_entry.set_enable_emoji_completion(false);
         model.viewport.connect(&widgets.scrolled_window,&widgets.messages_list,&sender);
-        rebuild_messages_view(&widgets.messages_list, &mut model.rendered, &model.history.messages, &model.users_map, &model.avatars, &model.access, model.user_id, &model.actions, &model.transfers, &model.config, &sender);
+        let initial_position=if model.history_ready{model.initial_read.take().map_or(Position::Bottom,|boundary|boundary.position(&model.history.messages))}else{Position::Bottom};
+        model.viewing_old=matches!(initial_position,Position::Unread(_)|Position::Message(_));
+        model.render_window.select(&model.history.messages,&initial_position,0.0,600.0);
+        rebuild_messages_view(&widgets.messages_list, &mut model.rendered, &model.history.messages, &model.render_window,None, model.history_ready, &model.users_map, &model.avatars, &model.access, model.user_id, &model.actions, &model.transfers, &model.config, false, &sender);
+        if model.active_channel.is_some(){
+            model.viewport.begin_open(&widgets.scrolled_window);
+            model.viewport.open_ready(model.history_ready);
+            model.viewport.restore(&widgets.scrolled_window,&widgets.messages_list,initial_position,&sender);
+        }
 
         ComponentParts { model, widgets }
     }
@@ -456,54 +502,113 @@ impl Component for ChatModel {
     ) {
         let message=match message {
             ChatMsg::SetChannel(c)=>ChatMsg::SetTarget(ConversationTarget::Channel(c)),
-            ChatMsg::SetDirect(d)=>ChatMsg::SetTarget(ConversationTarget::Direct(d)),other=>other,
+            ChatMsg::SetDirect(d)=>ChatMsg::SetTarget(ConversationTarget::Direct(d)),
+            ChatMsg::InsertEmoji(value)=>{self.emoji_manual=true;ChatMsg::EmojiSelected(value)},other=>other,
         };
+        let incremental=matches!(&message,ChatMsg::AddMessage(_)|ChatMsg::ApplyChange(_)|ChatMsg::DeleteMessage(_)|ChatMsg::RenderMedia(_)|ChatMsg::MediaViewport|ChatMsg::SnapshotLoaded{..}|ChatMsg::SendFinished{..}|ChatMsg::Action(ActionMsg::ReactionsLoaded{..}|ActionMsg::ToggleReaction{..}));
+        let hydrate=!matches!(&message,ChatMsg::RenderMedia(_));
         let update_emojis=matches!(&message,ChatMsg::OpenEmojis|ChatMsg::CloseEmojis|ChatMsg::EmojiSelected(_)|ChatMsg::InputChanged(_)|ChatMsg::MentionCursorChanged|ChatMsg::SetTarget(_)|ChatMsg::ClearChannel|ChatMsg::SetAccess{..}|ChatMsg::SendClicked|ChatMsg::SendFinished{..}|ChatMsg::OpenMentions|ChatMsg::Action(ActionMsg::EmojiPage{..}|ActionMsg::EmojisLoaded{..}));
         let update_mentions=matches!(&message,ChatMsg::OpenMentions|ChatMsg::MentionCursorChanged|ChatMsg::CloseMentions|ChatMsg::SendClicked|ChatMsg::SendFinished{..}|ChatMsg::InputChanged(_)|ChatMsg::MentionSelected(_)|ChatMsg::SetUsers(_)|ChatMsg::SetAccess{..}|ChatMsg::SetTarget(_)|ChatMsg::ClearChannel);
         let update_files=matches!(&message,ChatMsg::SetTarget(_)|ChatMsg::ClearChannel|ChatMsg::SendClicked|ChatMsg::SendFinished{..}|ChatMsg::Transfer(TransferMsg::Selected{..}|TransferMsg::Remove(_)|TransferMsg::Cancel));
         let following=self.viewport.following();let mut position=None;let mut render_history=false;
         match message {
-            ChatMsg::OpenEmojis=>{self.emoji_manual=!self.emoji_visible;self.emoji_dismissed=false;self.mention_visible=false;self.mention_manual=false;self.mention_dismissed=true;},
+            ChatMsg::OpenEmbeds=>{
+                if self.active_channel.is_some()&&self.access.send&&!self.draft.is_sending(){
+                    if let Some((window,_,_))=&self.actions.embed_editor{window.present();return;}
+                    let (window,body)=actions::window(root,"Embeds personalizados");window.set_default_size(500,650);
+                    let editor=embed_editor::Editors::new(self.draft.embeds.clone());body.append(&gtk::ScrolledWindow::builder().vexpand(true).child(&editor.root).build());
+                    let error=gtk::Label::new(None);error.set_wrap(true);error.add_css_class("error");body.append(&error);
+                    let save=gtk::Button::with_label("Aplicar embeds");save.add_css_class("suggested-action");let input=sender.input_sender().clone();let epoch=self.actions.epoch;save.connect_clicked(move |_|{let _=input.send(ChatMsg::SaveEmbeds(epoch));});body.append(&save);
+                    let input=sender.input_sender().clone();window.connect_close_request(move |_|{let _=input.send(ChatMsg::EmbedsClosed(epoch));gtk::glib::Propagation::Proceed});
+                    let keys=gtk::EventControllerKey::new();let weak=window.downgrade();keys.connect_key_pressed(move |_,key,_,_|{if key==gtk::gdk::Key::Escape{if let Some(window)=weak.upgrade(){window.close();}gtk::glib::Propagation::Stop}else{gtk::glib::Propagation::Proceed}});window.add_controller(keys);
+                    self.actions.embed_editor=Some((window.clone(),editor,error));window.present();
+                }
+            },
+            ChatMsg::SaveEmbeds(epoch)=>{
+                if epoch==self.actions.epoch&&self.access.send&&!self.draft.is_sending(){if let Some((_,editor,error))=&self.actions.embed_editor{match editor.read(){Ok(embeds)=>{self.draft.embeds=embeds;if let Some((window,_,_))=self.actions.embed_editor.take(){window.close();}if let Some(w)=root.root().and_downcast::<gtk::Window>(){w.present();}widgets.message_entry.grab_focus();},Err(e)=>error.set_text(&e.to_string())}}}
+            },
+            ChatMsg::EmbedsClosed(epoch)=>{if epoch==self.actions.epoch&&self.actions.embed_editor.as_ref().is_some_and(|(w,_,_)|!w.is_visible()){self.actions.embed_editor.take();if let Some(w)=root.root().and_downcast::<gtk::Window>(){w.present();}widgets.message_entry.grab_focus();}},
+            ChatMsg::OpenEmojis=>{if self.access.send&&!self.draft.is_sending(){self.emoji_manual=true;self.emoji_visible=false;self.emoji_dismissed=true;self.mention_visible=false;self.mention_manual=false;self.mention_dismissed=true;self.open_composer_picker(root,&sender);}},
+            ChatMsg::ComposerClosed(epoch)=>{
+                if epoch==self.actions.epoch&&self.actions.composer_picker.as_ref().is_some_and(|(window,_)|!window.is_visible()){
+                    self.actions.composer_picker.take();self.emoji_visible=false;self.emoji_manual=false;self.emoji_dismissed=true;
+                    if let Some(window)=root.root().and_downcast::<gtk::Window>(){window.present();}
+                    widgets.message_entry.grab_focus();
+                }
+            },
             ChatMsg::CloseEmojis=>{self.emoji_visible=false;self.emoji_manual=false;self.emoji_dismissed=true;},
             ChatMsg::UnicodePicker=>{
                 self.emoji_manual=false;self.emoji_visible=false;
                 let picker=gtk::EmojiChooser::new();picker.set_parent(&widgets.emoji_button);let input=sender.input_sender().clone();
                 picker.connect_emoji_picked(move |_,emoji|{let _=input.send(ChatMsg::EmojiSelected(emoji.into()));});picker.connect_closed(|p|p.unparent());picker.popup();
             },
-            ChatMsg::EmojiSelected(value)=>{if !self.access.send||self.draft.is_sending(){return;}let replace=!self.emoji_manual&&emoji::completion(&widgets.message_entry.text(),widgets.message_entry.position()).is_some();
+            ChatMsg::EmojiSelected(value)=>{if !self.access.send||self.draft.is_sending(){return;}let replace=!self.actions.composer_picker.as_ref().is_some_and(|(w,_)|w.is_visible())&&!self.emoji_manual&&emoji::completion(&widgets.message_entry.text(),widgets.message_entry.position()).is_some();
                 let(text,caret)=emoji::insert(&widgets.message_entry.text(),widgets.message_entry.position(),&value,replace);self.emoji_dismissed=true;self.emoji_manual=false;self.emoji_visible=false;self.draft.text=text.clone();widgets.message_entry.set_text(&text);widgets.message_entry.set_position(caret);widgets.message_entry.grab_focus();
             },
-            ChatMsg::CancelInitialRead=>{self.initial_read=None;},
+            ChatMsg::CancelInitialRead=>{self.initial_read=None;self.viewport.cancel_open(&widgets.scrolled_window);},
             ChatMsg::ViewportChanged(old)=>{self.viewing_old=old;if widgets.scrolled_window.vadjustment().value()<=120.0{sender.input(ChatMsg::AutoOlder);}},
+            ChatMsg::MediaViewport=>{
+                let adj=widgets.scrolled_window.vadjustment();let mut scope=std::collections::HashSet::new();let mut priority=HashMap::new();
+                let mut row=widgets.messages_list.first_child();
+                while let Some(w)=row{row=w.next_sibling();if let Some(id)=w.widget_name().strip_prefix("message-").and_then(|s|Uuid::parse_str(s).ok()){
+                    if let Some(b)=w.compute_bounds(&widgets.messages_list){if f64::from(b.y()+b.height())>=adj.value()-adj.page_size()&&f64::from(b.y())<=adj.value()+2.0*adj.page_size(){scope.insert(id);let distance=(f64::from(b.y())-adj.value()-adj.page_size()/2.0).abs();priority.insert(id,distance as u64);}}
+                }}
+                if !scope.is_empty(){self.transfers.scope=scope;self.transfers.priority=priority;}
+                if self.render_window.needs_shift(&widgets.messages_list,&widgets.scrolled_window,&self.history.messages){render_history=true;}
+                if self.viewport.scrolling(){self.viewport.media_when_idle(&sender);}else{if !render_history{self.hydrate_media(&sender);}if let Some(token)=self.media_render_pending{sender.input(ChatMsg::RenderMedia(token));}}
+            },
             ChatMsg::AutoOlder=>{if self.initial_read.is_none()&&self.has_more&&!self.history.loading()&&!self.older_requested&&self.history_error.is_none()&&self.actions.navigation.is_none()&&self.access.read&&widgets.scrolled_window.is_mapped()&&widgets.scrolled_window.vadjustment().value()<=120.0{sender.input(ChatMsg::LoadOlder);}},
             ChatMsg::ExpireHighlight{epoch,id,generation}=>{if self.actions.epoch==epoch&&self.highlight_generation==generation&&self.actions.highlight==Some(id){self.actions.highlight=None;render_history=true;}},
             ChatMsg::Latest=>{self.initial_read=None;self.actions.navigation=None;self.actions.highlight=None;render_history=true;position=Some(Position::Bottom);},
             ChatMsg::CopyMessage(text)=>{if let Some(display)=gtk::gdk::Display::default(){display.clipboard().set_text(&text);}},
             ChatMsg::ContextMenu(id)=>{let mut row=widgets.messages_list.first_child();while let Some(w)=row{if w.widget_name()==format!("message-{id}"){show_context_menu(&w,None);break;}row=w.next_sibling();}},
             ChatMsg::ContextAt{id,x,y}=>{let mut row=widgets.messages_list.first_child();while let Some(w)=row{if w.widget_name()==format!("message-{id}"){show_context_menu(&w,Some((x,y)));break;}row=w.next_sibling();}},
+            ChatMsg::Search=>{let _=sender.output(ChatOutput::Search);},
             ChatMsg::Notifications=>{let _=sender.output(ChatOutput::Notifications);},
             ChatMsg::NotificationCount{count,more}=>{self.unread_notifications=count;self.more_notifications=more;},
             ChatMsg::OpenProfile(id) => {let _=sender.output(ChatOutput::OpenProfile(id));}
             ChatMsg::ChannelPreferences => {let _=sender.output(ChatOutput::ChannelPreferences);}
             ChatMsg::SetConfig(config) => {render_history=self.config.complete()!=config.complete();self.config=config.complete();},
-            ChatMsg::Transfer(msg) => {render_history=matches!(&msg,TransferMsg::AttachmentVideo{..}|TransferMsg::File{..}|TransferMsg::Video{..}|TransferMsg::CloseVideo{..}|TransferMsg::ImageReady{..}|TransferMsg::AnimationReady{..}|TransferMsg::Preview{..}|TransferMsg::Reveal{..}|TransferMsg::RetryImage(_));self.handle_transfer(msg,&sender,root);},
+            ChatMsg::RenderMedia(token) => {
+                if self.media_render_pending==Some(token){if self.viewport.scrolling(){self.viewport.media_when_idle(&sender);}else{self.media_render_pending=None;render_history=true;}}
+            },
+            ChatMsg::Transfer(msg) => {
+                let background=matches!(&msg,TransferMsg::ImageReady{..}|TransferMsg::AnimationReady{..}|TransferMsg::Preview{..});
+                render_history=matches!(&msg,TransferMsg::AttachmentVideo{..}|TransferMsg::File{..}|TransferMsg::Video{..}|TransferMsg::CloseVideo{..}|TransferMsg::Reveal{..}|TransferMsg::RetryImage(_));
+                let revision=self.transfers.revision;
+                self.handle_transfer(msg,&sender,root);
+                // Several decodes may complete together. Reconcile once per
+                // batch, and ignore rejected/stale completions entirely.
+                if background && self.transfers.revision!=revision && self.media_render_pending.is_none(){
+                    let token=Uuid::new_v4();self.media_render_pending=Some(token);let input=sender.input_sender().clone();
+                    gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(16),move ||{let _=input.send(ChatMsg::RenderMedia(token));});
+                }
+            },
             ChatMsg::SetAccess { user_id, access } => {
                 render_history=self.user_id!=Some(user_id)||self.access!=access;
+                let gained_read=!self.access.read&&access.read;
                 self.user_id = Some(user_id); self.access = access;
-                if !self.access.read { self.actions.reset_channel(); self.transfers.reset(); }
+                if !self.access.read {
+                    self.initial_read=None;self.viewport.cancel_open(&widgets.scrolled_window);
+                    self.actions.reset_channel(); self.transfers.reset();self.reconcile_request=None;
+                    if let Some(channel)=self.active_channel.as_ref(){self.history.select(channel.id());}
+                    self.history_ready=false;
+                }else if gained_read&&self.active_channel.is_some()&&!self.history_ready&&!self.history.loading(){sender.input(ChatMsg::Resync);}
                 self.render_manager(&sender);
             }
             ChatMsg::Action(action) => {
                 let highlight=self.actions.highlight;
                 let navigate=matches!(&action,ActionMsg::Navigate(_));
-                render_history=!matches!(&action,ActionMsg::HoverReactions(_)|ActionMsg::OpenPicker(_)|ActionMsg::OpenParticipants(_)|ActionMsg::OpenEdit(_)|ActionMsg::ConfirmDelete(_)|ActionMsg::OpenPins|ActionMsg::OpenEmojiManager);
+                render_history=!matches!(&action,ActionMsg::Reconcile(_)|ActionMsg::Reload|ActionMsg::ReloadEmojis|ActionMsg::HoverReactions(_)|ActionMsg::OpenPicker(_)|ActionMsg::OpenParticipants(_)|ActionMsg::OpenEdit(_)|ActionMsg::ConfirmDelete(_)|ActionMsg::OpenPins|ActionMsg::OpenEmojiManager);
+                if let ActionMsg::ReactionsLoaded{id,..}|ActionMsg::ToggleReaction{id,..}=&action{self.history.mark_dirty(*id);}
                 self.handle_action(action, &sender, root);
                 if navigate{self.initial_read=None;}
                 if navigate||self.actions.highlight!=highlight{if let Some(id)=self.actions.highlight{position=Some(Position::Message(id));}}
             }
-            ChatMsg::SetChannel(_) | ChatMsg::SetDirect(_) => {},
+            ChatMsg::SetChannel(_) | ChatMsg::SetDirect(_) | ChatMsg::InsertEmoji(_) => {},
             ChatMsg::UpdateDirect(dm) => { if self.active_channel.as_ref().is_some_and(|c|c.id()==dm.id){self.active_channel=Some(ConversationTarget::Direct(dm));} },
             ChatMsg::SetTarget(channel) => {
+                self.viewport.begin_open(&widgets.scrolled_window);
                 if self.active_channel.as_ref().map(|c| c.id()) != Some(channel.id()) {
                     if let Some(previous) = &self.active_channel {
                         self.saved_drafts.insert(previous.id(), std::mem::take(&mut self.draft));
@@ -512,11 +617,12 @@ impl Component for ChatModel {
                 }
                 self.emoji_visible=false;self.emoji_manual=false;self.emoji_dismissed=false;
                 self.actions.reset_channel();
-                self.transfers.reset();
+                self.transfers.switch_channel();
                 self.has_more = false;self.older_requested=false;
                 self.history_error = None;
                 self.last_typing_sent = None;
                 self.history.select(channel.id());position=Some(Position::Bottom);self.viewing_old=false;
+                self.history_ready=false;self.media_render_pending=None;self.reconcile_request=None;
                 self.initial_read=Some(viewport::ReadBoundary::new(&channel));
                 self.active_channel = Some(channel);
                 sender.input(ChatMsg::Action(ActionMsg::Reload));
@@ -524,8 +630,9 @@ impl Component for ChatModel {
                 widgets.message_entry.set_text(&self.draft.text);
                 render_history=true;
             }
-            ChatMsg::UpdateChannel(channel) => self.active_channel = Some(ConversationTarget::Channel(channel)),
+            ChatMsg::UpdateChannel(channel) => {if self.active_channel.as_ref().is_some_and(|c|c.id()==channel.id){self.active_channel=Some(ConversationTarget::Channel(channel));}},
             ChatMsg::ClearChannel => {
+                self.initial_read=None;self.viewport.cancel_open(&widgets.scrolled_window);
                 self.actions.reset_channel();
                 self.transfers.reset();
                 self.access = Default::default();
@@ -533,6 +640,7 @@ impl Component for ChatModel {
                     self.saved_drafts.insert(channel.id(), std::mem::take(&mut self.draft));
                 }
                 self.history = History::default();
+                self.history_ready=false;self.media_render_pending=None;self.reconcile_request=None;
                 self.has_more = false;self.older_requested=false;
                 self.history_error = None;
                 self.typing_users.clear();
@@ -549,6 +657,15 @@ impl Component for ChatModel {
                 }
             }
             ChatMsg::ApplyChange(change) => {
+                if let Change::Embeds(id,embeds)=&change{
+                    if let Some(message)=self.history.messages.iter().find(|m|m.id==*id){
+                        for old in message.embeds.iter().flatten(){
+                            let changed=embeds.iter().find(|e|e.id==old.id).is_some_and(|e|e.metadata()!=old.metadata());
+                            let removed=!embeds.iter().any(|e|e.id==old.id)&&!self.history.messages.iter().any(|m|m.id!=*id&&m.embeds.iter().flatten().any(|e|e.id==old.id));
+                            if changed||removed{self.transfers.invalidate(old.id);}
+                        }
+                    }
+                }
                 if let Change::Moderation(message, attachment, status) = &change { self.transfers.invalidate(*attachment); if status=="blocked" {self.transfers.invalidate_message(*message);} }
                 if let Change::Preview(_, preview) = &change { self.transfers.invalidate(preview.id); }
                 if let Change::RemovePreview(_, id) = &change { self.transfers.invalidate(*id); }
@@ -556,6 +673,37 @@ impl Component for ChatModel {
                 render_history=true;
             }
             ChatMsg::OperationError(error) => self.draft.error = Some(error),
+            ChatMsg::Resync=>{
+                if self.access.read&&self.reconcile_request.is_none(){
+                    if let (Some(api),Some(channel))=(self.actions.api.clone(),self.active_channel.as_ref()){
+                        let request=Uuid::new_v4();self.reconcile_request=Some(request);self.history.begin_snapshot(request);
+                        let channel_id=channel.id();let oldest=self.history.messages.first().map(MessageCursor::from);let output=sender.input_sender().clone();
+                        self.transfers.jobs.push(tokio::spawn(async move{let result=api.reconcile_messages(channel_id,oldest).await;let _=output.send(ChatMsg::Reconciled{request,result});}));
+                    }
+                }
+            },
+            ChatMsg::Reconciled{request,result}=>{
+                if self.reconcile_request!=Some(request){return;}self.reconcile_request=None;
+                match result{
+                    Ok(page)=>{
+                        let old:Vec<_>=self.history.messages.iter().map(|m|m.id).collect();let observed=page.messages.clone();
+                        render_history=self.history.finish_reconcile(request,page.messages,!page.has_more);self.history_ready=true;
+                        if render_history&&!self.history.loading()&&!self.older_requested{if let Some(mut boundary)=self.initial_read.take(){
+                            position=Some(boundary.position(&self.history.messages));
+                            if let Some(cursor)=boundary.older(&self.history.messages,page.has_more){self.older_requested=true;let _=sender.output(ChatOutput::LoadMoreMessages{channel_id:page.channel_id,cursor:Some(cursor)});self.initial_read=Some(boundary);}
+                        }}
+                        self.has_more=page.has_more;
+                        for id in old{if self.history.is_deleted(id){self.transfers.invalidate_message(id);self.actions.pinned.retain(|m|m.id!=id);}}
+                        let _=sender.output(ChatOutput::HistoryObserved{channel_id:page.channel_id,messages:observed,latest:true});
+                    },
+                    Err(error)=>{self.history.fail_snapshot(request);let _=sender.output(ChatOutput::ActionError(error));},
+                }
+            },
+            ChatMsg::BeginSnapshot(request) => {if self.access.read{self.history.begin_snapshot(request);}},
+            ChatMsg::SnapshotLoaded { request, messages } => {
+                if let Some(messages) = messages.filter(|_|self.access.read) { render_history=self.history.finish_snapshot(request,messages); }
+                else { self.history.fail_snapshot(request); }
+            }
             ChatMsg::BeginHistory { request_id, cursor } => {
                 self.older_requested=false;self.history.begin(request_id); self.history_error = None; self.retry_cursor = cursor;
             }
@@ -564,6 +712,7 @@ impl Component for ChatModel {
                     Ok(response) => {
                         let observed=response.messages.clone();
                         if self.history.finish(request_id, response.messages, append) {
+                            self.history_ready=true;
                             let _=sender.output(ChatOutput::HistoryObserved{channel_id:response.channel_id,messages:observed,latest:!append});
                             self.has_more = response.has_more;
                             self.history_error = None;
@@ -591,14 +740,12 @@ impl Component for ChatModel {
                 if (render_history&&following)||own_send{self.initial_read=None;position=Some(Position::Bottom);}
             }
             ChatMsg::DeleteMessage(id) => {
-                self.transfers.invalidate_message(id);
-                self.history.apply(Change::Delete(id));
-                self.actions.pinned.retain(|m| m.id != id);
+                self.delete_message(id);
                 sender.input(ChatMsg::Action(ActionMsg::PinEvent { id, pinned: false }));
                 render_history=true;
             }
             ChatMsg::SetAvatars(avatars) => {
-                render_history=self.avatars!=avatars;self.avatars=avatars;
+                crate::media::update_member_avatars(widgets.messages_list.upcast_ref(),&self.avatars,&avatars);self.avatars=avatars;
             }
             ChatMsg::SetUsers(users) => {
                 let users:HashMap<_,_>=users.into_iter().map(|u| (u.id, u)).collect();render_history=self.users_map.len()!=users.len()||users.iter().any(|(id,u)|self.users_map.get(id).is_none_or(|old|old.display_name()!=u.display_name()||old.roles!=u.roles));self.users_map=users;self.refresh_reaction_hints();
@@ -608,6 +755,7 @@ impl Component for ChatModel {
                 else { self.typing_users.remove(&user_id); }
             }
             ChatMsg::ClearStaleTyping => {
+                self.hydrate_media(&sender);
                 let now = Instant::now();
                 self.typing_users.retain(|_, last| now.duration_since(*last).as_secs() < 4);
             }
@@ -654,7 +802,10 @@ impl Component for ChatModel {
             }
             ChatMsg::SendFinished { request_id, channel_id, result } => {
                 let outcome = result.as_ref().map(|_| ()).map_err(Clone::clone);
-                if let Ok(message) = result {if self.active_channel.as_ref().is_some_and(|c|c.id()==channel_id){
+                if let Ok(mut message) = result {if self.active_channel.as_ref().is_some_and(|c|c.id()==channel_id){
+                    // POST returns only custom embeds; the ordered WS list may
+                    // already include automatic embeds processed in background.
+                    if self.history.messages.iter().find(|m|m.id==message.id).is_some_and(|m|m.embeds.is_some()){message.embeds=None;}
                     self.initial_read=None;self.history.upsert(message);render_history=true;position=Some(Position::Bottom);
                 }}
                 if self.active_channel.as_ref().map(|c| c.id()) == Some(channel_id) {
@@ -713,9 +864,35 @@ impl Component for ChatModel {
             self.highlight_generation=self.highlight_generation.wrapping_add(1);let generation=self.highlight_generation;let epoch=self.actions.epoch;let id=*id;let input=sender.input_sender().clone();
             gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(2500),move ||{let _=input.send(ChatMsg::ExpireHighlight{epoch,id,generation});});
         }
+        // Reserve the older-history banner's height before allocating the
+        // opening rows, rather than shrinking the viewport after the reveal.
+        if let Some(position)=position.as_ref(){match position{Position::Unread(_)|Position::Message(_)=>self.viewing_old=true,Position::Bottom=>self.viewing_old=false,_=>{}}}
+        if self.viewport.open_ready((self.history_ready&&self.initial_read.is_none())||self.history_error.is_some())&&!render_history&&position.is_none(){
+            position=Some(self.viewport.capture(&widgets.scrolled_window,&widgets.messages_list));
+        }
         let anchor=if render_history{Some(self.viewport.capture(&widgets.scrolled_window,&widgets.messages_list))}else{None};
-        if render_history{self.hydrate_media(&sender);}
-        if render_history{rebuild_messages_view(&widgets.messages_list, &mut self.rendered, &self.history.messages, &self.users_map, &self.avatars, &self.access, self.user_id, &self.actions, &self.transfers, &self.config, &sender);self.viewport.restore(&widgets.scrolled_window,&widgets.messages_list,position.unwrap_or_else(||if following{Position::Bottom}else{anchor.unwrap()}),&sender);}
+        if render_history{
+            self.render_window.measure(&widgets.messages_list);
+            let desired=position.as_ref().unwrap_or_else(||if following{&Position::Bottom}else{anchor.as_ref().unwrap()});
+            self.render_window.select(&self.history.messages,desired,widgets.scrolled_window.vadjustment().value(),widgets.scrolled_window.vadjustment().page_size());
+            let visible=self.history.messages.iter().skip(self.render_window.range.start).take(self.render_window.range.len()).map(|m|m.id).collect();self.transfers.release_offscreen_playback(&visible);
+        }
+        if render_history&&hydrate&&!self.viewport.scrolling(){
+            if self.transfers.scope.is_empty(){self.transfers.scope=self.history.messages.iter().rev().take(8).map(|m|m.id).collect();}
+            self.hydrate_media(&sender);
+        }
+        if render_history&&hydrate&&self.viewport.scrolling(){self.viewport.media_when_idle(&sender);}
+        let dirty=if render_history{
+            let mut dirty=self.history.take_dirty();
+            let media=if self.viewport.scrolling(){Default::default()}else{std::mem::take(&mut self.transfers.dirty)};
+            for m in self.history.messages.iter().skip(self.render_window.range.start).take(self.render_window.range.len()){
+                if m.attachments.iter().flatten().any(|a|media.contains(&a.id))||m.embeds.iter().flatten().any(|p|media.contains(&p.id))||media.iter().any(|key|self.transfers.giphy_key(m,*key)){dirty.insert(m.id);}
+            }
+            if incremental{Some(dirty)}else{None}
+        }else{None};
+        #[cfg(test)]
+        if render_history{self.render_passes+=1;}
+        if render_history{if !self.viewport.scrolling(){self.media_render_pending=None;}rebuild_messages_view(&widgets.messages_list, &mut self.rendered, &self.history.messages, &self.render_window,dirty.as_ref(), self.history_ready, &self.users_map, &self.avatars, &self.access, self.user_id, &self.actions, &self.transfers, &self.config, self.viewport.scrolling(), &sender);self.viewport.media_after_layout(&sender);self.viewport.restore(&widgets.scrolled_window,&widgets.messages_list,position.unwrap_or_else(||if following{Position::Bottom}else{anchor.unwrap()}),&sender);}
         else if let Some(position)=position{self.viewport.restore(&widgets.scrolled_window,&widgets.messages_list,position,&sender);}
         if update_files{
         while let Some(child)=widgets.selected_files.first_child(){widgets.selected_files.remove(&child);}
@@ -724,6 +901,8 @@ impl Component for ChatModel {
             button.set_sensitive(!self.draft.is_sending());let s=sender.clone();button.connect_clicked(move |_|s.input(ChatMsg::Transfer(TransferMsg::Remove(index))));widgets.selected_files.append(&button);
         }
         }
+        widgets.reply_author.set_attributes(None);
+        if let Some(roles)=self.draft.reply.as_ref().and_then(|m|m.author_id).and_then(|id|self.users_map.get(&id)).and_then(|u|u.roles.as_deref()){crate::ui::style::role_color(&widgets.reply_author,roles);}
         self.update_view(widgets, sender);
     }
 }
@@ -747,10 +926,13 @@ fn get_typing_text(typing_users: &HashMap<Uuid, Instant>, users_map: &HashMap<Uu
     }
 }
 
+#[cfg(test)]
+thread_local!{static FORMATTED_ROWS:std::cell::Cell<usize>=const{std::cell::Cell::new(0)};}
+
 /// Cache only data that changes the row's presentation, never encoded media.
 fn message_visual_signature(msg:&Message)->String {
-    let previews:Vec<_>=msg.previews.iter().flatten().map(|p|(p.id,&p.url,&p.kind,&p.title,&p.description,&p.provider_name,&p.embed_url,&p.video_url,&p.image_mime_type,p.image_size_bytes,p.fetched_at)).collect();
-    format!("{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{previews:?}",msg.author_id,msg.content,msg.created_at,msg.edited_at,msg.reply_to,msg.attachments,msg.reactions,msg.user_reactions)
+    let embeds:Vec<_>=msg.embeds.iter().flatten().map(Embed::metadata).collect();
+    format!("{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{embeds:?}",msg.author_id,msg.content,msg.created_at,msg.edited_at,msg.reply_to,msg.attachments,msg.reactions,msg.user_reactions)
 }
 
 #[cfg(test)]
@@ -760,9 +942,9 @@ mod render_tests {
     fn row_signature_omits_encoded_media_but_tracks_preview_metadata(){
         let mut message:Message=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"channel_id":Uuid::new_v4(),"content":"hello","created_at":"2026-10-07T12:00:00Z","previews":[{"id":Uuid::new_v4(),"url":"https://example.test","kind":"og","title":"Photo","fetched_at":"2026-10-07T12:00:00Z"}]})).unwrap();
         let original=message_visual_signature(&message);
-        message.previews.as_mut().unwrap()[0].image_data=Some("A".repeat(4<<20));
+        message.embeds.as_mut().unwrap()[0].image_data=Some("A".repeat(4<<20));
         assert_eq!(message_visual_signature(&message),original);
-        message.previews.as_mut().unwrap()[0].title=Some("Updated title".into());
+        message.embeds.as_mut().unwrap()[0].title=Some("Updated title".into());
         assert_ne!(message_visual_signature(&message),original);
         let changed=message_visual_signature(&message);message.content=Some("edited".into());assert_ne!(message_visual_signature(&message),changed);
     }
@@ -772,6 +954,9 @@ fn rebuild_messages_view(
     list_box: &gtk::ListBox,
     rendered:&mut HashMap<String,(String,gtk::ListBoxRow)>,
     messages: &[Message],
+    window:&window::RenderWindow,
+    dirty:Option<&std::collections::HashSet<Uuid>>,
+    history_ready: bool,
     users_map: &HashMap<Uuid, UserSummary>,
     avatars: &HashMap<Uuid, gtk::gdk::Texture>,
     access: &crate::models::Access,
@@ -779,10 +964,15 @@ fn rebuild_messages_view(
     actions: &Actions,
     media: &Transfers,
     config: &crate::models::UserConfig,
+    defer_media:bool,
     sender: &ComponentSender<ChatModel>,
 ) {
     if messages.is_empty() {
+        if history_ready && list_box.first_child().is_some_and(|w|w.widget_name()=="empty-history"){return;}
         rendered.clear();while let Some(child)=list_box.first_child(){list_box.remove(&child);}
+        // A newly selected channel has no snapshot yet. Do not flash the empty
+        // conversation prompt between selection and the history response.
+        if !history_ready{return;}
         let empty_box = gtk::Box::new(gtk::Orientation::Vertical, 8);
         empty_box.set_valign(gtk::Align::Center);
         empty_box.set_halign(gtk::Align::Center);
@@ -799,6 +989,7 @@ fn rebuild_messages_view(
         empty_box.append(&label);
 
         let row = gtk::ListBoxRow::new();
+        row.set_widget_name("empty-history");
         row.set_activatable(false);
         row.set_selectable(false);
         row.set_child(Some(&empty_box));
@@ -809,7 +1000,7 @@ fn rebuild_messages_view(
     let pinned:std::collections::HashSet<_>=actions.pinned.iter().map(|m|m.id).collect();
     let by_id:HashMap<_,_>=messages.iter().map(|m|(m.id,m)).collect();
     let mut ordered=vec![];
-    for (index,msg) in messages.iter().enumerate() {
+    for (index,msg) in messages.iter().enumerate().skip(window.range.start).take(window.range.len()) {
         let previous=index.checked_sub(1).and_then(|i|messages.get(i));
         let date=msg.created_at.with_timezone(&chrono::Local).date_naive();
         if previous.is_none_or(|p|p.created_at.with_timezone(&chrono::Local).date_naive()!=date){
@@ -820,17 +1011,23 @@ fn rebuild_messages_view(
         }}
         let grouped=msg.author_id.is_some() && msg.reply_to.is_none() && msg.edited_at.is_none() && !pinned.contains(&msg.id) && previous.is_some_and(|p|p.author_id==msg.author_id&&p.created_at.with_timezone(&chrono::Local).date_naive()==date&&(0..300).contains(&msg.created_at.signed_duration_since(p.created_at).num_seconds()));
         let key=format!("message-{}",msg.id);
+        if dirty.is_some_and(|ids|!ids.contains(&msg.id)){
+            if let Some((_,row))=rendered.get(&key){if actions.highlight==Some(msg.id){row.add_css_class("papo-message-highlight");}else{row.remove_css_class("papo-message-highlight");}ordered.push(row.clone());continue;}
+        }
         let author=msg.author_id.and_then(|id|users_map.get(&id));
         let text=msg.content.as_deref().map(|text|mentions::render(text,users_map));
         let reply_text=msg.reply_to.map(|id|mentions::render(by_id.get(&id).and_then(|m|m.content.as_deref()).unwrap_or("Abrir mensagem respondida"),users_map));
-        let avatar=msg.author_id.and_then(|id|avatars.get(&id)).map_or(0,|t|t.as_ptr() as usize);
         let emoji_state:Vec<_>=msg.reactions.iter().flatten().filter_map(|r|r.emoji_id.map(|id|(id,actions.emoji_label(id),actions.textures.get(&id).map_or(0,|t|t.as_ptr() as usize)))).collect();
+        #[cfg(test)]
+        FORMATTED_ROWS.with(|n|n.set(n.get()+1));
         let message_state=message_visual_signature(msg);
-        let signature=format!("{message_state}|{grouped}|{access:?}|{user_id:?}|{config:?}|{:?}|{avatar}|{}|{}|{}|{:?}|{:?}|{}",author.map(|u|(u.display_name(),&u.roles)),pinned.contains(&msg.id),actions.busy.contains(&msg.id),actions.pins_ready,media.visual_state(msg),emoji_state,msg.created_at.with_timezone(&chrono::Local).format("%H:%M"));
-        let inline=text::parts(msg.content.as_deref().unwrap_or(""),&actions.emojis);let inline_state:Vec<_>=inline.iter().filter_map(|p|if let text::Part::Emoji(id,name)=p{Some((*id,name,actions.textures.get(id).map_or(0,|t|t.as_ptr() as usize)))}else{None}).collect();
+        let signature=format!("{message_state}|{grouped}|{access:?}|{user_id:?}|{config:?}|{:?}|{}|{}|{}|{:?}|{:?}|{}",author.map(|u|(u.display_name(),&u.roles)),pinned.contains(&msg.id),actions.busy.contains(&msg.id),actions.pins_ready,(),emoji_state,msg.created_at.with_timezone(&chrono::Local).format("%H:%M"));
+        let inline=text::parts_index(msg.content.as_deref().unwrap_or(""),&actions.emoji_names);let inline_state:Vec<_>=inline.iter().filter_map(|p|if let text::Part::Emoji(id,name)=p{Some((*id,name,actions.textures.get(id).map_or(0,|t|t.as_ptr() as usize)))}else{None}).collect();
         let reply_author=msg.reply_to.and_then(|id|by_id.get(&id)).and_then(|m|m.author_id).and_then(|id|users_map.get(&id)).map(|u|u.display_name());
         let signature=format!("{signature}|{text:?}|{reply_text:?}|{reply_author:?}|{inline_state:?}");
-        if let Some((old,row))=rendered.get(&key){if old==&signature{if actions.highlight==Some(msg.id){row.add_css_class("papo-message-highlight");}else{row.remove_css_class("papo-message-highlight");}ordered.push(row.clone());continue;}}
+        if let Some((old,row))=rendered.get(&key){if old==&signature{
+            if !defer_media{if let Some(container)=find_media_box(row.upcast_ref()){transfers::update_media_box(&container,msg,media,sender);}}
+            if actions.highlight==Some(msg.id){row.add_css_class("papo-message-highlight");}else{row.remove_css_class("papo-message-highlight");}ordered.push(row.clone());continue;}}
         let row = gtk::ListBoxRow::new();
         row.set_widget_name(&key);
         row.set_focusable(true);
@@ -849,6 +1046,7 @@ fn rebuild_messages_view(
         // Author user avatar (falling back to generic symbolic icon)
         let author_user = msg.author_id.and_then(|id| users_map.get(&id));
         let avatar_widget = avatar_image(msg.author_id.and_then(|id| avatars.get(&id)), 36);
+        if let Some(id)=msg.author_id{avatar_widget.set_widget_name(&format!("avatar-{id}"));}
         avatar_widget.set_text(Some(author_user.map(|u|u.display_name()).unwrap_or("Usuário")));
         avatar_widget.set_valign(gtk::Align::Start);
         avatar_widget.set_visible(config.display.as_ref().and_then(|d|d.show_avatars).unwrap_or(true));
@@ -895,30 +1093,15 @@ fn rebuild_messages_view(
             let channel_id = msg.channel_id; let s = sender.clone();
             let reply_button=gtk::Button::new();reply_button.add_css_class("flat");reply_button.add_css_class("papo-reply-reference");reply_button.set_halign(gtk::Align::Fill);reply_button.set_tooltip_text(Some("Ir para a mensagem respondida"));
             let line=gtk::Box::new(gtk::Orientation::Horizontal,6);line.append(&gtk::Image::from_icon_name("mail-reply-sender-symbolic"));
-            let original=by_id.get(&reply);let name=gtk::Label::new(Some(original.and_then(|m|m.author_id).and_then(|id|users_map.get(&id)).map(|u|u.display_name()).unwrap_or("Mensagem")));name.add_css_class("heading");name.add_css_class("caption");name.set_ellipsize(pango::EllipsizeMode::End);name.set_max_width_chars(20);line.append(&name);
+            let original=by_id.get(&reply);let name=gtk::Label::new(Some(original.and_then(|m|m.author_id).and_then(|id|users_map.get(&id)).map(|u|u.display_name()).unwrap_or("Mensagem")));name.add_css_class("heading");name.add_css_class("caption");name.set_ellipsize(pango::EllipsizeMode::End);name.set_max_width_chars(20);if let Some(roles)=original.and_then(|m|m.author_id).and_then(|id|users_map.get(&id)).and_then(|u|u.roles.as_deref()){crate::ui::style::role_color(&name,roles);}line.append(&name);
             let snippet=gtk::Label::new(Some(&text::excerpt(reply_text.as_deref().unwrap_or("Abrir mensagem respondida"))));snippet.add_css_class("caption");snippet.add_css_class("dim-label");snippet.set_xalign(0.0);snippet.set_hexpand(true);snippet.set_ellipsize(pango::EllipsizeMode::End);line.append(&snippet);reply_button.set_child(Some(&line));
             reply_button.connect_clicked(move |_|{let _=s.output(ChatOutput::Navigate{channel_id,message_id:reply});});content_box.append(&reply_button);
         }
 
         if let Some(raw)=&msg.content{content_box.append(&text::widget(raw,users_map,actions));}
 
-        // Attachments Rendering
-        if let Some(attachments) = &msg.attachments {
-            for att in attachments {
-                let att_card = transfers::attachment_widget(att, msg.id, media, sender);
-                content_box.append(&att_card);
-            }
-        }
-
-        for gif in transfers::giphy_widgets(msg,media,sender){content_box.append(&gif);}
-
-        // Link Previews Rendering
-        if let Some(previews) = &msg.previews {
-            for preview in previews {
-                let preview_card = transfers::preview_widget(preview, msg.id, media, sender);
-                content_box.append(&preview_card);
-            }
-        }
+        let media_box=gtk::Box::new(gtk::Orientation::Vertical,4);media_box.set_widget_name("message-media");
+        transfers::update_media_box(&media_box,msg,media,sender);content_box.append(&media_box);
 
         // Reactions Flow / Pill List
         let reactions_box = gtk::FlowBox::new();
@@ -1000,7 +1183,6 @@ fn rebuild_messages_view(
         // Reply quick button
         let reply_btn = gtk::Button::from_icon_name("mail-reply-sender-symbolic");
         reply_btn.add_css_class("flat");
-        reply_btn.add_css_class("dim-label");
         reply_btn.set_tooltip_text(Some("Responder"));
         reply_btn.set_sensitive(access.send);
         let msg_clone = msg.clone();
@@ -1029,6 +1211,13 @@ fn rebuild_messages_view(
         for trigger in ["Menu","<Shift>F10"]{let s=sender.clone();keys.add_shortcut(gtk::Shortcut::new(gtk::ShortcutTrigger::parse_string(trigger),Some(gtk::CallbackAction::new(move |_,_|{s.input(ChatMsg::ContextMenu(msg_id));gtk::glib::Propagation::Stop}))));}row.add_controller(keys);
         rendered.insert(key,(signature,row.clone()));ordered.push(row);
     }
+    for before in [true,false]{
+        let height=window.spacer(messages,before);if height>0{
+            let key=if before{"history-before"}else{"history-after"};
+            let entry=rendered.entry(key.into()).or_insert_with(||{let row=gtk::ListBoxRow::new();row.set_widget_name(key);row.set_activatable(false);row.set_selectable(false);row.set_can_focus(false);row.set_child(Some(&gtk::Box::new(gtk::Orientation::Vertical,0)));(String::new(),row)});
+            entry.1.set_height_request(height);if before{ordered.insert(0,entry.1.clone());}else{ordered.push(entry.1.clone());}
+        }
+    }
     let names:std::collections::HashSet<_>=ordered.iter().map(|r|r.widget_name().to_string()).collect();rendered.retain(|name,_|names.contains(name));
     let keep:std::collections::HashSet<_>=ordered.iter().cloned().collect();let mut child=list_box.first_child();
     while let Some(widget)=child{child=widget.next_sibling();if !widget.downcast_ref::<gtk::ListBoxRow>().is_some_and(|row|keep.contains(row)){list_box.remove(&widget);}}
@@ -1049,4 +1238,22 @@ fn show_context_menu(row:&gtk::Widget,point:Option<(f64,f64)>){
         let mut child=widget.first_child();while let Some(w)=child{visit(&w,row,point);child=w.next_sibling();}
     }
     row.grab_focus();visit(row,row,point);
+}
+
+impl ChatModel {
+    pub(crate) fn avatar_authors(&self)->std::collections::HashSet<Uuid>{
+        self.history.messages.iter().rev().take(window::ROW_LIMIT).filter_map(|m|m.author_id).collect()
+    }
+    fn delete_message(&mut self, id: Uuid) {
+        let keys:Vec<_>=self.history.messages.iter().filter(|m|m.id==id).flat_map(|m|m.attachments.iter().flatten().map(|a|a.id).chain(m.embeds.iter().flatten().map(|p|p.id))).collect();
+        self.transfers.invalidate_message(id);
+        self.history.apply(Change::Delete(id));
+        for key in keys{if !self.transfers.authorized(&self.history.messages,key){self.transfers.invalidate(key);}}
+        self.actions.pinned.retain(|m| m.id != id);
+    }
+}
+
+fn find_media_box(widget:&gtk::Widget)->Option<gtk::Box>{
+    if widget.widget_name()=="message-media"{return widget.clone().downcast().ok();}
+    let mut child=widget.first_child();while let Some(w)=child{if let Some(found)=find_media_box(&w){return Some(found);}child=w.next_sibling();}None
 }

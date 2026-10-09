@@ -62,6 +62,8 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let copy=find_button(&message,"Copiar texto");assert!(copy.is_visible());copy.emit_clicked();pump(context);let clipboard=gtk::gdk::Display::default().unwrap().clipboard();assert_eq!(context.block_on(clipboard.read_text_future()).unwrap().unwrap().as_str(),"Mensagem 36: teste de rolagem e respostas.");
     // Use the actual button signal, then timer updates, to ensure the click survives.
     let reply=find_button(&message,"Responder");reply.emit_clicked();chat.emit(ChatMsg::ClearStaleTyping);settle(context);assert_eq!(chat.model().draft.reply.as_ref().map(|m|m.id),Some(ids[36]));assert_eq!(row(&chat,ids[36]),message);
+    let banner=descendants(chat.widget().upcast_ref()).into_iter().find(|w|w.has_css_class("papo-reply-banner")).unwrap();assert!(banner.is_visible()&&!banner.has_css_class("dim-label"));assert!(descendants(&banner).iter().filter_map(|w|w.downcast_ref::<gtk::Label>()).any(|l|l.text()=="Alice"&&l.attributes().is_some()),"reply banner uses the author's role color");
+    assert!(descendants(&message).iter().filter_map(|w|w.downcast_ref::<gtk::Button>()).filter(|b|b.tooltip_text().as_deref()==Some("Responder")).all(|b|!b.has_css_class("dim-label")));
     find_button(chat.widget().upcast_ref(),"Cancelar resposta").emit_clicked();pump(context);assert!(chat.model().draft.reply.is_none());
     find_button(chat.widget().upcast_ref(),"Avançar para mensagens recentes").emit_clicked();settle(context);assert!(chat.model().viewport.following());assert!(!chat.model().viewing_old);
     chat.emit(ChatMsg::SetAccess{user_id:Uuid::new_v4(),access:crate::models::Access{read:true,..Default::default()}});settle(context);chat.emit(ChatMsg::ContextMenu(ids[36]));settle(context);let message=row(&chat,ids[36]);assert!(!find_button(&message,"Responder").is_sensitive());assert!(!descendants(&message).iter().filter_map(|w|w.downcast_ref::<gtk::Button>()).any(|b|matches!(b.label().as_deref(),Some("Excluir"|"Editar"|"Fixar"))));
@@ -93,7 +95,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     assert!(chat.model().rendered[&format!("message-{preview_message}")].0.len()<8192,"row cache must not retain encoded images");
     // Custom emojis are paintables inside selectable, read-only native text.
     let emoji_id=Uuid::new_v4();let mut bytes=std::io::Cursor::new(Vec::new());image::DynamicImage::new_rgba8(32,32).write_to(&mut bytes,image::ImageFormat::Png).unwrap();let texture=crate::media::bounded_texture_size(&bytes.into_inner(),32,32).unwrap();
-    let mut actions=Actions::default();actions.emojis.push(serde_json::from_value(serde_json::json!({"id":emoji_id,"name":"gambiarra","format":"PNG","created_at":start})).unwrap());actions.textures.insert(emoji_id,texture);
+    let mut actions=Actions::default();actions.emojis.push(serde_json::from_value(serde_json::json!({"id":emoji_id,"name":"gambiarra","format":"PNG","created_at":start})).unwrap());actions.textures.insert(emoji_id,texture);actions.emoji_names.insert("gambiarra".into(),emoji_id);
     let text=text::widget("Oi :gambiarra: :unknown:",&HashMap::new(),&actions);assert!(!text.is_editable()&&!text.is_cursor_visible());assert!(text.buffer().iter_at_offset(3).paintable().is_some());assert!(text.buffer().text(&text.buffer().start_iter(),&text.buffer().end_iter(),false).contains(":unknown:"));
     window.close();
 }

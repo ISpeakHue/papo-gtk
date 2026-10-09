@@ -54,7 +54,7 @@ async fn text_messages_use_multipart_and_optional_reply_field() {
     let (client, server) = mock(vec![(201, message()), (201, message())]).await;
     let channel = CHANNEL.parse().unwrap();
     for reply_to in [None, Some(Uuid::parse_str(ID).unwrap())] {
-        let sent = client.send_message(&CreateMessageRequest { channel_id:channel, content:Some("Olá 🌎".into()), reply_to }).await.unwrap();
+        let sent = client.send_message(&CreateMessageRequest { channel_id:channel, content:Some("Olá 🌎".into()), reply_to,embeds:vec![] }).await.unwrap();
         assert_eq!(sent.author_id, None);
     }
     let requests = server.await.unwrap();
@@ -85,6 +85,20 @@ async fn history_pagination_sends_timestamp_and_id_in_descending_order() {
     assert_eq!(query["last_id"], ID);
     assert_eq!(query["since"].parse::<chrono::DateTime<chrono::Utc>>().unwrap(), cursor.created_at);
     assert_eq!(cursor.created_at.timestamp_subsec_nanos(),123456789);
+}
+
+#[tokio::test]
+async fn embeds_use_new_endpoint_and_custom_payloads_on_create_and_edit(){
+    let embed=json!({"id":ID,"source_type":"custom","fetch_method":"manual","title":"Rich","color":"#123ABC","created_at":DATE,"fields":[{"position":0,"name":"One","value":"Two","inline":true}],"thumbnail":{"mime_type":"image/png"},"image_data":"AA=="});
+    let mut response=message();response["embeds"]=json!([embed.clone()]);
+    let (client,server)=mock(vec![(200,embed),(200,response.clone()),(200,response.clone()),(200,response)]).await;
+    let e=client.get_embed(ID.parse().unwrap()).await.unwrap();assert!(e.fetched_at.is_none());assert_eq!(e.fields[0].value,"Two");
+    let input=EmbedInput{title:"Rich 🌎".into(),color:"#123ABC".into(),fields:vec![EmbedFieldInput{name:"One".into(),value:"Two".into(),inline:true}],..Default::default()};
+    let create=CreateMessageRequest{channel_id:CHANNEL.parse().unwrap(),content:None,reply_to:None,embeds:vec![input.clone()]};
+    client.send_message(&create).await.unwrap();client.send_with_files(&create,&[],|_|{}).await.unwrap();client.edit_message_embeds(ID.parse().unwrap(),"",&[input.clone()]).await.unwrap();
+    let r=server.await.unwrap();assert_eq!(r[0].url.path(),format!("/embeds/{ID}"));
+    for r in &r[1..3]{assert_eq!(r.method,"POST");assert!(r.body.contains("name=\"embeds\""));assert!(r.body.contains(&serde_json::to_string(&vec![input.clone()]).unwrap()));}
+    assert_eq!(serde_json::from_str::<Value>(&r[3].body).unwrap(),json!({"content":"","embeds":[input]}));
 }
 
 #[tokio::test]
@@ -153,8 +167,8 @@ fn messages_accept_deleted_authors_and_preview_video_metadata() {
         let parsed: Message = serde_json::from_value(value).unwrap();
         assert_eq!(parsed.author_id.is_some(), author == json!(ID));
     }
-    let preview: LinkPreview = serde_json::from_value(json!({"id":ID,"url":"https://example.test/video", "kind":"video", "video_url":format!("/link-previews/{ID}/video"),"fetched_at":DATE})).unwrap();
-    assert!(preview.video_url.unwrap().ends_with("/video"));
+    let preview: Embed = serde_json::from_value(json!({"id":ID,"url":"https://example.test/video", "kind":"video", "video_url":format!("/embeds/{ID}/video"),"fetched_at":DATE})).unwrap();
+    assert!(preview.video.unwrap().url.unwrap().ends_with("/video"));
 }
 
 #[tokio::test]
@@ -210,7 +224,7 @@ async fn edit_delete_pin_unpin_and_pinned_list_follow_backend_routes() {
     assert!(client.pinned_messages(channel).await.is_err());
     let r = server.await.unwrap();
     assert_eq!(r[0].method,"PUT"); assert_eq!(r[0].url.path(),format!("/messages/{ID}"));
-    assert_eq!(serde_json::from_str::<Value>(&r[0].body).unwrap(),json!({"content":"edited 🌎"}));
+    assert_eq!(serde_json::from_str::<Value>(&r[0].body).unwrap(),json!({"content":"edited 🌎","embeds":[]}));
     assert_eq!(r[1].method,"DELETE"); assert_eq!(r[2].method,"POST"); assert_eq!(r[3].method,"DELETE");
     assert_eq!(r[2].url.path(),format!("/channels/{CHANNEL}/messages/{ID}/pin"));
     assert_eq!(r[2].url.path(),r[3].url.path());
@@ -283,7 +297,7 @@ async fn attachment_messages_stream_repeated_files_and_preserve_reply() {
     let total=Arc::new(std::sync::atomic::AtomicU64::new(0));
     for content in [None,Some("Reply with files".into())] {
         let count=total.clone();
-        client.send_with_files(&CreateMessageRequest{channel_id:CHANNEL.parse().unwrap(),content,reply_to:Some(ID.parse().unwrap())},&[file.clone(),file.clone()],move |bytes| {count.store(bytes,std::sync::atomic::Ordering::Relaxed);}).await.unwrap();
+        client.send_with_files(&CreateMessageRequest{channel_id:CHANNEL.parse().unwrap(),content,reply_to:Some(ID.parse().unwrap()),embeds:vec![]},&[file.clone(),file.clone()],move |bytes| {count.store(bytes,std::sync::atomic::Ordering::Relaxed);}).await.unwrap();
     }
     assert_eq!(total.load(std::sync::atomic::Ordering::Relaxed),22);
     for r in server.await.unwrap(){assert_eq!(r.method,"POST");assert_eq!(r.url.path(),"/messages");
@@ -319,7 +333,7 @@ async fn authenticated_media_is_bounded_streamed_saved_and_cleaned() {
     let listener=TcpListener::bind("127.0.0.1:0").await.unwrap();let client=ApiClient::new(&format!("http://{}",listener.local_addr().unwrap())).unwrap();
     client.cookies.add_cookie_str("Auth=media-session; Path=/",&client.base);
     let data:Vec<u8>=(0..200_000).map(|i|(i%256)as u8).collect();let sent=data.clone();
-    let server=tokio::spawn(async move{for expected in ["/attachments/file","/link-previews/preview/video","/media/hash"] {
+    let server=tokio::spawn(async move{for expected in ["/attachments/file","/embeds/preview/video","/media/hash"] {
         let (mut socket,_)=listener.accept().await.unwrap();let mut headers=vec![0;4096];let count=socket.read(&mut headers).await.unwrap();let headers=String::from_utf8_lossy(&headers[..count]);
         assert!(headers.starts_with(&format!("GET {expected} ")));assert!(headers.to_ascii_lowercase().contains("cookie: auth=media-session"));
         socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",sent.len()).as_bytes()).await.unwrap();let _=socket.write_all(&sent).await;
@@ -328,7 +342,7 @@ async fn authenticated_media_is_bounded_streamed_saved_and_cleaned() {
     #[cfg(unix)]{use std::os::unix::fs::PermissionsExt;assert_eq!(std::fs::metadata(&temp).unwrap().permissions().mode()&0o777,0o600);}
     let destination=std::env::temp_dir().join(format!("papo-save-test-{}",Uuid::new_v4()));let _cleanup=crate::api::features::TemporaryFile(destination.clone());
     save_download(file,destination.clone()).await.unwrap();assert_eq!(tokio::fs::read(&destination).await.unwrap(),data);assert!(!temp.exists());
-    let video=client.download_temporary("/link-previews/preview/video",200_000).await.unwrap();let path=video.0.clone();drop(video);assert!(!path.exists());
+    let video=client.download_temporary("/embeds/preview/video",200_000).await.unwrap();let path=video.0.clone();drop(video);assert!(!path.exists());
     assert!(client.media_bytes("/media/hash",1024).await.is_err());server.await.unwrap();
 }
 

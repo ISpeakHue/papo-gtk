@@ -3,6 +3,7 @@
 use base64::prelude::*;
 use gtk::gdk::Texture;
 use gtk::glib::Bytes;
+use gtk::prelude::*;
 use tracing::warn;
 
 pub mod avatars;
@@ -53,6 +54,24 @@ pub fn avatar_image(texture: Option<&Texture>, size: i32) -> adw::Avatar {
     image.set_icon_name(Some("avatar-default-symbolic"));
     set_avatar(&image, texture);
     image
+}
+
+/// Stable avatar widgets allow asynchronous batches to update only the image.
+pub fn member_avatar(id:uuid::Uuid,texture:Option<&Texture>,size:i32)->adw::Avatar{
+    let avatar=avatar_image(texture,size);avatar.set_widget_name(&format!("avatar-{id}"));avatar
+}
+pub fn update_member_avatars(root:&gtk::Widget,old:&std::collections::HashMap<uuid::Uuid,Texture>,new:&std::collections::HashMap<uuid::Uuid,Texture>){
+    use gtk::prelude::*;
+    let changed:std::collections::HashSet<_>=old.keys().chain(new.keys()).copied().filter(|id|old.get(id)!=new.get(id)).collect();
+    if changed.is_empty(){return;}
+    fn visit(widget:&gtk::Widget,changed:&std::collections::HashSet<uuid::Uuid>,textures:&std::collections::HashMap<uuid::Uuid,Texture>){
+        if let Some(avatar)=widget.downcast_ref::<adw::Avatar>(){
+            if let Some(id)=avatar.widget_name().strip_prefix("avatar-").and_then(|id|uuid::Uuid::parse_str(id).ok()).filter(|id|changed.contains(id)){set_avatar(avatar,textures.get(&id));}
+            return;
+        }
+        let mut child=widget.first_child();while let Some(w)=child{visit(&w,changed,textures);child=w.next_sibling();}
+    }
+    visit(root,&changed,new);
 }
 
 pub fn set_avatar(image: &adw::Avatar, texture: Option<&Texture>) {

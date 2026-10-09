@@ -39,11 +39,41 @@ pub(super) fn builtin()->Vec<Choice>{
     names.into_iter().map(|(name,text)|Choice{name,text,id:None}).collect()
 }
 pub(super) fn choices(builtin:&[Choice],custom:&[crate::models::Emoji],filter:&str)->Vec<Choice>{
-    let filter=filter.to_lowercase();let mut choices:Vec<_>=custom.iter().map(|e|Choice{name:e.name.clone(),text:format!(":{}:",e.name),id:Some(e.id)}).chain(builtin.iter().cloned()).filter(|c|c.name.to_lowercase().contains(&filter)).collect();
-    choices.sort_by_cached_key(|c|(!c.name.to_lowercase().starts_with(&filter),c.id.is_none(),c.name.to_lowercase()));choices
+    let filter=filter.to_lowercase();let mut choices:Vec<_>=custom.iter().map(|e|Choice{name:e.name.clone(),text:format!(":{}:",e.name),id:Some(e.id)}).chain(builtin.iter().cloned()).filter(|c|c.name.to_lowercase().contains(&filter)||c.text.contains(&filter)).collect();
+    choices.sort_by_cached_key(|c|{let common=filter.is_empty()&&["heart","thumbsup","joy","smile","fire","tada","eyes"].contains(&c.name.as_str())&&c.id.is_none();(!common,!c.name.to_lowercase().starts_with(&filter),c.id.is_none(),c.name.to_lowercase())});choices
 }
 #[cfg(test)]mod tests{
     use super::*;
     #[test]fn colon_completion_respects_unicode_caret_and_literals(){assert_eq!(completion("é :OME après",6),Some((3,7,"OME")));for text in ["https://host", "giphy:abc", "`:smile", ":smile:","12:34"]{assert!(completion(text,-1).is_none(),"{text}");}let(text,caret)=insert("é :smi après",6,"😄",true);assert_eq!(text,"é 😄  après");assert_eq!(caret,4);}
     #[test]fn every_server_name_remains_available_and_case_is_preserved(){let e:crate::models::Emoji=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"name":"OMEGALUL","format":"PNG","created_at":"2026-10-08T12:00:00Z"})).unwrap();let found=choices(&[],&[e],"omega");assert_eq!(found[0].text,":OMEGALUL:");}
+}
+
+/// Both pickers use one searchable catalog and bounded pages of square cells.
+pub(super) fn picker(list:&gtk::Box, builtin:&[Choice], custom:&[crate::models::Emoji], textures:&HashMap<Uuid,gtk::gdk::Texture>, choose:impl Fn(Choice)+'static) {
+    let previous=list.first_child().and_downcast::<gtk::SearchEntry>();
+    let focused=previous.as_ref().is_some_and(|s|s.state_flags().contains(gtk::StateFlags::FOCUS_WITHIN));
+    let caret=previous.as_ref().map(|s|s.position()).unwrap_or(-1);
+    let previous=previous.map(|s|s.text().to_string()).unwrap_or_default();
+    while let Some(child)=list.first_child(){list.remove(&child);}
+    let search=gtk::SearchEntry::new();search.set_placeholder_text(Some("Buscar emoji Unicode ou do servidor"));search.set_text(&previous);list.append(&search);
+    let grid=gtk::FlowBox::new();grid.set_selection_mode(gtk::SelectionMode::None);grid.set_homogeneous(true);grid.set_min_children_per_line(6);grid.set_max_children_per_line(6);grid.set_row_spacing(4);grid.set_column_spacing(4);
+    let scroll=gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).min_content_height(240).child(&grid).build();list.append(&scroll);
+    let empty=gtk::Label::new(Some("Nenhum emoji encontrado"));list.append(&empty);
+    let more=gtk::Button::with_label("Mais emojis");list.append(&more);
+    let catalog=std::rc::Rc::new((builtin.to_vec(),custom.to_vec(),textures.clone()));let choose=std::rc::Rc::new(choose);let limit=std::rc::Rc::new(std::cell::Cell::new(96usize));
+    let weak_search=search.downgrade();let weak_grid=grid.downgrade();let weak_more=more.downgrade();let weak_empty=empty.downgrade();let count=limit.clone();
+    let render:std::rc::Rc<dyn Fn()>=std::rc::Rc::new(move ||{
+        let (Some(search),Some(grid),Some(more),Some(empty))=(weak_search.upgrade(),weak_grid.upgrade(),weak_more.upgrade(),weak_empty.upgrade())else{return;};
+        while let Some(child)=grid.first_child(){grid.remove(&child);}
+        let choices=choices(&catalog.0,&catalog.1,search.text().trim());empty.set_visible(choices.is_empty());more.set_visible(choices.len()>count.get());
+        for choice in choices.into_iter().take(count.get()){
+            let button=gtk::Button::new();button.add_css_class("flat");button.add_css_class("papo-emoji-cell");button.set_size_request(44,44);button.set_halign(gtk::Align::Center);button.set_valign(gtk::Align::Center);button.set_tooltip_text(Some(&format!(":{}:",choice.name)));button.update_property(&[gtk::accessible::Property::Label(&choice.name)]);
+            if let Some(texture)=choice.id.and_then(|id|catalog.2.get(&id)){let image=gtk::Image::from_paintable(Some(texture));image.set_pixel_size(28);button.set_child(Some(&image));}
+            else{button.set_label(if choice.id.is_none(){&choice.text}else{"◌"});}
+            let select=choose.clone();button.connect_clicked(move |_|select(choice.clone()));grid.insert(&button,-1);
+        }
+    });
+    let update=render.clone();let count=limit.clone();search.connect_search_changed(move |_|{count.set(96);update();});
+    let update=render.clone();more.connect_clicked(move |_|{limit.set(limit.get()+96);update();});render();
+    if focused{search.grab_focus();search.set_position(caret);}
 }

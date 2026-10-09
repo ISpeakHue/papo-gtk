@@ -35,6 +35,83 @@ HTTP server, including failures, retries, confirmations, and permission changes:
 dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
 ```
 
+## Chat rendering and scrolling
+
+Chat rendering regressions in the mapped `ui_smoke` workflow also verify:
+
+- A channel awaiting its first history response does not show the empty-chat
+  prompt. An actual empty response displays a stable empty state.
+- Newly confirmed outgoing messages are inside the viewport without scrolling,
+  including after an unrelated row grows beyond the initial layout frames.
+  Readers scrolling through older messages are not pulled to the bottom.
+- A burst of 24 image completions reconciles history once; stale completions
+  do not reconcile history or move the viewport.
+- Shared preview versions keep the newest image paired with its metadata,
+  without retaining encoded image payloads in other messages.
+- Visible GIFs animate, clipped GIFs stop advancing frames, and scrolling them
+  back into view resumes playback. Unmapped/cached GIFs have no frame timer.
+
+These use generated media and a private display, without a remote account.
+
+## Review corrections (C01–C12)
+
+The default suite now exercises independent HTTP/live-history journals, complete
+snapshot removals, out-of-order member generations, expiry-aware renewal,
+503→200 recovery, lost refresh bodies, owner-scoped remembered-session cleanup,
+WebSocket acknowledgment deadlines, stalled handshakes and cancellable writes.
+These use ephemeral local servers and the test keyring, never a saved real session.
+
+The existing single-thread GTK `ui_smoke` workflow also checks:
+
+- Actual scrolling through more than 32 media images, automatic reload after
+  eviction, a stationary viewport with no refetch loop, shared previews after
+  deleting their initiating message, and HTTP-only viewer/video/file cleanup.
+- A 500-member list retaining its rows across 200 status events, and one
+  coalesced DM follow-up after 50 refresh triggers.
+- Background avatar preparation while GTK dispatches callbacks, a 72-pixel
+  member-avatar limit, the 1,024-texture pixel budget and stale-response rejection.
+- Histories of 100, 1,000 and 5,000 messages with 500 custom emojis. Message
+  widgets stay capped at 200 plus date/spacer rows. Reaction, image completion
+  and new-message updates format only affected rows. Direct navigation, scrolling
+  into spacers, older reading anchors and reconnect deletions remain usable.
+
+Run the GUI workflow on a test display with:
+
+```sh
+cargo test --locked --offline ui_smoke -- --ignored --test-threads=1 --nocapture
+```
+
+Its `chat benchmark` lines report elapsed reaction-update time, formatted-row
+count, retained rows and process RSS. Timing/RSS are observations; CI asserts
+bounded work and widget identity instead of hardware-specific millisecond limits.
+A real busy-server profile and a long, multi-user native voice/video call remain
+manual checks. Reconnect revalidates retained pages sequentially through the
+shared request budget while keeping their rows visible.
+
+## Bug report 6
+
+The mapped workflow covers the nine items in [BUG_FIXES_6.md](BUG_FIXES_6.md):
+shared Unicode/server emoji search, square chooser cells, composer insertion,
+same-thumbnail viewer dismissal, post-preparation audio, mute/hover volume,
+notification authors, reply contrast/role colors, the header search action,
+media reuse between channels and stable text widgets during image completion.
+An instrumented MediaStream checks that startup/preparation actually invokes
+the backend audio update, including when GTK already reports its default values.
+Mute/volume choices made before preparation survive repeated preparation.
+Run just this regression on a test display with `PAPO_UI_CASE=video-audio` and
+the `ui_smoke` command above. Rich-card tests check left-edge positions for long
+inline fields at wide/narrow sizes; the Twitter/X fixture also checks the
+left-aligned, full-size native video surface.
+Three separate send confirmations must produce visible text pixels without
+another message or scroll event, and wrapped lines must remain fully visible
+after narrow/wide resizing. Catalog updates preserve the active search caret
+and focus; closing the composer chooser returns focus to the message entry.
+Existing eviction, permission, video cleanup
+and large-history regressions remain part of the full workflow.
+
+For a shorter chooser/media/send check on a test display, set
+`PAPO_UI_CASE=report6` on the `ui_smoke` command. Run without it for full coverage.
+
 ## Bug report 5
 
 The default suite checks Giphy token/page/CDN parsing and rejects arbitrary hosts
@@ -56,7 +133,7 @@ The `ui_smoke` workflow now also checks:
 - Matching live sends and duplicate HTTP confirmations reveal the latest message.
 - GitHub preview bounds end before the next message row.
 - Video starts unmuted at nonzero volume, decodes audio and video, and picture
-  clicks pause/resume it. Native playback controls remain available.
+  clicks pause/resume it. GTK play/pause, seek, mute and hover-volume controls remain available.
 - GIF thumbnails and viewers use changing paintables. Clicking inside the image
   keeps it open; clicking the background closes it. Releasing a paintable releases
   its frame timer.
@@ -771,3 +848,154 @@ cleanup, four private-portal tests, actual SFU audio/video probes and the real
 portal buffer probe. Physical camera quality, long calls, desktop-specific picker
 behavior and the deployed server's video codec/TURN policy remain manual checks
 with two or more authorized accounts. No production calls were made by the tests.
+
+## Rich embed migration
+
+The default Rust suite verifies the nested `/embeds` contract, custom multipart
+POST and JSON PUT payloads, embed-only messages, Unicode/combined text limits,
+safe URLs, supported video MIME types, complete WebSocket replacement/clearing
+and concurrent history/reconnect journals. These tests use local fixtures.
+
+The existing `ui_smoke` workflow also exercises rich cards, ordered inline fields,
+plain text/unsafe-link rejection, the custom composer form, draft clearing,
+POST/WebSocket ordering, shared cached thumbnail cleanup, narrow layouts and
+delayed-edit/stored-media safeguards. Run the full workflow with the virtual-display
+command above, or focus on embeds with:
+
+```sh
+PAPO_UI_CASE=embeds dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+```
+
+For a manual backend check, send a URL and observe its automatic card. Create
+a custom card with color, author, footer and inline fields, send it without text,
+edit/remove its fields, and verify a second authorized client receives each
+complete replacement. Exercise a thumbnail and an HTTPS video with a supported
+codec. Recheck the card after switching channels and resizing the window.
+Stored-media editing and unavailable full images are explained in
+[EMBEDS.md](EMBEDS.md); their limitations originate in the inspected backend.
+
+## Send feedback and fullscreen video
+
+The GTK workflow checks pending text and embed-only sends without transient
+upload widgets or composer movement, failed-send draft retention, and visible,
+cancelable file progress. An instrumented media stream checks fullscreen size,
+stream identity, play/pause, timestamp, mute and volume preservation, Escape/F11,
+the exit button and disposal. The real decoder workflow exercises both embedded
+and attached videos, message reconciliation, background row eviction and deletion
+while fullscreen. All requests use local fixtures.
+
+To run the focused widget regressions:
+
+```sh
+PAPO_UI_CASE=send-video dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+```
+
+For a desktop check, play an attachment and an embedded video, use the fullscreen
+button, seek/change volume, then return using Escape. Check that playback continues
+from the same position. Verify that switching channels closes fullscreen playback.
+
+Local validation: 167 headless tests passed, the focused send/fullscreen widget
+checks passed, and the complete GTK workflow passed in 142.69 seconds on a private
+virtual display. `cargo build --locked --offline` also passed.
+
+## Startup image performance
+
+The mapped GTK workflow applies 512 member pictures in 32 batches with 200 chat
+rows. It asserts zero message formatting/history renders and stable chat/member
+row identity. It also verifies image removal and cached pictures on new messages.
+The sidebar checks DM/voice row identity, a 2048-pixel server icon reduced to at
+most 64 pixels, duplicate icon requests, and stale responses after replacement or
+removal. Holding both decoder permits confirms that the UI can present and accept
+updates while image preparation waits. No remote server requests are involved.
+
+```sh
+PAPO_UI_CASE=startup dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+```
+
+The synthetic benchmark reports avatar update time for observation; tests assert
+work counts and widget identity instead of a machine-specific latency threshold.
+Actual startup on a remote server also depends on network and server latency.
+
+Local validation: 167 Rust tests passed, the focused startup checks passed, the
+complete GTK workflow passed in 138.96 seconds, and the application build passed.
+The full workflow's 512-avatar benchmark took 181 ms across all 32 batches, with
+zero history renders, zero formatted message rows and zero replaced member rows.
+This measures synthetic avatar dispatch, not total remote-server startup time.
+
+## Scrolling while images load
+
+The mapped workflow injects an image completion during a real wheel animation.
+It checks advancing scroll frames, an unchanged placeholder, zero hydration
+passes and no media render during movement. An unrelated live reaction preserves
+the animation and deferred picture. The final animation destination accounts for
+layout changes; after idle, the image appears automatically and retains the
+reading anchor. Repeated adjustment changes exercise pixel/touchpad-style
+scrolling. Explicit Latest navigation still takes priority, and permission
+revocation prevents an idle callback from restoring an image.
+
+```sh
+PAPO_UI_CASE=scroll-media dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+```
+
+The full workflow also checks image-cache eviction/reload, stationary viewports,
+shared images, history pagination/navigation and media permission/cancellation.
+On a real desktop, scroll continuously past uncached pictures with both wheel
+and touchpad, then pause: placeholders may remain during movement, and images
+should appear afterward without cancelling motion or pulling the reading position.
+
+Local validation: 167 Rust tests passed, the focused scrolling checks passed, the
+complete GTK workflow passed in 141.54 seconds, and the application build passed.
+
+## Stable channel opening
+
+The mapped workflow observes the frame clock after painting and checks every
+visible opening frame, rather than only the final adjustment value. It covers
+initial history, switching away from an older reading position, wrapped text
+after narrowing the window, and an unread boundary that needs an older page.
+Intermediate unread pages remain concealed while their rows are allocated.
+Updates arriving every frame must not restart presentation indefinitely. Rapid
+switches reject the old response; empty history, request errors and explicit
+reader input all release presentation. Downloads are not required for these
+checks and no remote server requests are made.
+
+```sh
+PAPO_UI_CASE=channel-opening dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+```
+
+On a desktop, log in and switch between read and unread channels with long
+messages. History should first appear at its intended position without showing
+an intermediate scroll location. Images can still load afterward.
+
+Local validation: 167 Rust tests passed, the focused painted-frame checks
+passed, the full GTK workflow passed in 144.57 seconds, and the application
+build passed. The GTK run includes the scrolling/media, send, playback,
+pagination, reconnect and permission regressions.
+
+## Smooth live updates and bounded media work
+
+The painted-frame regression replaces a tall image placeholder above the reader
+with a shorter decoded picture. Before correction, one frame shifted the reading
+row from 120 to -80 pixels relative to the viewport. Every sampled frame must
+now retain the original offset. The existing wheel regression also verifies that
+geometry compensation preserves the running animation and its destination.
+
+The 5,000-message regression dispatches 100 stationary viewport updates: they
+must do zero full-history metadata normalization and inspect at most 200 media
+candidate rows per update. Reactions and plain live arrivals retain that metadata
+cache; a fresh embed still invalidates it and displays its changed title. A
+headless window-selection regression checks that small reading movements retain
+the current window, edge movement recenters it and Latest reaches the final row.
+
+```sh
+PAPO_UI_CASE=smooth-updates dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+```
+
+This focused case also runs the opening, active media-scrolling and large-history
+checks. Assertions concern painted positions and work counts, rather than
+machine-specific frame-time thresholds. It uses synthetic history and local
+fixtures, without sending requests to the production server.
+
+Local validation: 168 Rust tests passed, the focused smoothness checks passed,
+the full GTK workflow passed in 149.53 seconds, and the application build passed.
+The opening stress test records the update count at the first visible painted
+frame, so later main-loop dispatch cannot misreport presentation latency.

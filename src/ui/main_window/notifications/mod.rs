@@ -36,7 +36,7 @@ impl MainWindowModel {
                 let refresh=gtk::Button::with_label("Atualizar notificações");let input=sender.input_sender().clone();refresh.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Notification(NoticeMsg::Refresh));});body.append(&refresh);
                 let status=gtk::Label::new(None);status.set_wrap(true);body.append(&status);let rows=gtk::Box::new(gtk::Orientation::Vertical,8);body.append(&gtk::ScrolledWindow::builder().vexpand(true).child(&rows).build());
                 let more=gtk::Button::with_label("Mais notificações");let input=sender.input_sender().clone();more.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Notification(NoticeMsg::More));});body.append(&more);window.set_child(Some(&body));window.present();
-                self.notifications.view=Some(InboxView{window,rows,status,more});self.render_inbox(&sender);self.refresh_notifications(None,sender);
+                self.notifications.view=Some(InboxView{window,rows,status,more});self.load_notice_authors(&sender);self.render_inbox(&sender);self.refresh_notifications(None,sender);
             }
             NoticeMsg::Refresh=>self.refresh_notifications(None,sender),
             NoticeMsg::More=>{if self.notifications.more&&self.notifications.request.is_none(){self.refresh_notifications(self.notifications.cursor,sender);}}
@@ -51,7 +51,7 @@ impl MainWindowModel {
                     }
                     Err(e)=>{if let Some(v)=&self.notifications.view{v.status.set_text(&e.to_string());}sender.input(MainWindowMsg::ActionError(e));}
                 }
-                self.deliver_notices(sender.clone());self.render_inbox(&sender);
+                self.load_notice_authors(&sender);self.deliver_notices(sender.clone());self.render_inbox(&sender);
                 if let Some(id)=self.notifications.pending_open.take(){
                     if self.notifications.inbox.rows.get(&id).is_some_and(|n|n.channel_id.is_some()){sender.input(MainWindowMsg::Notification(NoticeMsg::OpenMessage(id)));}
                     else if let Some(v)=&self.notifications.view{v.status.set_text("Esta mensagem não está mais disponível nas notificações acessíveis.");}
@@ -89,7 +89,7 @@ impl MainWindowModel {
         self.notifications.jobs.push(tokio::spawn(async move{let result=api.notifications(user,cursor).await;sender.input(MainWindowMsg::Notification(NoticeMsg::Loaded{token,cursor,result}));}));
     }
     pub(super) fn incoming_notice(&mut self,event:NotificationEvent,sender:ComponentSender<Self>){
-        self.notifications.inbox.event(event);self.deliver_notices(sender.clone());self.render_inbox(&sender);self.refresh_notifications(None,sender);
+        self.notifications.inbox.event(event);self.load_notice_authors(&sender);self.deliver_notices(sender.clone());self.render_inbox(&sender);self.refresh_notifications(None,sender);
     }
     pub(super) fn deliver_notices(&mut self,sender:ComponentSender<Self>){
         if self.account.config.notifications.as_ref().is_some_and(|p|p.enabled==Some(true)){self.notifications.desktop.initialize(sender.input_sender().clone());}
@@ -105,6 +105,12 @@ impl MainWindowModel {
         for (id,body,sound)in send{self.notifications.desktop.send(id,body,sound);}
         let allowed=self.notifications.inbox.rows.values().filter(|n|state::delivery(n,&self.account.config,&channels,self.current_user.id,&self.notifications.inbox.messages).is_some()).map(|n|n.id).collect();self.notifications.desktop.revoke(&allowed);
     }
+    fn load_notice_authors(&mut self,sender:&ComponentSender<Self>){
+        let ids:HashSet<_>=self.notifications.inbox.rows.values().filter(|n|n.channel_id.is_some_and(|id|self.can_read_target(id))).filter_map(|n|n.author_id).collect();
+        let missing:Vec<_>=ids.iter().copied().filter(|id|!self.users.iter().any(|u|u.id==*id)&&!self.members.is_pending(*id)).collect();
+        for ids in missing.chunks(50){self.fetch_members(ids.to_vec(),sender.clone());}
+        self.load_avatars(ids.into_iter().collect(),false,sender.clone());
+    }
     pub(super) fn render_inbox(&self,sender:&ComponentSender<Self>){
         let channels=self.notification_channels();
         self.sidebar.emit(SidebarMsg::UnreadNotifications{count:self.notifications.inbox.unread(&channels),more:self.notifications.more});
@@ -113,7 +119,15 @@ impl MainWindowModel {
         for n in self.notifications.inbox.ordered(){
             let channel=n.channel_id.and_then(|id|channels.iter().find(|c|c.id==id));
             let label=if let Some(channel)=channel{let preview=self.account.config.notifications.as_ref().and_then(|p|p.message_preview).unwrap_or(true);let users=self.users.iter().map(|u|(u.id,u.clone())).collect();format!("{}#{} · {}\n{}",if n.read{""}else{"● "},channel.name,n.created_at.format("%d/%m/%Y %H:%M"),if preview{crate::ui::chat::mentions::render(&n.content,&users)}else{"Nova mensagem".into()})}else{"Nova notificação — mensagem não localizada ou canal indisponível".into()};
-            let row=gtk::Box::new(gtk::Orientation::Horizontal,8);let open=gtk::Button::new();open.set_widget_name(&format!("notification-{}",n.id));open.set_hexpand(true);let l=gtk::Label::new(Some(&label));l.set_wrap(true);l.set_xalign(0.0);open.set_child(Some(&l));let input=sender.input_sender().clone();let id=n.id;open.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Notification(NoticeMsg::OpenMessage(id)));});row.append(&open);
+            let row=gtk::Box::new(gtk::Orientation::Horizontal,8);let open=gtk::Button::new();open.set_widget_name(&format!("notification-{}",n.id));open.set_hexpand(true);
+            let content=gtk::Box::new(gtk::Orientation::Horizontal,10);let details=gtk::Box::new(gtk::Orientation::Vertical,4);
+            if channel.is_some(){
+                let author=n.author_id.and_then(|id|self.users.iter().find(|u|u.id==id)).or_else(||n.author_id.and_then(|id|self.direct.items.iter().map(|d|&d.user).find(|u|u.id==id)));
+                let name=author.map(|u|u.display_name()).unwrap_or("Membro indisponível");
+                let avatar=crate::media::avatar_image(n.author_id.and_then(|id|self.avatars.textures.get(&id)),36);avatar.set_text(Some(name));avatar.set_valign(gtk::Align::Start);content.append(&avatar);
+                let heading=gtk::Label::new(Some(name));heading.set_xalign(0.0);heading.add_css_class("heading");if let Some(roles)=author.and_then(|u|u.roles.as_deref()){crate::ui::style::role_color(&heading,roles);}details.append(&heading);
+            }
+            let l=gtk::Label::new(Some(&label));l.set_wrap(true);l.set_xalign(0.0);details.append(&l);content.append(&details);open.set_child(Some(&content));let input=sender.input_sender().clone();let id=n.id;open.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Notification(NoticeMsg::OpenMessage(id)));});row.append(&open);
             if !n.read{let mark=gtk::Button::with_label(if n.persisted{"Marcar lida"}else{"Dispensar"});mark.set_sensitive(!self.notifications.marks.contains(&id));let input=sender.input_sender().clone();mark.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Notification(NoticeMsg::Mark(id)));});row.append(&mark);}v.rows.append(&row);
         }v.more.set_sensitive(self.notifications.more&&self.notifications.request.is_none());
     }
@@ -129,6 +143,9 @@ pub(crate) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::Mai
     use crate::ui::chat::actions::tests::{find_button,pump,until};
     let host=adw::Window::builder().default_width(1100).default_height(740).content(main.widget()).build();host.present();
     main.emit(MainWindowMsg::Notification(NoticeMsg::Open));until(context,||main.model().notifications.request.is_none()&&main.model().notifications.view.is_some());let w=main.model().notifications.view.as_ref().unwrap().window.clone();
+    let authors=crate::ui::chat::actions::tests::descendants(w.upcast_ref());
+    let first=main.model().notifications.inbox.ordered()[0].author_id.unwrap();let name=main.model().users.iter().find(|u|u.id==first).unwrap().display_name().to_owned();
+    assert!(authors.iter().filter_map(|w|w.downcast_ref::<gtk::Label>()).any(|l|l.text()==name));assert!(authors.iter().any(|w|w.is::<adw::Avatar>()),"notices show their author's avatar");
     find_button(w.upcast_ref(),"Mais notificações").emit_clicked();until(context,||main.model().notifications.request.is_none()&&main.model().notifications.inbox.rows.len()==2);
     let id=Uuid::parse_str("12345678-1234-4234-8234-123456789ac0").unwrap();main.emit(MainWindowMsg::Notification(NoticeMsg::Mark(id)));until(context,||main.model().notifications.marks.is_empty()&&main.model().notifications.view.as_ref().unwrap().status.text().contains("Read failed"));assert!(!main.model().notifications.inbox.rows[&id].read);
     main.emit(MainWindowMsg::Notification(NoticeMsg::Mark(id)));until(context,||main.model().notifications.marks.is_empty()&&main.model().notifications.inbox.rows[&id].read);

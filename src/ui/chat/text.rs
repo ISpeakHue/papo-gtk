@@ -1,11 +1,14 @@
 //! Native, read-only message text with inline custom emoji paintables.
 use super::*;
-
 #[derive(Debug,PartialEq,Eq)]
 pub(super) enum Part { Text(String), Emoji(Uuid,String) }
 
+#[cfg(test)]
 pub(super) fn parts(text:&str,emojis:&[crate::models::Emoji])->Vec<Part>{
-    let names:HashMap<_,_>=emojis.iter().map(|e|(e.name.as_str(),e.id)).collect();
+    parts_index(text,&emojis.iter().map(|e|(e.name.clone(),e.id)).collect())
+}
+pub(super) fn parts_index(text:&str,names:&HashMap<String,Uuid>)->Vec<Part>{
+    if names.is_empty()||!text.contains(':'){return if text.is_empty(){vec![]}else{vec![Part::Text(text.into())]};}
     let mut parts=vec![];let mut start=0;let mut i=0;
     while i<text.len(){
         let rest=&text[i..];
@@ -32,16 +35,37 @@ pub(super) fn parts(text:&str,emojis:&[crate::models::Emoji])->Vec<Part>{
 
 pub(super) fn widget(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions)->gtk::TextView{
     let view=gtk::TextView::new();view.set_editable(false);view.set_cursor_visible(false);view.set_accepts_tab(false);
-    view.set_wrap_mode(gtk::WrapMode::WordChar);view.set_vexpand(false);view.add_css_class("papo-message-text");
+    view.set_wrap_mode(gtk::WrapMode::WordChar);view.set_vexpand(false);
+    view.add_css_class("papo-message-text");
+    // GtkTextView validates its lazy layout inside the allocated viewport. A
+    // grouped, newly appended row otherwise gives it zero pixels, so validation
+    // and its natural-height update wait until the next scroll/input event.
+    let metrics=view.pango_context().metrics(None,None);
+    view.set_height_request(((metrics.ascent()+metrics.descent()+pango::SCALE-1)/pango::SCALE).max(1));
+    // WidgetPaintable observes allocation changes, including width changes on
+    // resize. GtkTextView's own layout manager bypasses a size_allocate override.
+    // Keep only a native size observer, rather than a per-row frame timer.
+    let observer=gtk::WidgetPaintable::new(Some(&view));let weak=view.downgrade();
+    observer.connect_invalidate_size(move |_|{if let Some(view)=weak.upgrade(){size_to_content(&view);}});
+    view.connect_map(move |view|{observer.set_widget(Some(view));size_to_content(view);});
     let buffer=view.buffer();let mut iter=buffer.start_iter();let mut targets=vec![];
     let tag=gtk::TextTag::builder().foreground("#3584e4").underline(pango::Underline::Single).build();buffer.tag_table().add(&tag);
-    for part in parts(text,&actions.emojis){match part{
+    for part in parts_index(text,&actions.emoji_names){match part{
         Part::Text(text)=>{let text=mentions::render(&text,users);let offset=iter.offset();buffer.insert(&mut iter,&text);for(start,end,url) in links(&text){let start=offset+start;let end=offset+end;buffer.apply_tag(&tag,&buffer.iter_at_offset(start),&buffer.iter_at_offset(end));targets.push((start,end,url));}},
         Part::Emoji(id,name)=>{if let Some(texture)=actions.textures.get(&id){buffer.insert_paintable(&mut iter,texture);}else{buffer.insert(&mut iter,&format!(":{name}:"));}},
     }}
     install_links(&view,targets,|view,url|{let launcher=gtk::UriLauncher::new(url);let parent=view.root().and_downcast::<gtk::Window>();launcher.launch(parent.as_ref(),None::<&gtk::gio::Cancellable>,|result|{if let Err(error)=result{tracing::warn!("Could not open chat link: {error}");}});});
     // Keep a textual description available even when a custom image is displayed.
     view.set_tooltip_text(Some(&mentions::render(text,users)));view
+}
+
+fn size_to_content(view:&gtk::TextView){
+    if view.width()<=0{return;}
+    // Force the lazy layout to validate through the last wrapped line. Its
+    // native geometry also accounts for inline emoji paintables and text tags.
+    let end=view.buffer().end_iter();let rect=view.iter_location(&end);let (y,height)=view.line_yrange(&end);
+    let required=(y+height).max(rect.y()+rect.height()).saturating_add(view.bottom_margin()).max(1);
+    if view.height_request()!=required{view.set_height_request(required);}
 }
 
 fn install_links(view:&gtk::TextView,targets:Vec<(i32,i32,String)>,launch:impl Fn(&gtk::TextView,&str)+'static){

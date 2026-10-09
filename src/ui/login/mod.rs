@@ -343,7 +343,7 @@ impl SimpleComponent for LoginModel {
                         Ok(client) => {
                             match authenticate::authenticate(&client, &mode, &username, &password, &server_password).await {
                                 Ok(whoami) => {
-                                    let stored=if remember{crate::session::save(&client,&whoami.username).await}else{crate::session::forget(&client,&whoami.username).await};
+                                    let stored=if remember{crate::session::save(&client,&whoami.username).await}else{crate::session::forget_account(&client,&whoami.username).await};
                                     if stored.is_err(){tracing::warn!("Desktop keyring unavailable; session remains in memory only");}
                                     info!("Authenticated as {}", whoami.username);
                                     LoginMsg::AuthSuccess(whoami, client)

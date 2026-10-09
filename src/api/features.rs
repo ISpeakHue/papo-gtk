@@ -22,13 +22,17 @@ impl UploadFile {
     }
 }
 pub fn validate_upload(content: Option<&str>, files: &[UploadFile]) -> Result<()> {
+    validate_message(content,files,&[])
+}
+pub fn validate_message(content:Option<&str>,files:&[UploadFile],embeds:&[EmbedInput])->Result<()>{
+    crate::models::validate_embeds(embeds)?;
     anyhow::ensure!(content.unwrap_or("").chars().count() <= 8192, "Use até 8192 caracteres.");
     anyhow::ensure!(files.len() <= 10, "Escolha até 10 arquivos.");
     anyhow::ensure!(files.iter().all(|f| f.size <= MAX_FILE), "Cada arquivo deve ter até 100 MiB.");
     // Reserve room for Unicode text, multipart boundaries and filenames.
     let bytes = files.iter().try_fold(0u64, |sum, f| sum.checked_add(f.size)).context("Arquivos muito grandes")?;
-    anyhow::ensure!(bytes + content.unwrap_or("").len() as u64 + 65536 <= MAX_BODY, "O envio deve ter até 110 MiB, incluindo o formulário.");
-    anyhow::ensure!(!content.unwrap_or("").trim().is_empty() || !files.is_empty(), "Escreva uma mensagem ou escolha um arquivo.");
+    anyhow::ensure!(bytes + content.unwrap_or("").len() as u64 + serde_json::to_vec(embeds)?.len() as u64 + 65536 <= MAX_BODY, "O envio deve ter até 110 MiB, incluindo o formulário.");
+    anyhow::ensure!(!content.unwrap_or("").trim().is_empty() || !files.is_empty()||!embeds.is_empty(), "Escreva uma mensagem, escolha um arquivo ou adicione um embed.");
     Ok(())
 }
 /// Removes unfinished files on cancellation, errors, and session teardown.
@@ -65,10 +69,11 @@ pub async fn save_download(source: TemporaryFile, destination: PathBuf) -> Resul
 }
 impl ApiClient {
     pub async fn send_with_files(&self, request: &CreateMessageRequest, files: &[UploadFile], progress: impl Fn(u64) + Send + Sync + 'static) -> Result<Message> {
-        validate_upload(request.content.as_deref(), files)?;
+        validate_message(request.content.as_deref(), files,&request.embeds)?;
         let progress = Arc::new(progress);
         let count = Arc::new(std::sync::atomic::AtomicU64::new(0));
         let mut form = reqwest::multipart::Form::new().text("channel_id", request.channel_id.to_string());
+        if !request.embeds.is_empty(){form=form.text("embeds",serde_json::to_string(&request.embeds)?);}
         if let Some(text) = &request.content {
             form = form.text("content", text.clone());
         }

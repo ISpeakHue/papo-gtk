@@ -13,8 +13,8 @@ pub enum DirectMsg {
 }
 #[derive(Default)]
 pub(super) struct Direct {
-    pub items:Vec<DirectConversation>, request:Option<Uuid>,selection:Option<Uuid>,version:u64,
-    changed:HashMap<Uuid,u64>,read:HashMap<Uuid,MessageCursor>,hidden:HashSet<Uuid>,blocked_peers:HashSet<Uuid>,busy:HashSet<Uuid>,jobs:Vec<tokio::task::JoinHandle<()>>,
+    pub items:Vec<DirectConversation>, request:Option<Uuid>,refresh_again:bool,selection:Option<Uuid>,version:u64,
+    changed:HashMap<Uuid,u64>,read:HashMap<Uuid,MessageCursor>,hidden:HashSet<Uuid>,hidden_since:HashMap<Uuid,u64>,blocked_peers:HashSet<Uuid>,busy:HashSet<Uuid>,jobs:Vec<tokio::task::JoinHandle<()>>,
     pub presence:HashMap<Uuid,crate::ws::PresenceStatus>,last_refresh:Option<Instant>,
     blocks:Option<BlockView>, blocks_request:Option<Uuid>,
 }
@@ -82,6 +82,7 @@ impl MainWindowModel {
         }
     }
     pub(super) fn refresh_direct(&mut self,sender:ComponentSender<Self>){
+        if self.direct.request.is_some(){self.direct.refresh_again=true;return;}
         let token=Uuid::new_v4();self.direct.request=Some(token);self.direct.last_refresh=Some(Instant::now());
         let version=self.direct.version;let api=self.api_client.clone();
         self.direct.jobs.retain(|j|!j.is_finished());
@@ -114,7 +115,7 @@ impl MainWindowModel {
                 if self.direct.selection!=Some(token){return;}self.direct.selection=None;
                 match result {
                     Ok(dm)=>{
-                        let id=dm.id;self.close_profile_for_direct(dm.user.id);self.direct.hidden.remove(&id);self.direct_snapshot(dm.clone(),&sender);
+                        let id=dm.id;self.close_profile_for_direct(dm.user.id);self.direct.hidden.remove(&id);self.direct.hidden_since.remove(&id);self.direct_snapshot(dm.clone(),&sender);
                         self.chat.emit(ChatMsg::SetAccess{user_id:self.current_user.id,access:self.direct_access()});
                         if self.active_channel_id!=Some(id){self.active_channel_id=Some(id);self.preview_requests.clear();self.notifications.read_pending=false;self.chat.emit(ChatMsg::SetDirect(dm));self.load_history(id,None,sender.clone());}
                         self.sidebar.emit(SidebarMsg::SetSelection(id));
@@ -125,13 +126,14 @@ impl MainWindowModel {
             }
             DirectMsg::Listed{token,version,result}=>{
                 if self.direct.request!=Some(token){return;}self.direct.request=None;
+                if std::mem::take(&mut self.direct.refresh_again){self.refresh_direct(sender.clone());}
                 match result {
                     Ok(mut items)=>{
                         items=merge_snapshot(items,&self.direct.items,&self.direct.changed,version);
-                        items.retain(|d|!self.direct.busy.contains(&d.id)&&!self.direct.blocked_peers.contains(&d.user.id));
+                        items.retain(|d|!self.direct.busy.contains(&d.id)&&!self.direct.hidden_since.get(&d.id).is_some_and(|v|*v>version)&&!self.direct.blocked_peers.contains(&d.user.id));
                         for d in &mut items{reconcile_read(d,&self.direct.read);}
                         if let Some(id)=self.active_channel_id.filter(|id|self.direct.items.iter().any(|d|d.id==*id)&&!items.iter().any(|d|d.id==*id)){self.clear_direct(id);}
-                        for d in &items{self.direct.hidden.remove(&d.id);}
+                        for d in &items{self.direct.hidden.remove(&d.id);self.direct.hidden_since.remove(&d.id);}
                         self.direct.items=items;self.direct.changed.retain(|_,v|*v>version);self.publish_direct();
                         self.load_avatars(self.direct.items.iter().map(|d|d.user.id).collect(),false,sender.clone());self.deliver_notices(sender.clone());self.render_inbox(&sender);self.render_search(&sender);
                     }
@@ -142,7 +144,7 @@ impl MainWindowModel {
                 if !self.direct.busy.insert(id){return;}self.direct.selection=None;let api=self.api_client.clone();
                 self.direct.jobs.push(tokio::spawn(async move{let result=api.hide_direct(id).await;sender.input(MainWindowMsg::Direct(DirectMsg::Hidden{id,result}));}));
             }
-            DirectMsg::Hidden{id,result}=>{self.direct.busy.remove(&id);match result{Ok(())=>{self.direct.hidden.insert(id);self.clear_direct(id);self.refresh_direct(sender.clone());},Err(e)=>sender.input(MainWindowMsg::OperationFailed(e))}self.deliver_notices(sender.clone());self.render_inbox(&sender);self.render_search(&sender);}
+            DirectMsg::Hidden{id,result}=>{self.direct.busy.remove(&id);match result{Ok(())=>{self.direct.version+=1;self.direct.hidden_since.insert(id,self.direct.version);self.direct.hidden.insert(id);self.clear_direct(id);self.refresh_direct(sender.clone());},Err(e)=>sender.input(MainWindowMsg::OperationFailed(e))}self.deliver_notices(sender.clone());self.render_inbox(&sender);self.render_search(&sender);}
             DirectMsg::Blocks=>{
                 if let Some(v)=self.direct.blocks.take(){v.window.close();}
                 let (window,body)=crate::ui::chat::actions::window(root,"Usuários bloqueados");
@@ -196,6 +198,13 @@ pub(crate) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::Mai
     main.emit(MainWindowMsg::ChannelSelected(public.clone()));pump(context);assert_eq!(composer().text(),"server draft");
     main.emit(MainWindowMsg::Direct(DirectMsg::Select(dm,None)));until(context,||main.model().active_channel_id==Some(dm)&&composer().text()=="DM draft");
     main.emit(MainWindowMsg::WsReceived(WsEvent::PresenceUpdate(crate::ws::PresenceEntry{user_id:peer,status:crate::ws::PresenceStatus::Busy,status_message:None,typing:None,nickname:None,user_voice:vec![]})));pump(context);assert_eq!(main.model().direct.presence[&peer],crate::ws::PresenceStatus::Busy);
+    // Hold a list result while many refresh triggers arrive: retain its token
+    // and schedule only one successor rather than starting discarded requests.
+    let held=Uuid::new_v4();let version=main.model().direct.version;let items=main.model().direct.items.clone();
+    main.state().get_mut().model.direct.request=Some(held);let jobs=main.model().direct.jobs.len();
+    for _ in 0..50{main.emit(MainWindowMsg::Direct(DirectMsg::Refresh));}pump(context);
+    assert_eq!(main.model().direct.request,Some(held));assert!(main.model().direct.refresh_again);assert_eq!(main.model().direct.jobs.len(),jobs);
+    main.emit(MainWindowMsg::Direct(DirectMsg::Listed{token:held,version,result:Ok(items)}));until(context,||main.model().direct.request.is_none());assert!(!main.model().direct.refresh_again);
     // An older REST request cannot overwrite a newer dm_update or confirmed read.
     let old_token=Uuid::new_v4();let version=main.model().direct.version;
     main.emit(MainWindowMsg::Direct(DirectMsg::Refresh));until(context,||main.model().direct.request.is_none());

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Papo
+Comment=Chat with your community
+Comment[pt_BR]=Converse com sua comunidade
+Exec=papo-gtk
+Icon=br.com.papo.gtk
+Terminal=false
+Categories=Network;InstantMessaging;GTK;
+Keywords=chat;messages;voice;community;
+Keywords[pt_BR]=chat;mensagens;voz;comunidade;
+StartupNotify=true
+StartupWMClass=br.com.papo.gtk

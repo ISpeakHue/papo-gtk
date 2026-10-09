@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/br/com/papo/gtk/icons">
+    <file alias="128x128/apps/br.com.papo.gtk.png">icons/hicolor/128x128/apps/br.com.papo.gtk.png</file>
+    <file alias="256x256/apps/br.com.papo.gtk.png">icons/hicolor/256x256/apps/br.com.papo.gtk.png</file>
+  </gresource>
+</gresources>

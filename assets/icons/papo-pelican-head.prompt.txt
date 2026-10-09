@@ -1,0 +1,8 @@
+Use case: logo-brand.
+Asset type: simplified full-color GNOME app icon for Papo GTK.
+Input image: reference for pelican identity and white/orange palette only; redesign the composition completely.
+Primary request: ONLY a pelican's head in side profile, facing right, with its recognizable broad bill and rounded throat pouch. No body, wing, legs, or long neck.
+Style: contemporary GNOME Adwaita app icon, very simple vector-like geometric artwork. Construct the entire icon from about five large clean shapes: a rounded off-white head, a compact golden-orange upper bill, a deeper orange rounded throat pouch, one small dark circular eye, and a thin pale-grey lower edge suggesting shallow depth. Use a stubby compact bill and generous pouch, clearly pelican rather than duck. Smooth opaque color fields, clean crisp silhouette, minimal top-lit depth. No illustrated rendering.
+Composition: square canvas, a single optically centered compact head icon. Balanced transparent margins, artwork within the central 75 percent. Head and pouch together form a rounded compact silhouette, readable at 32 pixels. The head terminates neatly below the pouch without a dangling neck.
+Background: actual transparent alpha.
+Avoid: feathers, tufts, gloss, highlights in eye, gradients across every shape, outlines, photorealism, 3D rendering, texture, tiny details, ornamental curves, background tiles, circles behind the head, badges, text, watermark, external shadows. Prioritize simplicity and bold geometry over resemblance to the reference's detailed rendering.

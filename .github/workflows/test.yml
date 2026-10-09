@@ -27,7 +27,7 @@ jobs:
       CARGO_TERM_COLOR: always
     steps:
       - name: Install Rust and native build dependencies
-        run: dnf install -y git gcc rust cargo pkgconf-pkg-config openssl-devel gtk4-devel libadwaita-devel python3-gobject python3-gstreamer1 gstreamer1-plugins-base gstreamer1-plugins-good gstreamer1-plugins-bad-free libnice-gstreamer1 xorg-x11-server-Xvfb xorg-x11-xauth dbus-daemon
+        run: dnf install -y git gcc rust cargo pkgconf-pkg-config glib2-devel openssl-devel gtk4-devel libadwaita-devel python3-gobject python3-gstreamer1 gstreamer1-plugins-base gstreamer1-plugins-good gstreamer1-plugins-bad-free libnice-gstreamer1 xorg-x11-server-Xvfb xorg-x11-xauth dbus-daemon
       - uses: actions/checkout@v4
       - name: Compile application and run unit and integration tests
         run: cargo test --locked

@@ -87,10 +87,10 @@ impl SimpleComponent for LoginModel {
                     set_halign: gtk::Align::Center,
 
                     gtk::Image {
-                        set_icon_name: Some("chat-message-new-symbolic"),
-                        set_pixel_size: 40,
+                        set_icon_name: Some(crate::app::APP_ID),
+                        set_widget_name: "papo-app-icon",
+                        set_pixel_size: 96,
                         add_css_class: "papo-login-brand",
-                        add_css_class: "accent",
                     },
 
                     gtk::Label {

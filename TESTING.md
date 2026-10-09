@@ -6,11 +6,11 @@ Run the suite with:
 cargo test --locked
 ```
 
-Install Rust, a C compiler, pkg-config, OpenSSL development files, GTK 4.12+
+Install Rust, a C compiler, pkg-config, GLib development tools, OpenSSL development files, GTK 4.12+
 and libadwaita 1.6+ first. On Fedora 44:
 
 ```sh
-sudo dnf install rust cargo gcc pkgconf-pkg-config openssl-devel gtk4-devel libadwaita-devel
+sudo dnf install rust cargo gcc pkgconf-pkg-config glib2-devel openssl-devel gtk4-devel libadwaita-devel
 ```
 
 The default suite runs without a display, a Papo backend, credentials, or a database.
@@ -34,6 +34,20 @@ HTTP server, including failures, retries, confirmations, and permission changes:
 ```sh
 dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
 ```
+
+## Pelican branding
+
+The executable bundles 128px and 256px pelican icons. The focused GTK check
+resolves and decodes both sizes through an isolated resource-only icon theme,
+verifies the login and window icons, and can render light/dark previews:
+
+```sh
+PAPO_UI_CASE=branding PAPO_DESIGN_PREVIEW=1 dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+```
+
+Previews are saved to `/tmp/papo-design-pelican-light.png` and
+`/tmp/papo-design-pelican-dark.png`. Validate launcher metadata with
+`desktop-file-validate data/br.com.papo.gtk.desktop`.
 
 ## Chat rendering and scrolling
 

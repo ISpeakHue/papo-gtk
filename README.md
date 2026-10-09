@@ -10,11 +10,11 @@ uses an adaptive server/channel sidebar and native GNOME controls.
 
 ## Build and run
 
-Requires Rust, a C compiler, pkg-config, OpenSSL development files, GTK 4.12+
+Requires Rust, a C compiler, pkg-config, GLib development tools (`glib-compile-resources`), OpenSSL development files, GTK 4.12+
 and libadwaita 1.6+. On Fedora 44:
 
 ```sh
-sudo dnf install rust cargo gcc pkgconf-pkg-config openssl-devel gtk4-devel libadwaita-devel
+sudo dnf install rust cargo gcc pkgconf-pkg-config glib2-devel openssl-devel gtk4-devel libadwaita-devel
 cargo build --locked
 cargo run --locked
 ```
@@ -24,6 +24,20 @@ Enter the **backend API URL** in the login screen, for example
 keep it running while using the frontend. For a remote server, only the frontend
 needs to run on your computer. Enter the server password when required, then use
 your account credentials.
+
+The pelican icon is embedded in the executable, including when using `cargo run`.
+To also register Papo in the desktop app list and give its dock entry the same icon:
+
+```sh
+cargo build --locked
+python3 scripts/install-desktop.py
+```
+
+This creates a per-user launcher pointing at this checkout's debug executable;
+rebuilding updates the app it launches. For a release build, use
+`cargo build --release --locked` and
+`python3 scripts/install-desktop.py --binary target/release/papo-gtk`.
+Keep the checkout at that path, or rerun the installer after moving it.
 
 Voice, video playback, cameras and screen sharing use the native media runtime.
 Install it on Fedora with:

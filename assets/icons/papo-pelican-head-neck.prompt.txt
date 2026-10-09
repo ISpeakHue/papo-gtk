@@ -1,0 +1,8 @@
+Use case: precise-object-edit.
+Asset type: Papo GTK pelican app icon, GNOME-inspired simplified geometry.
+Input image: edit target, the approved head-only icon.
+Primary request: Add a short graceful white pelican neck underneath and behind the head, so the head has a natural anatomical continuation rather than ending awkwardly. The neck should descend from the back of the head in a gentle compact S curve, with a rounded tidy base below the throat pouch. Integrate it smoothly with the existing white head and pale-grey underside.
+Preserve: the exact side-facing head identity, plain dark eye, golden-orange upper bill, rounded orange pouch, existing palette and simple clean shape style. Keep the composition as a head-and-neck bust, not a whole bird. Keep a balanced compact app-icon silhouette within a square canvas, with transparent margins.
+Constraints: Only the neck and the immediate head-neck junction should change; head and bill should remain visually the same. If needed, scale the whole icon down slightly to give the new neck comfortable space. Restrained shading, no additional detail.
+Background: preserve genuine transparent alpha.
+Avoid: body, wings, feet, long dangling neck, feathers, ornate curves, new gloss, black outlines, backing tiles, text, watermark, cast shadows.

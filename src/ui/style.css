@@ -58,7 +58,7 @@
 .papo-status-dot { background: @sidebar_bg_color; border-radius: 50%; padding: 1px; }
 .papo-menu button { padding: 8px 12px; border-radius: 6px; }
 .papo-login { background: @window_bg_color; }
-.papo-login-brand { background: alpha(@accent_bg_color, .13); color: @accent_color; border-radius: 24px; padding: 20px; }
+.papo-login-brand { margin-bottom: 4px; }
 
 .papo-menu button.papo-destructive { color: @destructive_color; }
 .papo-menu button.papo-destructive:hover { background: alpha(@destructive_color,.12); }

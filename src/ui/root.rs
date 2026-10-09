@@ -47,6 +47,38 @@ mod tests {
             if !context.pending() { break; }
             context.iteration(false);
         }
+        {
+            let theme = gtk::IconTheme::new();
+            theme.set_search_path(&[]);
+            theme.add_resource_path("/br/com/papo/gtk/icons");
+            for scale in [1, 2] {
+                let icon = theme.lookup_icon(crate::app::APP_ID, &[], 128, scale,
+                    gtk::TextDirection::None, gtk::IconLookupFlags::empty());
+                let file = icon.file().expect("embedded app icon must resolve without installation");
+                assert!(file.uri().starts_with("resource:///br/com/papo/gtk/icons/"));
+                let texture = gtk::gdk::Texture::from_file(&file).unwrap();
+                assert_eq!(texture.width(), 128 * scale);
+                assert_eq!(texture.height(), 128 * scale);
+                assert!(!icon.is_symbolic());
+            }
+            assert_eq!(window.icon_name().as_deref(), Some(crate::app::APP_ID));
+            let widgets = descendants(&window.content().unwrap());
+            let brand = widgets.iter().find(|widget| widget.widget_name() == "papo-app-icon")
+                .unwrap().downcast_ref::<gtk::Image>().unwrap();
+            assert_eq!(brand.icon_name().as_deref(), Some(crate::app::APP_ID));
+        }
+        if std::env::var("PAPO_UI_CASE").as_deref() == Ok("branding") {
+            let style = adw::StyleManager::default();
+            let previous = style.color_scheme();
+            for (scheme, name) in [(adw::ColorScheme::ForceLight, "pelican-light"),
+                (adw::ColorScheme::ForceDark, "pelican-dark")] {
+                style.set_color_scheme(scheme);
+                crate::ui::main_window::layout::tests::preview(window, name, &context);
+            }
+            style.set_color_scheme(previous);
+            window.close();
+            return;
+        }
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("report6"){
             crate::ui::chat::bugs6::exercise(&context);window.close();return;
         }
@@ -306,6 +338,7 @@ impl Component for RootModel {
     view! {
         adw::ApplicationWindow {
             set_title: Some("Papo"),
+            set_icon_name: Some(crate::app::APP_ID),
             set_default_size: (1280, 760),
 
             #[wrap(Some)]
@@ -341,6 +374,7 @@ impl Component for RootModel {
     }
 
     fn init(_init: (), root: Self::Root, sender: ComponentSender<Self>) -> ComponentParts<Self> {
+        crate::app::branding::install();
         crate::ui::style::install();
         let config = AppConfig::load();
 

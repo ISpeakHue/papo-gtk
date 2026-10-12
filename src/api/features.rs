@@ -9,7 +9,8 @@ pub const MAX_FILE: u64 = 100 << 20;
 pub const MAX_BODY: u64 = 110 << 20;
 #[derive(Debug, Clone)]
 pub struct UploadFile {
-    pub path: PathBuf, pub name: String, pub size: u64
+    pub path: PathBuf, pub name: String, pub size: u64,
+    pub(crate) _temporary: Option<Arc<TemporaryFile>>,
 }
 impl UploadFile {
     pub async fn inspect(path: PathBuf) -> Result<Self> {
@@ -17,8 +18,21 @@ impl UploadFile {
         anyhow::ensure!(meta.is_file() && meta.len() <= MAX_FILE, "Escolha arquivos de até 100 MiB.");
         let name = path.file_name().context("Nome de arquivo inválido")?.to_string_lossy().into_owned();
         Ok(Self {
-            path, name, size: meta.len()
+            path, name, size: meta.len(), _temporary: None
         })
+    }
+    /// Keep clipboard data alive through draft switches, retries and active uploads.
+    pub async fn clipboard_png(bytes: &[u8]) -> Result<Self> {
+        anyhow::ensure!(!bytes.is_empty() && bytes.len() as u64 <= MAX_FILE, "Imagem muito grande (máximo 100 MiB).");
+        let path=std::env::temp_dir().join(format!("papo-clipboard-{}.png",Uuid::new_v4()));
+        let mut options=tokio::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)] options.mode(0o600);
+        let mut file=options.open(&path).await?;
+        let temporary=Arc::new(TemporaryFile(path.clone()));
+        file.write_all(bytes).await?;
+        file.flush().await?;
+        Ok(Self{path,name:"imagem-colada.png".into(),size:bytes.len() as u64,_temporary:Some(temporary)})
     }
 }
 pub fn validate_upload(content: Option<&str>, files: &[UploadFile]) -> Result<()> {
@@ -205,10 +219,24 @@ pub fn validate_profile_image(bytes: &[u8], banner: bool) -> Result<&'static str
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn clipboard_file_lives_until_the_last_draft_or_upload_owner_is_dropped() {
+        let file=UploadFile::clipboard_png(b"staged fixture").await.unwrap();
+        let path=file.path.clone();
+        let upload=file.clone();
+        assert_eq!(tokio::fs::read(&path).await.unwrap(),b"staged fixture");
+        #[cfg(unix)] {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(tokio::fs::metadata(&path).await.unwrap().permissions().mode()&0o777,0o600);
+        }
+        drop(file);assert!(path.exists());
+        drop(upload);assert!(!path.exists());
+        assert!(UploadFile::clipboard_png(&[]).await.is_err());
+    }
     #[test]
     fn upload_limits_count_unicode_and_all_multipart_files() {
         let file = UploadFile {
-            path: "unused".into(), name: "test".into(), size: MAX_FILE
+            path: "unused".into(), name: "test".into(), size: MAX_FILE, _temporary: None
         };
         assert!(validate_upload(Some(&"🌎".repeat(8192)), &[]).is_ok());
         assert!(validate_upload(Some(&"🌎".repeat(8193)), &[]).is_err());

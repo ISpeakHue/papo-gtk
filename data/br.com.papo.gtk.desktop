@@ -10,4 +10,4 @@ Categories=Network;InstantMessaging;GTK;
 Keywords=chat;messages;voice;community;
 Keywords[pt_BR]=chat;mensagens;voz;comunidade;
 StartupNotify=true
-StartupWMClass=br.com.papo.gtk
+StartupWMClass=papo-gtk

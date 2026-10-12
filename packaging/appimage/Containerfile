@@ -1,0 +1,23 @@
+FROM docker.io/library/ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential ca-certificates curl xz-utils git pkg-config meson ninja-build \
+    gettext libssl-dev libgtk-4-dev libappstream-dev libgirepository1.0-dev \
+    libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev \
+    python3 python3-gi python3-gst-1.0 python3-cairo gir1.2-gst-plugins-bad-1.0 \
+    gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
+    gstreamer1.0-plugins-ugly gstreamer1.0-libav gstreamer1.0-nice gstreamer1.0-pipewire \
+    gstreamer1.0-tools libgtk-4-media-gstreamer librsvg2-common \
+    adwaita-icon-theme fonts-dejavu-core desktop-file-utils squashfs-tools \
+    xvfb xauth dbus-x11 && rm -rf /var/lib/apt/lists/*
+
+COPY bootstrap.sh /build/bootstrap.sh
+RUN bash /build/bootstrap.sh
+
+ENV PATH=/opt/rust/bin:/usr/local/bin:/usr/bin:/bin \
+    PKG_CONFIG_PATH=/usr/local/lib/pkgconfig \
+    LD_LIBRARY_PATH=/usr/local/lib \
+    CARGO_HOME=/cargo \
+    CARGO_TARGET_DIR=/work/target/appimage
+WORKDIR /work

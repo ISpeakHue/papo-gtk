@@ -1,6 +1,6 @@
 //! Room-entry cue isolated from GTK's native player lifecycle.
 use std::sync::{Arc,Mutex,atomic::{AtomicU32,Ordering}};
-use tokio::{io::AsyncWriteExt,process::Command,task::JoinHandle};
+use tokio::{io::AsyncWriteExt,task::JoinHandle};
 
 #[derive(Default)]
 pub struct CallCue {
@@ -33,7 +33,7 @@ impl CallCue {
 impl Drop for CallCue{fn drop(&mut self){self.stop();}}
 
 async fn play_cue(test_sink:bool,pid:Arc<AtomicU32>,leave:bool)->Result<(),String>{
-    let mut command=Command::new("/usr/bin/python3");
+    let mut command=crate::media::runtime::python();
     command.args(["-u","-c",include_str!("sound.py")]);if test_sink{command.arg("--test-sink");}
     command.kill_on_drop(true).stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
     let mut child=command.spawn().map_err(|e|e.to_string())?;pid.store(child.id().unwrap_or(0),Ordering::SeqCst);

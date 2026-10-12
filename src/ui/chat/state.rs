@@ -31,6 +31,43 @@ pub struct History {
 }
 
 impl History {
+    pub(super) fn trim_recent(&mut self,limit:usize)->bool {
+        if self.messages.len()<=limit{return false;}
+        self.messages.drain(..self.messages.len()-limit);self.messages.shrink_to_fit();
+        // A late older-page response must not repopulate the released history.
+        self.pending=None;self.changes=Default::default();
+        let ids:HashSet<_>=self.messages.iter().map(|m|m.id).collect();self.dirty.retain(|id|ids.contains(id));
+        self.media_revision=self.media_revision.wrapping_add(1);true
+    }
+    pub(super) fn prepare_cache(&mut self, limit: usize) -> bool {
+        self.pending = None; self.changes=Default::default(); self.snapshots=Default::default(); self.dirty=Default::default();
+        let trimmed = self.messages.len() > limit;
+        if trimmed { self.messages.drain(..self.messages.len() - limit); }
+        // Encoded images live in the separately bounded media cache. Metadata
+        // still lets an evicted thumbnail be fetched on a later visit.
+        for embed in self.messages.iter_mut().flat_map(|m| m.embeds.iter_mut().flatten()) { embed.image_data = None; }
+        self.messages.shrink_to_fit();
+        trimmed
+    }
+    pub(super) fn cache_bytes(&self) -> usize {
+        // Account for allocated capacities without serializing messages on the
+        // GTK thread when the user switches channels.
+        let string=|s:&Option<String>|s.as_ref().map_or(0,String::capacity);
+        let media=|m:&Option<crate::models::EmbedMedia>|m.as_ref().map_or(0,|m|string(&m.url)+string(&m.mime_type));
+        self.deleted.capacity()*std::mem::size_of::<Uuid>() + self.messages.capacity()*std::mem::size_of::<Message>() + self.messages.iter().map(|m| {
+            string(&m.content)
+                + m.attachments.as_ref().map_or(0,|items|items.capacity()*std::mem::size_of::<crate::models::Attachment>() + items.iter().map(|a|a.mime_type.capacity()+a.original_file_name.capacity()+string(&a.moderation_status)).sum::<usize>())
+                + m.embeds.as_ref().map_or(0,|items|items.capacity()*std::mem::size_of::<Embed>() + items.iter().map(|e| {
+                    e.source_type.capacity()+e.fetch_method.capacity()+string(&e.provider)+string(&e.site_name)+string(&e.url)+string(&e.title)+string(&e.description)+string(&e.color)+string(&e.embed_url)+string(&e.image_data)
+                        + media(&e.thumbnail)+media(&e.image)+media(&e.video)
+                        + e.author.as_ref().map_or(0,|a|string(&a.name)+string(&a.url)+media(&a.media))
+                        + e.footer.as_ref().map_or(0,|f|string(&f.text)+media(&f.icon))
+                        + e.fields.capacity()*std::mem::size_of::<crate::models::EmbedField>()+e.fields.iter().map(|f|f.name.capacity()+f.value.capacity()).sum::<usize>()
+                }).sum::<usize>())
+                + m.reactions.as_ref().map_or(0,|items|items.capacity()*std::mem::size_of::<MessageReactionSummary>()+items.iter().map(|r|string(&r.unicode)).sum::<usize>())
+                + m.user_reactions.as_ref().map_or(0,|items|items.capacity()*std::mem::size_of::<crate::models::MessageUserReaction>()+items.iter().map(|r|string(&r.unicode)).sum::<usize>())
+        }).sum::<usize>()
+    }
     pub fn media_revision(&self)->u64{self.media_revision}
     pub fn mark_dirty(&mut self,id:Uuid){self.dirty.insert(id);}
     pub fn take_dirty(&mut self)->HashSet<Uuid>{
@@ -106,6 +143,10 @@ impl History {
     }
 
     pub fn is_deleted(&self, id: Uuid) -> bool { self.deleted.contains(&id) }
+
+    pub(super) fn deleted_count(&self) -> usize { self.deleted.len() }
+
+    pub fn is_pending(&self, request: Uuid) -> bool { self.pending == Some(request) }
 
     pub fn loading(&self) -> bool { self.pending.is_some() }
 
@@ -267,6 +308,18 @@ impl Draft {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn returning_to_recent_history_releases_old_pages_and_rejects_late_pagination(){
+        let channel=Uuid::new_v4();let mut history=History::default();history.select(channel);
+        for i in 0..350{history.upsert(message(channel,i));}
+        let request=Uuid::new_v4();history.begin(request);
+        let snapshot=Uuid::new_v4();history.begin_snapshot(snapshot);
+        let latest=history.messages.last().unwrap().id;history.apply(Change::Edit(latest,"live edit".into(),None));
+        assert!(history.trim_recent(200));assert_eq!(history.messages.len(),200);assert_eq!(history.messages.capacity(),200);
+        assert!(!history.finish(request,vec![message(channel,0)],true));
+        assert!(history.finish_snapshot(snapshot,vec![]));assert_eq!(history.messages.last().unwrap().content.as_deref(),Some("live edit"));
+        assert!(!history.trim_recent(200));
+    }
 
     fn message(channel_id: Uuid, second: i64) -> Message {
         Message {
@@ -316,7 +369,7 @@ mod tests {
 
     #[test]
     fn file_only_draft_retains_selection_on_failure_and_cancel() {
-        let mut draft=Draft::default();draft.files.push(crate::api::features::UploadFile{path:"file".into(),name:"file".into(),size:1});
+        let mut draft=Draft::default();draft.files.push(crate::api::features::UploadFile{path:"file".into(),name:"file".into(),size:1,_temporary:None});
         let first=draft.begin().unwrap();assert!(draft.finish(first,Err("offline".into())));assert_eq!(draft.files.len(),1);
         let cancelled=draft.begin().unwrap();draft.cancel();assert!(!draft.finish(cancelled,Ok(())));assert_eq!(draft.files.len(),1);
         let next=draft.begin().unwrap();assert!(draft.finish(next,Ok(())));assert!(draft.files.is_empty());

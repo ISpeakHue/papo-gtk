@@ -86,10 +86,11 @@ impl MainWindowModel {
         let token=Uuid::new_v4();self.direct.request=Some(token);self.direct.last_refresh=Some(Instant::now());
         let version=self.direct.version;let api=self.api_client.clone();
         self.direct.jobs.retain(|j|!j.is_finished());
-        self.direct.jobs.push(tokio::spawn(async move{let result=api.list_direct().await;sender.input(MainWindowMsg::Direct(DirectMsg::Listed{token,version,result}));}));
+        self.direct.jobs.push(tokio::spawn(async move{let result=api.list_direct().await;let _=sender.input_sender().send(MainWindowMsg::Direct(DirectMsg::Listed{token,version,result}));}));
     }
     pub(super) fn tick_direct(&mut self,sender:ComponentSender<Self>){if self.direct.last_refresh.map_or(true,|t|t.elapsed()>=Duration::from_secs(30)){self.refresh_direct(sender);}}
     fn clear_direct(&mut self,id:Uuid){
+        self.chat.emit(ChatMsg::InvalidateConversation(id));
         self.direct.items.retain(|d|d.id!=id);self.direct.changed.remove(&id);
         if self.active_channel_id==Some(id){self.active_channel_id=None;self.preview_requests.clear();self.chat.emit(ChatMsg::ClearChannel);}
         self.publish_direct();
@@ -98,26 +99,26 @@ impl MainWindowModel {
         if let Some(id)=self.active_channel_id.filter(|id|self.direct.items.iter().any(|d|d.id==*id)){self.clear_direct(id);}
         self.direct.selection=None;self.refresh_direct(sender.clone());self.deliver_notices(sender.clone());self.render_inbox(&sender);self.render_search(&sender);
     }
-    fn refresh_blocks(&mut self,sender:ComponentSender<Self>){let token=Uuid::new_v4();self.direct.blocks_request=Some(token);let api=self.api_client.clone();self.direct.jobs.push(tokio::spawn(async move{let result=api.list_blocks().await;sender.input(MainWindowMsg::Direct(DirectMsg::BlocksLoaded{token,result}));}));}
+    fn refresh_blocks(&mut self,sender:ComponentSender<Self>){let token=Uuid::new_v4();self.direct.blocks_request=Some(token);let api=self.api_client.clone();self.direct.jobs.push(tokio::spawn(async move{let result=api.list_blocks().await;let _=sender.input_sender().send(MainWindowMsg::Direct(DirectMsg::BlocksLoaded{token,result}));}));}
     pub(super) fn direct_event(&mut self,msg:DirectMsg,sender:ComponentSender<Self>,root:&gtk::Box){
         match msg {
             DirectMsg::Refresh=>self.refresh_direct(sender),
             DirectMsg::Open(user)=>{
                 if user==self.current_user.id{self.chat.emit(ChatMsg::OperationError("Não é possível abrir uma DM consigo mesmo.".into()));return;}
                 let token=Uuid::new_v4();self.direct.selection=Some(token);let api=self.api_client.clone();let own=self.current_user.id;
-                self.direct.jobs.push(tokio::spawn(async move{let result=api.open_direct(own,user).await;sender.input(MainWindowMsg::Direct(DirectMsg::Selected{token,message:None,result}));}));
+                self.direct.jobs.push(tokio::spawn(async move{let result=api.open_direct(own,user).await;let _=sender.input_sender().send(MainWindowMsg::Direct(DirectMsg::Selected{token,message:None,result}));}));
             }
             DirectMsg::Select(id,message)=>{
                 let token=Uuid::new_v4();self.direct.selection=Some(token);let api=self.api_client.clone();
-                self.direct.jobs.push(tokio::spawn(async move{let result=api.get_direct(id).await;sender.input(MainWindowMsg::Direct(DirectMsg::Selected{token,message,result}));}));
+                self.direct.jobs.push(tokio::spawn(async move{let result=api.get_direct(id).await;let _=sender.input_sender().send(MainWindowMsg::Direct(DirectMsg::Selected{token,message,result}));}));
             }
             DirectMsg::Selected{token,message,result}=>{
                 if self.direct.selection!=Some(token){return;}self.direct.selection=None;
                 match result {
                     Ok(dm)=>{
                         let id=dm.id;self.close_profile_for_direct(dm.user.id);self.direct.hidden.remove(&id);self.direct.hidden_since.remove(&id);self.direct_snapshot(dm.clone(),&sender);
-                        self.chat.emit(ChatMsg::SetAccess{user_id:self.current_user.id,access:self.direct_access()});
-                        if self.active_channel_id!=Some(id){self.active_channel_id=Some(id);self.preview_requests.clear();self.notifications.read_pending=false;self.chat.emit(ChatMsg::SetDirect(dm));self.load_history(id,None,sender.clone());}
+                        if self.active_channel_id!=Some(id){self.active_channel_id=Some(id);self.preview_requests.clear();self.notifications.read_pending=false;self.chat.emit(ChatMsg::SelectTarget{target:crate::models::ConversationTarget::Direct(dm),user_id:self.current_user.id,access:self.direct_access()});self.load_history(id,None,sender.clone());}
+                        else{self.chat.emit(ChatMsg::SetAccess{user_id:self.current_user.id,access:self.direct_access()});}
                         self.sidebar.emit(SidebarMsg::SetSelection(id));
                         if let Some(message_id)=message{self.chat.emit(ChatMsg::Action(crate::ui::chat::actions::ActionMsg::Navigate(message_id)));}
                     }
@@ -142,7 +143,7 @@ impl MainWindowModel {
             }
             DirectMsg::Hide(id)=>{
                 if !self.direct.busy.insert(id){return;}self.direct.selection=None;let api=self.api_client.clone();
-                self.direct.jobs.push(tokio::spawn(async move{let result=api.hide_direct(id).await;sender.input(MainWindowMsg::Direct(DirectMsg::Hidden{id,result}));}));
+                self.direct.jobs.push(tokio::spawn(async move{let result=api.hide_direct(id).await;let _=sender.input_sender().send(MainWindowMsg::Direct(DirectMsg::Hidden{id,result}));}));
             }
             DirectMsg::Hidden{id,result}=>{self.direct.busy.remove(&id);match result{Ok(())=>{self.direct.version+=1;self.direct.hidden_since.insert(id,self.direct.version);self.direct.hidden.insert(id);self.clear_direct(id);self.refresh_direct(sender.clone());},Err(e)=>sender.input(MainWindowMsg::OperationFailed(e))}self.deliver_notices(sender.clone());self.render_inbox(&sender);self.render_search(&sender);}
             DirectMsg::Blocks=>{
@@ -161,7 +162,7 @@ impl MainWindowModel {
             DirectMsg::Block(id,block)=>{
                 if id==self.current_user.id||!self.direct.busy.insert(id){return;}
                 let api=self.api_client.clone();let own=self.current_user.id;self.direct.selection=None;
-                self.direct.jobs.push(tokio::spawn(async move{let result=api.block_user(own,id,block).await;sender.input(MainWindowMsg::Direct(DirectMsg::Blocked{id,block,result}));}));
+                self.direct.jobs.push(tokio::spawn(async move{let result=api.block_user(own,id,block).await;let _=sender.input_sender().send(MainWindowMsg::Direct(DirectMsg::Blocked{id,block,result}));}));
             }
             DirectMsg::Blocked{id,block,result}=>{
                 self.direct.busy.remove(&id);

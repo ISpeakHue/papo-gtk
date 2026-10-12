@@ -22,6 +22,7 @@
 .papo-user-footer { background: alpha(@window_fg_color, .035); padding: 10px 8px; border-top: 1px solid alpha(@window_fg_color, .08); }
 .papo-user-footer button { padding: 4px; }
 .papo-chat { background: @window_bg_color; }
+.papo-history-cover, .papo-history-surface { background: @window_bg_color; }
 .papo-chat-heading { min-height: 56px; padding: 0 12px; border-bottom: 1px solid alpha(@window_fg_color, .08); }
 .papo-channel-symbol { font-size: 22px; font-weight: 600; }
 .papo-chat-history { background: transparent; padding: 8px 0; }
@@ -67,6 +68,8 @@
 
 .papo-mention-suggestions { margin: 0 16px; padding: 6px; background: @popover_bg_color; border: 1px solid alpha(@window_fg_color,.12); border-radius: 10px; }
 .papo-mention-suggestions button { padding: 8px 12px; }
+.papo-member-suggestions { padding: 4px; }
+.papo-member-suggestions button { padding: 6px 10px; }
 .papo-voice-member .papo-voice-speaking { background: alpha(@success_color,.15); border-radius: 5px; padding: 2px 4px; font-weight: bold; }
 .papo-inline-image { padding: 0; min-width: 0; min-height: 0; }
 .papo-media-frame { border-radius: 10px; background: alpha(@window_fg_color,.06); }
@@ -74,3 +77,6 @@
 
 .papo-reply-banner { background: alpha(@accent_bg_color, .16); border-left: 3px solid @accent_bg_color; border-radius: 6px; padding: 6px 10px; }
 .papo-emoji-cell { padding: 2px; min-width: 40px; min-height: 40px; }
+
+.papo-unread-divider { color: @accent_color; margin: 8px 16px; }
+.papo-unread-divider separator { background: @accent_color; min-height: 1px; }

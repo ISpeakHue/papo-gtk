@@ -27,6 +27,7 @@ struct SecurityView {
     password: gtk::PasswordEntry,
     confirmation: gtk::PasswordEntry,
     devices: gtk::Box,
+    sessions_scroll: gtk::ScrolledWindow,
     error: gtk::Label,
     loading: bool,
 }
@@ -47,10 +48,13 @@ impl MainWindowModel {
                 if let Some(old)=self.security.view.take(){old.password.set_text("");old.confirmation.set_text("");old.window.close();}
                 let token = Uuid::new_v4();
                 let (w, body) = window(root, "Segurança da conta");
+                w.set_default_height(-1);
+                body.set_valign(gtk::Align::Start);
                 let password = gtk::PasswordEntry::new(); password.set_show_peek_icon(true);
                 password.set_placeholder_text(Some("Nova senha")); body.append(&password);
                 let confirmation = gtk::PasswordEntry::new(); confirmation.set_placeholder_text(Some("Repita a nova senha")); body.append(&confirmation);
-                body.append(&gtk::Label::new(Some("A senha deve atender à política do servidor, incluindo maiúscula e caractere especial.")));
+                let policy = gtk::Label::new(Some("A senha deve atender à política do servidor, incluindo maiúscula e caractere especial."));
+                policy.set_wrap(true); policy.set_xalign(0.0); body.append(&policy);
                 let save = gtk::Button::with_label("Alterar senha"); let s = sender.clone();
                 save.connect_clicked(move |_| s.input(MainWindowMsg::Security(SecurityMsg::SavePassword(token)))); body.append(&save);
                 let reload = gtk::Button::with_label("Atualizar sessões"); let s = sender.clone();
@@ -58,10 +62,13 @@ impl MainWindowModel {
                 let all = gtk::Button::with_label("Encerrar todas as sessões"); let s = sender.clone();
                 all.connect_clicked(move |_| s.input(MainWindowMsg::Security(SecurityMsg::ConfirmDrop { token, id: "ALL".into() }))); body.append(&all);
                 let devices = gtk::Box::new(gtk::Orientation::Vertical, 8);
-                let scroll = gtk::ScrolledWindow::new(); scroll.set_min_content_height(180); scroll.set_child(Some(&devices)); body.append(&scroll);
+                let scroll = gtk::ScrolledWindow::new();
+                scroll.set_hscrollbar_policy(gtk::PolicyType::Never);
+                scroll.set_propagate_natural_height(true); scroll.set_max_content_height(240);
+                scroll.set_child(Some(&devices)); body.append(&scroll);
                 let error = gtk::Label::new(None); error.set_wrap(true); body.append(&error);
                 let p=password.clone();let c=confirmation.clone();w.connect_close_request(move |_|{p.set_text("");c.set_text("");gtk::glib::Propagation::Proceed});
-                w.present(); self.security.view = Some(SecurityView { token, window: w, controls: body, password, confirmation, devices, error, loading: false });
+                w.present(); self.security.view = Some(SecurityView { token, window: w, controls: body, password, confirmation, devices, sessions_scroll: scroll, error, loading: false });
                 sender.input(MainWindowMsg::Security(SecurityMsg::Reload(token)));
             }
             SecurityMsg::Reload(token) => {
@@ -80,9 +87,16 @@ impl MainWindowModel {
                         for device in devices {
                             if device.expires_at<=chrono::Utc::now(){continue;}
                             let row = gtk::Box::new(gtk::Orientation::Vertical, 4);
-                            row.append(&gtk::Label::new(Some(&format!("{}\nCriada: {} · Expira: {}", device.id, device.created_at.format("%d/%m/%Y %H:%M"), device.expires_at.format("%d/%m/%Y %H:%M")))));
+                            let details = gtk::Label::new(Some(&format!("{}\nCriada: {} · Expira: {}", device.id, device.created_at.format("%d/%m/%Y %H:%M"), device.expires_at.format("%d/%m/%Y %H:%M"))));
+                            details.set_wrap(true); details.set_xalign(0.0); row.append(&details);
                             let drop = gtk::Button::with_label("Encerrar sessão"); let s = sender.clone(); let id = device.id.to_string();
                             drop.connect_clicked(move |_| s.input(MainWindowMsg::Security(SecurityMsg::ConfirmDrop { token, id: id.clone() }))); row.append(&drop); view.devices.append(&row);
+                        }
+                        // Reserve the height of actual rows, bounded for long session lists.
+                        let height=view.devices.measure(gtk::Orientation::Vertical,(view.window.width()-32).max(1)).1.min(240);
+                        view.sessions_scroll.set_min_content_height(height);
+                        if view.window.default_height()==-1 {
+                            view.window.set_default_height(view.controls.measure(gtk::Orientation::Vertical,view.window.width()).1);
                         }
                     }
                 }
@@ -108,7 +122,9 @@ impl MainWindowModel {
                 if self.security.mutation || !self.security.view.as_ref().is_some_and(|v| v.token == token && v.window.is_visible()) { return; }
                 if let Some(w) = self.security.confirmation.take() { w.close(); }
                 let (w, body) = window(root, "Encerrar sessão?");
-                body.append(&gtk::Label::new(Some(if id == "ALL" { "Todas as sessões serão encerradas, incluindo esta." } else { "Se esta for sua sessão atual, será necessário entrar novamente." })));
+                w.set_default_height(-1);
+                let warning = gtk::Label::new(Some(if id == "ALL" { "Todas as sessões serão encerradas, incluindo esta." } else { "Se esta for sua sessão atual, será necessário entrar novamente." }));
+                warning.set_wrap(true); body.append(&warning);
                 let cancel = gtk::Button::with_label("Cancelar"); let close = w.clone(); cancel.connect_clicked(move |_| close.close()); body.append(&cancel);
                 let confirm = gtk::Button::with_label("Confirmar encerramento"); let s = sender.clone(); let close = w.clone();
                 confirm.connect_clicked(move |_| { close.close(); s.input(MainWindowMsg::Security(SecurityMsg::Drop { token, id: id.clone() })); }); body.append(&confirm);
@@ -143,6 +159,7 @@ pub(crate) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::Mai
     use crate::ui::chat::actions::tests::{find_button,pump,until};
     find_button(main.widget().upcast_ref(),"Segurança").emit_clicked();until(context,||main.model().security.view.as_ref().is_some_and(|v|!v.loading));
     let w=main.model().security.view.as_ref().unwrap().window.clone();
+    crate::ui::main_window::layout::tests::preview(&w,"security",context);
     {let m=main.model();let v=m.security.view.as_ref().unwrap();v.password.set_text("Password!9");v.confirmation.set_text("Mismatch");}
     find_button(w.upcast_ref(),"Alterar senha").emit_clicked();pump(context);assert!(main.model().security.view.as_ref().unwrap().error.text().contains("mesma"));
     main.model().security.view.as_ref().unwrap().confirmation.set_text("Password!9");find_button(w.upcast_ref(),"Alterar senha").emit_clicked();

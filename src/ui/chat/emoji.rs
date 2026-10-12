@@ -11,7 +11,7 @@ pub(super) fn completion(text:&str,position:i32)->Option<(usize,usize,&str)>{
     let mut i=0;let prefix=&text[..start];while i<prefix.len(){let rest=&prefix[i..];if rest.starts_with('`'){let count=rest.bytes().take_while(|b|*b==b'`').count();let delimiter=&rest[..count];let end=rest[count..].find(delimiter)?;i+=count+end+count;}else{i+=rest.chars().next()?.len_utf8();}}
     Some((start,end,name))
 }
-pub(super) fn insert(text:&str,position:i32,value:&str,replace:bool)->(String,i32){
+#[cfg(test)]pub(super) fn insert(text:&str,position:i32,value:&str,replace:bool)->(String,i32){
     let end=if position<0{text.len()}else{text.char_indices().nth(position as usize).map_or(text.len(),|(i,_)|i)};
     let(start,end)=if replace{completion(text,position).map_or((end,end),|(s,e,_)|(s,e))}else{(end,end)};
     let suffix=if text[end..].starts_with(':')&&replace{&text[end+1..]}else{&text[end..]};

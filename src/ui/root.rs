@@ -79,8 +79,17 @@ mod tests {
             window.close();
             return;
         }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("account-notices"){crate::ui::main_window::bugs7::exercise(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("profile-emojis"){crate::ui::main_window::account::exercise_profile_emojis(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("status-viewer"){crate::ui::status::exercise(&context);crate::ui::user_list::exercise_corrections(&context);crate::ui::chat::transfers::exercise_viewer(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("clipboard"){crate::ui::chat::clipboard::exercise(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("retention"){crate::ui::chat::transfers::exercise_retention(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("mentions"){crate::ui::chat::composer::exercise(&context);crate::ui::chat::clipboard::exercise(&context);crate::ui::chat::bugs::exercise(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("mention-suggestions"){crate::ui::chat::composer::exercise_suggestions(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("report7"){crate::ui::chat::bugs7::exercise(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("report6"){
-            crate::ui::chat::bugs6::exercise(&context);window.close();return;
+            crate::ui::chat::bugs6::exercise(&context);
+        crate::ui::chat::bugs7::exercise(&context);window.close();return;
         }
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("send-video"){
             crate::ui::chat::bugs6::exercise_send_feedback(&context);crate::ui::chat::video::exercise_fullscreen(&context);window.close();return;
@@ -90,6 +99,9 @@ mod tests {
         }
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("scroll-media"){
             crate::ui::chat::performance::exercise_media_scroll(&context);window.close();return;
+        }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("channel-cache"){
+            crate::ui::chat::performance::exercise_channel_cache(&context);window.close();return;
         }
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("channel-opening"){
             crate::ui::chat::performance::exercise_opening(&context);window.close();return;
@@ -194,7 +206,8 @@ mod tests {
         drain();
         assert!(descendants(members.widget().upcast_ref()).iter()
             .filter_map(|widget| widget.downcast_ref::<gtk::Image>())
-            .any(|image| image.icon_name().as_deref() == Some("user-idle-symbolic")));
+            .any(|image| image.has_css_class("papo-status-dot") && image.paintable().is_some()
+                && image.tooltip_text().as_deref() == Some("Ausente")));
 
         // Full profiles supply cached textures in chat and member rows. Avatar
         // changes replace those textures; removal/corrupt data restores icons.
@@ -260,10 +273,18 @@ mod tests {
         crate::ui::chat::bugs::exercise(&context);
         crate::ui::chat::bugs5::exercise(&context);
         crate::ui::chat::bugs6::exercise(&context);
+        crate::ui::chat::bugs7::exercise(&context);
+        crate::ui::chat::clipboard::exercise(&context);
+        crate::ui::chat::composer::exercise(&context);
+        crate::ui::main_window::account::exercise_profile_emojis(&context);
+        crate::ui::status::exercise(&context);
+        crate::ui::chat::transfers::exercise_viewer(&context);
+        crate::ui::chat::transfers::exercise_retention(&context);
         crate::ui::chat::rich::exercise(&context);
         crate::ui::chat::video::exercise_initial_audio();
         crate::ui::chat::bugs6::exercise_send_feedback(&context);
         crate::ui::chat::video::exercise_fullscreen(&context);
+        crate::ui::chat::performance::exercise_channel_cache(&context);
         crate::ui::chat::performance::exercise_startup(&context);
         crate::ui::sidebar::exercise_startup(&context);
         crate::ui::chat::performance::exercise_media_scroll(&context);

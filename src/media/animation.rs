@@ -20,6 +20,26 @@ impl PreparedAnimation{
         }
         if frames.is_empty(){None}else{Some(Self{frames})}
     }
+    pub async fn video(path:&std::path::Path)->anyhow::Result<Self>{
+        let mut command=crate::media::runtime::python();
+        command.args(["-u","-c",include_str!("gif_video.py")]).arg(path).env("GST_DEBUG","0").kill_on_drop(true);
+        let output=tokio::time::timeout(Duration::from_secs(20),command.output()).await??;
+        anyhow::ensure!(output.status.success(),"Não foi possível decodificar o vídeo do GIF: {}",String::from_utf8_lossy(&output.stderr).trim());
+        Self::video_frames(&output.stdout)
+    }
+    fn video_frames(data:&[u8])->anyhow::Result<Self>{
+        anyhow::ensure!(data.len()>=16&&data.len()<=((48<<20)+4096)&&&data[..8]==b"PAPOGIF1","Quadros de GIF inválidos");
+        let width=u32::from_le_bytes(data[8..12].try_into()?);let height=u32::from_le_bytes(data[12..16].try_into()?);
+        anyhow::ensure!(width>0&&width<=420&&height>0&&height<=300,"Geometria do GIF inválida");
+        let size=width as usize*height as usize*4;let mut remaining=&data[16..];let mut frames=vec![];let mut total=0;
+        while !remaining.is_empty(){
+            anyhow::ensure!(frames.len()<602&&remaining.len()>=size+4,"Quadro de GIF incompleto");
+            let delay=u32::from_le_bytes(remaining[..4].try_into()?);anyhow::ensure!((20..=10000).contains(&delay),"Intervalo do GIF inválido");
+            total+=size;anyhow::ensure!(total<=48<<20,"GIF maior que o limite de memória");
+            frames.push((PreparedImage{width,height,pixels:remaining[4..4+size].to_vec()},Duration::from_millis(u64::from(delay))));remaining=&remaining[size+4..];
+        }
+        anyhow::ensure!(!frames.is_empty(),"Nenhum quadro de GIF disponível");Ok(Self{frames})
+    }
     pub fn bytes(&self)->usize{self.frames.iter().map(|(f,_)|f.pixels.len()).sum()}
     pub fn paintable(self)->Animation{
         let animation:Animation=glib::Object::new();let frames=self.frames.into_iter().map(|(frame,delay)|(frame.texture(),delay)).collect::<Vec<_>>();
@@ -42,6 +62,7 @@ mod imp{
 }
 glib::wrapper!{pub struct Animation(ObjectSubclass<imp::Animation>) @implements gdk::Paintable;}
 impl Animation{
+    pub fn animated(&self)->bool{self.imp().frames.get().unwrap().len()>1}
     pub fn first(&self)->gdk::Texture{self.imp().frames.get().unwrap()[0].0.clone()}
     pub fn picture(&self)->gtk::Picture{
         let picture=gtk::Picture::for_paintable(self);picture.set_can_shrink(true);picture.set_content_fit(gtk::ContentFit::Contain);
@@ -80,6 +101,11 @@ fn schedule(animation:&Animation){
 #[cfg(test)]mod tests{
     use super::*;
     pub(crate) fn fixture()->Vec<u8>{let mut out=vec![];{let mut encoder=image::codecs::gif::GifEncoder::new(&mut out);encoder.set_repeat(image::codecs::gif::Repeat::Infinite).unwrap();for color in [[255,0,0,255],[0,255,0,255]]{encoder.encode_frame(image::Frame::from_parts(image::RgbaImage::from_pixel(8,8,image::Rgba(color)),0,0,image::Delay::from_numer_denom_ms(40,1))).unwrap();}}out}
+    #[test]fn isolated_video_frames_validate_geometry_budget_and_complete_frames(){
+        let mut data=b"PAPOGIF1".to_vec();data.extend_from_slice(&2u32.to_le_bytes());data.extend_from_slice(&2u32.to_le_bytes());data.extend_from_slice(&100u32.to_le_bytes());data.extend_from_slice(&[255;16]);
+        let animation=PreparedAnimation::video_frames(&data).unwrap();assert_eq!(animation.frames.len(),1);assert_eq!(animation.bytes(),16);assert_eq!(animation.frames[0].1,Duration::from_millis(100));
+        assert!(PreparedAnimation::video_frames(&data[..data.len()-1]).is_err());data[8..12].copy_from_slice(&9999u32.to_le_bytes());assert!(PreparedAnimation::video_frames(&data).is_err());
+    }
     #[test]fn supplied_giphy_sample_decodes_when_provided(){if let Ok(path)=std::env::var("PAPO_GIPHY_SAMPLE"){let data=std::fs::read(path).unwrap();let animation=PreparedAnimation::decode(&data).expect("public Giphy sample must decode");assert!(animation.frames.len()>1);println!("Giphy sample: {} frames, {} decoded bytes",animation.frames.len(),animation.bytes());}}
     #[test]fn gifs_keep_frames_timing_and_enforce_input_limits(){let gif=PreparedAnimation::decode(&fixture()).unwrap();assert_eq!(gif.frames.len(),2);assert_eq!(gif.frames[0].1,Duration::from_millis(40));assert_ne!(gif.frames[0].0.pixels,gif.frames[1].0.pixels);assert_eq!(gif.bytes(),512);assert!(PreparedAnimation::decode(&vec![0; (4<<20)+1]).is_none());assert!(PreparedAnimation::decode(b"invalid").is_none());}
     pub(crate) fn exercise(context:&glib::MainContext){

@@ -3,6 +3,7 @@ use std::{env, path::PathBuf, process::Command};
 fn main() {
     println!("cargo:rerun-if-changed=assets/papo.gresource.xml");
     println!("cargo:rerun-if-changed=assets/icons/hicolor");
+    println!("cargo:rerun-if-changed=assets/status");
 
     let output = PathBuf::from(env::var_os("OUT_DIR").expect("Cargo must set OUT_DIR"))
         .join("papo.gresource");

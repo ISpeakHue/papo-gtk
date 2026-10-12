@@ -12,6 +12,7 @@ use direct::{Direct,DirectMsg};
 pub(crate) mod administration;
 use administration::{Administration,AdminMsg};
 pub(crate) mod account;
+#[cfg(test)]pub(crate) mod bugs7;
 use account::{Account, AccountMsg};
 pub(crate) mod search;
 use search::{Search,SearchMsg};
@@ -114,7 +115,7 @@ pub enum MainWindowMsg {
     OperationFailed(anyhow::Error),
     ActionError(anyhow::Error),
     RefreshAccess,
-    StartLoading,
+    StartLoading, ConversationLoaded, StartBackground,
     Navigate { channel_id: Uuid, message_id: Uuid },
     UserActivity,
     PreviewLoaded { channel_id: Uuid, message_id: Uuid, preview_id: Uuid, request_id: Uuid, result: anyhow::Result<Embed> },
@@ -183,6 +184,8 @@ impl Component for MainWindowModel {
         let chat = ChatModel::builder()
             .launch(ChatInit { api: Some(init.api_client.clone()), user_id: Some(init.current_user.id), ..ChatInit::default() })
             .forward(sender.input_sender(), |output| match output {
+                ChatOutput::ConversationLoaded=>MainWindowMsg::ConversationLoaded,
+                ChatOutput::EmojisChanged=>MainWindowMsg::Account(AccountMsg::EmojisChanged),
                 ChatOutput::Search=>MainWindowMsg::Search(SearchMsg::Open),
                 ChatOutput::Notifications=>MainWindowMsg::Notification(NoticeMsg::Open),
                 ChatOutput::HistoryObserved{channel_id,messages,latest}=>MainWindowMsg::HistoryObserved{channel_id,messages,latest},
@@ -296,6 +299,22 @@ impl Component for MainWindowModel {
         if matches!(&message,MainWindowMsg::ChannelSelected(_)|MainWindowMsg::Direct(DirectMsg::Select(_, _))){self.layout.dismiss_navigation();}
         match message {
             MainWindowMsg::StartLoading => self.start_loading(sender),
+            MainWindowMsg::ConversationLoaded => {
+                if !self.background_started {
+                    let input=sender.input_sender().clone();
+                    // Give GTK a layout/paint opportunity before populating the
+                    // secondary lists. This never delays showing messages.
+                    gtk::glib::timeout_add_local_once(Duration::from_millis(80),move || { let _=input.send(MainWindowMsg::StartBackground); });
+                }
+            }
+            MainWindowMsg::StartBackground => {
+                if !self.background_started {
+                    self.background_started=true;
+                    self.refresh_notifications(None,sender.clone());
+                    self.refresh_direct(sender.clone());
+                    self.refresh_users(sender,None);
+                }
+            }
             MainWindowMsg::ToggleNavigation=>self.layout.navigation.set_show_sidebar(!self.layout.navigation.shows_sidebar()),
             MainWindowMsg::MembersVisible(visible)=>self.show_user_list=visible,
             MainWindowMsg::SidebarMode(direct)=>{self.sidebar.emit(if direct{SidebarMsg::ShowDirect}else{SidebarMsg::ShowChannels});self.layout.navigation.set_show_sidebar(true);},
@@ -325,23 +344,18 @@ impl Component for MainWindowModel {
                         user.settings=Some(crate::models::WhoamiSettings {version:1,config:self.account.config.clone()});
                         user.connection_violation=Some(user.connection_violation.unwrap_or(false)||self.current_user.connection_violation.unwrap_or(false));
                         self.current_user = user;
-                        if !self.background_started {
-                            self.background_started = true;
-                            self.refresh_notifications(None, sender.clone());
-                            self.refresh_direct(sender.clone());
-                            self.refresh_users(sender.clone(), None);
-                        }
                         self.sidebar.emit(SidebarMsg::SetCurrentUser(self.current_user.clone()));
                         self.roles=roles;self.managed_channels=channels.clone();self.server_access=server_access.clone();self.setup=server.is_none();
                         self.sidebar.emit(SidebarMsg::SetManagement{access:server_access.clone(),setup:self.setup});
                         self.sync_admin_access();self.sync_moderation_access();
                         if self.administration.reopen{self.administration.reopen=false;sender.input(MainWindowMsg::Administration(AdminMsg::Open));}
-                        let Some(server)=server else{self.server=None;if !self.admin_visible(){sender.input(MainWindowMsg::Administration(AdminMsg::Open));}return;};
+                        let Some(server)=server else{sender.input(MainWindowMsg::StartBackground);self.server=None;if !self.admin_visible(){sender.input(MainWindowMsg::Administration(AdminMsg::Open));}return;};
                         self.server = Some(server.clone());
                         self.sidebar.emit(SidebarMsg::SetServer(server));
                         self.access = access;
                         self.channels = channels.into_iter().filter(|c| self.access.get(&c.id).is_some_and(|a| a.read)).collect();
                         self.channels.sort_by_key(|c|c.position.unwrap_or(0));
+                        self.chat.emit(ChatMsg::RetainConversations(self.channels.iter().map(|c|c.id).chain(self.direct.items.iter().filter(|d|self.can_read_target(d.id)).map(|d|d.id)).collect()));
                         self.notifications.journal.reconcile(read_version,&mut self.channels);
                         self.publish_voice_channels();
                         self.sync_voice_access();
@@ -363,6 +377,7 @@ impl Component for MainWindowModel {
                                 }
                             }
                         } else {self.chat.emit(ChatMsg::SetAccess{user_id:self.current_user.id,access:self.direct_access()});}
+                        if self.active_channel_id.is_none() { sender.input(MainWindowMsg::StartBackground); }
                     }
                     Err(error) => {
                         self.access.clear();self.server_access=Default::default();self.sync_admin_access();self.sync_moderation_access();self.sync_voice_access();self.sidebar.emit(SidebarMsg::SetManagement{access:Default::default(),setup:false});
@@ -475,6 +490,7 @@ impl Component for MainWindowModel {
                 WsEvent::Reconnected => {
                     if std::mem::take(&mut self.startup_on_socket) { return; }
                     self.last_activity = None;
+                    self.chat.emit(ChatMsg::ClearConversations);
                     self.refresh_notifications(None,sender.clone());
                     self.refresh_direct(sender.clone());
                     if self.active_channel_id.is_some(){self.chat.emit(ChatMsg::Resync);}
@@ -497,13 +513,14 @@ impl Component for MainWindowModel {
                         self.notifications.journal.message(&message,&mut self.channels);self.notifications.inbox.observe(message.clone());
                         self.publish_voice_channels();
                         self.deliver_notices(sender.clone());self.render_inbox(&sender);
+                        if Some(message.channel_id) != self.active_channel_id { self.chat.emit(ChatMsg::CacheChange(Change::Upsert(message.clone()))); }
                         if Some(message.channel_id) == self.active_channel_id {if let Some(id)=message.author_id{self.load_avatars(vec![id],false,sender.clone());}self.notifications.read_pending=true;self.chat.emit(ChatMsg::AddMessage(message));}
                     } else {self.notifications.inbox.observe(message);self.refresh_direct(sender);}
                 }
                 WsEvent::MessageEdit { id, content, channel_id, edited_at } => {
                     if channel_id.is_none() || channel_id == self.active_channel_id {
                         self.chat.emit(ChatMsg::ApplyChange(Change::Edit(id, content, edited_at)));
-                    }
+                    } else { self.chat.emit(ChatMsg::CacheChange(Change::Edit(id,content,edited_at))); }
                 }
                 WsEvent::MessageDelete { id, .. } => {self.notifications.inbox.delete(id);self.chat.emit(ChatMsg::DeleteMessage(id));self.render_inbox(&sender);self.deliver_notices(sender.clone());if self.channels.iter().any(|c|c.last_message.as_ref().is_some_and(|m|m.id==id)){self.refresh_channels(sender);}},
                 WsEvent::Typing { user_id, channel_id, is_typing } => {
@@ -568,13 +585,16 @@ impl Component for MainWindowModel {
                 }
                 WsEvent::EmbedsUpdate {channel_id,message_id,embeds}=>{
                     if Some(channel_id)==self.active_channel_id&&self.can_read_target(channel_id){self.chat.emit(ChatMsg::ApplyChange(Change::Embeds(message_id,embeds)));}
+                    else { self.chat.emit(ChatMsg::CacheChange(Change::Embeds(message_id,embeds))); }
                 },
                 WsEvent::PreviewUpdate { channel_id, message_id, preview } => {
                     self.preview_requests.remove(&(message_id, preview.id));
-                    if Some(channel_id) == self.active_channel_id { self.chat.emit(ChatMsg::ApplyChange(Change::Preview(message_id, preview))); }
+                    if Some(channel_id)==self.active_channel_id { self.chat.emit(ChatMsg::ApplyChange(Change::Preview(message_id, preview))); }
+                    else { self.chat.emit(ChatMsg::CacheChange(Change::Preview(message_id,preview))); }
                 }
                 WsEvent::AttachmentModeration { channel_id, message_id, attachment_id, status } => {
-                    if Some(channel_id) == self.active_channel_id { self.chat.emit(ChatMsg::ApplyChange(Change::Moderation(message_id, attachment_id, status))); }
+                    if Some(channel_id)==self.active_channel_id { self.chat.emit(ChatMsg::ApplyChange(Change::Moderation(message_id, attachment_id, status))); }
+                    else { self.chat.emit(ChatMsg::CacheChange(Change::Moderation(message_id,attachment_id,status))); }
                 }
             },
         }
@@ -609,14 +629,13 @@ impl MainWindowModel {
         if !matches!(channel.channel_type, None | Some(crate::models::ChannelType::Text)) { return; }
         let channel_id = channel.id;
         let Some(access) = self.access.get(&channel_id).filter(|a| a.read).cloned() else { return; };
-        self.chat.emit(ChatMsg::SetAccess { user_id: self.current_user.id, access });
-        if self.active_channel_id == Some(channel_id) { return; }
+        if self.active_channel_id == Some(channel_id) { self.chat.emit(ChatMsg::SetAccess { user_id: self.current_user.id, access });return; }
         self.direct_cancel_selection();
         self.active_channel_id = Some(channel_id);
         self.sidebar.emit(SidebarMsg::SetSelection(channel_id));
         self.notifications.read_pending=false;
         self.preview_requests.clear();
-        self.chat.emit(ChatMsg::SetChannel(channel));
+        self.chat.emit(ChatMsg::SelectTarget { target:crate::models::ConversationTarget::Channel(channel),user_id:self.current_user.id,access });
         self.load_history(channel_id, None, sender.clone());
     }
 
@@ -700,19 +719,10 @@ impl MainWindowModel {
         }
     }
 
-    fn load_history(&self, channel_id: Uuid, cursor: Option<MessageCursor>, sender: ComponentSender<Self>) {
-        let request_id = Uuid::new_v4();
-        self.chat.emit(ChatMsg::BeginHistory { request_id, cursor });
-        let client = self.api_client.clone();
-        let chat_sender = self.chat.sender().clone();
-        tokio::spawn(async move {
-            let result = client.list_messages(channel_id, cursor).await.map_err(|error| {
-                let message = error.to_string();
-                if crate::api::is_session_error(&error) || crate::api::is_permission_error(&error) { sender.input(MainWindowMsg::OperationFailed(error)); }
-                message
-            });
-            let _ = chat_sender.send(ChatMsg::HistoryLoaded { request_id, result, append: cursor.is_some() });
-        });
+    fn load_history(&self, channel_id: Uuid, cursor: Option<MessageCursor>, _sender: ComponentSender<Self>) {
+        // The chat processes selection before this command, so it can display
+        // a cached conversation and choose an appropriate background refresh.
+        self.chat.emit(ChatMsg::RequestHistory { channel_id, cursor });
     }
 }
 

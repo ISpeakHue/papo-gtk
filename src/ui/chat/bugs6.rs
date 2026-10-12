@@ -20,7 +20,7 @@ pub(crate) fn exercise_send_feedback(context:&gtk::glib::MainContext){
     let request={let mut state=chat.state().get_mut();state.model.draft.text.clear();state.model.draft.embeds=vec![serde_json::from_value(serde_json::json!({"title":"custom card"})).unwrap()];state.model.draft.begin().unwrap()};
     chat.emit(ChatMsg::Transfer(TransferMsg::Progress{id:request,bytes:0}));settle(context);assert!(!progress.is_visible()&&!cancel.is_visible(),"embed-only sends must not flash upload widgets");
     chat.state().get_mut().model.draft.finish(request,Ok(()));
-    let request={let mut state=chat.state().get_mut();state.model.draft.files.push(crate::api::features::UploadFile{path:"/tmp/feedback-fixture.webm".into(),name:"fixture.webm".into(),size:100});state.model.draft.begin().unwrap()};
+    let request={let mut state=chat.state().get_mut();state.model.draft.files.push(crate::api::features::UploadFile{path:"/tmp/feedback-fixture.webm".into(),name:"fixture.webm".into(),size:100,_temporary:None});state.model.draft.begin().unwrap()};
     chat.emit(ChatMsg::Transfer(TransferMsg::Progress{id:request,bytes:50}));settle(context);assert!(progress.is_mapped()&&cancel.is_mapped(),"uploads retain progress and cancellation");
     cancel.emit_clicked();settle(context);assert!(!chat.model().draft.is_sending());assert!(!progress.is_visible()&&!cancel.is_visible());assert_eq!(chat.model().draft.files.len(),1,"cancel keeps the draft available");
     window.set_content(None::<&gtk::Widget>);window.close();
@@ -43,7 +43,10 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let search=descendants(picker.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::SearchEntry>().ok()).unwrap();search.set_text("server_cat");
     until(context,||descendants(picker.upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::Button>()).filter(|b|b.has_css_class("papo-emoji-cell")).count()==1);
     search.grab_focus();search.set_position(3);let token=Uuid::new_v4();chat.state().get_mut().model.actions.emojis_request=Some(token);
+    chat.emit(ChatMsg::Action(ActionMsg::EmojiPage{token,emojis:vec![custom.clone()],images:vec![]}));pump(context);
+    let passes=chat.model().render_passes;
     chat.emit(ChatMsg::Action(ActionMsg::EmojiPage{token,emojis:vec![custom],images:vec![]}));pump(context);
+    assert_eq!(chat.model().render_passes,passes,"an unchanged emoji catalog must not rebuild the conversation");
     let search=descendants(picker.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::SearchEntry>().ok()).unwrap();assert_eq!(search.text(),"server_cat");assert_eq!(search.position(),3);assert!(search.state_flags().contains(gtk::StateFlags::FOCUS_WITHIN),"catalog updates preserve active search focus");
     let cell=find_button(picker.upcast_ref(),":SERVER_CAT:");assert_eq!(cell.width_request(),cell.height_request());cell.emit_clicked();pump(context);
     let entry=descendants(chat.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Entry>().ok()).unwrap();assert_eq!(entry.text(),":SERVER_CAT: ");assert!(entry.state_flags().contains(gtk::StateFlags::FOCUS_WITHIN));entry.set_text("");pump(context);
@@ -54,8 +57,10 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     until(context,||descendants(reaction.upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::Button>()).filter(|b|b.has_css_class("papo-emoji-cell")).all(|b|b.tooltip_text().is_some_and(|t|t.contains("rocket"))));assert!(find_button(reaction.upcast_ref(),"🚀").is_visible());search.set_text("SERVER_CAT");until(context,||descendants(reaction.upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::Button>()).any(|b|b.tooltip_text().as_deref()==Some(":SERVER_CAT:")));reaction.close();
     // Media completion must retain the message/text widget, replacing only its media slot.
     let key=format!("message-{}",messages.last().unwrap().id);let row=chat.model().rendered[&key].1.clone();let text=descendants(row.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::TextView>().ok()).unwrap();
+    let height=row.height();
     let epoch=chat.model().transfers.epoch;let token=Uuid::new_v4();chat.state().get_mut().model.transfers.image_tokens.insert(image,token);
     chat.emit(ChatMsg::Transfer(TransferMsg::ImageReady{epoch,message:messages.last().unwrap().id,key:image,token,result:Some(crate::media::PreparedImage{width:80,height:40,pixels:vec![100;80*40*4]})}));settle(context);
+    assert!((row.height()-height).abs()<=2,"initial image completion keeps the painted row height: {} vs {height}",row.height());
     assert_eq!(chat.model().rendered[&key].1,row);assert!(text.parent().is_some(),"decoding must not unmap the message text");
     let texture=chat.model().transfers.textures[&image].clone();
     let open=find_button(row.upcast_ref(),"Abrir imagem");open.emit_clicked();pump(context);

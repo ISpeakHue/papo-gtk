@@ -6,6 +6,7 @@ mod imp {
     pub struct Frame {
         pub child:std::cell::OnceCell<gtk::Widget>,
         pub size:std::cell::Cell<(i32,i32)>,
+        pub first_snapshot:std::cell::RefCell<Option<Box<dyn FnOnce()>>>,
     }
     #[glib::object_subclass]
     impl ObjectSubclass for Frame {
@@ -27,10 +28,16 @@ mod imp {
             }
         }
         fn size_allocate(&self,width:i32,height:i32,baseline:i32){if let Some(child)=self.child.get(){child.allocate(width,height,baseline,None);}}
-        fn snapshot(&self,snapshot:&gtk::Snapshot){if let Some(child)=self.child.get(){self.obj().snapshot_child(child,snapshot);}}
+        fn snapshot(&self,snapshot:&gtk::Snapshot){
+            if let Some(first)=self.first_snapshot.borrow_mut().take(){first();}
+            if let Some(child)=self.child.get(){self.obj().snapshot_child(child,snapshot);}
+        }
     }
 }
 glib::wrapper!{pub struct Frame(ObjectSubclass<imp::Frame>) @extends gtk::Widget,@implements gtk::Accessible,gtk::Buildable,gtk::ConstraintTarget;}
+impl Frame {
+    pub fn on_first_snapshot(&self,callback:impl FnOnce()+'static){*self.imp().first_snapshot.borrow_mut()=Some(Box::new(callback));}
+}
 pub fn frame(child:&impl IsA<gtk::Widget>,width:i32,height:i32)->Frame {
     let frame:Frame=glib::Object::new();frame.imp().size.set((width.max(1),height.max(1)));
     let child=child.as_ref().clone();child.set_parent(&frame);let _=frame.imp().child.set(child);

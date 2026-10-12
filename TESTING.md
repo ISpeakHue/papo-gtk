@@ -37,6 +37,9 @@ dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test
 
 ## Pelican branding
 
+For the packaged runtime, run the AppImage's `--runtime-check` command and see
+[APPIMAGE.md](APPIMAGE.md) for the isolated build and validation results.
+
 The executable bundles 128px and 256px pelican icons. The focused GTK check
 resolves and decodes both sizes through an isolated resource-only icon theme,
 verifies the login and window icons, and can render light/dark previews:
@@ -67,6 +70,43 @@ Chat rendering regressions in the mapped `ui_smoke` workflow also verify:
 
 These use generated media and a private display, without a remote account.
 
+## Recent-channel caching and loading order
+
+Recent conversations are cached in memory for the authenticated session: up to
+8 inactive channels, 200 recent messages per channel and an estimated 16 MiB of
+message metadata. Encoded image payloads are excluded. A cache hit displays
+retained messages while the normal paced API refresh revalidates the retained
+range, including missed edits and deletions. Transient refresh errors keep the
+cached conversation readable. Denied access clears retained content; access
+snapshots prune unavailable channels, live messages/edits/deletions update cached
+conversations without rebuilding the active chat, and reconnect clears inactive
+snapshots. Deletion tombstones are bounded; conversations exceeding that budget
+are discarded. Nothing is persisted to
+disk or reused by another login.
+
+Media survives channel switches with up to 64 image textures and a 64 MiB
+RGBA-pixel budget. GIF animation retains its separate existing budget. Known
+image dimensions size placeholders; unknown dimensions keep the frame allocated
+on that visit, so the initial image completion does not resize surrounding rows.
+Snapshots beneath the opening cover can still refine image dimensions; the
+geometry is fixed when the history is presented, preserving already-loaded
+images' aspect ratios without moving visible rows.
+Later visits can use the learned dimensions. Server emoji textures remain shared
+across channels for the session.
+
+The headless cache tests cover retention limits, eviction, oversized histories,
+permission pruning and cancelled-request/live-deletion races. The mapped GTK
+workflow additionally checks a 700 ms HTTP refresh: cached messages become visible
+before it completes, missed edits/deletions reconcile, a failed refresh retains
+content, and HTTP 403 clears it. The existing media/emoji regression also asserts unchanged painted row heights
+after initial image completion and no chat rebuild for an unchanged emoji catalog.
+The startup mock asserts that message requests
+precede member, DM, notification and emoji requests. Run the focused cache check:
+
+```sh
+PAPO_UI_CASE=channel-cache dbus-run-session -- xvfb-run -a cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+```
+
 ## Review corrections (C01–C12)
 
 The default suite now exercises independent HTTP/live-history journals, complete
@@ -77,7 +117,7 @@ These use ephemeral local servers and the test keyring, never a saved real sessi
 
 The existing single-thread GTK `ui_smoke` workflow also checks:
 
-- Actual scrolling through more than 32 media images, automatic reload after
+- Actual scrolling through more than 64 media images, automatic reload after
   eviction, a stationary viewport with no refetch loop, shared previews after
   deleting their initiating message, and HTTP-only viewer/video/file cleanup.
 - A 500-member list retaining its rows across 200 status events, and one
@@ -182,7 +222,11 @@ endpoints are read-only and can retry.
 Startup subscribes to WebSocket before loading its access snapshot. If the socket
 is unavailable, HTTP starts after two seconds. The first successful subscription
 does not duplicate startup; subsequent connections still reconcile missed events.
-Members, direct messages and notifications start after access loading succeeds.
+Members, direct messages and notifications start after the first message-history response,
+with an 80 ms opportunity for GTK to allocate and paint the chat. Servers without
+a readable text channel start those requests after access loading instead. Channel
+pins and the emoji catalog also wait for the first history response; emoji loading
+starts before pins.
 Channel overrides come from `/channels`; only omitted/null overrides use the
 legacy per-channel endpoint. In-flight access refreshes coalesce into one pending
 follow-up so permission changes are still reconciled. Server emojis are reused
@@ -953,6 +997,10 @@ PAPO_UI_CASE=scroll-media dbus-run-session -- xvfb-run -a cargo test --locked ui
 
 The full workflow also checks image-cache eviction/reload, stationary viewports,
 shared images, history pagination/navigation and media permission/cancellation.
+The wheel-cancellation fixture extends only its test gesture to one second so
+software GPU rendering cannot finish the animation before the assertion. The
+application's wheel gesture remains 160 ms; cancellation and deferred media
+mounting are still checked while the test animation is playing.
 On a real desktop, scroll continuously past uncached pictures with both wheel
 and touchpad, then pause: placeholders may remain during movement, and images
 should appear afterward without cancelling motion or pulling the reading position.
@@ -967,6 +1015,33 @@ visible opening frame, rather than only the final adjustment value. It covers
 initial history, switching away from an older reading position, wrapped text
 after narrowing the window, and an unread boundary that needs an older page.
 Intermediate unread pages remain concealed while their rows are allocated.
+An opaque overlay matching the chat background covers the history during this
+transition. The scroller stays fully opaque and mapped, so GTK can prepare the
+new rows without reviving a stale transparent frame. The regression renders
+covered frames to textures and checks that old text, images and scrollbars
+cannot show through in light and dark themes. Queued input from a previous
+channel cannot reveal the new channel before it settles; input in the current
+channel still cancels the gate. Each selection replaces the previous scroll
+viewport's render node while retaining the scroller, controllers and list.
+Selection and its permissions arrive together, so changing channel permissions
+does not briefly redraw the old chat.
+
+The reveal is committed after GTK allocation and anchor correction. A late
+row-size change on the reveal frame reproduces a misplaced painted frame with
+the former pre-layout reveal, and passes with the corrected order. On X11 the
+test also reads actual pixels from its private test window, without forcing a
+fresh GTK snapshot. Distinct channel colors must never reappear after the cover
+or the next channel has reached the display, across cached and uncached visits.
+A separate fixture colors the upper and lower parts of one history differently.
+It checks the list's allocated transform against the adjustment and reads the
+private window's pixels while a preceding row grows on the reveal frame, for
+both latest and unread destinations. It also grows the row after opening while
+following the bottom. This catches an adjustment that is correct while GTK
+still draws an earlier portion of the same channel. The layout hook requests
+viewport reallocation when these positions disagree and keeps the opening
+cover until the transform matches; it does not add a timed loading delay.
+This pixel check uses libX11 only in tests; Wayland runs retain the allocation
+and rendered-texture checks.
 Updates arriving every frame must not restart presentation indefinitely. Rapid
 switches reject the old response; empty history, request errors and explicit
 reader input all release presentation. Downloads are not required for these
@@ -978,7 +1053,16 @@ PAPO_UI_CASE=channel-opening dbus-run-session -- xvfb-run -a cargo test --locked
 
 On a desktop, log in and switch between read and unread channels with long
 messages. History should first appear at its intended position without showing
-an intermediate scroll location. Images can still load afterward.
+an intermediate scroll location or a flash of the previous channel. Images can
+still load afterward.
+
+The follow-up transition update passed 172 Rust tests, the application build,
+and the complete mapped GTK workflow (173.23 seconds). Actual displayed-frame
+checks passed with Cairo and Vulkan; the Vulkan opening case took 20.80 seconds.
+Temporarily restoring the former pre-layout reveal made the new late-allocation
+regression fail with a painted position of 2754 instead of 3219. The corrected
+source was restored before final validation. The earlier opaque-cover checks
+also passed with OpenGL, light/dark themes and stale input rejection.
 
 Local validation: 167 Rust tests passed, the focused painted-frame checks
 passed, the full GTK workflow passed in 144.57 seconds, and the application
@@ -1013,3 +1097,170 @@ Local validation: 168 Rust tests passed, the focused smoothness checks passed,
 the full GTK workflow passed in 149.53 seconds, and the application build passed.
 The opening stress test records the update count at the first visible painted
 frame, so later main-loop dispatch cannot misreport presentation latency.
+
+
+## Report 7: inbox, cached rows, unread divider, profile and provider GIFs
+
+```sh
+PAPO_UI_CASE=report7 dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+PAPO_UI_CASE=account-notices dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+```
+
+`report7` checks reuse of 199/200 recent-channel rows, inactive edits/deletions,
+unread-marker geometry, the real Up-key controller, draft protection, stale
+results, automatic provider GIF animation, duplicate-preview suppression, and
+isolated silent video-to-animation fallback/cleanup. `account-notices` checks the native
+profile header and narrow layout, save failure/retry and image-update draft
+restoration, automatic inbox/page reads, one bulk write for five notices, and
+persistence of live events seen before their API records arrive. Both are also
+covered by the full mapped workflow.
+
+Set `PAPO_DESIGN_PREVIEW=1` to save profile screenshots under
+`/tmp/papo-design-profile*.png`. Public provider access is excluded from the
+hermetic workflow. To validate a downloaded Tenor page and its GIF separately:
+
+```sh
+PAPO_GIF_HTML=/path/to/tenor.html PAPO_GIF_SAMPLE=/path/to/sample.gif cargo test --locked media::gif_links -- --nocapture
+```
+
+See [BUG_FIXES_7.md](BUG_FIXES_7.md) for implemented behavior and the live Klipy
+verification limit. Intermittent native GStreamer teardown crashes were observed in the
+legacy video stress loop; another full workflow passed. Automatic GIF video
+decoding uses an isolated worker, with bounded output and cancellation cleanup. This observation
+is retained in the report rather than hidden by the passing rerun.
+
+## Presence badges and original image viewing
+
+Member, direct-message and user-footer badges use bundled SVGs: a green dot for
+available, an amber crescent for away, a red minus for busy and a gray ring for
+offline. They include status tooltips and do not depend on desktop theme icons.
+
+Opening a static attachment shows its cached chat thumbnail immediately, then
+downloads the authorized original to a temporary file and decodes it off the GTK
+thread. Native detail is retained up to a 4096-pixel edge; larger sources are
+resized with Lanczos filtering. Source dimensions, pixels and decoder allocation
+are bounded. The high-resolution texture belongs only to the viewer, so closing
+it releases the texture and cancels pending requests. Switching channels,
+revoking access or moderating a picture prevents stale results from appearing.
+Animated GIF paintables keep their existing playback. Link embed quality is
+limited to the cached image supplied by `/embeds`; the current backend does not
+provide an original-image endpoint for those embeds.
+
+```sh
+PAPO_UI_CASE=status-viewer dbus-run-session -- xvfb-run -a cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+```
+
+The mapped test checks embedded resources, light/dark status rendering, member
+row reuse, thumbnail-only requests before opening, an actual 1800×900 original,
+unchanged chat rows/textures, released viewer textures, queued cancellation,
+stale viewer tokens, request failure fallback and moderation. Decoder unit tests
+cover native resolution, resizing and invalid/oversized sources. With
+`PAPO_DESIGN_PREVIEW=1`, snapshots are saved under `/tmp/papo-design-status-*.png`
+and `/tmp/papo-design-original-image.png`.
+
+## Emoji rendering in profiles
+
+Profile descriptions, status messages and typing text use the chat's emoji renderer
+and cached server emoji catalog. Unicode emoji display normally; known custom codes
+such as `:ricardao:` display inline images, while unknown codes remain readable text.
+The description editor shows a live preview when it contains known custom emoji
+and preserves the original codes when saving. An open profile updates when the
+emoji catalog arrives or changes, without another profile request.
+
+```sh
+PAPO_UI_CASE=profile-emojis dbus-run-session -- xvfb-run -a cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+```
+
+This mapped regression covers mixed Unicode/custom/unknown emoji, late catalog
+arrival, removal, editor preview, save failure/retry, and preservation of raw text.
+Set `PAPO_DESIGN_PREVIEW=1` for `/tmp/papo-design-profile-emojis.png` and
+`/tmp/papo-design-profile-emoji-editor.png`.
+
+## Clipboard image attachments
+
+Copy an image (for example, a screenshot) and paste in the message composer with
+Ctrl+V or Shift+Insert. It should appear as `imagem-colada.png` in the pending
+attachments, preserving any caption. It is uploaded only when you send. Ordinary
+text paste continues to insert text. Removing the attachment deletes its temporary
+file; failed uploads retain it for retry, and switching channels preserves its draft.
+
+The mapped clipboard check uses a private test clipboard and mock API. It covers
+native paste, both shortcuts, PNG MIME clipboard data, caption preservation,
+upload failure/retry, channel-scoped completions, permission changes, attachment
+limits, sending while an image is being prepared, and temporary-file cleanup.
+
+```sh
+PAPO_UI_CASE=clipboard dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+cargo test --locked clipboard_file_lives_until_the_last_draft_or_upload_owner_is_dropped
+```
+
+The clipboard check also runs in the complete GTK workflow.
+
+## Readable mention labels
+
+Choosing a member inserts a highlighted `@display name` in the composer. The
+draft and multipart request retain `@mention(<@user-id>)` so duplicate display
+names cannot change the recipient. Typing an ordinary `@name` does not create a
+hidden mention. Editing part of a selected label makes it plain text. Restored
+drafts and failed sends preserve the display label and target; nickname updates
+refresh the label without changing its recipient. Native keyboard and IME edits
+are tracked through the entry's text delegate, preserving the selected member ID.
+Enter, Tab and suggestion clicks return focus with an unselected caret after the
+completed mention, so continued typing appends to it.
+
+Suggestions show a cached profile picture and a nickname in the member's role
+color, with the username alongside it. They respect the avatar display preference.
+New avatar batches update mounted suggestions in place; role-color changes refresh
+the open choices. A short list fits its rows and padding without reserving a hidden
+scrollbar's minimum height; long lists retain the 240-pixel content cap and scrollbar.
+The focused layout check covers single/many/empty results, filtering after scrolling,
+late avatar replacement/removal, live role colors, and the avatar preference:
+
+```sh
+PAPO_UI_CASE=mention-suggestions dbus-run-session -- xvfb-run -a cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+```
+
+With `PAPO_DESIGN_PREVIEW=1`, it saves
+`/tmp/papo-design-mention-suggestions-light.png` and
+`/tmp/papo-design-mention-suggestions-dark.png`.
+
+Received mentions have a blue highlight and open the tagged member's profile on
+click. Plain `@nickname` or `@username` text from other clients also links when it
+identifies one member unambiguously; ambiguous names, email addresses, URLs and
+plain names in code remain ordinary text. This read-only recognition does not
+turn a manually typed draft into a notification. Dragging or copying a selection
+does not open a profile, and `@everyone` has no individual profile target.
+
+```sh
+PAPO_UI_CASE=mentions dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+```
+
+This focused workflow verifies Unicode caret positions, highlighted spans,
+duplicate-name edits, nickname changes, emoji insertion, draft switches,
+failed-send retries and the exact submitted ID. It exercises the Enter/Tab
+controllers, native text insertion, focus changes, continued typing and native
+mention click handlers, including selection/drag protection. It also runs existing
+mention completion and clipboard checks. Set `PAPO_DESIGN_PREVIEW=1` to capture
+`/tmp/papo-design-composer-mention.png` and `/tmp/papo-design-clickable-mentions.png`
+on the test display.
+
+## Older-history and media retention
+
+After scrolling settles, decoded images and GIF frames outside the nearby
+viewport are released, including pictures held by still-mounted message rows.
+Reserved media geometry prevents unloading from changing scroll positions.
+Returning to the latest messages retains the newest 200 messages and enables
+pagination to fetch older pages again. Channel switches release decoded media
+and exclude older pages from inactive row caches. Open image viewers and
+fullscreen video are preserved while the user is viewing them.
+
+```sh
+PAPO_UI_CASE=retention dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+```
+
+The check uses weak GTK references to verify that image textures, GIF paintables
+and older rows really lose their owners. It also checks late-decode rejection,
+bottom positioning, older-page reload, and shared assets used by nearby messages.
+The Rust suite verifies history trimming rejects stale pagination while retaining
+live edits. Freed allocations may remain in allocator or renderer pools, so process
+RSS need not fall immediately after each eviction.

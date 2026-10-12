@@ -51,6 +51,10 @@ on the installed codecs; a backend configured for voice is required for calls.
 
 ## Tests
 
+For a self-contained Linux test build to share with others, see
+[APPIMAGE.md](APPIMAGE.md). The build script produces an x86_64 AppImage with
+the GTK and native media runtime included, plus tester instructions and source.
+
 ```sh
 cargo test --locked
 ```

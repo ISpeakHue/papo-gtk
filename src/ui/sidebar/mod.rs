@@ -192,8 +192,9 @@ impl Component for SidebarModel {
                                 #[name="avatar_widget"]
                                 adw::Avatar {set_icon_name:Some("avatar-default-symbolic"),set_size:32,set_show_initials:false,#[watch] set_text:Some(model.current_user.display_name())},
                                 add_overlay = &gtk::Image {
-                                    #[watch] set_icon_name:Some(match model.current_user.status {Some(UserStatus::Away)=>"user-idle-symbolic",Some(UserStatus::Busy)=>"user-busy-symbolic",_=>"user-available-symbolic"}),
-                                    set_pixel_size:10,set_halign:gtk::Align::End,set_valign:gtk::Align::End,add_css_class:"papo-status-dot",
+                                    #[watch] set_resource:Some(crate::ui::status::resource(crate::ui::status::manual(model.current_user.status.as_ref()))),
+                                    #[watch] set_tooltip_text:Some(crate::ui::status::label(crate::ui::status::manual(model.current_user.status.as_ref()))),
+                                    set_pixel_size:12,set_halign:gtk::Align::End,set_valign:gtk::Align::End,add_css_class:"papo-status-dot",
                                 },
                             },
                             gtk::Box {
@@ -454,8 +455,7 @@ Abra o perfil de um membro para enviar uma mensagem."));empty.set_wrap(true);emp
             if self.selected_channel_id==Some(dm.id){open.add_css_class("selected");}
             open.set_hexpand(true);open.set_widget_name(&format!("dm-{}",dm.id));open.set_tooltip_text(Some(dm.user.display_name()));
             let content=gtk::Box::new(gtk::Orientation::Horizontal,8);
-            let (icon,status)=match self.presence.get(&dm.user.id){Some(crate::ws::PresenceStatus::Online)=>("user-available-symbolic","Disponível"),Some(crate::ws::PresenceStatus::Away)=>("user-idle-symbolic","Ausente"),Some(crate::ws::PresenceStatus::Busy)=>("user-busy-symbolic","Ocupado"),_=>("user-offline-symbolic","Offline")};
-            let presence=gtk::Image::from_icon_name(icon);presence.set_pixel_size(10);presence.set_tooltip_text(Some(status));presence.add_css_class("papo-status-dot");
+            let presence=crate::ui::status::image(self.presence.get(&dm.user.id).copied().unwrap_or(crate::ws::PresenceStatus::Offline));
             if self.show_avatars{let avatar=gtk::Overlay::new();let image=crate::media::member_avatar(dm.user.id,self.avatars.get(&dm.user.id),28);image.set_text(Some(dm.user.display_name()));avatar.set_child(Some(&image));presence.set_halign(gtk::Align::End);presence.set_valign(gtk::Align::End);avatar.add_overlay(&presence);content.append(&avatar);}else{content.append(&presence);}
             let label=gtk::Label::new(Some(dm.user.display_name()));label.set_xalign(0.0);label.set_ellipsize(pango::EllipsizeMode::End);label.set_hexpand(true);content.append(&label);
             if dm.unread_count>0{let badge=gtk::Label::new(Some(&dm.unread_count.to_string()));badge.add_css_class("papo-notification-count");content.append(&badge);}

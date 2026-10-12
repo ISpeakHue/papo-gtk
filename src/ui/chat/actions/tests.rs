@@ -11,9 +11,10 @@ const OLDER: &str = "12345678-1234-4234-8234-123456789abf";
 const EMOJI: &str = "12345678-1234-4234-8234-123456789ac0";
 const DATE: &str = "2026-10-03T12:00:00Z";
 pub(crate) struct Backend {
+    pub(crate) peer_profile:Option<Value>,
     pub(crate) peer_banned:bool,pub(crate) fail_moderation:bool,pub(crate) fail_audit:bool,
     pub(crate) server_missing:bool, pub(crate) server_value:Value, pub(crate) admin_roles:Vec<Value>, pub(crate) admin_channels:Vec<Value>, pub(crate) dms:Vec<Value>, dm_messages:Vec<Value>, pub(crate) blocks:Vec<Value>, pub(crate) fail_role:bool, pub(crate) deny_dm:bool, pub(crate) fail_server:bool,
-    message: Value, old: Value, groups: Vec<Value>, emojis: Vec<Value>, pinned: bool,
+    message: Value, old: Value, groups: Vec<Value>, pub(crate) emojis: Vec<Value>, pinned: bool,
     pub(crate) profile:Value, config:Value, channel_setting:Value, fail_profile:bool, fail_settings:bool, fail_upload:bool,
     fail_password:bool, fail_recovery:bool, fail_search:bool, fail_read:bool, revoked:bool, dropped:Vec<String>, read_notices:Vec<Value>,
     fail_edit: bool, deny_edit: bool, fail_emoji: bool, pub(crate) requests: Vec<(String, String, Value)>, restricted: bool,
@@ -42,7 +43,7 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
         old: json!({"id":OLDER,"channel_id":CHANNEL,"author_id":USER,"content":"Older message","created_at":"2026-10-02T00:00:00Z"}),
         channel_setting:json!("all"), profile:json!({"id":USER,"username":"alice","nickname":"Alice","description":"Old description","created_at":DATE}), config:serde_json::to_value(crate::models::UserConfig::default()).unwrap(),fail_profile:true,fail_settings:true,fail_upload:true,
         fail_password:true,fail_recovery:true,fail_search:true,fail_read:true,revoked:false,dropped:vec![],read_notices:vec![],
-        groups: vec![], emojis: vec![], pinned:false, fail_edit:true, deny_edit:false, fail_emoji:true, requests:vec![], restricted:false,
+        groups: vec![], emojis: vec![], peer_profile:None, pinned:false, fail_edit:true, deny_edit:false, fail_emoji:true, requests:vec![], restricted:false,
     }));
     let shared = state.clone(); let task = tokio::spawn(async move {
         loop {
@@ -79,7 +80,7 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
                         if method=="DELETE"{b.dms.clear();(204,Value::Null)}else if b.deny_dm||!b.blocks.is_empty(){(403,json!({"type":"https://test/dm-blocked","detail":"DM blocked"}))}else{b.dms.first().cloned().map(|d|(200,d)).unwrap_or((404,json!({"detail":"Unknown DM"})))}
                     } else if route=="/users/blocks" {(200,json!({"users":b.blocks}))}
                     else if route==format!("/users/{EMOJI}/block"){if method=="POST"{b.blocks=vec![peer];b.dms.clear();}else{b.blocks.clear();}(204,Value::Null)}
-                    else if route==format!("/users/{EMOJI}/profile"){(200,peer)}
+                    else if route==format!("/users/{EMOJI}/profile"){(200,b.peer_profile.clone().unwrap_or(peer))}
                     else if route.starts_with("/users/")&&route.ends_with("/roles")&&method=="POST"{b.profile["roles"]=json!([{ "id":body["role_id"],"name":"Moderator"}]);(201,json!({"user_id":USER,"role_id":body["role_id"],"assigned_at":DATE}))}
                     else if route.starts_with("/users/")&&route.contains("/roles/")&&method=="DELETE"{b.profile["roles"]=json!([]);(204,Value::Null)}
                     else if route.starts_with("/roles")&&method!="GET"{
@@ -108,7 +109,7 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
                         let id=if path.contains("last_id"){MESSAGE}else{EMOJI};
                         (200,json!({"notifications":[{"id":id,"message_id":OLDER,"channel_id":CHANNEL,"author_id":USER,"message_content":"notification preview","read":b.read_notices.contains(&json!(id)),"created_at":if id==EMOJI{DATE}else{"2026-10-02T00:00:00Z"}}],"has_more":id==EMOJI}))
                     } else if route == format!("/users/{USER}/read_notification") {
-                        if b.fail_read{b.fail_read=false;(500,json!({"detail":"Read failed"}))}else{b.read_notices.extend(body["notification_ids"].as_array().unwrap().clone());(200,json!({"updated":1}))}
+                        if b.fail_read{b.fail_read=false;(500,json!({"detail":"Read failed"}))}else{b.read_notices.extend(body["notification_ids"].as_array().unwrap().clone());(200,json!({"updated":body["notification_ids"].as_array().unwrap().len()}))}
                     } else if route == "/messages" && method=="POST" {
                         if b.fail_upload{b.fail_upload=false;(500,json!({"detail":"Upload failed"}))}else{let mut message=b.message.clone();message["id"]=json!("12345678-1234-4234-8234-123456789ac1");if body.as_str().is_some_and(|s|s.contains("12345678-1234-4234-8234-123456789ac3")){message["channel_id"]=json!("12345678-1234-4234-8234-123456789ac3");message["content"]=json!("DM test");b.dm_messages.push(message.clone());}(201,message)}
                     } else if route == "/users/settings" && method=="PUT" {
@@ -174,6 +175,7 @@ pub(crate) fn exercise(context: &gtk::glib::MainContext) {
     let chat = ChatModel::builder().launch(ChatInit { api: Some(api.clone()), user_id:Some(user), ..Default::default() }).detach();
     chat.emit(ChatMsg::SetAccess { user_id:user, access:crate::models::Access::resolve(user,Some(user),&[],&[],&[]) });
     chat.emit(ChatMsg::SetChannel(channel.clone())); chat.emit(ChatMsg::AddMessage(message.clone()));
+    chat.emit(ChatMsg::RequestHistory{channel_id,cursor:None});
     until(context,|| chat.model().actions.pins_ready);
     assert!(find_button(chat.widget().upcast_ref(),"Editar").get_visible());
     find_button(chat.widget().upcast_ref(),"Editar").emit_clicked();
@@ -219,6 +221,7 @@ pub(crate) fn exercise(context: &gtk::glib::MainContext) {
     assert!(chat.model().actions.pinned.is_empty());
     chat.emit(ChatMsg::SetAccess { user_id:user, access:crate::models::Access::resolve(user,Some(user),&[],&[],&[]) });
     chat.emit(ChatMsg::SetChannel(channel.clone())); chat.emit(ChatMsg::AddMessage(message.clone()));
+    chat.emit(ChatMsg::RequestHistory{channel_id,cursor:None});
     until(context,|| chat.model().actions.pins_ready);
     // Upload keeps its draft on error and custom images replace placeholder labels.
     find_button(chat.widget().upcast_ref(),"Emojis").emit_clicked(); pump(context);
@@ -277,9 +280,11 @@ pub(crate) fn exercise(context: &gtk::glib::MainContext) {
     assert!(chat.model().actions.emojis_loaded.is_some());
     let emoji_calls=backend.lock().unwrap().requests.iter().filter(|(_,p,_)|p.starts_with("/emojis?")).count();
     let other:Channel=serde_json::from_value(json!({"id":"12345678-1234-4234-8234-123456789ac2","name":"other","created_at":DATE})).unwrap();
-    chat.emit(ChatMsg::SetChannel(other));
+    let other_id=other.id; chat.emit(ChatMsg::SetChannel(other));
+    chat.emit(ChatMsg::RequestHistory{channel_id:other_id,cursor:None});
     until(context,||chat.model().actions.pins_ready);
     chat.emit(ChatMsg::SetChannel(channel.clone()));
+    chat.emit(ChatMsg::RequestHistory{channel_id,cursor:None});
     until(context,||chat.model().actions.pins_ready);
     assert_eq!(backend.lock().unwrap().requests.iter().filter(|(_,p,_)|p.starts_with("/emojis?")).count(),emoji_calls);
     chat.emit(ChatMsg::AddMessage(message.clone()));pump(context);
@@ -328,6 +333,12 @@ pub(crate) fn exercise(context: &gtk::glib::MainContext) {
     until(context,||main.model().users.len()==2);
     {
         let guard=backend.lock().unwrap();let startup=&guard.requests[startup_baseline..];
+        let history=startup.iter().position(|(_,p,_)|p.contains("/messages?")).unwrap();
+        for secondary in ["/users?", "/dms", "/emojis?", "/users/12345678-1234-4234-8234-123456789abc/notifications"] {
+            if let Some(index)=startup.iter().position(|(_,p,_)|p.starts_with(secondary)) {
+                assert!(history<index,"messages must precede secondary startup request {secondary}");
+            }
+        }
         assert_eq!(startup.iter().filter(|(_,p,_)|p=="/channels").count(),1,"first connection must not duplicate the access snapshot");
         assert_eq!(startup.iter().filter(|(_,p,_)|p=="/auth/whoami").count(),1);
         assert_eq!(startup.iter().filter(|(_,p,_)|p.starts_with("/users?")).count(),1);
@@ -342,7 +353,7 @@ pub(crate) fn exercise(context: &gtk::glib::MainContext) {
     crate::ui::main_window::security::exercise(&main,context);assert!(outputs.lock().unwrap().is_empty());
     crate::ui::login::recovery::exercise(&api,context);
     crate::ui::main_window::search::exercise(&main,context);
-    crate::ui::main_window::notifications::exercise(&main,context);
+    crate::ui::main_window::notifications::exercise(&main,context,&backend);
     crate::ui::main_window::direct::exercise(&main,context);
     crate::ui::main_window::administration::exercise(&main,context);
     crate::ui::main_window::moderation::exercise(&main,context,&backend);

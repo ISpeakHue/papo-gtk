@@ -491,3 +491,20 @@ async fn voice_ice_credentials_are_ephemeral_and_redacted() {
     let (client,server)=mock(vec![(200,json!({"ice_servers":[{"urls":["stun:stun.test:3478"]},{"urls":["turn:turn.test:3478?transport=udp","turns:turn.test:5349?transport=tcp"],"username":"ephemeral-user","credential":"SECRET"}]})),(401,json!({"detail":"expired"}))]).await;
     let config=client.voice_ice_servers().await.unwrap();assert_eq!(config.ice_servers[1].credential.as_deref(),Some("SECRET"));assert!(!format!("{config:?}").contains("SECRET"));assert!(!format!("{config:?}").contains("ephemeral-user"));assert!(is_session_error(&client.voice_ice_servers().await.unwrap_err()));let requests=server.await.unwrap();assert_eq!(requests[0].method,"GET");assert_eq!(requests[0].url.path(),"/voice/ice-servers");
 }
+
+#[tokio::test]
+async fn latest_own_message_fetches_complete_metadata_before_editing(){
+    let result=json!({"type":"message","id":ID,"content":"own text","channel_id":CHANNEL,"channel_name":"general","author_id":ID,"author_username":"alice","created_at":DATE});
+    let full=json!({"id":ID,"channel_id":CHANNEL,"author_id":ID,"content":"own text","created_at":DATE,"embeds":[{"id":CHANNEL,"source_type":"custom","fetch_method":"manual","title":"Keep this card","created_at":DATE}]});
+    let(api,server)=mock(vec![(200,json!({"results":[result],"has_more":false})),(200,json!({"channel_id":CHANNEL,"messages":[full],"has_more":false}))]).await;
+    let message=api.latest_own_message(CHANNEL.parse().unwrap(),ID.parse().unwrap()).await.unwrap().unwrap();
+    assert_eq!(message.embeds.unwrap()[0].title.as_deref(),Some("Keep this card"));
+    let requests=server.await.unwrap();let query:Value=serde_json::from_str(&requests[0].body).unwrap();assert_eq!(query["author"],ID);assert_eq!(query["channel_id"],CHANNEL);assert_eq!(query["order"],"desc");
+    let cursor:std::collections::HashMap<_,_>=requests[1].url.query_pairs().into_owned().collect();assert_eq!(cursor["since"].parse::<chrono::DateTime<chrono::Utc>>().unwrap(),DATE.parse::<chrono::DateTime<chrono::Utc>>().unwrap()+chrono::Duration::microseconds(1));
+}
+#[tokio::test]
+async fn latest_own_message_does_not_fetch_history_without_an_owned_search_result(){
+    let result=json!({"type":"message","id":ID,"content":"other text","channel_id":CHANNEL,"channel_name":"general","author_id":null,"author_username":null,"created_at":DATE});
+    let(api,server)=mock(vec![(200,json!({"results":[result],"has_more":false}))]).await;
+    assert!(api.latest_own_message(CHANNEL.parse().unwrap(),ID.parse().unwrap()).await.unwrap().is_none());assert_eq!(server.await.unwrap().len(),1);
+}

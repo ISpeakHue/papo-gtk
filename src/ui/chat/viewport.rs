@@ -5,33 +5,63 @@ use std::{cell::{Cell,RefCell},rc::Rc};
 
 #[derive(Clone)]
 pub(super) enum Position { Bottom, Message(Uuid), Unread(Uuid), Anchor{ id:Option<Uuid>,offset:f64,value:f64 } }
+type Extent=(i32,i32,f64,f64,f64);
 pub(super) struct Viewport {
     following:Rc<Cell<bool>>,pending:Rc<RefCell<Option<Position>>>,generation:Rc<Cell<u64>>,
     wheel:Rc<RefCell<Option<adw::TimedAnimation>>>,
     last_motion:Rc<Cell<Option<Instant>>>,idle_media:Rc<Cell<bool>>,
     opening:Rc<Cell<bool>>,opening_ready:Rc<Cell<bool>>,opening_callback:Rc<Cell<bool>>,
     reflow:Rc<RefCell<Option<Position>>>,media_layout:Rc<Cell<bool>>,
+    cover:std::cell::OnceCell<gtk::glib::WeakRef<gtk::Widget>>,
+    input_epoch:Rc<Cell<u64>>,
+    reveal:Rc<RefCell<Option<(u64,Extent,bool)>>>,
+    handoff:Rc<Cell<Option<i64>>>,
 }
-impl Default for Viewport {fn default()->Self{Self{following:Rc::new(Cell::new(true)),pending:Default::default(),generation:Default::default(),wheel:Default::default(),last_motion:Default::default(),idle_media:Default::default(),opening:Default::default(),opening_ready:Default::default(),opening_callback:Default::default(),reflow:Default::default(),media_layout:Default::default()}}}
+impl Default for Viewport {fn default()->Self{Self{following:Rc::new(Cell::new(true)),pending:Default::default(),generation:Default::default(),wheel:Default::default(),last_motion:Default::default(),idle_media:Default::default(),opening:Default::default(),opening_ready:Default::default(),opening_callback:Default::default(),reflow:Default::default(),media_layout:Default::default(),cover:Default::default(),input_epoch:Default::default(),reveal:Default::default(),handoff:Default::default()}}}
 impl Drop for Viewport{fn drop(&mut self){self.idle_media.set(false);self.media_layout.set(false);self.reflow.borrow_mut().take();stop_wheel(&self.wheel);self.last_motion.set(None);}}
 impl Viewport {
     pub fn following(&self)->bool{self.following.get()}
+    pub fn opening_flag(&self)->Rc<Cell<bool>>{self.opening.clone()}
+    pub fn input_epoch_flag(&self)->Rc<Cell<u64>>{self.input_epoch.clone()}
+    pub fn input_epoch(&self)->u64{self.input_epoch.get()}
+    #[cfg(test)]pub fn covered(&self)->bool{self.cover.get().and_then(|w|w.upgrade()).is_some_and(|w|w.is_visible())}
+    #[cfg(test)]pub fn reveal_pending(&self)->impl Fn()->bool+'static{let reveal=self.reveal.clone();move ||reveal.borrow().is_some()}
     pub fn scrolling(&self)->bool{scrolling(&self.last_motion,&self.wheel)}
-    pub fn begin_open(&self,scroll:&gtk::ScrolledWindow){
+    pub fn begin_open(&self,_scroll:&gtk::ScrolledWindow){
+        self.input_epoch.set(self.input_epoch.get().wrapping_add(1));
         stop_wheel(&self.wheel);self.last_motion.set(None);
         self.pending.borrow_mut().take();self.generation.set(self.generation.get().wrapping_add(1));
         self.reflow.borrow_mut().take();
+        self.reveal.borrow_mut().take();self.handoff.set(None);
         self.following.set(true);self.opening.set(true);self.opening_ready.set(false);self.opening_callback.set(false);
-        // Opacity preserves mapping and allocation. Hiding the widget would
-        // prevent TextView height-for-width layout from settling at all.
-        scroll.set_opacity(0.0);
+        // Keep the history fully opaque and mapped. A solid cover conceals
+        // intermediate allocations while GTK continues snapshotting the new
+        // rows, without resuming an old render node after opacity 0 -> 1.
+        if let Some(cover)=self.cover.get().and_then(|w|w.upgrade()){cover.set_visible(true);}
+    }
+    pub fn reset_surface(&self,scroll:&gtk::ScrolledWindow){
+        // Discard the old viewport's cached scroll transform/render node.
+        // Reuse the list and adjustment/controllers, but never the previous
+        // channel's viewport surface. Conceal first and stop its players before
+        // unmapping their widgets, so teardown has only one owner.
+        if let Some(previous)=scroll.child().and_downcast::<gtk::Viewport>(){
+            if let Some(list)=previous.child(){
+                previous.set_child(None::<&gtk::Widget>);scroll.set_child(None::<&gtk::Widget>);
+                let view=gtk::Viewport::new(None::<&gtk::Adjustment>,None::<&gtk::Adjustment>);
+                view.set_scroll_to_focus(false);view.set_child(Some(&list));scroll.set_child(Some(&view));
+            }
+        }
+        scroll.queue_draw();
     }
     pub fn open_ready(&self,ready:bool)->bool{
         self.opening.get()&&self.opening_ready.replace(ready)!=ready&&ready
     }
-    pub fn cancel_open(&self,scroll:&gtk::ScrolledWindow){
+    pub fn cancel_open(&self,_scroll:&gtk::ScrolledWindow){
+        self.input_epoch.set(self.input_epoch.get().wrapping_add(1));
         if self.opening.replace(false){self.pending.borrow_mut().take();self.generation.set(self.generation.get().wrapping_add(1));}
-        self.opening_ready.set(false);self.opening_callback.set(false);scroll.set_opacity(1.0);
+        self.opening_ready.set(false);self.opening_callback.set(false);
+        self.reveal.borrow_mut().take();self.handoff.set(None);
+        if let Some(cover)=self.cover.get().and_then(|w|w.upgrade()){cover.set_visible(false);}
     }
     pub fn media_when_idle(&self,sender:&ComponentSender<ChatModel>){
         if self.idle_media.replace(true){return;}
@@ -47,7 +77,8 @@ impl Viewport {
         let pending=self.media_layout.clone();let input=sender.input_sender().clone();
         gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(80),move ||{if pending.replace(false){let _=input.send(ChatMsg::MediaViewport);}});
     }
-    pub fn connect(&self,scroll:&gtk::ScrolledWindow,list:&gtk::ListBox,sender:&ComponentSender<ChatModel>){
+    pub fn connect(&self,scroll:&gtk::ScrolledWindow,list:&gtk::ListBox,cover:&gtk::Box,sender:&ComponentSender<ChatModel>){
+        let _=self.cover.set(cover.upcast_ref::<gtk::Widget>().downgrade());
         if let Some(view)=scroll.child().and_downcast::<gtk::Viewport>(){view.set_scroll_to_focus(false);}
         // ListBox also scrolls its cursor independently of GtkViewport.
         list.set_adjustment(None::<&gtk::Adjustment>);
@@ -56,10 +87,12 @@ impl Viewport {
         // Apply the anchor after GTK allocation, before that frame is painted.
         let layout_hook:Rc<RefCell<Option<(gtk::gdk::FrameClock,gtk::glib::SignalHandlerId)>>>=Default::default();
         let hook=layout_hook.clone();let rows=list.downgrade();let pending=self.pending.clone();let reflow=self.reflow.clone();let wheel=self.wheel.clone();
+        let handoff=self.handoff.clone();let reveal=self.reveal.clone();let generation=self.generation.clone();let opening=self.opening.clone();let ready=self.opening_ready.clone();let active=self.opening_callback.clone();let following=self.following.clone();let cover=cover.downgrade();let input=sender.input_sender().clone();
         scroll.connect_map(move |scroll|{
             if hook.borrow().is_some(){return;}
             let Some(clock)=scroll.frame_clock()else{return;};let weak=scroll.downgrade();let rows=rows.clone();let pending=pending.clone();let reflow=reflow.clone();let wheel=wheel.clone();
-            let id=clock.connect_local("layout",true,move |_|{
+            let handoff=handoff.clone();let reveal=reveal.clone();let generation=generation.clone();let opening=opening.clone();let ready=ready.clone();let active=active.clone();let following=following.clone();let cover=cover.clone();let input=input.clone();
+            let id=clock.connect_local("layout",true,move |args|{
                 let(Some(scroll),Some(list))=(weak.upgrade(),rows.upgrade())else{return None;};let adj=scroll.vadjustment();
                 let correction=reflow.borrow_mut().take();
                 if let Some(Position::Anchor{id:Some(id),offset,value})=correction{
@@ -72,6 +105,36 @@ impl Viewport {
                     }
                 }
                 if let Some(position)=pending.borrow().as_ref(){set_position(&adj,&list,position,false);}
+                // GtkViewport can configure the adjustment while allocating.
+                // Following the new bottom in that signal updates the value,
+                // but its child can retain the transform computed beforehand.
+                // A draw invalidation cannot repair an allocation transform.
+                let positioned=scroll.child().is_some_and(|view|{
+                    // Compare within the viewport, excluding the scroller's
+                    // own border and native overscroll/bounce transform.
+                    let positioned=list.compute_bounds(&view).is_some_and(|bounds|
+                        (f64::from(bounds.y())+adj.value()).abs()<1.0);
+                    if !positioned{view.queue_allocate();}
+                    positioned
+                });
+                let frame=args[0].get::<gtk::gdk::FrameClock>().unwrap().frame_counter();
+                if !opening.get()&&positioned&&handoff.get().is_some_and(|until|frame>=until){handoff.set(None);pending.borrow_mut().take();}
+                if let Some((expected,extent,bounded))=reveal.borrow_mut().take(){
+                    let allocated=(list.width(),list.height(),adj.upper(),adj.page_size(),adj.value());
+                    if generation.get()==expected&&opening.get()&&ready.get()&&positioned&&(extent==allocated||bounded){
+                        // The last allocation and anchor correction belong to
+                        // this frame. Never expose the pre-layout render node.
+                        list.queue_draw();scroll.queue_draw();
+                        // Retain the anchor through the first visible frames.
+                        // A queued final update may allocate a marker or media
+                        // row immediately after reveal, before the next layout.
+                        // Correct that allocation before releasing restoration.
+                        handoff.set(Some(frame+2));opening.set(false);active.set(false);
+                        if let Some(cover)=cover.upgrade(){cover.set_visible(false);}
+                        let bottom=(adj.upper()-adj.page_size()-adj.value()).max(0.0)<=24.0;following.set(bottom);
+                        let _=input.send(ChatMsg::ViewportChanged(!bottom));
+                    }
+                }
                 None
             });*hook.borrow_mut()=Some((clock,id));
         });
@@ -99,23 +162,28 @@ impl Viewport {
         let controller=gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
         controller.set_propagation_phase(gtk::PropagationPhase::Capture);
         let pending=self.pending.clone();let generation=self.generation.clone();let wheel=self.wheel.clone();let weak=scroll.downgrade();let input=sender.input_sender().clone();
-        let motion=self.last_motion.clone();controller.connect_scroll(move |controller,_,dy|{let _=input.send(ChatMsg::CancelInitialRead);
+        let input_epoch=self.input_epoch.clone();
+        let motion=self.last_motion.clone();controller.connect_scroll(move |controller,_,dy|{
             motion.set(Some(Instant::now()));
             pending.borrow_mut().take();generation.set(generation.get().wrapping_add(1));
+            let _=input.send(ChatMsg::CancelInitialRead(input_epoch.get()));
             let Some(scroll)=weak.upgrade()else{return gtk::glib::Propagation::Proceed;};
             if controller.unit()!=gtk::gdk::ScrollUnit::Wheel{stop_wheel(&wheel);return gtk::glib::Propagation::Proceed;}
             animate_wheel(&scroll,&wheel,dy);gtk::glib::Propagation::Stop
         });scroll.add_controller(controller);
         let click=gtk::GestureClick::new();click.set_button(1);click.set_propagation_phase(gtk::PropagationPhase::Capture);let pending=self.pending.clone();let generation=self.generation.clone();
-        let input=sender.input_sender().clone();let wheel=self.wheel.clone();click.connect_pressed(move |_,_,_,_|{let _=input.send(ChatMsg::CancelInitialRead);pending.borrow_mut().take();generation.set(generation.get().wrapping_add(1));stop_wheel(&wheel);});scroll.add_controller(click);
+        let input_epoch=self.input_epoch.clone();
+        let input=sender.input_sender().clone();let wheel=self.wheel.clone();click.connect_pressed(move |_,_,_,_|{pending.borrow_mut().take();generation.set(generation.get().wrapping_add(1));let _=input.send(ChatMsg::CancelInitialRead(input_epoch.get()));stop_wheel(&wheel);});scroll.add_controller(click);
         // GTK's automatic focus scrolling also runs during layout changes. Only
         // reveal a focused row when the user explicitly navigates with keys.
         let keys=gtk::EventControllerKey::new();keys.set_propagation_phase(gtk::PropagationPhase::Capture);
         let pending=self.pending.clone();let generation=self.generation.clone();let weak=scroll.downgrade();let wheel=self.wheel.clone();let input=sender.input_sender().clone();
+        let input_epoch=self.input_epoch.clone();
         keys.connect_key_pressed(move |_,key,_,_|{
             let reveal=matches!(key,gtk::gdk::Key::Tab|gtk::gdk::Key::ISO_Left_Tab|gtk::gdk::Key::Up|gtk::gdk::Key::Down|gtk::gdk::Key::Home|gtk::gdk::Key::End);
-            if reveal||matches!(key,gtk::gdk::Key::Page_Up|gtk::gdk::Key::Page_Down){let _=input.send(ChatMsg::CancelInitialRead);
+            if reveal||matches!(key,gtk::gdk::Key::Page_Up|gtk::gdk::Key::Page_Down){
                 pending.borrow_mut().take();generation.set(generation.get().wrapping_add(1));
+                let _=input.send(ChatMsg::CancelInitialRead(input_epoch.get()));
                 stop_wheel(&wheel);
                 if reveal{if let Some(scroll)=weak.upgrade(){reveal_keyboard_focus(&scroll,generation.clone(),generation.get());}}
             }
@@ -145,6 +213,7 @@ impl Viewport {
         // restarting the opening frame budget or adding more frame callbacks.
         let reusing=self.opening.get()&&self.opening_callback.get();
         let generation=if reusing{self.generation.get()}else{self.generation.get().wrapping_add(1)};
+        if !reusing{self.handoff.set(None);}
         self.generation.set(generation);*self.pending.borrow_mut()=Some(position);
         // Explicit latest navigation must take effect even if an unchanged,
         // temporarily occluded history has no new allocation frame yet.
@@ -156,8 +225,9 @@ impl Viewport {
         if reusing{return;}
         if self.opening.get(){self.opening_callback.set(true);}
         let pending=self.pending.clone();let current=self.generation.clone();let following=self.following.clone();let list=list.downgrade();let s=sender.clone();let frames=Cell::new(0);
+        let reveal=self.reveal.clone();let handoff=self.handoff.clone();
         let opening=self.opening.clone();let ready=self.opening_ready.clone();let active=self.opening_callback.clone();let geometry=Cell::new(None);let stable=Cell::new(0);let reported_bottom=Cell::new(None);
-        scroll.add_tick_callback(move |scroll,_|{
+        scroll.add_tick_callback(move |scroll,clock|{
             if current.get()!=generation{return gtk::glib::ControlFlow::Break;}
             frames.set(frames.get()+1);if frames.get()<2{return gtk::glib::ControlFlow::Continue;}
             let Some(position)=pending.borrow().clone()else{return gtk::glib::ControlFlow::Break;};
@@ -182,8 +252,13 @@ impl Viewport {
                 // frame number. A bound keeps continuous media updates from
                 // delaying presentation indefinitely; downloads are not awaited.
                 if (adj.page_size()<=0.0||stable.get()<2)&&frames.get()<12{return gtk::glib::ControlFlow::Continue;}
-                opening.set(false);active.set(false);scroll.set_opacity(1.0);
-            }else if frames.get()<4{return gtk::glib::ControlFlow::Continue;}
+                *reveal.borrow_mut()=Some((generation,extent,frames.get()>=12));
+                clock.request_phase(gtk::gdk::FrameClockPhase::LAYOUT);
+                // Layout may still change in this frame (TextView wrapping,
+                // image completion or resizing). The layout hook rechecks the
+                // extent, corrects the anchor, and then reveals the history.
+                return gtk::glib::ControlFlow::Continue;
+            }else if handoff.get().is_some(){return gtk::glib::ControlFlow::Continue;}else if frames.get()<4{return gtk::glib::ControlFlow::Continue;}
             pending.borrow_mut().take();let bottom=(adj.upper()-adj.page_size()-adj.value()).max(0.0)<=24.0;following.set(bottom);let _=s.input_sender().send(ChatMsg::ViewportChanged(!bottom));gtk::glib::ControlFlow::Break
         });
     }
@@ -284,11 +359,16 @@ impl ReadBoundary{
     chat.state().get_mut().model.actions.api=Some(crate::api::ApiClient::new("http://127.0.0.1:9").unwrap());
     let passes=chat.model().render_passes;let hydrations=chat.model().media_hydrations;let from=adj.value();
     {let state=chat.model();state.viewport.last_motion.set(Some(Instant::now()));animate_wheel(&scroll,&state.viewport.wheel,-6.0);}
-    let animation=chat.model().viewport.wheel.borrow().as_ref().unwrap().clone();let destination=animation.value_to();assert!(destination<from-100.0);assert_eq!(animation.state(),adw::AnimationState::Playing);
+    let animation=chat.model().viewport.wheel.borrow().as_ref().unwrap().clone();
+    // Software GPU rendering can spend longer than the production gesture's
+    // 160 ms inside one pump. Keep this test gesture alive long enough to
+    // distinguish cancellation from naturally reaching its destination.
+    animation.set_duration(1000);
+    let destination=animation.value_to();assert!(destination<from-100.0);assert_eq!(animation.state(),adw::AnimationState::Playing);
     let epoch=chat.model().transfers.epoch;let token=Uuid::new_v4();chat.state().get_mut().model.transfers.image_tokens.insert(key,token);
     chat.emit(ChatMsg::Transfer(TransferMsg::ImageReady{epoch,message:messages[48].id,key,token,result:Some(crate::media::PreparedImage{width:640,height:160,pixels:vec![255;640*160*4]})}));
-    let start=Instant::now();while start.elapsed()<std::time::Duration::from_millis(70){pump(context);std::thread::sleep(std::time::Duration::from_millis(3));}
-    assert!(chat.model().transfers.textures.contains_key(&key));assert!(chat.model().media_render_pending.is_some());assert_eq!(chat.model().render_passes,passes,"decoding during scrolling must not rebuild media");assert_eq!(chat.model().media_hydrations,hydrations,"scroll ticks must not rescan/hydrate the history");assert_eq!(media.first_child().unwrap(),placeholder);assert_eq!(animation.state(),adw::AnimationState::Playing,"image completion must not cancel wheel motion");assert!(adj.value()<from-20.0,"scroll frames keep advancing while the picture waits");
+    let start=Instant::now();while start.elapsed()<std::time::Duration::from_millis(70){context.iteration(false);std::thread::sleep(std::time::Duration::from_millis(3));}
+    assert!(chat.model().transfers.textures.contains_key(&key));assert!(chat.model().media_render_pending.is_some());assert_eq!(chat.model().render_passes,passes,"decoding during scrolling must not rebuild media");assert_eq!(chat.model().media_hydrations,hydrations,"scroll ticks must not rescan/hydrate the history");assert_eq!(media.first_child().unwrap(),placeholder);assert_eq!(animation.state(),adw::AnimationState::Playing,"image completion must not cancel wheel motion");assert!(adj.value()<from-0.5,"scroll frames keep advancing while the picture waits");
     // Structural updates also preserve the same running animation. Reactions
     // do not touch the pending image row, so its placeholder still waits.
     chat.emit(ChatMsg::ApplyChange(Change::Reaction(messages[30].id,crate::models::MessageReactionSummary{emoji_id:None,unicode:Some("❤️".into()),count:1})));pump(context);assert_eq!(animation.state(),adw::AnimationState::Playing);assert_eq!(media.first_child().unwrap(),placeholder,"unrelated live changes must not flush deferred pictures");
@@ -299,7 +379,7 @@ impl ReadBoundary{
     // custom wheel animation. Keep deferring throughout that continuous motion.
     let displayed=media.first_child().unwrap();let passes=chat.model().render_passes;let hydrations=chat.model().media_hydrations;let token=Uuid::new_v4();chat.state().get_mut().model.transfers.image_tokens.insert(key,token);adj.set_value(adj.value()-10.0);
     chat.emit(ChatMsg::Transfer(TransferMsg::ImageReady{epoch,message:messages[48].id,key,token,result:Some(crate::media::PreparedImage{width:320,height:80,pixels:vec![180;320*80*4]})}));
-    for _ in 0..6{adj.set_value(adj.value()-10.0);let start=Instant::now();while start.elapsed()<std::time::Duration::from_millis(30){pump(context);std::thread::sleep(std::time::Duration::from_millis(3));}assert_eq!(media.first_child().unwrap(),displayed);}
+    for _ in 0..6{adj.set_value(adj.value()-10.0);let start=Instant::now();while start.elapsed()<std::time::Duration::from_millis(30){context.iteration(false);std::thread::sleep(std::time::Duration::from_millis(3));}assert_eq!(media.first_child().unwrap(),displayed);}
     assert_eq!(chat.model().render_passes,passes);assert_eq!(chat.model().media_hydrations,hydrations);until(context,||chat.model().media_render_pending.is_none());settle(context);assert_ne!(media.first_child().unwrap(),displayed,"a continuous pixel gesture also flushes its image after pausing");
     // Explicit navigation still takes priority over scrolling and old results.
     {let state=chat.model();state.viewport.last_motion.set(Some(Instant::now()));animate_wheel(&scroll,&state.viewport.wheel,-2.0);}let running=chat.model().viewport.wheel.borrow().as_ref().unwrap().clone();chat.emit(ChatMsg::Latest);pump(context);assert_ne!(running.state(),adw::AnimationState::Playing);settle(context);assert!(chat.model().viewport.following());

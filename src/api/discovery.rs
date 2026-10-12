@@ -9,6 +9,22 @@ impl ApiClient {
         anyhow::ensure!(response.results.iter().all(|r| r.kind == "message"), "Tipo de resultado desconhecido.");
         Ok(response)
     }
+    /// Resolve the newest own message with complete metadata, so editing cannot
+    /// accidentally discard custom embeds from a search result's partial fields.
+    pub async fn latest_own_message(&self,channel:Uuid,user:Uuid)->Result<Option<Message>>{
+        let found=self.search(&SearchRequest{channel_id:channel.to_string(),author:user.to_string(),order:"desc".into(),..Default::default()},None).await?;
+        let Some(target)=found.results.into_iter().filter(|m|m.channel_id==channel&&m.author_id==Some(user)).max_by_key(|m|(m.created_at,m.id))else{return Ok(None);};
+        let at=target.created_at.checked_add_signed(chrono::Duration::microseconds(1)).context("Data da mensagem fora do intervalo")?;
+        let mut cursor=MessageCursor{created_at:at,id:Uuid::from_bytes([255;16])};
+        for _ in 0..4{
+            let page=self.list_messages(channel,Some(cursor)).await?;
+            if let Some(message)=page.messages.iter().find(|m|m.id==target.id&&m.author_id==Some(user)&&m.channel_id==channel){return Ok(Some(message.clone()));}
+            let next=page.messages.iter().min_by_key(|m|(m.created_at,m.id)).map(MessageCursor::from);
+            if !page.has_more||next.is_none_or(|next|(next.created_at,next.id)>=(cursor.created_at,cursor.id)||next.created_at<target.created_at){break;}
+            cursor=next.unwrap();
+        }
+        anyhow::bail!("Sua mensagem não está mais disponível. Atualize o canal e tente novamente.")
+    }
     pub async fn notifications(&self, user: Uuid, cursor: Option<MessageCursor>) -> Result<NotificationList> {
         let mut url = self.url(&format!("/users/{user}/notifications"));
         url.query_pairs_mut().append_pair("order", "desc");

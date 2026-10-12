@@ -8,10 +8,12 @@ use tracing::warn;
 
 pub mod avatars;
 pub mod sound;
+pub mod runtime;
 pub mod preview;
 pub mod frame;
 pub mod animation;
 pub mod giphy;
+pub mod gif_links;
 
 /// Bound encoded input, dimensions and decoded cache size before creating a texture.
 pub fn bounded_texture(bytes: &[u8]) -> Option<Texture> {
@@ -20,6 +22,18 @@ pub fn bounded_texture(bytes: &[u8]) -> Option<Texture> {
 #[derive(Debug)]
 pub struct PreparedImage{pub width:u32,pub height:u32,pub pixels:Vec<u8>}
 impl PreparedImage{
+    /// Original attachments are decoded only for an open viewer. Keep the
+    /// encoded file on disk and bound source pixels and the displayed texture.
+    pub fn decode_viewer(path:&std::path::Path)->Option<Self>{
+        let reader=image::ImageReader::open(path).ok()?.with_guessed_format().ok()?;
+        let(w,h)=reader.into_dimensions().ok()?;
+        if w==0||h==0||w>16384||h>16384||u64::from(w)*u64::from(h)>32_000_000{return None;}
+        let mut reader=image::ImageReader::open(path).ok()?.with_guessed_format().ok()?;
+        let mut limits=image::Limits::default();limits.max_alloc=Some(192<<20);reader.limits(limits);
+        let image=reader.decode().ok()?;
+        let image=if w>4096||h>4096{image.resize(4096,4096,image::imageops::FilterType::Lanczos3)}else{image};
+        let pixels=image.into_rgba8();Some(Self{width:pixels.width(),height:pixels.height(),pixels:pixels.into_raw()})
+    }
     pub fn decode(bytes:&[u8],width:u32,height:u32)->Option<Self>{Self::decode_impl(bytes,width,height,true)}
     /// Chat frames handle enlargement at presentation time. Other native image
     /// widgets retain their established decoding size (notably avatars).
@@ -162,6 +176,17 @@ mod tests {
 
 #[cfg(test)]
 mod prepared_image_tests {
+    #[test]
+    fn viewer_preserves_native_detail_and_bounds_large_or_invalid_sources(){
+        let path=std::env::temp_dir().join(format!("papo-viewer-test-{}",uuid::Uuid::new_v4()));
+        let file=crate::api::features::TemporaryFile(path);
+        for (width,height,expected) in [(1800,900,Some((1800,900))),(5000,2,Some((4096,2))),(17000,1,None)] {
+            let mut bytes=std::io::Cursor::new(Vec::new());image::DynamicImage::new_rgb8(width,height).write_to(&mut bytes,image::ImageFormat::Png).unwrap();
+            std::fs::write(&file.0,bytes.into_inner()).unwrap();
+            assert_eq!(super::PreparedImage::decode_viewer(&file.0).map(|i|(i.width,i.height)),expected);
+        }
+        std::fs::write(&file.0,b"not an image").unwrap();assert!(super::PreparedImage::decode_viewer(&file.0).is_none());
+    }
     #[test]
     fn decoding_preserves_small_sources_and_bounds_large_images(){
         for (width,height,expected) in [(32,32,(32,32)),(1024,256,(680,170)),(800,1200,(307,460))]{

@@ -8,6 +8,7 @@ pub(super) struct RenderWindow{
     heights:HashMap<Uuid,f64>,
 }
 impl RenderWindow{
+    pub fn retain_ids(&mut self,ids:&std::collections::HashSet<Uuid>){self.heights.retain(|id,_|ids.contains(id));}
     pub fn measure(&mut self,list:&gtk::ListBox){
         let mut row=list.first_child();while let Some(w)=row{row=w.next_sibling();if let Some(id)=w.widget_name().strip_prefix("message-").and_then(|s|Uuid::parse_str(s).ok()){
             if w.height()>0{self.heights.insert(id,f64::from(w.height()));}

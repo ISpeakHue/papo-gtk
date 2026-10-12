@@ -1,9 +1,11 @@
 //! Profile and preferences dialogs; accepted writes are the source of local state.
 use super::*;
+use adw::prelude::*;
 use crate::models::*;
 use crate::ui::chat::actions::window;
 #[derive(Debug)]
 pub enum AccountMsg {
+    EmojisChanged, DescriptionChanged(Uuid), FitProfile(Uuid),
     Profile(Uuid), RefreshProfile(Uuid), ProfileRefreshReady{token:Uuid,id:Uuid}, Preferences, ChannelPreferences, ProfileLoaded {
         token: Uuid, result: anyhow::Result<(UserProfile, Option<Vec<u8>>)>
     }, ProfilePrepared{token:Uuid,result:anyhow::Result<(UserProfile,Option<Vec<u8>>,Option<crate::media::PreparedImage>)>}, SaveProfile(Uuid), Image {
@@ -27,11 +29,13 @@ pub(super) struct Account {
     profile: Option<ProfileView>, preferences: Option<PreferencesView>, channel: Option<(Uuid, gtk::Window, gtk::Box, gtk::Label)>, jobs: Vec<tokio::task::JoinHandle<()>>, mutation: Option<Uuid>, settings_pending: bool, channel_pending: bool, restore_fields: Option<(Uuid, UpdateUserRequest, u32)>, pub config: UserConfig, css: Option<gtk::CssProvider>,
 }
 struct ProfileView {
+    text:Vec<ProfileText>,
     loading:bool,refresh_again:bool,refresh_scheduled:bool,
-    token: Uuid, id: Uuid, window: gtk::Window, body: gtk::Box, error: gtk::Label, fields: Option<ProfileFields>, pending: bool, image_write: bool
+    token: Uuid, id: Uuid, window: gtk::Window, body: gtk::Box, error: gtk::Label, save:Option<gtk::Button>, fields: Option<ProfileFields>, pending: bool, image_write: bool
 }
+struct ProfileText {container:gtk::Box,value:String,preview:bool}
 struct ProfileFields {
-    nickname: gtk::Entry, status: gtk::Entry, description: gtk::TextBuffer, typing: gtk::Entry, manual: gtk::DropDown
+    nickname: adw::EntryRow, status: adw::EntryRow, description: gtk::TextBuffer, typing: adw::EntryRow, manual: gtk::DropDown
 }
 struct PreferencesView {
     token: Uuid, window: gtk::Window, body: gtk::Box, error: gtk::Label, theme: gtk::DropDown, font: gtk::DropDown, density: gtk::DropDown, checks: Vec<gtk::CheckButton>, pending: bool
@@ -55,15 +59,6 @@ impl Drop for Account {
         }
     }
 }
-fn entry(body: &gtk::Box, label: &str, text: &str)->gtk::Entry {
-    let l = gtk::Label::new(Some(label));
-    l.set_xalign(0.0);
-    body.append(&l);
-    let e = gtk::Entry::new();
-    e.set_text(text);
-    body.append(&e);
-    e
-}
 fn dropdown(body: &gtk::Box, label: &str, values: &[&str], selected: u32)->gtk::DropDown {
     let l = gtk::Label::new(Some(label));
     l.set_xalign(0.0);
@@ -74,6 +69,26 @@ fn dropdown(body: &gtk::Box, label: &str, values: &[&str], selected: u32)->gtk::
     e
 }
 impl MainWindowModel {
+    fn refresh_profile_text(&mut self,sender:&ComponentSender<Self>){
+        let Some(profile)=self.account.profile.as_ref().filter(|v|v.window.is_visible())else{return;};
+        let chat=self.chat.model();
+        for text in &profile.text {
+            while let Some(child)=text.container.first_child(){text.container.remove(&child);}
+            if text.preview {
+                let visible=chat.has_profile_emoji(&text.value);
+                if let Some(parent)=text.container.parent(){parent.set_visible(visible);}
+                if !visible{continue;}
+            }
+            let view=chat.profile_text(&text.value);view.add_css_class("papo-profile-text");
+            if !text.preview{
+                view.set_justification(gtk::Justification::Center);
+                let fitted=std::rc::Rc::new(std::cell::Cell::new(false));let input=sender.input_sender().clone();let token=profile.token;
+                view.connect_notify_local(Some("height-request"),move |view,_|{if view.is_mapped()&&!fitted.replace(true){let _=input.send(MainWindowMsg::Account(AccountMsg::FitProfile(token)));}});
+            }
+            text.container.append(&view);
+        }
+        if profile.fields.is_none(){fit_profile(profile);}
+    }
     pub(super) fn profile_action_status(&self,text:&str){if let Some(v)=&self.account.profile{if v.window.is_visible(){v.error.set_text(text);}}}
     pub(super) fn close_profile_for_direct(&mut self,peer:Uuid){if self.account.profile.as_ref().is_some_and(|v|v.id==peer){if let Some(v)=self.account.profile.take(){v.window.close();}}}
 
@@ -100,6 +115,17 @@ impl MainWindowModel {
     pub(super) fn account_event(&mut self, msg: AccountMsg, sender: &ComponentSender<Self>, root: &gtk::Box) {
         self.account.jobs.retain(|j|!j.is_finished());
         match msg {
+            AccountMsg::EmojisChanged=>self.refresh_profile_text(sender),
+            AccountMsg::DescriptionChanged(token)=>{
+                let Some(v)=self.account.profile.as_mut().filter(|v|v.token==token&&v.window.is_visible())else{return;};
+                let Some(fields)=&v.fields else{return;};let buffer=&fields.description;let value=buffer.text(&buffer.start_iter(),&buffer.end_iter(),false).to_string();for text in &mut v.text{if text.preview{text.value=value.clone();}}
+                self.refresh_profile_text(sender);
+            },
+            AccountMsg::FitProfile(token)=>{
+                if let Some(v)=self.account.profile.as_ref().filter(|v|v.token==token&&v.fields.is_none()&&!v.loading&&v.window.is_visible()){
+                    fit_profile(v);
+                }
+            },
             AccountMsg::RefreshProfile(id) => {
                 if id!=self.current_user.id{
                     if let Some(v)=self.account.profile.as_mut().filter(|v|v.id==id&&v.fields.is_none()&&v.window.is_visible()){
@@ -122,19 +148,32 @@ impl MainWindowModel {
                     v.window.close();
                 }
                 let token = Uuid::new_v4();
-                let (w, body) = window(root, "Perfil");
-                w.set_default_size(720,780);
+                let own=id==self.current_user.id;
+                let w:gtk::Window=adw::Window::builder().title(if own{"Editar perfil"}else{"Perfil"}).default_width(if own{620}else{460}).default_height(if own{780}else{-1}).modal(true).build().upcast();
+                if let Some(parent)=root.root().and_downcast::<gtk::Window>(){w.set_transient_for(Some(&parent));}
+                let toolbar=adw::ToolbarView::new();let header=adw::HeaderBar::new();let title=adw::WindowTitle::new(if own{"Editar perfil"}else{"Perfil"},"");header.set_title_widget(Some(&title));toolbar.add_top_bar(&header);
+                let save=own.then(||{let save=gtk::Button::with_label("Salvar perfil");save.add_css_class("suggested-action");save.set_sensitive(false);let output=sender.input_sender().clone();save.connect_clicked(move |_|{let _=output.send(MainWindowMsg::Account(AccountMsg::SaveProfile(token)));});header.pack_end(&save);save});
+                let body=gtk::Box::new(gtk::Orientation::Vertical,0);toolbar.set_content(Some(&body));w.downcast_ref::<adw::Window>().unwrap().set_content(Some(&toolbar));
                 let scroll = gtk::ScrolledWindow::new();
-                scroll.set_vexpand(true);scroll.set_hscrollbar_policy(gtk::PolicyType::Never);
-                let content = gtk::Box::new(gtk::Orientation::Vertical, 8);content.set_valign(gtk::Align::Start);
-                scroll.set_child(Some(&content));
+                scroll.set_vexpand(own);scroll.set_hscrollbar_policy(gtk::PolicyType::Never);
+                if !own {
+                    // Read-only profiles fit their content instead of reserving editor space.
+                    scroll.set_propagate_natural_height(true);
+                    scroll.set_min_content_height(140);
+                    scroll.set_max_content_height(560);
+                }
+                let content = gtk::Box::new(gtk::Orientation::Vertical, if own{24}else{16});content.set_valign(gtk::Align::Start);
+                content.set_margin_top(24);content.set_margin_bottom(if own{24}else{16});content.set_margin_start(18);content.set_margin_end(18);
+                let clamp=adw::Clamp::new();clamp.set_maximum_size(560);clamp.set_tightening_threshold(440);clamp.set_child(Some(&content));scroll.set_child(Some(&clamp));
                 body.append(&scroll);
                 let error = gtk::Label::new(Some("Carregando perfil…"));
                 error.set_wrap(true);
+                error.connect_notify_local(Some("label"),|label,_|label.set_visible(!label.text().is_empty()));
                 body.append(&error);
                 w.present();
                 self.account.profile = Some(ProfileView {
-                    token, id, window: w, body: content, error, fields: None, pending: false, image_write: false,loading:true,refresh_again:false,refresh_scheduled:false
+                    text:vec![],
+                    token, id, window: w, body: content, error, save, fields: None, pending: false, image_write: false,loading:true,refresh_again:false,refresh_scheduled:false
                 });
                 let api = self.api_client.clone();
                 let s = sender.clone();
@@ -173,6 +212,7 @@ impl MainWindowModel {
                         sender.input(MainWindowMsg::ActionError(e));
                     }, Ok((p, banner, image)) => {
                         v.error.set_text("");
+                        if let Some(save)=&v.save{save.set_sensitive(true);}
                         if let Some(t) = banner.as_deref().and_then(crate::media::bounded_texture) {
                             let picture = gtk::Picture::for_paintable(&t);
                             picture.set_height_request(140);
@@ -193,22 +233,30 @@ impl MainWindowModel {
                             Some(UserStatus::Away) => "Ausente", Some(UserStatus::Busy) => "Ocupado", None => "Automática"
                         }))));}
                         if p.id==self.current_user.id {
-                            let nickname = entry(&v.body, "Apelido (até 32 caracteres)", p.nickname.as_deref().unwrap_or(""));
-                            let status = entry(&v.body, "Mensagem de status (até 64 caracteres)", p.status_message.as_deref().unwrap_or(""));
-                            let label = gtk::Label::new(Some("Descrição (até 512 caracteres)"));
-                            label.set_xalign(0.0);
-                            v.body.append(&label);
-                            let text = gtk::TextView::new();
-                            text.set_wrap_mode(gtk::WrapMode::WordChar);
-                            text.set_height_request(100);
-                            text.set_vexpand(false);text.set_valign(gtk::Align::Start);
-                            let description = text.buffer();
-                            description.set_text(p.description.as_deref().unwrap_or(""));
-                            v.body.append(&text);
-                            let typing = entry(&v.body, "Texto ao digitar (até 64 caracteres)", p.typing.as_deref().unwrap_or(""));
-                            let manual = dropdown(&v.body, "Presença manual", &["Automática", "Ausente", "Ocupado"], match p.status {
-                                Some(UserStatus::Away) => 1, Some(UserStatus::Busy) => 2, _ => 0
-                            });
+                            let appearance=adw::PreferencesGroup::new();appearance.set_title("Imagem do perfil");v.body.append(&appearance);
+                            for (title,banner) in [("Avatar",false),("Banner",true)]{
+                                let row=adw::ActionRow::builder().title(title).subtitle(if banner{"Imagem no topo do seu perfil"}else{"Sua imagem nas mensagens e na lista de membros"}).build();
+                                let buttons=gtk::Box::new(gtk::Orientation::Horizontal,0);buttons.add_css_class("linked");buttons.set_valign(gtk::Align::Center);
+                                for (label,remove) in [(if banner{"Alterar banner"}else{"Alterar avatar"},false),(if banner{"Remover banner"}else{"Remover avatar"},true)]{
+                                    let b=gtk::Button::with_label(if remove{"Remover"}else{"Alterar…"});b.set_tooltip_text(Some(label));b.update_property(&[gtk::accessible::Property::Label(label)]);let output=sender.input_sender().clone();b.connect_clicked(move |_|{let _=output.send(MainWindowMsg::Account(AccountMsg::Image{token,banner,remove}));});buttons.append(&b);
+                                }row.add_suffix(&buttons);appearance.add(&row);
+                            }
+                            let identity=adw::PreferencesGroup::new();identity.set_title("Sobre você");v.body.append(&identity);
+                            let nickname=profile_entry(&identity,"Apelido",p.nickname.as_deref().unwrap_or(""),"Até 32 caracteres");
+                            let status=profile_entry(&identity,"Mensagem de status",p.status_message.as_deref().unwrap_or(""),"Até 64 caracteres");
+                            let about=adw::PreferencesGroup::new();about.set_title("Descrição");about.set_description(Some("Conte um pouco sobre você · até 512 caracteres"));v.body.append(&about);
+                            let text=gtk::TextView::new();text.set_wrap_mode(gtk::WrapMode::WordChar);text.set_top_margin(12);text.set_bottom_margin(12);text.set_left_margin(12);text.set_right_margin(12);
+                            let description=text.buffer();description.set_text(p.description.as_deref().unwrap_or(""));
+                            let editor=gtk::ScrolledWindow::builder().min_content_height(110).hscrollbar_policy(gtk::PolicyType::Never).child(&text).build();let frame=gtk::Frame::new(None);frame.set_child(Some(&editor));about.add(&frame);
+                            let preview=gtk::Box::new(gtk::Orientation::Vertical,6);preview.set_margin_top(8);preview.set_margin_bottom(8);preview.set_margin_start(12);preview.set_margin_end(12);
+                            let caption=gtk::Label::new(Some("Prévia"));caption.add_css_class("caption");caption.add_css_class("dim-label");caption.set_xalign(0.0);preview.append(&caption);
+                            let content=gtk::Box::new(gtk::Orientation::Vertical,0);preview.append(&content);about.add(&preview);
+                            v.text.push(ProfileText{container:content,value:p.description.as_deref().unwrap_or("").into(),preview:true});
+                            let input=sender.input_sender().clone();description.connect_changed(move |_|{let _=input.send(MainWindowMsg::Account(AccountMsg::DescriptionChanged(token)));});
+                            let presence=adw::PreferencesGroup::new();presence.set_title("Presença");v.body.append(&presence);
+                            let typing=profile_entry(&presence,"Texto ao digitar",p.typing.as_deref().unwrap_or(""),"Até 64 caracteres");
+                            let manual=gtk::DropDown::from_strings(&["Automática","Ausente","Ocupado"]);manual.set_selected(match p.status{Some(UserStatus::Away)=>1,Some(UserStatus::Busy)=>2,_=>0});manual.set_valign(gtk::Align::Center);
+                            let row=adw::ActionRow::builder().title("Disponibilidade").subtitle("A presença automática acompanha sua atividade").build();row.add_suffix(&manual);row.set_activatable_widget(Some(&manual));presence.add(&row);
                             if let Some((id, draft, presence)) = self.account.restore_fields.take() {
                                 if id==p.id {
                                     nickname.set_text(&draft.nickname);
@@ -221,36 +269,24 @@ impl MainWindowModel {
                             v.fields = Some(ProfileFields {
                                 nickname, status, description, typing, manual
                             });
-                            let save = gtk::Button::with_label("Salvar perfil");
-                            let s = sender.clone();
-                            save.connect_clicked(move |_|s.input(MainWindowMsg::Account(AccountMsg::SaveProfile(token))));
-                            v.body.append(&save);
-                            save.add_css_class("suggested-action");save.set_halign(gtk::Align::End);
-                            let image_actions=gtk::FlowBox::new();image_actions.set_selection_mode(gtk::SelectionMode::None);image_actions.set_min_children_per_line(1);image_actions.set_max_children_per_line(4);image_actions.set_column_spacing(6);image_actions.set_row_spacing(6);v.body.append(&image_actions);
-                            for (label, banner, remove) in [("Alterar avatar", false, false), ("Remover avatar", false, true), ("Alterar banner", true, false), ("Remover banner", true, true)] {
-                                let b = gtk::Button::with_label(label);
-                                let s = sender.clone();
-                                b.connect_clicked(move |_|s.input(MainWindowMsg::Account(AccountMsg::Image {
-                                    token, banner, remove
-                                })));
-                                image_actions.insert(&b,-1);
-                            }
+                            let buffer=&v.fields.as_ref().unwrap().description;v.text[0].value=buffer.text(&buffer.start_iter(),&buffer.end_iter(),false).into();
+
                         }
                         else {
                             for (label,action) in [("Mensagem direta",0),("Bloquear usuário",1)] {
                                 let b=gtk::Button::with_label(label);let s=sender.clone();let id=p.id;
                                 b.connect_clicked(move |_|s.input(MainWindowMsg::Direct(if action==0{super::direct::DirectMsg::Open(id)}else{super::direct::DirectMsg::Block(id,true)})));v.body.append(&b);
                             }
-                            for text in [p.description, p.status_message, p.typing].into_iter().flatten() {
-                                let label = gtk::Label::new(Some(&text));
-                                label.set_wrap(true);
-                                label.set_selectable(true);
-                                v.body.append(&label);
+                            for text in [p.description, p.status_message, p.typing].into_iter().flatten().filter(|text|!text.trim().is_empty()) {
+                                let container=gtk::Box::new(gtk::Orientation::Vertical,0);v.body.append(&container);
+                                v.text.push(ProfileText{container,value:text,preview:false});
                             }
+                            // GTK retains the loading window's allocation unless a new size is requested.
+                            fit_profile(v);
                         }
                     }
                 }
-                self.publish_avatars();
+                self.refresh_profile_text(sender);self.publish_avatars();
             }
             AccountMsg::SaveProfile(token) => {
                 if self.account.mutation.is_some() {
@@ -271,7 +307,7 @@ impl MainWindowModel {
                 v.pending = true;
                 v.image_write = false;
                 self.account.mutation = Some(token);
-                v.body.set_sensitive(false);
+                v.body.set_sensitive(false);if let Some(save)=&v.save{save.set_sensitive(false);}
                 v.error.set_text("Salvando…");
                 let id = v.id;
                 let api = self.api_client.clone();
@@ -336,7 +372,7 @@ impl MainWindowModel {
                         v.pending = true;
                         v.image_write = true;
                         self.account.mutation = Some(token);
-                        v.body.set_sensitive(false);
+                        v.body.set_sensitive(false);if let Some(save)=&v.save{save.set_sensitive(false);}
                         v.error.set_text("Salvando imagem…");
                         let id = v.id;
                         let api = self.api_client.clone();
@@ -363,7 +399,7 @@ impl MainWindowModel {
                     return;
                 };
                 v.pending = false;
-                v.body.set_sensitive(true);
+                v.body.set_sensitive(true);if let Some(save)=&v.save{save.set_sensitive(true);}
                 match result {
                     Err(e) => {
                         v.error.set_text(&format!("Falha ao salvar: {e}"));
@@ -596,6 +632,53 @@ impl MainWindowModel {
         }
     }
 }
+fn fit_profile(view:&ProfileView){
+    if let Some(content)=view.window.downcast_ref::<adw::Window>().and_then(|w|w.content()){
+        view.window.set_default_height(content.measure(gtk::Orientation::Vertical,view.window.width()).1);
+    }
+}
+fn profile_entry(group:&adw::PreferencesGroup,title:&str,value:&str,help:&str)->adw::EntryRow{
+    let row=adw::EntryRow::new();row.set_title(title);row.set_text(value);row.set_tooltip_text(Some(help));group.add(&row);row
+}
+
+#[cfg(test)]
+pub(crate) fn exercise_profile_emojis(context:&gtk::glib::MainContext){
+    use crate::ui::chat::actions::{ActionMsg,tests::{mock,pump,until,find_button}};
+    use base64::Engine;
+    let(api,backend,server)=tokio::runtime::Handle::current().block_on(mock());
+    let peer:Uuid="12345678-1234-4234-8234-123456789ac0".parse().unwrap();
+    let description="Olá 😄 :ricardao: :unknown:";
+    backend.lock().unwrap().peer_profile=Some(serde_json::json!({"id":peer,"username":"bob","description":description,"status_message":"","typing":"","created_at":"2026-10-03T00:00:00Z"}));
+    let current_user=serde_json::from_value(backend.lock().unwrap().profile.clone()).unwrap();
+    let main=MainWindowModel::builder().launch(MainWindowInit{current_user,api_client:api}).detach();
+    until(context,||!main.model().channels.is_empty()&&main.model().access_request.is_none());
+    main.emit(MainWindowMsg::Account(AccountMsg::Profile(peer)));until(context,||main.model().account.profile.as_ref().is_some_and(|v|!v.loading&&!v.text.is_empty()));
+    let token=main.model().account.profile.as_ref().unwrap().token;
+    let view=||main.model().account.profile.as_ref().unwrap().text[0].container.first_child().and_downcast::<gtk::TextView>();
+    let images=|view:&gtk::TextView|{let b=view.buffer();(0..b.char_count()).filter(|i|b.iter_at_offset(*i).paintable().is_some()).count()};
+    assert_eq!(images(&view().unwrap()),0);let buffer=view().unwrap().buffer();assert_eq!(buffer.text(&buffer.start_iter(),&buffer.end_iter(),false),description);
+    let profile_requests=||backend.lock().unwrap().requests.iter().filter(|(_,p,_)|p==&format!("/users/{peer}/profile")).count();let requests=profile_requests();
+    let mut png=std::io::Cursor::new(Vec::new());let bitmap=image::ImageBuffer::from_fn(32,32,|x,y|image::Rgba(if (x==9||x==22)&&(10..14).contains(&y){[20,20,20,255]}else{[255,200,30,255]}));image::DynamicImage::ImageRgba8(bitmap).write_to(&mut png,image::ImageFormat::Png).unwrap();
+    backend.lock().unwrap().emojis=vec![serde_json::json!({"id":peer,"name":"ricardao","format":"PNG","image_blob":base64::engine::general_purpose::STANDARD.encode(png.into_inner()),"created_at":"2026-10-03T00:00:00Z"})];
+    main.model().chat.emit(ChatMsg::Action(ActionMsg::ReloadEmojis));until(context,||view().is_some_and(|v|images(&v)==1));
+    assert_eq!(profile_requests(),requests,"emoji availability must not refetch the profile");assert_eq!(main.model().account.profile.as_ref().unwrap().token,token);
+    let buffer=view().unwrap().buffer();let plain=buffer.text(&buffer.start_iter(),&buffer.end_iter(),false);assert!(plain.contains("😄")&&plain.contains(":unknown:")&&!plain.contains(":ricardao:"));
+    let w=main.model().account.profile.as_ref().unwrap().window.clone();crate::ui::main_window::layout::tests::preview(&w,"profile-emojis",context);
+    main.emit(MainWindowMsg::Account(AccountMsg::Profile(main.model().current_user.id)));until(context,||main.model().account.profile.as_ref().is_some_and(|v|v.fields.is_some()));
+    let raw="Editar :ricardao: 😄";let buffer=main.model().account.profile.as_ref().unwrap().fields.as_ref().unwrap().description.clone();buffer.set_text(raw);
+    until(context,||view().is_some_and(|v|images(&v)==1));assert_eq!(buffer.text(&buffer.start_iter(),&buffer.end_iter(),false),raw);
+    let w=main.model().account.profile.as_ref().unwrap().window.clone();crate::ui::main_window::layout::tests::preview(&w,"profile-emoji-editor",context);
+    find_button(w.upcast_ref(),"Salvar perfil").emit_clicked();until(context,||main.model().account.profile.as_ref().is_some_and(|v|!v.pending&&v.error.text().contains("Profile failed")));
+    let saved_token=main.model().account.profile.as_ref().unwrap().token;
+    find_button(w.upcast_ref(),"Salvar perfil").emit_clicked();until(context,||main.model().account.profile.as_ref().is_some_and(|v|v.token!=saved_token&&!v.loading&&v.fields.is_some()&&!v.pending&&v.error.text().is_empty()));
+    assert_eq!(backend.lock().unwrap().profile["description"],raw);
+    backend.lock().unwrap().emojis.clear();main.model().chat.emit(ChatMsg::Action(ActionMsg::ReloadEmojis));
+    until(context,||main.model().account.profile.as_ref().unwrap().text[0].container.parent().is_some_and(|p|!p.is_visible()));
+    let buffer=main.model().account.profile.as_ref().unwrap().fields.as_ref().unwrap().description.clone();
+    assert_eq!(buffer.text(&buffer.start_iter(),&buffer.end_iter(),false),raw);
+    drop(main);server.abort();pump(context);
+}
+
 #[cfg(test)]
 pub(crate) fn exercise_preferences_and_profiles(main: &Controller<MainWindowModel>, context: &gtk::glib::MainContext) {
     use crate::ui::chat::actions::tests:: {
@@ -606,6 +689,10 @@ pub(crate) fn exercise_preferences_and_profiles(main: &Controller<MainWindowMode
     let profile=main.model().account.profile.as_ref().unwrap().window.clone();assert!(profile.default_height()>=720);crate::ui::main_window::layout::tests::preview(&profile,"profile",context);
     let image_button=find_button(profile.upcast_ref(),"Alterar avatar");until(context,||image_button.height()>0);
     let bounds=image_button.compute_bounds(&profile).unwrap();assert!(bounds.y()+bounds.height()<profile.height() as f32,"profile image controls should be visible when the window opens: button={bounds:?}, window={}x{}",profile.width(),profile.height());
+    assert!(descendants(profile.upcast_ref()).iter().any(|w|w.is::<adw::HeaderBar>()));assert!(descendants(profile.upcast_ref()).iter().any(|w|w.is::<adw::EntryRow>()));
+    let save=find_button(profile.upcast_ref(),"Salvar perfil");let save_bounds=save.compute_bounds(&profile).unwrap();assert!(save_bounds.y()<80.0,"save stays in the native header");
+    profile.set_default_size(390,650);until(context,||profile.width()<=420);crate::ui::main_window::layout::tests::preview(&profile,"profile-narrow",context);
+    assert!(profile.width()<=420,"the profile editor must fit a narrow window");assert!(save.compute_bounds(&profile).unwrap().y()<80.0);
     let old = main.model().account.profile.as_ref().unwrap().token;
     {
         let m = main.model();
@@ -635,6 +722,11 @@ pub(crate) fn exercise_preferences_and_profiles(main: &Controller<MainWindowMode
     find_button(window.upcast_ref(), "Remover avatar").emit_clicked();
     until(context, ||main.model().account.profile.as_ref().is_some_and(|v|v.token!=token&&v.fields.is_some()));
     main.model().account.profile.as_ref().unwrap().window.close();
+    main.emit(MainWindowMsg::Account(AccountMsg::Profile("12345678-1234-4234-8234-123456789ac0".parse().unwrap())));
+    until(context,||main.model().account.profile.as_ref().is_some_and(|v|!v.loading));
+    let other=main.model().account.profile.as_ref().unwrap().window.clone();
+    crate::ui::main_window::layout::tests::preview(&other,"other-profile",context);
+    other.close();
     find_button(main.widget().upcast_ref(), "Preferências").emit_clicked();
     pump(context);
     {

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+PAPO_APPDIR="${APPDIR:-$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)}"
+export PAPO_APPDIR
+source "$PAPO_APPDIR/usr/share/papo-gtk/runtime-env.sh"
+if [[ "${1:-}" == --runtime-check ]]; then
+    shift
+    exec "$PAPO_PYTHON" "$PAPO_APPDIR/usr/share/papo-gtk/runtime-check.py" "$@"
+fi
+exec "$PAPO_APPDIR/usr/bin/papo-gtk" "$@"

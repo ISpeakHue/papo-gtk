@@ -176,8 +176,8 @@ impl ChatModel {
     pub(super) fn handle_action(&mut self, action: ActionMsg, sender: &ComponentSender<Self>, root: &gtk::Box) {
         match action {
             ActionMsg::Reload => {
-                if self.actions.pins_request.is_none() { self.request_pins(sender); }
                 if self.actions.emojis_loaded.map_or(true, |time| time.elapsed() >= std::time::Duration::from_secs(60)) && self.actions.emojis_request.is_none() { self.request_emojis(sender); }
+                if self.actions.pins_request.is_none() { self.request_pins(sender); }
             }
             ActionMsg::OpenEdit(message) => {
                 let Some(user) = self.user_id else { return; };

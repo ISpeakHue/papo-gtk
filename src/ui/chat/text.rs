@@ -34,6 +34,13 @@ pub(super) fn parts_index(text:&str,names:&HashMap<String,Uuid>)->Vec<Part>{
 }
 
 pub(super) fn widget(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions)->gtk::TextView{
+    build(text,users,actions,None)
+}
+pub(super) fn with_profiles(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions,open:impl Fn(Uuid)+'static)->gtk::TextView{
+    build(text,users,actions,Some(std::rc::Rc::new(open)))
+}
+#[derive(Clone)]enum Target {Link(String),Profile(Uuid)}
+fn build(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions,open:Option<std::rc::Rc<dyn Fn(Uuid)>>)->gtk::TextView{
     let view=gtk::TextView::new();view.set_editable(false);view.set_cursor_visible(false);view.set_accepts_tab(false);
     view.set_wrap_mode(gtk::WrapMode::WordChar);view.set_vexpand(false);
     view.add_css_class("papo-message-text");
@@ -50,11 +57,15 @@ pub(super) fn widget(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions
     view.connect_map(move |view|{observer.set_widget(Some(view));size_to_content(view);});
     let buffer=view.buffer();let mut iter=buffer.start_iter();let mut targets=vec![];
     let tag=gtk::TextTag::builder().foreground("#3584e4").underline(pango::Underline::Single).build();buffer.tag_table().add(&tag);
+    let mention=gtk::TextTag::builder().name("papo-mention").background("#3584e4").foreground("#ffffff").build();buffer.tag_table().add(&mention);
     for part in parts_index(text,&actions.emoji_names){match part{
-        Part::Text(text)=>{let text=mentions::render(&text,users);let offset=iter.offset();buffer.insert(&mut iter,&text);for(start,end,url) in links(&text){let start=offset+start;let end=offset+end;buffer.apply_tag(&tag,&buffer.iter_at_offset(start),&buffer.iter_at_offset(end));targets.push((start,end,url));}},
+        Part::Text(text)=>{let displayed=mentions::DisplayText::read(&text,users);let text=&displayed.text;let offset=iter.offset();buffer.insert(&mut iter,text);for span in displayed.spans{let start=offset+text[..span.start].chars().count() as i32;let end=offset+text[..span.end].chars().count() as i32;buffer.apply_tag(&mention,&buffer.iter_at_offset(start),&buffer.iter_at_offset(end));if let Some(id)=span.id.filter(|_|open.is_some()){targets.push((start,end,Target::Profile(id)));}}for(start,end,url) in links(text){let start=offset+start;let end=offset+end;buffer.apply_tag(&tag,&buffer.iter_at_offset(start),&buffer.iter_at_offset(end));targets.push((start,end,Target::Link(url)));}},
         Part::Emoji(id,name)=>{if let Some(texture)=actions.textures.get(&id){buffer.insert_paintable(&mut iter,texture);}else{buffer.insert(&mut iter,&format!(":{name}:"));}},
     }}
-    install_links(&view,targets,|view,url|{let launcher=gtk::UriLauncher::new(url);let parent=view.root().and_downcast::<gtk::Window>();launcher.launch(parent.as_ref(),None::<&gtk::gio::Cancellable>,|result|{if let Err(error)=result{tracing::warn!("Could not open chat link: {error}");}});});
+    install_targets(&view,targets,move |view,target|match target{
+        Target::Profile(id)=>{if let Some(open)=&open{open(*id);}},
+        Target::Link(url)=>{let launcher=gtk::UriLauncher::new(url);let parent=view.root().and_downcast::<gtk::Window>();launcher.launch(parent.as_ref(),None::<&gtk::gio::Cancellable>,|result|{if let Err(error)=result{tracing::warn!("Could not open chat link: {error}");}});},
+    });
     // Keep a textual description available even when a custom image is displayed.
     view.set_tooltip_text(Some(&mentions::render(text,users)));view
 }
@@ -68,13 +79,16 @@ fn size_to_content(view:&gtk::TextView){
     if view.height_request()!=required{view.set_height_request(required);}
 }
 
-fn install_links(view:&gtk::TextView,targets:Vec<(i32,i32,String)>,launch:impl Fn(&gtk::TextView,&str)+'static){
+#[cfg(test)]fn install_links(view:&gtk::TextView,targets:Vec<(i32,i32,String)>,launch:impl Fn(&gtk::TextView,&str)+'static){
+    install_targets(view,targets.into_iter().map(|(start,end,url)|(start,end,Target::Link(url))).collect(),move |view,target|{if let Target::Link(url)=target{launch(view,url);}});
+}
+fn install_targets(view:&gtk::TextView,targets:Vec<(i32,i32,Target)>,launch:impl Fn(&gtk::TextView,&Target)+'static){
     let targets=std::rc::Rc::new(targets);
     let click=gtk::GestureClick::new();click.set_button(1);click.set_propagation_phase(gtk::PropagationPhase::Capture);
     let pressed=std::rc::Rc::new(std::cell::Cell::new((0.0f64,0.0f64)));let point=pressed.clone();click.connect_pressed(move |_,_,x,y|point.set((x,y)));
     let weak=view.downgrade();let urls=targets.clone();click.connect_released(move |_,count,x,y|{
         let Some(view)=weak.upgrade()else{return;};let(px,py)=pressed.get();if count!=1||(x-px).abs()>5.0||(y-py).abs()>5.0||view.buffer().has_selection(){return;}
-        if let Some(url)=target_at(&view,&urls,x,y){launch(&view,&url);}
+        if let Some(target)=target_at(&view,&urls,x,y){launch(&view,&target);}
     });view.add_controller(click);
     let motion=gtk::EventControllerMotion::new();let weak=view.downgrade();motion.connect_motion(move |_,x,y|{if let Some(view)=weak.upgrade(){view.set_cursor_from_name(Some(if target_at(&view,&targets,x,y).is_some(){"pointer"}else{"text"}));}});view.add_controller(motion);
  }
@@ -102,7 +116,7 @@ pub(super) fn links(text:&str)->Vec<(i32,i32,String)>{
         }i+=rest.chars().next().unwrap().len_utf8();
     }links
 }
-fn target_at(view:&gtk::TextView,targets:&[(i32,i32,String)],x:f64,y:f64)->Option<String>{
+fn target_at(view:&gtk::TextView,targets:&[(i32,i32,Target)],x:f64,y:f64)->Option<Target>{
     let(x,y)=view.window_to_buffer_coords(gtk::TextWindowType::Widget,x as i32,y as i32);let iter=view.iter_at_location(x,y)?;let rect=view.iter_location(&iter);
     if x<rect.x()||x>rect.x()+rect.width().max(1)||y<rect.y()||y>rect.y()+rect.height(){return None;}
     targets.iter().find(|(start,end,_)|iter.offset()>=*start&&iter.offset()<*end).map(|(_,_,url)|url.clone())

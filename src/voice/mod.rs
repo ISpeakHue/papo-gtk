@@ -25,7 +25,7 @@ pub enum EngineEvent {
     #[serde(rename="video_reset")]VideoReset{epoch:u64},
 }
 impl std::fmt::Debug for EngineEvent{fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result{f.write_str("EngineEvent { media details: [redacted] }")}}
-fn command()->Command{let mut c=Command::new("/usr/bin/python3");c.args(["-u","-c",WORKER]).env("GST_DEBUG","0").stderr(Stdio::null()).kill_on_drop(true);c}
+fn command()->Command{let mut c=crate::media::runtime::python();c.args(["-u","-c",WORKER]).env("GST_DEBUG","0").stderr(Stdio::null()).kill_on_drop(true);c}
 pub async fn devices()->anyhow::Result<Vec<Device>>{list_devices("--devices").await}
 pub async fn cameras()->anyhow::Result<Vec<Device>>{list_devices("--cameras").await}
 async fn list_devices(flag:&str)->anyhow::Result<Vec<Device>>{

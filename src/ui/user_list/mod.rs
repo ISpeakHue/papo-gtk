@@ -184,14 +184,8 @@ fn rebuild_members_list(list_box: &gtk::ListBox, users: &[UserSummary],
         }
         overlay.set_child(Some(&avatar));
 
-        if is_online {
-            let status_icon_name = match presence.get(&user.id).map(|entry| entry.status) {
-                Some(PresenceStatus::Away) => "user-idle-symbolic",
-                Some(PresenceStatus::Busy) => "user-busy-symbolic",
-                _ => "user-available-symbolic",
-            };
-            let status_img = gtk::Image::from_icon_name(status_icon_name);
-            status_img.set_pixel_size(10);status_img.add_css_class("papo-status-dot");
+        {
+            let status_img = crate::ui::status::image(presence.get(&user.id).map(|entry|entry.status).unwrap_or(PresenceStatus::Offline));
             status_img.set_halign(gtk::Align::End);
             status_img.set_valign(gtk::Align::End);
             overlay.add_overlay(&status_img);
@@ -239,7 +233,7 @@ fn member_signature(user:&UserSummary,presence:&HashMap<Uuid,PresenceEntry>,_ava
     format!("{:?}|{:?}|{:?}|{:?}|{}",user,p.map(|p|p.status),p.and_then(|p|p.nickname.as_deref()),p.and_then(|p|p.status_message.as_deref()),show)
 }
 fn set_status_icon(widget:&gtk::Widget,status:PresenceStatus){
-    if widget.has_css_class("papo-status-dot"){if let Some(image)=widget.downcast_ref::<gtk::Image>(){image.set_icon_name(Some(match status{PresenceStatus::Away=>"user-idle-symbolic",PresenceStatus::Busy=>"user-busy-symbolic",_=>"user-available-symbolic"}));}}
+    if widget.has_css_class("papo-status-dot"){if let Some(image)=widget.downcast_ref::<gtk::Image>(){crate::ui::status::set(image,status);}}
     let mut child=widget.first_child();while let Some(w)=child{child=w.next_sibling();set_status_icon(&w,status);}
 }
 
@@ -253,6 +247,7 @@ fn set_status_icon(widget:&gtk::Widget,status:PresenceStatus){
     let affected=rows[&format!("member-{}",users[0].id)].clone();
     for i in 0..200{list.emit(UserListMsg::UpdatePresence(entry(users[0].id,if i%2==0{PresenceStatus::Away}else{PresenceStatus::Busy})));}pump(context);
     let after:HashMap<_,_>=descendants(list.widget().upcast_ref()).into_iter().filter(|w|w.widget_name().starts_with("member-")).map(|w|(w.widget_name().to_string(),w)).collect();assert_eq!(rows,after);assert_eq!(after[&format!("member-{}",users[0].id)],affected);
+    let badge=descendants(affected.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Image>().ok().filter(|w|w.has_css_class("papo-status-dot"))).unwrap();assert_eq!(badge.tooltip_text().as_deref(),Some("Ocupado"));assert!(badge.paintable().is_some());
     list.emit(UserListMsg::UpdatePresence(entry(users[0].id,PresenceStatus::Offline)));pump(context);
     let after:HashMap<_,_>=descendants(list.widget().upcast_ref()).into_iter().filter(|w|w.widget_name().starts_with("member-")).map(|w|(w.widget_name().to_string(),w)).collect();for user in &users[1..]{assert_eq!(rows[&format!("member-{}",user.id)],after[&format!("member-{}",user.id)]);}
 }

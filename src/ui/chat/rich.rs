@@ -1,4 +1,5 @@
-//! Native rich cards. Remote HTML and original media URLs are never loaded.
+//! Native rich cards. General media uses the authorized API; public GIF
+//! providers have a separate bounded resolver that never executes remote HTML.
 use super::*;
 
 pub(super) fn safe_url(value:&str)->Option<reqwest::Url>{
@@ -34,11 +35,11 @@ pub(super) fn body(p:&Embed)->gtk::Box{
     if !p.fields.is_empty(){card.append(&grid);}
     card
 }
-pub(super) fn footer(card:&gtk::Box,p:&Embed){
+pub(super) fn footer(card:&gtk::Box,p:&Embed,image_available:bool){
     // The current GET /embeds API supplies thumbnail bytes only. Keep image,
     // author-icon and footer-icon metadata; don't bypass channel authorization
     // by downloading their original URLs or content hashes.
-    if p.image.is_some(){let l=label("Imagem incorporada indisponível no servidor.");l.add_css_class("dim-label");card.append(&l);}
+    if p.image.is_some()&&!image_available{let l=label("Imagem incorporada indisponível no servidor.");l.add_css_class("dim-label");card.append(&l);}
     if let Some(text)=p.footer.as_ref().and_then(|f|f.text.as_deref()){let l=label(text);l.add_css_class("caption");l.add_css_class("dim-label");card.append(&l);}
 }
 

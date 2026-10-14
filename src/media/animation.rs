@@ -11,12 +11,22 @@ impl PreparedAnimation{
         let mut decoder=image::codecs::gif::GifDecoder::new(std::io::Cursor::new(bytes)).ok()?;
         let(w,h)=decoder.dimensions();if w==0||h==0||w>2048||h>2048{return None;}
         let mut limits=image::Limits::default();limits.max_alloc=Some(32<<20);decoder.set_limits(limits).ok()?;
-        let mut frames=vec![];let mut total=0usize;
-        for (index,frame) in decoder.into_frames().enumerate(){if index>=240{return None;}let frame=frame.ok()?;let(n,d)=frame.delay().numer_denom_ms();
+        let mut frames:Vec<(PreparedImage,Duration)>=vec![];let mut total=0usize;let mut target=(420.min(w),300.min(h));
+        for (index,frame) in decoder.into_frames().enumerate(){if index>=300{return None;}let frame=frame.ok()?;let(n,d)=frame.delay().numer_denom_ms();
             let delay=Duration::from_millis((u64::from(n)/u64::from(d.max(1))).clamp(20,10_000));
-            let pixels=image::DynamicImage::ImageRgba8(frame.into_buffer()).thumbnail(420.min(w),300.min(h)).into_rgba8();
-            total+=pixels.len();if total>48<<20{return None;}
+            let pixels=image::DynamicImage::ImageRgba8(frame.into_buffer()).thumbnail(target.0,target.1).into_rgba8();
+            total+=pixels.len();
             frames.push((PreparedImage{width:pixels.width(),height:pixels.height(),pixels:pixels.into_raw()},delay));
+            // Preserve the whole animation by reducing preview resolution
+            // instead of rejecting a normal GIF when decoded frames fill RAM.
+            while total>48<<20 {
+                target=((target.0*3/4).max(1),(target.1*3/4).max(1));total=0;
+                for (frame,_) in &mut frames {
+                    let rgba=image::RgbaImage::from_raw(frame.width,frame.height,std::mem::take(&mut frame.pixels))?;
+                    let resized=image::DynamicImage::ImageRgba8(rgba).thumbnail(target.0,target.1).into_rgba8();
+                    frame.width=resized.width();frame.height=resized.height();frame.pixels=resized.into_raw();total+=frame.pixels.len();
+                }
+            }
         }
         if frames.is_empty(){None}else{Some(Self{frames})}
     }
@@ -129,6 +139,23 @@ fn schedule(animation:&Animation){
     }
     #[test]fn supplied_giphy_sample_decodes_when_provided(){if let Ok(path)=std::env::var("PAPO_GIPHY_SAMPLE"){let data=std::fs::read(path).unwrap();let animation=PreparedAnimation::decode(&data).expect("public Giphy sample must decode");assert!(animation.frames.len()>1);println!("Giphy sample: {} frames, {} decoded bytes",animation.frames.len(),animation.bytes());}}
     #[test]fn gifs_keep_frames_timing_and_enforce_input_limits(){let gif=PreparedAnimation::decode(&fixture()).unwrap();assert_eq!(gif.frames.len(),2);assert_eq!(gif.frames[0].1,Duration::from_millis(40));assert_ne!(gif.frames[0].0.pixels,gif.frames[1].0.pixels);assert_eq!(gif.bytes(),512);assert!(PreparedAnimation::decode(&vec![0; (4<<20)+1]).is_none());assert!(PreparedAnimation::decode(b"invalid").is_none());}
+    #[test]fn accepts_backend_gif_thumbnails_with_three_hundred_frames(){
+        let mut bytes=Vec::new();{
+            let mut encoder=image::codecs::gif::GifEncoder::new(&mut bytes);
+            for i in 0..300{encoder.encode_frame(image::Frame::from_parts(image::RgbaImage::from_pixel(2,2,image::Rgba([i as u8,100,200,255])),0,0,image::Delay::from_numer_denom_ms(40,1))).unwrap();}
+        }
+        let decoded=PreparedAnimation::decode(&bytes).expect("the backend permits 300 thumbnail frames");assert_eq!(decoded.frames.len(),300);assert_eq!(decoded.bytes(),4800);
+    }
+    #[test]fn long_gifs_reduce_resolution_without_dropping_frames_or_exceeding_memory_budget(){
+        let mut bytes=Vec::new();{
+            let mut encoder=image::codecs::gif::GifEncoder::new(&mut bytes);
+            for i in 0..100{encoder.encode_frame(image::Frame::from_parts(image::RgbaImage::from_pixel(420,300,image::Rgba([i as u8,100,200,255])),0,0,image::Delay::from_numer_denom_ms(40,1))).unwrap();}
+        }
+        let decoded=PreparedAnimation::decode(&bytes).unwrap();assert_eq!(decoded.frames.len(),100);assert!(decoded.bytes()<=48<<20);
+        let first=&decoded.frames[0].0;assert!(first.width<420);
+        assert!(decoded.frames.iter().all(|(frame,delay)|frame.width==first.width&&frame.height==first.height&&*delay==Duration::from_millis(40)));
+        assert_ne!(first.pixels,decoded.frames.last().unwrap().0.pixels);
+    }
     pub(crate) fn exercise(context:&glib::MainContext){
         use crate::ui::chat::actions::tests::{until,pump};
         let animation=PreparedAnimation::decode(&fixture()).unwrap().paintable();assert!(animation.imp().timer.borrow().is_none(),"cached GIFs need no timer");

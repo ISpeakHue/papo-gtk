@@ -102,6 +102,7 @@ mod tests {
         }
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("profile-emojis"){crate::ui::main_window::account::exercise_profile_emojis(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("status-viewer"){crate::ui::status::exercise(&context);crate::ui::user_list::exercise_corrections(&context);crate::ui::chat::transfers::exercise_viewer(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("attachment-media"){crate::ui::chat::transfers::exercise_attachments(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("clipboard"){crate::ui::chat::clipboard::exercise(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("retention"){crate::ui::chat::transfers::exercise_retention(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("mentions"){crate::ui::chat::composer::exercise(&context);crate::ui::chat::clipboard::exercise(&context);crate::ui::chat::bugs::exercise(&context);window.close();return;}

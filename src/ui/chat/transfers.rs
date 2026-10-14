@@ -2,6 +2,8 @@
 use super::*;
 mod viewer;
 mod author;
+#[cfg(test)]mod attachments;
+#[cfg(test)]pub(crate) use attachments::exercise as exercise_attachments;
 #[cfg(test)]mod geometry;
 #[cfg(test)]pub(crate) use geometry::exercise as exercise_geometry;
 #[cfg(test)]pub(crate) use author::exercise as author_exercise;
@@ -397,7 +399,10 @@ fn queue_image(transfers:&mut Transfers,sender:&ComponentSender<ChatModel>,messa
     transfers.media_job(key,tokio::spawn(async move{
         let Ok(_permit)=limiter.acquire_owned().await else{return;};
         let result=tokio::task::spawn_blocking(move ||{let _permit=_permit;let bytes=match input{ImageInput::Bytes(bytes)=>bytes,ImageInput::Base64(data)=>{use base64::Engine;if data.len()>6<<20{return (None,None);}let Ok(bytes)=base64::engine::general_purpose::STANDARD.decode(data)else{return (None,None);};bytes}};
-            if bytes.starts_with(b"GIF8"){(None,crate::media::animation::PreparedAnimation::decode(&bytes))}else{(crate::media::PreparedImage::decode_thumbnail(&bytes,680,460),None)}
+            if bytes.starts_with(b"GIF8"){
+                if let Some(animation)=crate::media::animation::PreparedAnimation::decode(&bytes){return (None,Some(animation));}
+            }
+            (crate::media::PreparedImage::decode_thumbnail(&bytes,680,460),None)
         }).await.unwrap_or_default();
         let msg=if let Some(animation)=result.1{TransferMsg::AnimationReady{epoch,message,key,token,from_video:false,result:Some(animation)}}else{TransferMsg::ImageReady{epoch,message,key,token,result:result.0}};
         let _=output.send(ChatMsg::Transfer(msg));
@@ -500,13 +505,16 @@ impl ChatModel {
                     let api = api.clone();
                     let s = sender.clone();
                     let key = a.id;let token=Uuid::new_v4();self.transfers.image_tokens.insert(key,token);
+                    // Small GIF originals preserve motion even when the server
+                    // generated a still thumbnail. Other images keep thumbnails.
+                    let endpoint=if a.mime_type=="image/gif"&&a.size_bytes<=4<<20{format!("/attachments/{key}")}else{format!("/attachments/{key}/thumbnail")};
                     let message = m.id;
                     let limiter = self.transfers.limiter.clone();
                     self.transfers.media_job(key,tokio::spawn(async move {
                         let Ok(_permit) = limiter.acquire_owned().await else {
                             return;
                         };
-                        let result = api.media_bytes(&format!("/attachments/{key}/thumbnail"), 4<<20).await;
+                        let result = api.media_bytes(&endpoint, 4<<20).await;
                         s.input(ChatMsg::Transfer(TransferMsg::Bytes {
                             epoch, message, key, token:Some(token), preview: false, result
                         }));
@@ -602,6 +610,15 @@ impl ChatModel {
                 let window=gtk::Window::builder().title("Imagem").default_width(900).default_height(680).build();if let Some(parent)=root.root().and_downcast::<gtk::Window>(){window.set_transient_for(Some(&parent));window.set_application(parent.application().as_ref());}
                 let token=Uuid::new_v4();let epoch=self.transfers.epoch;window.set_widget_name(&format!("viewer-{token}"));
                 let picture=self.transfers.animations.get(&key).map(|(animation,_)|animation.picture()).unwrap_or_else(||gtk::Picture::for_paintable(texture));viewer::install(&window,&picture);dismiss_image(&window,&picture);
+                if let Some(attachment)=self.history.messages.iter().find(|m|m.id==message).and_then(|m|m.attachments.iter().flatten().find(|a|a.id==key)) {
+                    if let Some(header)=window.child().and_then(|root|root.first_child()).and_downcast::<adw::HeaderBar>() {
+                        let save=gtk::Button::from_icon_name("folder-download-symbolic");save.set_tooltip_text(Some("Baixar arquivo"));
+                        save.update_property(&[gtk::accessible::Property::Label("Baixar arquivo")]);
+                        let attachment=attachment.clone();let input=sender.input_sender().clone();
+                        save.connect_clicked(move |_|{let _=input.send(ChatMsg::Transfer(TransferMsg::Download{message,attachment:attachment.clone()}));});
+                        header.pack_end(&save);
+                    }
+                }
                 let input=sender.input_sender().clone();window.connect_close_request(move |_|{let input=input.clone();gtk::glib::idle_add_local_once(move ||{let _=input.send(ChatMsg::Transfer(TransferMsg::ViewerClosed{epoch,token}));});gtk::glib::Propagation::Proceed});
                 window.present();self.transfers.images.retain(|(_,_,w)|w.is_visible());self.transfers.images.push((message,key,window));
                 self.load_viewer(message,key,token,sender);
@@ -714,7 +731,7 @@ impl ChatModel {
             TransferMsg::Download {
                 message, attachment
             } => {
-                if !self.transfers.visible(&attachment) {
+                if !self.access.read||!self.history.messages.iter().any(|m|m.id==message&&m.attachments.iter().flatten().any(|a|a.id==attachment.id&&self.transfers.visible(a))) {
                     return;
                 }
                 let epoch = self.transfers.epoch;
@@ -733,7 +750,7 @@ impl ChatModel {
             TransferMsg::Save {
                 epoch, message, attachment, path
             } => {
-                if epoch!=self.transfers.epoch||!self.history.messages.iter().any(|m|m.id==message&&m.attachments.iter().flatten().any(|a|a.id==attachment&&self.transfers.visible(a))) {
+                if epoch!=self.transfers.epoch||!self.access.read||!self.history.messages.iter().any(|m|m.id==message&&m.attachments.iter().flatten().any(|a|a.id==attachment&&self.transfers.visible(a))) {
                     return;
                 }
                 self.start_download(message, attachment, Some(path), false, sender);
@@ -853,10 +870,26 @@ impl ChatModel {
         if inline{self.transfers.media_job(key,job);}else{self.transfers.jobs.push(job);}
     }
 }
+pub(super) fn attachment_context(row:&gtk::Widget,message:Uuid,x:f64,y:f64,messages:&[Message],media:&Transfers,sender:&ComponentSender<ChatModel>)->bool {
+    let mut picked=row.pick(x,y,gtk::PickFlags::DEFAULT);
+    while let Some(widget)=picked {
+        let key=widget.widget_name().strip_prefix("attachment-").and_then(|name|name.get(..36)).and_then(|id|Uuid::parse_str(id).ok());
+        if let Some(a)=key.and_then(|key|messages.iter().find(|m|m.id==message)?.attachments.iter().flatten().find(|a|a.id==key&&media.visible(a))) {
+            // Anchor on the actual row, independent of its offscreen toolbar.
+            let popover=gtk::Popover::new();popover.set_widget_name("attachment-context-menu");popover.add_css_class("papo-menu");popover.set_parent(row);
+            popover.set_pointing_to(Some(&gtk::gdk::Rectangle::new(x.round() as i32,y.round() as i32,1,1)));
+            let save=gtk::Button::with_label("Baixar arquivo");save.add_css_class("flat");let attachment=a.clone();let input=sender.input_sender().clone();let weak=popover.downgrade();
+            save.connect_clicked(move |_|{if let Some(p)=weak.upgrade(){p.popdown();}let _=input.send(ChatMsg::Transfer(TransferMsg::Download{message,attachment:attachment.clone()}));});
+            popover.set_child(Some(&save));popover.connect_closed(|p|p.unparent());let weak=popover.downgrade();row.connect_destroy(move |_|{if let Some(p)=weak.upgrade(){if p.parent().is_some(){p.unparent();}}});popover.popup();return true;
+        }
+        if widget==*row{break;}picked=widget.parent();
+    }
+    false
+}
+
 pub(super) fn attachment_widget(a: &Attachment, message: Uuid, media: &Transfers, sender: &ComponentSender<ChatModel>)->gtk::Box {
     let card = gtk::Box::new(gtk::Orientation::Vertical, 6);
     card.set_halign(gtk::Align::Start);let visual=a.mime_type.starts_with("image/")||a.mime_type.starts_with("video/");if !visual{card.add_css_class("card");}
-    let label=gtk::Label::new(Some(&format!("{} · {}",a.original_file_name,format_file_size(a.size_bytes))));label.set_xalign(0.0);label.set_ellipsize(pango::EllipsizeMode::End);label.set_max_width_chars(45);label.add_css_class("caption");let header=gtk::Box::new(gtk::Orientation::Horizontal,6);label.set_hexpand(true);header.append(&label);card.append(&header);
     if media.visible(a) {
         if a.mime_type.starts_with("video/"){append_video(&card,media,message,a.id,false,sender);}
         if media.textures.contains_key(&a.id) {
@@ -871,14 +904,13 @@ pub(super) fn attachment_widget(a: &Attachment, message: Uuid, media: &Transfers
             button.connect_clicked(move |_|s.input(ChatMsg::Transfer(TransferMsg::RetryImage(key))));
             card.append(&media.placeholder(a.id,&button,false));
         }
-        let button = if visual{gtk::Button::from_icon_name("folder-download-symbolic")}else{gtk::Button::with_label("Baixar arquivo")};
-        button.set_tooltip_text(Some("Baixar arquivo"));button.update_property(&[gtk::accessible::Property::Label("Baixar arquivo")]);button.add_css_class("flat");button.set_halign(gtk::Align::End);
-        let a = a.clone();
-        let s = sender.clone();
-        button.connect_clicked(move |_|s.input(ChatMsg::Transfer(TransferMsg::Download {
-            message, attachment: a.clone()
-        })));
-        header.append(&button);
+        if !visual {
+            // Non-previewable files retain a named, clickable file tile.
+            let button=gtk::Button::with_label(&a.original_file_name);button.add_css_class("flat");
+            let attachment=a.clone();let input=sender.input_sender().clone();
+            button.connect_clicked(move |_|{let _=input.send(ChatMsg::Transfer(TransferMsg::Download{message,attachment:attachment.clone()}));});
+            card.append(&button);
+        }
     } else if a.moderation_status.as_deref()==Some("sensitive") {
         let button = gtk::Button::with_label("Conteúdo sensível — revelar");
         let attachment = a.id;
@@ -1103,7 +1135,7 @@ pub(crate) fn exercise(api: &crate::api::ApiClient, context: &gtk::glib::MainCon
     let window=adw::Window::builder().default_width(900).default_height(650).content(photo.widget()).build();window.present();for _ in 0..80{pump(context);std::thread::sleep(std::time::Duration::from_millis(5));}
     let open=find_button(photo.widget().upcast_ref(),"Abrir imagem");let picture=descendants(open.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Picture>().ok()).unwrap();
     assert!((620..=640).contains(&picture.width()),"actual picture width: {}",picture.width());assert!((150..=165).contains(&picture.height()));
-    assert!(descendants(photo.widget().upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::Button>()).all(|b|b.label().as_deref()!=Some("Baixar arquivo")),"visual attachments use an unobtrusive download icon");crate::ui::main_window::layout::tests::preview(&window,"inline-image",context);open.emit_clicked();pump(context);assert!(photo.model().transfers.images[0].2.is_visible());let viewer=photo.model().transfers.images[0].2.clone();
+    assert!(descendants(photo.widget().upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::Button>()).all(|b|!b.is_mapped()||(b.label().as_deref()!=Some("Baixar arquivo")&&b.icon_name().as_deref()!=Some("folder-download-symbolic"))),"visual attachments expose downloads only in context menus and viewers");crate::ui::main_window::layout::tests::preview(&window,"inline-image",context);open.emit_clicked();pump(context);assert!(photo.model().transfers.images[0].2.is_visible());let viewer=photo.model().transfers.images[0].2.clone();
     let mut tiny=std::io::Cursor::new(Vec::new());image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(32,32,image::Rgba([48,120,180,255]))).write_to(&mut tiny,image::ImageFormat::Png).unwrap();
     photo.emit(ChatMsg::Transfer(TransferMsg::Bytes{token:None,epoch,message:message_id,key:picture_id,preview:false,result:Ok(tiny.into_inner())}));
     until(context,||photo.model().transfers.textures[&picture_id].width()==32);

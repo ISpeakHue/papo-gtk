@@ -732,7 +732,9 @@ impl Component for ChatModel {
             ChatMsg::Latest=>{self.trim_when_idle=true;self.initial_read=None;self.actions.navigation=None;self.actions.highlight=None;render_history=true;position=Some(Position::Bottom);},
             ChatMsg::CopyMessage(text)=>{if let Some(display)=gtk::gdk::Display::default(){display.clipboard().set_text(&text);}},
             ChatMsg::ContextMenu(id)=>{let mut row=widgets.messages_list.first_child();while let Some(w)=row{if w.widget_name()==format!("message-{id}"){show_context_menu(&w,None);break;}row=w.next_sibling();}},
-            ChatMsg::ContextAt{id,x,y}=>{let mut row=widgets.messages_list.first_child();while let Some(w)=row{if w.widget_name()==format!("message-{id}"){show_context_menu(&w,Some((x,y)));break;}row=w.next_sibling();}},
+            ChatMsg::ContextAt{id,x,y}=>{let mut row=widgets.messages_list.first_child();while let Some(w)=row{if w.widget_name()==format!("message-{id}"){
+                if !self.access.read||!transfers::attachment_context(&w,id,x,y,&self.history.messages,&self.transfers,&sender){show_context_menu(&w,Some((x,y)));}break;
+            }row=w.next_sibling();}},
             ChatMsg::Search=>{let _=sender.output(ChatOutput::Search);},
             ChatMsg::Notifications=>{let _=sender.output(ChatOutput::Notifications);},
             ChatMsg::NotificationCount{count,more}=>{self.unread_notifications=count;self.more_notifications=more;},

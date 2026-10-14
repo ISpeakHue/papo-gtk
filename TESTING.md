@@ -1673,6 +1673,24 @@ The `PAPO_UI_CASE=status-viewer` member-list checks cover separate Online,
 Busy, Away and Offline sections, section ordering/counts, full presence syncs,
 empty-section removal and preservation of existing rows during status changes.
 
+## Uploaded GIFs and media presentation
+
+`PAPO_UI_CASE=attachment-media` runs the native attachment regression with only
+local mock media. It serves an animated GIF original alongside a still thumbnail
+and verifies that the visible chat and image viewer advance frames. Ordinary
+images still request thumbnails; small GIFs (up to 4 MiB) request their original
+through the same authenticated, bounded, asynchronous pipeline. Larger GIFs
+retain the backend thumbnail path. GIF decoding accepts the backend's 300-frame
+limit and reduces preview resolution if needed to stay within 48 MiB of frames.
+Oversized or undecodable animations can retain a still preview.
+
+The native check also covers filename-free image/video/GIF previews, clickable
+generic file tiles, right-click download actions (including tall messages),
+the viewer's download control, saving the original GIF bytes, and rejection of
+downloads after sensitive moderation or permission loss. Revealing sensitive
+media restores its menu action. Unit tests cover 300-frame thumbnails and
+resolution reduction without dropping frames or timing.
+
 ## AppImage hardware video plugins
 
 ```sh

@@ -38,8 +38,11 @@ libadwaita controls, system colors and GNOME window behavior.
   follow the backend's assigned role order. Inline image thumbnails preserve
   aspect ratio and display at up to 640 × 480 pixels, including small backend
   thumbnails; image embeds use up to 420 × 300. Decoded textures remain bounded
-  to 680 × 460 without enlarging tiny chat source buffers. Replies use a compact,
-  single-line author/excerpt reference; navigating briefly highlights the original
+  to 680 × 460 without enlarging tiny chat source buffers.
+  Inline images, GIFs and videos have no filename/size header or download icon.
+  Downloads are available from the media context menu and, for images, the
+  viewer header. Files without a visual preview retain a clickable filename.
+  Replies use a compact, single-line author/excerpt reference; navigating briefly highlights the original
   message in yellow/orange, then fades back over 900 ms without replacing its
   widget. Read-only message text supports selection without an
   editing caret and renders known `:custom_name:` emojis inline. HTTP/HTTPS links

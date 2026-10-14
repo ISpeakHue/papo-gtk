@@ -45,6 +45,8 @@ jobs:
         run: PAPO_UI_CASE=backend-update dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
       - name: Check rich cards and quoted Twitter/X embeds
         run: PAPO_UI_CASE=embeds dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+      - name: Check uploaded GIF motion and media download actions
+        run: PAPO_UI_CASE=attachment-media dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
       - name: Check member groups, Markdown, emoji tabs and channel actions
         run: PAPO_UI_CASE=report8 dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
       - name: Check private screen portal permissions and cleanup

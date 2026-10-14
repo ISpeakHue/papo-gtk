@@ -1,6 +1,10 @@
 //! Streaming transfers and bounded media textures owned by the chat session.
 use super::*;
 mod viewer;
+mod author;
+#[cfg(test)]mod geometry;
+#[cfg(test)]pub(crate) use geometry::exercise as exercise_geometry;
+#[cfg(test)]pub(crate) use author::exercise as author_exercise;
 #[cfg(test)] pub(crate) use viewer::exercise as exercise_viewer;
 #[cfg(test)] use adw::prelude::AdwWindowExt;
 use crate::api::features:: {
@@ -13,6 +17,7 @@ use std:: {
 };
 #[derive(Debug)]
 pub enum TransferMsg {
+    AuthorReady{epoch:Uuid,key:Uuid,token:Uuid,result:Option<crate::media::PreparedImage>},
     ViewerReady{epoch:Uuid,message:Uuid,key:Uuid,token:Uuid,result:anyhow::Result<crate::media::PreparedImage>},
     ViewerClosed{epoch:Uuid,token:Uuid},
     PasteImage(u64),
@@ -44,6 +49,8 @@ pub enum TransferMsg {
     },
 }
 pub(super) struct Transfers {
+    pub(super) sent_attachments:HashSet<Uuid>,
+    authors:author::Authors,
     viewer_jobs:HashMap<Uuid,tokio::task::JoinHandle<()>>,
     viewer_limiter:std::sync::Arc<tokio::sync::Semaphore>,
     pub(super) clipboard_request: Option<Uuid>,
@@ -110,12 +117,13 @@ fn dismiss_image(window:&gtk::Window,picture:&gtk::Picture){
     click.connect_released(move |gesture,_,x,y|{let Some(window)=weak.upgrade()else{return;};let Some(picture)=gesture.widget().and_downcast::<gtk::Picture>()else{return;};let Some(image)=picture.paintable()else{return;};
         if outside_image(x,y,f64::from(picture.width()),f64::from(picture.height()),f64::from(image.intrinsic_width().max(1)),f64::from(image.intrinsic_height().max(1))){window.close();}
     });picture.add_controller(click);
-    let keys=gtk::EventControllerKey::new();let weak=window.downgrade();keys.connect_key_pressed(move |_,key,_,_|{if key==gtk::gdk::Key::Escape{if let Some(window)=weak.upgrade(){window.close();}gtk::glib::Propagation::Stop}else{gtk::glib::Propagation::Proceed}});window.add_controller(keys);
 
 }
 impl Default for Transfers {
     fn default() -> Self {
         Self {
+            sent_attachments:Default::default(),
+            authors:Default::default(),
             viewer_jobs:Default::default(),viewer_limiter:std::sync::Arc::new(tokio::sync::Semaphore::new(1)),
             clipboard_request: None,
             media_jobs:Default::default(),saving:0,
@@ -153,6 +161,7 @@ impl Transfers {
         self.video_requests.retain(|(id,_),_|*id!=message);for p in self.videos.iter().filter(|p|p.message==message){self.video_files.remove(&p.key);self.video_order.retain(|key|*key!=p.key);}self.videos.retain(|p|p.message!=message);
     }
     pub fn invalidate(&mut self, id: Uuid) {
+        self.authors.invalidate(id);
         self.images.retain(|(_,key,w)|{if *key==id{w.close();false}else{true}});
         self.video_requests.retain(|(_,key),_|*key!=id);self.videos.retain(|p|p.key!=id);
         self.revealed.remove(&id);self.video_files.remove(&id);self.video_order.retain(|key|*key!=id);self.embeds.remove(&id);self.sizes.remove(&id);
@@ -164,8 +173,9 @@ impl Transfers {
     pub fn switch_channel(&mut self){
         // Retain lightweight geometry/metadata, releasing decoded pixels and GIF frames.
         let sizes=std::mem::take(&mut self.sizes);let previews=std::mem::take(&mut self.embeds);let resolved=std::mem::take(&mut self.resolved);
+        let mut authors=std::mem::take(&mut self.authors);authors.pause();
         self.reset();
-        self.sizes=sizes;self.embeds=previews;self.resolved=resolved;
+        self.sizes=sizes;self.embeds=previews;self.resolved=resolved;self.authors=authors;
     }
     pub(super) fn release_distant(&mut self,messages:&[Message])->bool {
         self.images.retain(|(_,_,window)|window.is_visible());
@@ -177,6 +187,7 @@ impl Transfers {
         }
         keep.extend(self.images.iter().filter(|(_,_,w)|w.is_visible()).map(|(_,key,_)|*key));
         keep.extend(self.videos.iter().filter(|p|p.fullscreen.is_open()).map(|p|p.key));
+        self.authors.release(&keep);
         let keys:HashSet<_>=self.textures.keys().chain(self.animations.keys()).chain(self.video_files.keys()).chain(self.payloads.keys()).chain(self.requested.iter()).chain(self.image_tokens.keys()).chain(self.preview_tokens.keys()).chain(self.media_jobs.keys()).copied().filter(|key|!keep.contains(key)).collect();
         for key in keys {
             if let Some(jobs)=self.media_jobs.remove(&key){for job in jobs{job.abort();}}
@@ -190,10 +201,13 @@ impl Transfers {
         changed
     }
     pub(super) fn trim_provider_ids(&mut self,messages:&[Message]){
+        self.sent_attachments.retain(|id|messages.iter().any(|m|m.attachments.iter().flatten().any(|a|a.id==*id)));
         let urls:HashSet<_>=messages.iter().flat_map(|m|crate::media::gif_links::links(m.content.as_deref().unwrap_or(""))).collect();
         self.giphy.retain(|url,_|urls.contains(url));
     }
     pub fn reset(&mut self) {
+        self.sent_attachments.clear();
+        self.authors=Default::default();
         for (_,job) in self.viewer_jobs.drain(){job.abort();}
         self.clipboard_request=None;
         self.media_jobs.clear();self.saving=0;
@@ -217,9 +231,12 @@ impl Transfers {
         }
     }
     fn request(&mut self,key:Uuid)->bool{
+        self.request_embed(key,false)
+    }
+    fn request_embed(&mut self,key:Uuid,author_needed:bool)->bool{
         self.wanted.insert(key);
-        if self.textures.contains_key(&key){self.order.retain(|id|*id!=key);self.order.push_back(key);return false;}
-        if self.requested.len()>=8||self.textures.contains_key(&key)||self.resolved.contains(&key)||self.failed.get(&key).is_some_and(|(attempt,at)|*attempt>=3||*at>std::time::Instant::now()){return false;}
+        if self.textures.contains_key(&key){self.order.retain(|id|*id!=key);self.order.push_back(key);if !author_needed{return false;}}
+        if self.requested.len()>=8||(!author_needed&&self.resolved.contains(&key))||self.failed.get(&key).is_some_and(|(attempt,at)|*attempt>=3||*at>std::time::Instant::now()){return false;}
         self.requested.insert(key)
     }
     fn request_gif(&mut self,key:Uuid)->bool{
@@ -237,7 +254,12 @@ impl Transfers {
     }
     pub fn visible(&self, a: &Attachment) -> bool {
         match a.moderation_status.as_deref() {
-            Some("blocked"|"pending"|"processing") => false, Some("sensitive") => self.revealed.contains(&a.id), _ => true
+            Some("blocked") => false,
+            // The sender already has this image. An acknowledged upload can
+            // use its authorized thumbnail without waiting for moderation's
+            // background notification. Explicit sensitive/blocked states win.
+            Some("pending"|"processing") => self.sent_attachments.contains(&a.id),
+            Some("sensitive") => self.revealed.contains(&a.id), _ => true
         }
     }
     #[cfg(test)]
@@ -256,6 +278,7 @@ impl Transfers {
     }
     fn remember_preview(&mut self,mut preview:Embed){
         preview.image_data=None;
+        preview.author_image_data=None;
         if !self.sizes.contains_key(&preview.id){
             if let Some((width,height))=preview.thumbnail.as_ref().and_then(|m|m.width.zip(m.height)).filter(|(w,h)|*w>0&&*h>0){self.remember_size(preview.id,width,height);}
         }
@@ -268,11 +291,8 @@ impl Transfers {
         while self.video_files.len()>4||self.video_files.values().map(|(_,size)|size).sum::<u64>()>128<<20{if let Some(old)=self.video_order.pop_front(){self.video_files.remove(&old);}else{break;}}
     }
     fn cache_image(&mut self,id:Uuid,image:crate::media::PreparedImage){
-        // An actual replacement of an already decoded asset may change its
-        // shape. Initial placeholder completion keeps its allocated geometry.
-        if self.textures.get(&id).is_some_and(|t|t.width() as u32!=image.width || t.height() as u32!=image.height) {
-            self.frames.borrow_mut().retain(|(key,_),_|*key!=id);
-        }
+        // The decoded dimensions supersede a placeholder's guessed geometry.
+        // The chat applies that layout at idle with its reading anchor intact.
             self.dirty.insert(id);
             self.requested.remove(&id);self.failed.remove(&id);
             self.revision=self.revision.wrapping_add(1);
@@ -323,17 +343,16 @@ impl Transfers{
         crate::media::gif_links::links(message.content.as_deref().unwrap_or("")).iter().any(|id|self.giphy.get(id)==Some(&key))
     }
     fn image_frame(&self,key:Uuid,child:&impl IsA<gtk::Widget>,embedded:bool)->crate::media::frame::Frame {
-        // Remember the first allocated geometry for this visit. If the backend
-        // supplied no dimensions, decoding fills the reserved frame without
-        // changing row heights. The next visit can use the learned dimensions.
+        // A painted placeholder is only a fallback until dimensions arrive.
+        // Using its guessed ratio after decoding would permanently letterbox
+        // the image on the first visit. Learned sizes also survive unloading.
         let mut frames=self.frames.borrow_mut();
         if frames.len()>=512&&!frames.contains_key(&(key,embedded)) {
             if let Some(old)=frames.keys().copied().find(|(id,_)|!self.wanted.contains(id)){frames.remove(&old);}
         }
-        // Hidden snapshots prepare GTK render nodes, but are not a first
-        // presentation. Refine their geometry until the cover is removed.
-        let (width,height)=frames.get(&(key,embedded)).filter(|_|!self.opening.get()).copied().unwrap_or_else(|| {
-            let (w,h)=self.sizes.get(&key).copied().or_else(||self.textures.get(&key).map(|t|(t.width(),t.height()))).unwrap_or((640,360));
+        let known=self.sizes.get(&key).copied().or_else(||self.textures.get(&key).map(|t|(t.width(),t.height())));
+        let (width,height)=frames.get(&(key,embedded)).filter(|_|known.is_none()&&!self.opening.get()).copied().unwrap_or_else(|| {
+            let (w,h)=known.unwrap_or((640,360));
             let ratio=f64::from(w.max(1))/f64::from(h.max(1));
             let width=if embedded{420.0f64.min(300.0*ratio)}else{640.0f64.min(480.0*ratio)};
             (width.round().max(1.0) as i32,(width/ratio).round().max(1.0) as i32)
@@ -431,25 +450,31 @@ impl ChatModel {
         // Move encoded payloads out before sharing metadata: cloning a preview
         // used to copy megabytes of base64 for every message referencing it.
         self.transfers.wanted.clear();
-        let mut images=HashMap::new();
+        let mut images:HashMap<Uuid,(Option<String>,Option<String>)>=HashMap::new();
         let mut known:HashMap<Uuid,Embed>=HashMap::new();
         let revision=self.history.media_revision();
         if self.transfers.normalized_revision!=Some(revision){
         #[cfg(test)]{self.transfers.metadata_visits+=self.history.messages.len();}
         for p in self.history.messages.iter_mut().flat_map(|m|m.embeds.iter_mut().flatten()){
+            self.transfers.authors.invalidate_stale(p);
+            if self.transfers.embeds.get(&p.id).is_some_and(|cached|cached.version()==p.version()&&!p.fetch_method.is_empty()&&cached.author!=p.author){self.transfers.invalidate(p.id);}
             if let Some(cached)=self.transfers.embeds.get(&p.id){
-                if cached.version()>=p.version(){if p.image_data.is_none(){*p=cached.clone();}}
+                if cached.version()>=p.version(){if p.image_data.is_none()&&p.author_image_data.is_none(){*p=cached.clone();}}
                 else{self.transfers.invalidate(p.id);}
             }
             let data=p.image_data.take();
-            let score=|p:&Embed|usize::from(p.title.is_some())+usize::from(p.description.is_some())+usize::from(p.thumbnail.is_some())+usize::from(p.has_video());
-            if known.get(&p.id).is_none_or(|old|p.version()>old.version()||(p.version()==old.version()&&(score(p)>score(old)||(score(p)==score(old)&&data.is_some()&&!images.contains_key(&p.id))))){
-                images.remove(&p.id);if let Some(data)=data{images.insert(p.id,data);}
+            let author_data=p.author_image_data.take();
+            let score=|p:&Embed|usize::from(p.title.is_some())+usize::from(p.description.is_some())+usize::from(p.thumbnail.is_some())+usize::from(p.author.is_some())+usize::from(p.has_video());
+            let same_version=known.get(&p.id).is_some_and(|old|p.version()==old.version());
+            if known.get(&p.id).is_none_or(|old|p.version()>old.version()||(same_version&&(score(p)>score(old)||(score(p)==score(old)&&(data.is_some()||author_data.is_some()))))){
+                let previous=images.remove(&p.id).filter(|_|same_version).unwrap_or_default();
+                let data=data.or(previous.0);let author_data=author_data.or(previous.1);
+                if data.is_some()||author_data.is_some(){images.insert(p.id,(data,author_data));}
                 known.insert(p.id,p.clone());
             }
         }
         for preview in known.values(){self.transfers.remember_preview(preview.clone());}
-        for (key,data) in images{if let Some(preview)=known.get(&key){self.transfers.payload(key,preview.version(),data);}}
+        for (key,(data,author_data)) in images{if let Some(preview)=known.get(&key){if let Some(data)=data{self.transfers.payload(key,preview.version(),data);}if let Some(data)=author_data{self.transfers.authors.payload(key,data);}}}
         self.transfers.normalized_revision=Some(revision);
         }
         let scope=self.transfers.scope.clone();let mut candidates=0;
@@ -489,9 +514,12 @@ impl ChatModel {
                 }
             }
             for p in m.embeds.iter_mut().flatten() {
+                if p.author.as_ref().is_some_and(|a|a.media.is_some()){self.transfers.wanted.insert(p.id);}
+                self.transfers.queue_author_payload(sender,p.id);
                 // New history/WS payloads already carry complete rich metadata.
                 // Only thumbnails need an authorized GET for their bytes.
-                if !p.fetch_method.is_empty()&&p.thumbnail.is_none(){continue;}
+                let author_needed=self.transfers.authors.needs(p);
+                if !p.fetch_method.is_empty()&&p.thumbnail.is_none()&&!author_needed{continue;}
                 if candidates>=24{break;}candidates+=1;
                 if let Some(full)=known.get(&p.id).or_else(||self.transfers.embeds.get(&p.id)){if full.version()>=p.version()&&full!=p{*p=full.clone();}}
                 if self.transfers.payloads.contains_key(&p.id){
@@ -499,7 +527,7 @@ impl ChatModel {
                         let (_,data)=self.transfers.payloads.remove(&p.id).unwrap();self.transfers.payload_order.retain(|key|*key!=p.id);
                         queue_image(&mut self.transfers,sender,m.id,p.id,ImageInput::Base64(data));
                     }
-                }else if self.transfers.request(p.id){
+                }else if self.transfers.request_embed(p.id,author_needed){
                     let api = api.clone();
                     let s = sender.clone();
                     let key = p.id;
@@ -519,6 +547,9 @@ impl ChatModel {
     }
     pub(super) fn handle_transfer(&mut self, msg: TransferMsg, sender: &ComponentSender<Self>, root: &gtk::Box) {
         match msg {
+            TransferMsg::AuthorReady{epoch,key,token,result}=>{
+                if self.access.read{self.transfers.author_ready(epoch,key,token,result,&self.history.messages);}
+            },
             TransferMsg::ViewerClosed{epoch,token}=>{
                 if epoch!=self.transfers.epoch{return;}
                 if let Some(job)=self.transfers.viewer_jobs.remove(&token){job.abort();}
@@ -549,6 +580,7 @@ impl ChatModel {
                 match result{
                     Ok(mut preview) if preview.id==key=>{
                         self.transfers.revision=self.transfers.revision.wrapping_add(1);
+                        let author_data=preview.author_image_data.take();self.transfers.queue_author(sender,&preview,author_data);
                         if let Some(data)=preview.image_data.take(){queue_image(&mut self.transfers,sender,message,key,ImageInput::Base64(data));}else{self.transfers.requested.remove(&key);self.transfers.resolved.insert(key);}
                         self.transfers.remember_preview(preview.clone());
                         let ids:Vec<_>=self.history.messages.iter().filter(|m|m.embeds.iter().flatten().any(|p|p.id==key)).map(|m|m.id).collect();
@@ -567,9 +599,9 @@ impl ChatModel {
                 if !self.access.read||!self.history.messages.iter().any(|m|m.id==message&&(self.transfers.giphy_key(m,key)||m.attachments.iter().flatten().any(|a|a.id==key&&self.transfers.visible(a))||m.embeds.iter().flatten().any(|p|p.id==key))){return;}
                 let Some(texture)=self.transfers.textures.get(&key)else{return;};
                 if let Some((_,_,window))=self.transfers.images.iter().find(|(m,k,w)|*m==message&&*k==key&&w.is_visible()){window.close();return;}
-                let window=gtk::Window::builder().title("Imagem").default_width(900).default_height(680).build();if let Some(parent)=root.root().and_downcast::<gtk::Window>(){window.set_transient_for(Some(&parent));}
+                let window=gtk::Window::builder().title("Imagem").default_width(900).default_height(680).build();if let Some(parent)=root.root().and_downcast::<gtk::Window>(){window.set_transient_for(Some(&parent));window.set_application(parent.application().as_ref());}
                 let token=Uuid::new_v4();let epoch=self.transfers.epoch;window.set_widget_name(&format!("viewer-{token}"));
-                let picture=self.transfers.animations.get(&key).map(|(animation,_)|animation.picture()).unwrap_or_else(||gtk::Picture::for_paintable(texture));picture.set_can_shrink(true);picture.set_content_fit(gtk::ContentFit::Contain);window.set_child(Some(&picture));dismiss_image(&window,&picture);
+                let picture=self.transfers.animations.get(&key).map(|(animation,_)|animation.picture()).unwrap_or_else(||gtk::Picture::for_paintable(texture));viewer::install(&window,&picture);dismiss_image(&window,&picture);
                 let input=sender.input_sender().clone();window.connect_close_request(move |_|{let input=input.clone();gtk::glib::idle_add_local_once(move ||{let _=input.send(ChatMsg::Transfer(TransferMsg::ViewerClosed{epoch,token}));});gtk::glib::Propagation::Proceed});
                 window.present();self.transfers.images.retain(|(_,_,w)|w.is_visible());self.transfers.images.push((message,key,window));
                 self.load_viewer(message,key,token,sender);
@@ -876,8 +908,8 @@ fn append_video(card:&gtk::Box,media:&Transfers,message:Uuid,key:Uuid,preview:bo
     }
 }
 
-pub(super) fn preview_widget(p: &Embed, message: Uuid, media: &Transfers, sender: &ComponentSender<ChatModel>)->gtk::Box {
-    let card=super::rich::body(p);
+pub(super) fn preview_widget(p: &Embed, message: Uuid, media: &Transfers, users:&HashMap<Uuid,UserSummary>, actions:&Actions, sender: &ComponentSender<ChatModel>)->gtk::Box {
+    let card=super::rich::body(p,media.authors.textures.get(&p.id),users,actions,sender);
     let gif_provider=p.source_type=="link"&&p.url.as_deref().is_some_and(crate::media::gif_links::is_provider);
     let animated_gif=gif_provider&&media.animations.contains_key(&p.id);
     if !p.has_video()||gif_provider{if media.textures.contains_key(&p.id) {
@@ -899,7 +931,7 @@ pub(super) fn preview_widget(p: &Embed, message: Uuid, media: &Transfers, sender
     }
     if let Some(url)=p.embed_url.as_deref().and_then(super::rich::youtube_url){card.append(&gtk::LinkButton::with_label(url.as_str(),"Abrir no YouTube"));}
     if p.has_video()&&!gif_provider{append_video(&card,media,message,p.id,true,sender);}
-    super::rich::footer(&card,p,animated_gif);
+    super::rich::footer(&card,p,animated_gif,users,actions,sender);
 
     // Keep the existing 640-pixel video surface while bounding text-only cards.
     // A clamp centers its child when tightening. Make its natural width equal
@@ -927,7 +959,7 @@ pub(crate) fn exercise(api: &crate::api::ApiClient, context: &gtk::glib::MainCon
     })).unwrap()));
     pump(context);
     let test_window=adw::Window::builder().default_width(900).default_height(650).content(chat.widget()).build();test_window.present();until(context,||test_window.is_mapped());
-    let composer=descendants(chat.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Entry>().ok()).unwrap();composer.grab_focus();
+    let composer=composer::field(chat.widget().upcast_ref());composer.grab_focus();
     let path = std::env::temp_dir().join(format!("papo-ui-upload-{}", Uuid::new_v4()));
     std::fs::write(&path, b"file content").unwrap();
     let _cleanup = TemporaryFile(path.clone());
@@ -1026,7 +1058,7 @@ pub(crate) fn exercise(api: &crate::api::ApiClient, context: &gtk::glib::MainCon
     chat.emit(ChatMsg::Action(ActionMsg::Navigate(gif_message)));
     until(context,||chat.model().transfers.animations.contains_key(&gif_key));
     chat.emit(ChatMsg::Transfer(TransferMsg::OpenImage{message:gif_message,key:gif_key}));pump(context);let viewer=chat.model().transfers.images.last().unwrap().2.clone();until(context,||viewer.is_mapped());
-    let picture=viewer.child().and_downcast::<gtk::Picture>().unwrap();assert!(picture.paintable().is_some_and(|p|p.is::<crate::media::animation::Animation>()),"the viewer also keeps the GIF animated");
+    let picture=viewer::picture(&viewer).unwrap();assert!(picture.paintable().is_some_and(|p|p.is::<crate::media::animation::Animation>()),"the viewer also keeps the GIF animated");
     let controllers=picture.observe_controllers();let click=(0..controllers.n_items()).find_map(|i|controllers.item(i).and_downcast::<gtk::GestureClick>()).unwrap();
     click.emit_by_name::<()>("released",&[&1i32,&f64::from(picture.width()/2),&f64::from(picture.height()/2)]);assert!(viewer.is_visible(),"clicking the image keeps it open");
     click.emit_by_name::<()>("released",&[&1i32,&1.0f64,&1.0f64]);pump(context);assert!(!viewer.is_visible(),"clicking the letterbox outside the image closes it");
@@ -1130,7 +1162,7 @@ pub(super) fn giphy_widgets(message:&Message,media:&Transfers,sender:&ComponentS
     let widgets=descendants(chat.widget().upcast_ref());assert!(widgets.iter().any(|w|w.is::<gtk::Picture>()));window.set_content(None::<&gtk::Widget>);window.close();drop(chat);pump(context);server.abort();
 }
 
-pub(super) fn update_media_box(container:&gtk::Box,message:&Message,media:&Transfers,sender:&ComponentSender<ChatModel>){
+pub(super) fn update_media_box(container:&gtk::Box,message:&Message,media:&Transfers,users:&HashMap<Uuid,UserSummary>,actions:&Actions,sender:&ComponentSender<ChatModel>){
     let mut existing=HashMap::new();let mut child=container.first_child();while let Some(w)=child{child=w.next_sibling();existing.insert(w.widget_name().to_string(),w);}
     let state=|key:Uuid|format!("{}-{}-{}-{}",key,media.textures.get(&key).map_or(0,|t|t.as_ptr() as usize),media.animations.get(&key).map_or(0,|(a,_)|a.as_ptr() as usize),media.videos.iter().find(|p|p.message==message.id&&p.key==key).map_or(0,|p|p.view.as_ptr() as usize));
     let mut ordered=vec![];
@@ -1138,7 +1170,7 @@ pub(super) fn update_media_box(container:&gtk::Box,message:&Message,media:&Trans
     for id in crate::media::gif_links::links(message.content.as_deref().unwrap_or("")){
         if let Some(key)=media.giphy.get(&id).filter(|key|!message.embeds.iter().flatten().any(|p|p.id==**key)){let name=format!("giphy-{}",state(*key));let widget=existing.remove(&name).unwrap_or_else(||{let mut single=message.clone();single.content=Some(crate::media::gif_links::content(&id));giphy_widgets(&single,media,sender).remove(0)});widget.set_widget_name(&name);ordered.push(widget);}
     }
-    for preview in message.embeds.iter().flatten(){let name=format!("preview-{}-{}",state(preview.id),media.video_requests.contains_key(&(message.id,preview.id)));let widget=existing.remove(&name).unwrap_or_else(||preview_widget(preview,message.id,media,sender).upcast());widget.set_widget_name(&name);ordered.push(widget);}
+    for preview in message.embeds.iter().flatten(){let name=format!("preview-{}-{}-{}-{}",state(preview.id),media.authors.textures.get(&preview.id).map_or(0,|t|t.as_ptr() as usize),media.video_requests.contains_key(&(message.id,preview.id)),super::rich::display_signature(preview,users,actions));let widget=existing.remove(&name).unwrap_or_else(||preview_widget(preview,message.id,media,users,actions,sender).upcast());widget.set_widget_name(&name);ordered.push(widget);}
     for widget in existing.into_values(){container.remove(&widget);}
     let mut previous=None;for widget in ordered{if widget.parent().is_none(){container.insert_child_after(&widget,previous.as_ref());}else if widget.prev_sibling()!=previous{container.reorder_child_after(&widget,previous.as_ref());}previous=Some(widget);}
 }

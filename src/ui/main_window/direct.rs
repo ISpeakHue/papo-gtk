@@ -13,7 +13,7 @@ pub enum DirectMsg {
 }
 #[derive(Default)]
 pub(super) struct Direct {
-    pub items:Vec<DirectConversation>, request:Option<Uuid>,refresh_again:bool,selection:Option<Uuid>,version:u64,
+    pub items:Vec<DirectConversation>, pub known:HashSet<Uuid>, request:Option<Uuid>,refresh_again:bool,selection:Option<Uuid>,version:u64,
     changed:HashMap<Uuid,u64>,read:HashMap<Uuid,MessageCursor>,hidden:HashSet<Uuid>,hidden_since:HashMap<Uuid,u64>,blocked_peers:HashSet<Uuid>,busy:HashSet<Uuid>,jobs:Vec<tokio::task::JoinHandle<()>>,
     pub presence:HashMap<Uuid,crate::ws::PresenceStatus>,last_refresh:Option<Instant>,
     blocks:Option<BlockView>, blocks_request:Option<Uuid>,
@@ -61,7 +61,7 @@ impl MainWindowModel {
         if self.direct.busy.contains(&dm.id)||self.direct.hidden.contains(&dm.id)||self.direct.blocked_peers.contains(&dm.user.id){return;}
         reconcile_read(&mut dm,&self.direct.read);
         self.direct.version+=1;self.direct.changed.insert(dm.id,self.direct.version);
-        let id=dm.id;let peer=dm.user.id;
+        let id=dm.id;self.direct.known.insert(id);let peer=dm.user.id;
         if let Some(d)=self.direct.items.iter_mut().find(|d|d.id==id){*d=dm.clone();}else{self.direct.items.push(dm.clone());}
         self.direct.items.sort_by_key(|d|std::cmp::Reverse(d.last_message.as_ref().map(|m|m.created_at).unwrap_or(d.created_at)));
         if self.active_channel_id==Some(id){self.chat.emit(ChatMsg::UpdateDirect(dm));}
@@ -117,7 +117,7 @@ impl MainWindowModel {
                 match result {
                     Ok(dm)=>{
                         let id=dm.id;self.close_profile_for_direct(dm.user.id);self.direct.hidden.remove(&id);self.direct.hidden_since.remove(&id);self.direct_snapshot(dm.clone(),&sender);
-                        if self.active_channel_id!=Some(id){self.active_channel_id=Some(id);self.preview_requests.clear();self.notifications.read_pending=false;self.chat.emit(ChatMsg::SelectTarget{target:crate::models::ConversationTarget::Direct(dm),user_id:self.current_user.id,access:self.direct_access()});self.load_history(id,None,sender.clone());}
+                        if self.active_channel_id!=Some(id){self.active_channel_id=Some(id);self.preview_requests.clear();self.chat.emit(ChatMsg::SelectTarget{target:crate::models::ConversationTarget::Direct(dm),user_id:self.current_user.id,access:self.direct_access()});self.load_history(id,None,sender.clone());}
                         else{self.chat.emit(ChatMsg::SetAccess{user_id:self.current_user.id,access:self.direct_access()});}
                         self.sidebar.emit(SidebarMsg::SetSelection(id));
                         if let Some(message_id)=message{self.chat.emit(ChatMsg::Action(crate::ui::chat::actions::ActionMsg::Navigate(message_id)));}
@@ -135,7 +135,7 @@ impl MainWindowModel {
                         for d in &mut items{reconcile_read(d,&self.direct.read);}
                         if let Some(id)=self.active_channel_id.filter(|id|self.direct.items.iter().any(|d|d.id==*id)&&!items.iter().any(|d|d.id==*id)){self.clear_direct(id);}
                         for d in &items{self.direct.hidden.remove(&d.id);self.direct.hidden_since.remove(&d.id);}
-                        self.direct.items=items;self.direct.changed.retain(|_,v|*v>version);self.publish_direct();
+                        self.direct.known.extend(items.iter().map(|d|d.id));self.direct.items=items;self.direct.changed.retain(|_,v|*v>version);self.publish_direct();
                         self.load_avatars(self.direct.items.iter().map(|d|d.user.id).collect(),false,sender.clone());self.deliver_notices(sender.clone());self.render_inbox(&sender);self.render_search(&sender);
                     }
                     Err(e)=>{self.direct_denied_without_refresh();self.deliver_notices(sender.clone());self.render_inbox(&sender);self.render_search(&sender);sender.input(MainWindowMsg::OperationFailed(e));}
@@ -183,7 +183,7 @@ pub(crate) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::Mai
     use crate::ui::chat::actions::tests::{descendants,find_button,pump,until};
     let peer=Uuid::parse_str("12345678-1234-4234-8234-123456789ac0").unwrap();let dm=Uuid::parse_str("12345678-1234-4234-8234-123456789ac3").unwrap();
     let public=main.model().channels[0].clone();
-    let composer=||descendants(main.model().chat.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Entry>().ok()).unwrap();
+    let composer=||crate::ui::chat::composer::field(main.model().chat.widget().upcast_ref());
     main.emit(MainWindowMsg::ChannelSelected(public.clone()));pump(context);composer().set_text("server draft");pump(context);
     main.emit(MainWindowMsg::Account(AccountMsg::Profile(peer)));until(context,||gtk::Window::list_toplevels().iter().any(|w|descendants(w).iter().filter_map(|w|w.downcast_ref::<gtk::Button>()).any(|b|b.label().as_deref()==Some("Mensagem direta"))));
     let profile=gtk::Window::list_toplevels().into_iter().find(|w|descendants(w).iter().filter_map(|w|w.downcast_ref::<gtk::Button>()).any(|b|b.label().as_deref()==Some("Mensagem direta"))).unwrap();find_button(&profile,"Mensagem direta").emit_clicked();

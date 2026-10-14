@@ -10,7 +10,7 @@ pub(crate) fn exercise_send_feedback(context:&gtk::glib::MainContext){
     let chat=ChatModel::builder().launch(ChatInit{active_channel:Some(target),user_id:Some(user),..Default::default()}).detach();
     chat.emit(ChatMsg::SetAccess{user_id:user,access:crate::models::Access::resolve(user,Some(user),&[],&[],&[])});
     let window=adw::Window::builder().default_width(850).default_height(680).content(chat.widget()).build();window.present();settle(context);
-    let entry=descendants(chat.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Entry>().ok()).unwrap();
+    let entry=composer::field(chat.widget().upcast_ref());
     let progress=descendants(chat.widget().upcast_ref()).into_iter().find(|w|w.widget_name()=="send-progress").unwrap();let cancel=find_button(chat.widget().upcast_ref(),"Cancelar envio");
     entry.set_text("No flashing feedback");settle(context);let before=entry.compute_bounds(chat.widget()).unwrap();
     let request=chat.state().get_mut().model.draft.begin().unwrap();chat.emit(ChatMsg::Transfer(TransferMsg::Progress{id:request,bytes:0}));settle(context);
@@ -49,7 +49,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     assert_eq!(chat.model().render_passes,passes,"an unchanged emoji catalog must not rebuild the conversation");
     let search=descendants(picker.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::SearchEntry>().ok()).unwrap();assert_eq!(search.text(),"server_cat");assert_eq!(search.position(),3);assert!(search.state_flags().contains(gtk::StateFlags::FOCUS_WITHIN),"catalog updates preserve active search focus");
     let cell=find_button(picker.upcast_ref(),":SERVER_CAT:");assert_eq!(cell.width_request(),cell.height_request());cell.emit_clicked();pump(context);
-    let entry=descendants(chat.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Entry>().ok()).unwrap();assert_eq!(entry.text(),":SERVER_CAT: ");assert!(entry.state_flags().contains(gtk::StateFlags::FOCUS_WITHIN));entry.set_text("");pump(context);
+    let entry=composer::field(chat.widget().upcast_ref());assert_eq!(entry.text(),":SERVER_CAT: ");assert!(entry.state_flags().contains(gtk::StateFlags::FOCUS_WITHIN));entry.set_text("");pump(context);
     chat.emit(ChatMsg::Action(ActionMsg::OpenPicker(messages[0].id)));pump(context);
     // Locate by title so the test doesn't depend on the Actions storage layout.
     let reaction=gtk::Window::list_toplevels().into_iter().find_map(|w|w.downcast::<gtk::Window>().ok().filter(|w|w.title().as_deref()==Some("Escolher reação")&&w.is_visible())).unwrap();

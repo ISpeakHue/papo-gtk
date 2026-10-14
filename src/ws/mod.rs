@@ -124,7 +124,7 @@ fn spawn_with_deadlines(client: crate::api::ApiClient,deadlines:Deadlines) -> (m
             let request = match client.websocket_request() {
                 Ok(request) => request,
                 Err(e) => {
-                    error!("Cannot build WebSocket request: {e}");
+                    error!(reason = %crate::logging::error_summary(&e), "Cannot build WebSocket request");
                     return;
                 }
             };
@@ -176,7 +176,7 @@ fn spawn_with_deadlines(client: crate::api::ApiClient,deadlines:Deadlines) -> (m
                                         break;
                                     }
                                     Err(e) => {
-                                        error!("WebSocket read error: {e}");
+                                        error!(reason = %error_summary(&e), "WebSocket read error");
                                         break;
                                     }
                                     _ => {}
@@ -211,7 +211,7 @@ fn spawn_with_deadlines(client: crate::api::ApiClient,deadlines:Deadlines) -> (m
                         let _ = ev_tx.send(WsEvent::SessionExpired).await;
                         return;
                     }
-                    error!("WebSocket connect error: {e}");
+                    error!(reason = %error_summary(&e), "WebSocket connect error");
                 }
             }
 
@@ -231,18 +231,33 @@ fn spawn_with_deadlines(client: crate::api::ApiClient,deadlines:Deadlines) -> (m
     (ev_rx, cmd_tx)
 }
 
+/// Never format a transport error's response headers, URL or frame contents.
+fn error_summary(error:&tokio_tungstenite::tungstenite::Error)->String{
+    use tokio_tungstenite::tungstenite::Error;
+    match error{
+        Error::Http(response)=>format!("HTTP {}",response.status().as_u16()),
+        Error::Io(error)=>format!("I/O {:?}",error.kind()),
+        Error::ConnectionClosed|Error::AlreadyClosed=>"connection closed".into(),
+        Error::Tls(_)=>"TLS connection failed".into(),
+        Error::Capacity(_)|Error::WriteBufferFull(_)=>"message or buffer limit exceeded".into(),
+        Error::Protocol(_)|Error::HttpFormat(_)|Error::AttackAttempt=>"invalid handshake or protocol".into(),
+        Error::Utf8=>"invalid UTF-8".into(),
+        Error::Url(_)=>"invalid WebSocket URL".into(),
+    }
+}
+
 // ── Parser ────────────────────────────────────────────────────────────────────
 
-fn parse_event(text: &str) -> Option<WsEvent> {
+pub(crate) fn parse_event(text: &str) -> Option<WsEvent> {
     let raw: RawEvent = serde_json::from_str(text)
-        .map_err(|e| warn!("Unparseable WS frame: {e}"))
+        .map_err(|e| warn!(line = e.line(), column = e.column(), "Unparseable WS frame"))
         .ok()?;
 
     match raw.event_type.as_str() {
         "voice_joined"|"voice_answer"|"voice_offer"|"voice_ice_candidate"|"voice_state_update"|"voice_leave"|"active_speaker_update"|"voice_audio_routes"=>serde_json::from_str(text).ok().map(WsEvent::Voice),
         "message" => {
             let msg: Message = serde_json::from_value(raw.payload)
-                .map_err(|e| warn!("Bad message payload: {e}"))
+                .map_err(|e| warn!(line = e.line(), column = e.column(), "Bad message payload"))
                 .ok()?;
             Some(WsEvent::NewMessage(msg))
         }
@@ -321,13 +336,13 @@ fn parse_event(text: &str) -> Option<WsEvent> {
             channel_id: parse_uuid(&raw.payload, "channel_id")?, message_id: parse_uuid(&raw.payload, "message_id")?,
             preview: serde_json::from_value(raw.payload["preview"].clone()).ok()?,
         }),
-        "attachment_moderation_update" => Some(WsEvent::AttachmentModeration {
+        "attachment_moderation_update"|"moderation_update" => Some(WsEvent::AttachmentModeration {
             channel_id: parse_uuid(&raw.payload, "channel_id")?, message_id: parse_uuid(&raw.payload, "message_id")?,
             attachment_id: parse_uuid(&raw.payload, "attachment_id")?, status: raw.payload["status"].as_str()?.into(),
         }),
         "heartbeat_ack" => None, // silently swallow
-        other => {
-            warn!("Unknown WS event type: {other}");
+        _ => {
+            warn!("Unknown WS event type");
             None
         }
     }
@@ -468,6 +483,9 @@ mod backend_contract_tests {
             "id":ID,"url":"https://example.test","kind":"og","fetched_at":"2026-10-03T12:00:00Z","video_url":null
         }})),WsEvent::PreviewUpdate { .. }));
         assert!(matches!(parse(json!({"type":"attachment_moderation_update","channel_id":ID,"message_id":ID,"attachment_id":ID,"status":"sensitive"})),WsEvent::AttachmentModeration { .. }));
+        for kind in ["attachment_moderation_update","moderation_update"]{for verdict in ["pending","processing","clean","sensitive","blocked","failed"]{
+            assert!(matches!(parse(json!({"type":kind,"channel_id":ID,"message_id":ID,"attachment_id":ID,"status":verdict})),WsEvent::AttachmentModeration{status,..} if status==verdict));
+        }}
     }
 
     #[test]fn rich_embed_events_replace_lists_and_accept_null_clears(){
@@ -615,4 +633,24 @@ mod voice_reconnect_tests {
         tokio::time::timeout(Duration::from_millis(200),async{while socket.read(&mut bytes).await.unwrap()>0{}}).await.unwrap();
     }
 
+}
+
+#[cfg(test)]mod logging_tests {
+    use super::*;
+    #[test]fn transport_and_parser_diagnostics_hide_headers_payloads_and_custom_errors() {
+        let capture=crate::logging::tests::Capture::default();
+        tracing::subscriber::with_default(capture.subscriber("trace"),||{
+            let response=tokio_tungstenite::tungstenite::http::Response::builder().status(502)
+                .header("Set-Cookie","Auth=AUTH_SECRET").body(Some(b"PASSWORD_SECRET".to_vec())).unwrap();
+            let error=tokio_tungstenite::tungstenite::Error::Http(response);
+            assert_eq!(error_summary(&error),"HTTP 502");
+            error!(reason=%error_summary(&error),"WebSocket connect error");
+            let error=tokio_tungstenite::tungstenite::Error::Io(std::io::Error::other("Auth=AUTH_SECRET"));
+            error!(reason=%error_summary(&error),"WebSocket read error");
+            assert!(parse_event(r#"{"type":"AUTH_SECRET"}"#).is_none());
+            assert!(parse_event(r#"{"type":"message","id":{},"channel_id":"PASSWORD_SECRET"}"#).is_none());
+        });
+        let output=capture.text();assert!(output.contains("502")&&output.contains("WebSocket read error"));
+        assert!(!output.contains("AUTH_SECRET")&&!output.contains("PASSWORD_SECRET"));
+    }
 }

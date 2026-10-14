@@ -4,6 +4,7 @@ No sockets for application signaling, credential arguments, recording, or webvie
 Only the GTK process talks to the authenticated owning WebSocket.
 """
 import json
+import math
 import base64
 import time
 import faulthandler
@@ -168,6 +169,7 @@ class Engine:
             raise ValueError("capture could not link")
         self.microphone = capture.get_by_name("microphone")
         self.microphone.set_property("mute", bool(config.get("muted", False)))
+        self.set_microphone_gain(config.get("microphone_gain", 1.5))
         extension = Gst.ElementFactory.make("rtphdrextclientaudiolevel")
         if extension:
             extension.set_id(1)
@@ -201,6 +203,7 @@ class Engine:
         bus.add_signal_watch()
         bus.connect("message", self.bus_message)
         emit({"type": "started", "pid": os.getpid()})
+        emit({"type": "microphone_gain", "gain": self.microphone.get_property("volume")})
         if self.pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
             self.fail("Não foi possível iniciar áudio. Verifique o microfone e a saída.")
 
@@ -497,6 +500,17 @@ class Engine:
                 return False
             GLib.timeout_add_seconds(5, check)
 
+    def set_microphone_gain(self, value):
+        try:
+            gain = float(value)
+        except (TypeError, ValueError, OverflowError):
+            gain = 1.5
+        if not math.isfinite(gain):
+            gain = 1.5
+        gain = max(0.0, min(3.0, gain))
+        self.microphone.set_property("volume", gain)
+        return gain
+
     def set_speaking(self, active):
         if getattr(self, "speaking", False) != active:
             self.speaking = active
@@ -552,6 +566,9 @@ class Engine:
                 emit({"type": "video_reset", "epoch": self.video_epoch})
             elif kind == "frame_ack":
                 self.frame_pending = False
+            elif kind == "microphone_gain":
+                gain = self.set_microphone_gain(event.get("gain"))
+                emit({"type": "microphone_gain", "gain": gain})
             elif kind == "mute":
                 self.microphone.set_property("mute", bool(event["muted"]))
                 if event["muted"]:

@@ -41,12 +41,29 @@ pub fn is_permission_error(error: &anyhow::Error) -> bool {
     error.downcast_ref::<ApiError>().is_some_and(|e| e.status == StatusCode::FORBIDDEN) && !is_session_error(error)
 }
 
+/// Redact cookies in HeaderValue/Request debug output without changing the wire.
+#[derive(Default)]
+struct SessionCookies(Jar);
+impl SessionCookies {
+    fn add_cookie_str(&self, cookie: &str, url: &Url) { self.0.add_cookie_str(cookie, url); }
+}
+impl CookieStore for SessionCookies {
+    fn set_cookies(&self, cookies: &mut dyn Iterator<Item = &reqwest::header::HeaderValue>, url: &Url) {
+        self.0.set_cookies(cookies, url);
+    }
+    fn cookies(&self, url: &Url) -> Option<reqwest::header::HeaderValue> {
+        let mut value = self.0.cookies(url)?;
+        value.set_sensitive(true);
+        Some(value)
+    }
+}
+
 /// Wraps a `reqwest::Client` and the base URL of the backend.
 #[derive(Clone)]
 pub struct ApiClient {
     inner: Client,
     base: Url,
-    cookies: Arc<Jar>,
+    cookies: Arc<SessionCookies>,
     requests: Arc<RequestScheduler>,
     session_owner: Arc<std::sync::Mutex<Uuid>>,
 }
@@ -56,7 +73,7 @@ impl ApiClient {
     /// Create a new client pointing at `base_url` (e.g. `http://localhost:8080`).
     pub fn new(base_url: &str) -> Result<Self> {
         let base = Self::parse_base_url(base_url)?;
-        let cookies = Arc::new(Jar::default());
+        let cookies = Arc::new(SessionCookies::default());
         let mut builder = Client::builder()
             .cookie_provider(cookies.clone())
             .connect_timeout(Duration::from_secs(5))
@@ -365,7 +382,7 @@ impl ApiClient {
     pub async fn reconcile_messages(&self,channel_id:Uuid,oldest:Option<MessageCursor>)->Result<MessageListResponse>{
         let mut cursor=None;let mut messages=Vec::new();
         loop{
-            let page=self.list_messages(channel_id,cursor).await?;
+            let page=self.message_page(channel_id,cursor,if oldest.is_some(){100}else{30}).await?;
             let next=page.messages.iter().min_by_key(|m|(m.created_at,m.id)).map(MessageCursor::from);
             let covered=oldest.is_none_or(|old|next.is_some_and(|next|(next.created_at,next.id)<=(old.created_at,old.id)));
             messages.extend(page.messages);
@@ -375,8 +392,13 @@ impl ApiClient {
         }
     }
     pub async fn list_messages(&self, channel_id: Uuid, cursor: Option<MessageCursor>) -> Result<MessageListResponse> {
+        self.message_page(channel_id,cursor,if cursor.is_some(){100}else{30}).await
+    }
+
+    // Keep opening light; use larger pages for history and retained-page validation.
+    async fn message_page(&self, channel_id: Uuid, cursor: Option<MessageCursor>, limit:u32) -> Result<MessageListResponse> {
         let mut url = self.url(&format!("/channels/{channel_id}/messages"));
-        url.query_pairs_mut().append_pair("order", "desc");
+        url.query_pairs_mut().append_pair("order", "desc").append_pair("limit",&limit.to_string());
         if let Some(cursor) = cursor {
             url.query_pairs_mut().append_pair("since", &cursor.created_at.to_rfc3339())
                 .append_pair("last_id", &cursor.id.to_string());

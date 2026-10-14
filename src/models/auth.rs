@@ -6,21 +6,37 @@ use uuid::Uuid;
 
 // ── Requests ────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Clone, Serialize)]
 pub struct RegisterRequest {
     pub username: String,
     pub password: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Clone, Serialize)]
 pub struct LoginRequest {
     pub username: String,
     pub password: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Clone, Serialize)]
 pub struct LoginServerRequest {
     pub server_password: String,
+}
+
+impl std::fmt::Debug for RegisterRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RegisterRequest").field("username", &self.username).field("password", &"[REDACTED]").finish()
+    }
+}
+impl std::fmt::Debug for LoginRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LoginRequest").field("username", &self.username).field("password", &"[REDACTED]").finish()
+    }
+}
+impl std::fmt::Debug for LoginServerRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LoginServerRequest").field("server_password", &"[REDACTED]").finish()
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -78,4 +94,19 @@ pub struct ConnectedDevicesResponse {
 #[derive(Debug, Clone, Deserialize)]
 pub struct DropConnectionResponse {
     pub dropped: u32,
+}
+
+#[cfg(test)]mod tests {
+    use super::*;
+    #[test]fn authentication_debug_redacts_passwords_without_changing_json() {
+        let login=LoginRequest{username:"alice".into(),password:"PASSWORD_SECRET".into()};
+        let registration=RegisterRequest{username:"alice".into(),password:"PASSWORD_SECRET".into()};
+        let server=LoginServerRequest{server_password:"SERVER_SECRET".into()};
+        for debug in [format!("{login:?}"),format!("{registration:?}"),format!("{server:?}")] {
+            assert!(debug.contains("[REDACTED]"));assert!(!debug.contains("PASSWORD_SECRET")&&!debug.contains("SERVER_SECRET"));
+        }
+        assert_eq!(serde_json::to_value(login).unwrap()["password"],"PASSWORD_SECRET");
+        assert_eq!(serde_json::to_value(registration).unwrap()["password"],"PASSWORD_SECRET");
+        assert_eq!(serde_json::to_value(server).unwrap()["server_password"],"SERVER_SECRET");
+    }
 }

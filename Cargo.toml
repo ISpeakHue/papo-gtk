@@ -59,6 +59,7 @@ toml = "0.8"
 
 # XDG dirs for cache/config paths
 dirs = "5"
+pulldown-cmark = { version = "0.13", default-features = false }
 
 [profile.release]
 strip = true

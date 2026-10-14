@@ -1,5 +1,7 @@
 //! Original image work belongs to the viewer, never to the chat thumbnail cache.
 use super::*;
+mod controls;
+pub(super) use controls::{install,picture};
 
 impl ChatModel {
     pub(super) fn load_viewer(&mut self,message:Uuid,key:Uuid,token:Uuid,sender:&ComponentSender<Self>){
@@ -43,10 +45,10 @@ impl ChatModel {
         if !self.access.read||!self.history.messages.iter().any(|m|m.id==message&&(m.attachments.iter().flatten().any(|a|a.id==key&&self.transfers.visible(a))||m.embeds.iter().flatten().any(|e|e.id==key))){return;}
         let Some((_,_,window))=self.transfers.images.iter().find(|(m,k,w)|*m==message&&*k==key&&w.is_visible()&&w.widget_name()==format!("viewer-{token}"))else{return;};
         match result {
-            Ok(image)=>{if let Some(picture)=window.child().and_downcast::<gtk::Picture>(){picture.set_paintable(Some(&image.texture()));}},
+            Ok(image)=>{if let Some(picture)=picture(window){picture.set_paintable(Some(&image.texture()));}},
             Err(error)=>{
                 window.set_title(Some("Imagem · não foi possível carregar o original"));
-                if let Some(picture)=window.child(){picture.set_tooltip_text(Some(&format!("Exibindo prévia. {error}")));}
+                if let Some(picture)=picture(window){picture.set_tooltip_text(Some(&format!("Exibindo prévia. {error}")));}
                 if crate::api::is_session_error(&error){let _=sender.output(ChatOutput::ActionError(error));}
             },
         }
@@ -82,19 +84,24 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let thumbnail=chat.model().transfers.textures[&key].clone();assert_eq!(thumbnail.width(),640);
     let row=chat.model().rendered[&format!("message-{message}")].1.clone();let passes=chat.model().render_passes;
     chat.emit(ChatMsg::Transfer(TransferMsg::OpenImage{message,key}));until(context,||!chat.model().transfers.images.is_empty());
-    let viewer=chat.model().transfers.images[0].2.clone();let picture=viewer.child().and_downcast::<gtk::Picture>().unwrap();
+    let viewer=chat.model().transfers.images[0].2.clone();let picture=controls::picture(&viewer).unwrap();
     until(context,||originals()==1);assert_eq!(picture.paintable().unwrap().intrinsic_width(),640,"the preview is immediately available while the original downloads");
+    actions::tests::find_button(viewer.upcast_ref(),"Aumentar zoom").emit_clicked();let zoomed_width=picture.width_request();
     until(context,||picture.paintable().is_some_and(|p|p.intrinsic_width()==1800));
+    assert_eq!(picture.width_request(),zoomed_width,"loading the original preserves the user's zoomed image size");
+    actions::tests::find_button(viewer.upcast_ref(),"Ajustar à janela").emit_clicked();
     assert_eq!(picture.paintable().unwrap().intrinsic_height(),900);assert_eq!(chat.model().transfers.textures[&key],thumbnail);assert_eq!(chat.model().rendered[&format!("message-{message}")].1,row);assert_eq!(chat.model().render_passes,passes,"viewer decoding must not rebuild chat rows");
+    controls::exercise(&viewer,context);
+    assert_eq!(originals(),1,"zoom and fullscreen must reuse the decoded original without new requests");
     let quality=picture.paintable().unwrap().downgrade();let old_token=viewer.widget_name().strip_prefix("viewer-").unwrap().parse().unwrap();let epoch=chat.model().transfers.epoch;
     crate::ui::main_window::layout::tests::preview(&viewer,"original-image",context);
     viewer.close();drop(picture);drop(viewer);until(context,||chat.model().transfers.images.is_empty());assert!(quality.upgrade().is_none(),"the original texture is released when the viewer closes");
     let permit=tokio::runtime::Handle::current().block_on(chat.model().transfers.viewer_limiter.clone().acquire_owned()).unwrap();
     chat.emit(ChatMsg::Transfer(TransferMsg::OpenImage{message,key}));until(context,||!chat.model().transfers.viewer_jobs.is_empty());let reopened=chat.model().transfers.images[0].2.clone();
-    chat.emit(ChatMsg::Transfer(TransferMsg::ViewerReady{epoch,message,key,token:old_token,result:Ok(crate::media::PreparedImage{width:1,height:1,pixels:vec![255;4]})}));pump(context);assert_eq!(reopened.child().and_downcast::<gtk::Picture>().unwrap().paintable().unwrap().intrinsic_width(),640,"an earlier viewer result cannot replace a reopened image");
+    chat.emit(ChatMsg::Transfer(TransferMsg::ViewerReady{epoch,message,key,token:old_token,result:Ok(crate::media::PreparedImage{width:1,height:1,pixels:vec![255;4]})}));pump(context);assert_eq!(controls::picture(&reopened).unwrap().paintable().unwrap().intrinsic_width(),640,"an earlier viewer result cannot replace a reopened image");
     reopened.close();until(context,||chat.model().transfers.viewer_jobs.is_empty()&&chat.model().transfers.images.is_empty());drop(reopened);drop(permit);pump(context);assert_eq!(originals(),1,"closing cancels queued original work");
     fail.store(true,Ordering::SeqCst);chat.emit(ChatMsg::Transfer(TransferMsg::OpenImage{message,key}));until(context,||!chat.model().transfers.images.is_empty());let viewer=chat.model().transfers.images[0].2.clone();
-    until(context,||viewer.title().is_some_and(|t|t.contains("não foi possível")));assert!(viewer.is_visible());assert_eq!(viewer.child().and_downcast::<gtk::Picture>().unwrap().paintable().unwrap().intrinsic_width(),640,"failed original requests retain the usable preview");viewer.close();until(context,||chat.model().transfers.images.is_empty());drop(viewer);
+    until(context,||viewer.title().is_some_and(|t|t.contains("não foi possível")));assert!(viewer.is_visible());assert_eq!(controls::picture(&viewer).unwrap().paintable().unwrap().intrinsic_width(),640,"failed original requests retain the usable preview");viewer.close();until(context,||chat.model().transfers.images.is_empty());drop(viewer);
     let permit=tokio::runtime::Handle::current().block_on(chat.model().transfers.viewer_limiter.clone().acquire_owned()).unwrap();
     chat.emit(ChatMsg::Transfer(TransferMsg::OpenImage{message,key}));until(context,||!chat.model().transfers.viewer_jobs.is_empty());let viewer=chat.model().transfers.images[0].2.clone();let token=viewer.widget_name().strip_prefix("viewer-").unwrap().parse().unwrap();
     chat.emit(ChatMsg::ApplyChange(Change::Moderation(message,key,"blocked".into())));until(context,||chat.model().transfers.images.is_empty()&&chat.model().transfers.viewer_jobs.is_empty());assert!(!viewer.is_visible());
@@ -106,4 +113,5 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     until(context,||chat.model().transfers.epoch!=epoch);assert!(chat.model().transfers.images.is_empty()&&chat.model().transfers.viewer_jobs.is_empty());assert!(!viewer.is_visible());
     chat.emit(ChatMsg::Transfer(TransferMsg::ViewerReady{epoch,message,key,token,result:Ok(crate::media::PreparedImage{width:1,height:1,pixels:vec![255;4]})}));pump(context);assert!(chat.model().transfers.textures.is_empty());drop(permit);drop(viewer);
     window.set_content(None::<&gtk::Widget>);window.close();drop(chat);server.abort();pump(context);
+    controls::exercise_gif(context);
 }

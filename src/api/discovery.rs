@@ -1,6 +1,17 @@
 use super::*;
 
 impl ApiClient {
+    /// Small, read-only page including the pending message. The successor UUID
+    /// makes the exclusive descending cursor inclusive without skipping ties.
+    pub async fn moderation_messages(&self, channel:Uuid, message:&Message)->Result<MessageListResponse>{
+        anyhow::ensure!(message.channel_id==channel,"Mensagem de outro canal.");
+        let cursor=if let Some(next)=message.id.as_u128().checked_add(1){
+            MessageCursor{created_at:message.created_at,id:Uuid::from_u128(next)}
+        }else{
+            MessageCursor{created_at:message.created_at.checked_add_signed(chrono::Duration::microseconds(1)).context("Data da mensagem fora do intervalo")?,id:Uuid::nil()}
+        };
+        self.message_page(channel,Some(cursor),30).await
+    }
     pub async fn search(&self, request: &SearchRequest, cursor: Option<MessageCursor>) -> Result<SearchResponse> {
         request.validate()?;
         let mut url = self.url("/search");
@@ -37,5 +48,20 @@ impl ApiClient {
         let response: Response = Self::decode(self.inner.put(self.url(&format!("/users/{user}/read_notification")))
             .json(&serde_json::json!({"notification_ids":ids})).send_paced(&self.requests).await?, "marcar notificações lidas").await?;
         Ok(response.updated)
+    }
+
+    /// Listing history does not acknowledge it. Call only for a viewed message.
+    pub async fn mark_channel_read(&self, channel:Uuid, message:Uuid)->Result<()> {
+        Self::check_response(self.inner.put(self.url(&format!("/channels/{channel}/read")))
+            .json(&serde_json::json!({"message_id":message})).send_paced(&self.requests).await?,
+            "marcar canal lido").await?;
+        Ok(())
+    }
+    /// Explicit user action: resolve the current head without opening the chat.
+    pub async fn mark_latest_read(&self,channel:Uuid)->Result<Option<Message>>{
+        let page=self.message_page(channel,None,1).await?;
+        let newest=page.messages.into_iter().filter(|m|m.channel_id==channel).max_by_key(|m|(m.created_at,m.id));
+        if let Some(message)=&newest{self.mark_channel_read(channel,message.id).await?;}
+        Ok(newest)
     }
 }

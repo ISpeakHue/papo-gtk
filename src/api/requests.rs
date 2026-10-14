@@ -59,14 +59,22 @@ pub(super) trait PacedRequest {
 impl PacedRequest for RequestBuilder {
     async fn send_paced(self, scheduler: &RequestScheduler) -> Result<Response, reqwest::Error> {
         let template = self.try_clone();
-        let read_only = template.as_ref().and_then(|b| b.try_clone()).and_then(|b| b.build().ok())
-            .is_some_and(|r| r.method() == reqwest::Method::GET ||
+        let metadata = template.as_ref().and_then(|b| b.try_clone()).and_then(|b| b.build().ok());
+        let method = metadata.as_ref().map_or("UNKNOWN", |r| r.method().as_str());
+        let read_only = metadata.as_ref().is_some_and(|r| r.method() == reqwest::Method::GET ||
                 (r.method() == reqwest::Method::POST &&
                  ["/users/profile_batch", "/users/user_summary_batch"].iter().any(|p| r.url().path().ends_with(p))));
         let mut builder = self;
         for attempt in 0..=MAX_READ_RETRIES {
             scheduler.wait().await;
-            let response = builder.send().await?;
+            let started = Instant::now();
+            let result = builder.send().await.map_err(reqwest::Error::without_url);
+            // No URLs, headers, bodies or raw errors, even at debug/trace level.
+            match &result {
+                Ok(response) => tracing::debug!(method, attempt = attempt + 1, status = response.status().as_u16(), elapsed_ms = started.elapsed().as_millis(), "HTTP request completed"),
+                Err(error) => tracing::debug!(method, attempt = attempt + 1, elapsed_ms = started.elapsed().as_millis(), reason = if error.is_timeout() { "timeout" } else if error.is_connect() { "connection" } else { "transport" }, "HTTP request failed"),
+            }
+            let response = result?;
             if response.status() != StatusCode::TOO_MANY_REQUESTS { return Ok(response); }
             let delay = retry_after(response.headers()).unwrap_or(Duration::from_secs(1 << attempt)).max(REQUEST_GAP);
             // Even a rejected mutation cools down all other tasks; never replay it.

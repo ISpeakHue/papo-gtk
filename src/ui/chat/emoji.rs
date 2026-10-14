@@ -48,32 +48,84 @@ pub(super) fn choices(builtin:&[Choice],custom:&[crate::models::Emoji],filter:&s
     #[test]fn every_server_name_remains_available_and_case_is_preserved(){let e:crate::models::Emoji=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"name":"OMEGALUL","format":"PNG","created_at":"2026-10-08T12:00:00Z"})).unwrap();let found=choices(&[],&[e],"omega");assert_eq!(found[0].text,":OMEGALUL:");}
 }
 
-/// Both pickers use one searchable catalog and bounded pages of square cells.
-pub(super) fn picker(list:&gtk::Box, builtin:&[Choice], custom:&[crate::models::Emoji], textures:&HashMap<Uuid,gtk::gdk::Texture>, choose:impl Fn(Choice)+'static) {
-    let previous=list.first_child().and_downcast::<gtk::SearchEntry>();
-    let focused=previous.as_ref().is_some_and(|s|s.state_flags().contains(gtk::StateFlags::FOCUS_WITHIN));
-    let caret=previous.as_ref().map(|s|s.position()).unwrap_or(-1);
-    let previous=previous.map(|s|s.text().to_string()).unwrap_or_default();
-    while let Some(child)=list.first_child(){list.remove(&child);}
-    let search=gtk::SearchEntry::new();search.set_placeholder_text(Some("Buscar emoji Unicode ou do servidor"));search.set_text(&previous);list.append(&search);
-    let grid=gtk::FlowBox::new();grid.set_selection_mode(gtk::SelectionMode::None);grid.set_homogeneous(true);grid.set_min_children_per_line(6);grid.set_max_children_per_line(6);grid.set_row_spacing(4);grid.set_column_spacing(4);
-    let scroll=gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).min_content_height(240).child(&grid).build();list.append(&scroll);
-    let empty=gtk::Label::new(Some("Nenhum emoji encontrado"));list.append(&empty);
-    let more=gtk::Button::with_label("Mais emojis");list.append(&more);
-    let catalog=std::rc::Rc::new((builtin.to_vec(),custom.to_vec(),textures.clone()));let choose=std::rc::Rc::new(choose);let limit=std::rc::Rc::new(std::cell::Cell::new(96usize));
-    let weak_search=search.downgrade();let weak_grid=grid.downgrade();let weak_more=more.downgrade();let weak_empty=empty.downgrade();let count=limit.clone();
-    let render:std::rc::Rc<dyn Fn()>=std::rc::Rc::new(move ||{
-        let (Some(search),Some(grid),Some(more),Some(empty))=(weak_search.upgrade(),weak_grid.upgrade(),weak_more.upgrade(),weak_empty.upgrade())else{return;};
-        while let Some(child)=grid.first_child(){grid.remove(&child);}
-        let choices=choices(&catalog.0,&catalog.1,search.text().trim());empty.set_visible(choices.is_empty());more.set_visible(choices.len()>count.get());
-        for choice in choices.into_iter().take(count.get()){
-            let button=gtk::Button::new();button.add_css_class("flat");button.add_css_class("papo-emoji-cell");button.set_size_request(44,44);button.set_halign(gtk::Align::Center);button.set_valign(gtk::Align::Center);button.set_tooltip_text(Some(&format!(":{}:",choice.name)));button.update_property(&[gtk::accessible::Property::Label(&choice.name)]);
-            if let Some(texture)=choice.id.and_then(|id|catalog.2.get(&id)){let image=gtk::Image::from_paintable(Some(texture));image.set_pixel_size(28);button.set_child(Some(&image));}
-            else{button.set_label(if choice.id.is_none(){&choice.text}else{"◌"});}
-            let select=choose.clone();button.connect_clicked(move |_|select(choice.clone()));grid.insert(&button,-1);
+/// Stable tabs preserve search, loaded cells and scroll position during API updates.
+#[derive(Clone)]
+pub(super) struct Picker {
+    pub root:gtk::Box,
+    catalog:std::rc::Rc<std::cell::RefCell<Catalog>>,
+    server_page:gtk::StackPage,status:gtk::Label,
+    render:std::rc::Rc<dyn Fn()>,
+}
+#[derive(Default)]struct Catalog {
+    builtin:Vec<Choice>,custom:Vec<crate::models::Emoji>,
+    textures:HashMap<Uuid,gtk::gdk::Texture>,animations:HashMap<Uuid,crate::media::animation::Animation>,
+}
+impl Picker {
+    pub fn new(root:&gtk::Box,builtin:&[Choice],choose:impl Fn(Choice)+'static)->Self {
+        let search=gtk::SearchEntry::new();search.set_placeholder_text(Some("Buscar emoji"));root.append(&search);
+        let tabs=gtk::Stack::new();tabs.set_widget_name("emoji-tabs");tabs.set_transition_type(gtk::StackTransitionType::None);tabs.set_vexpand(true);
+        let switcher=gtk::StackSwitcher::builder().stack(&tabs).halign(gtk::Align::Center).build();root.append(&switcher);let status=gtk::Label::new(None);status.set_wrap(true);status.set_visible(false);root.append(&status);root.append(&tabs);
+        let catalog=std::rc::Rc::new(std::cell::RefCell::new(Catalog{builtin:builtin.to_vec(),..Default::default()}));
+        let choose:std::rc::Rc<dyn Fn(Choice)>=std::rc::Rc::new(choose);let mut renders=Vec::<std::rc::Rc<dyn Fn()>>::new();let mut server_page=None;
+        for custom in [false,true] {
+            let body=gtk::Box::new(gtk::Orientation::Vertical,4);
+            let grid=gtk::FlowBox::new();grid.set_selection_mode(gtk::SelectionMode::None);grid.set_homogeneous(true);grid.set_min_children_per_line(6);grid.set_max_children_per_line(6);grid.set_row_spacing(4);grid.set_column_spacing(4);
+            let scroll=gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).min_content_height(240).child(&grid).build();body.append(&scroll);
+            let empty=gtk::Label::new(Some("Nenhum emoji encontrado"));body.append(&empty);
+            let page=tabs.add_titled(&body,Some(if custom{"server"}else{"unicode"}),if custom{"Servidor"}else{"Unicode"});if custom{server_page=Some(page);}
+            let limit=std::rc::Rc::new(std::cell::Cell::new(96usize));let rendered=std::rc::Rc::new(std::cell::RefCell::new(Vec::<String>::new()));let total=std::rc::Rc::new(std::cell::Cell::new(0usize));
+            let (weak_search,weak_grid,weak_empty)=(search.downgrade(),grid.downgrade(),empty.downgrade());let data=catalog.clone();let count=limit.clone();let keys=rendered.clone();let size=total.clone();let select=choose.clone();
+            let render:std::rc::Rc<dyn Fn()>=std::rc::Rc::new(move || {
+                let(Some(search),Some(grid),Some(empty))=(weak_search.upgrade(),weak_grid.upgrade(),weak_empty.upgrade())else{return;};let data=data.borrow();
+                let found=if custom{choices(&[],&data.custom,search.text().trim())}else{choices(&data.builtin,&[],search.text().trim())};size.set(found.len());empty.set_visible(found.is_empty());
+                let found:Vec<_>=found.into_iter().take(count.get()).collect();
+                let signatures:Vec<_>=found.iter().map(|c|format!("{}|{:?}|{}|{:?}|{:?}",c.name,c.id,c.text,c.id.and_then(|id|data.textures.get(&id)).map(|p|p.as_ptr()),c.id.and_then(|id|data.animations.get(&id)).map(|p|p.as_ptr()))).collect();
+                let mut keys=keys.borrow_mut();if !signatures.starts_with(&keys){while let Some(child)=grid.first_child(){grid.remove(&child);}keys.clear();}
+                for choice in found.into_iter().skip(keys.len()) {
+                    let button=gtk::Button::new();button.add_css_class("flat");button.add_css_class("papo-emoji-cell");button.set_size_request(44,44);button.set_halign(gtk::Align::Center);button.set_valign(gtk::Align::Center);button.set_tooltip_text(Some(&format!(":{}:",choice.name)));button.update_property(&[gtk::accessible::Property::Label(&choice.name)]);
+                    if let Some(paintable)=choice.id.and_then(|id|data.animations.get(&id).map(|a|a.clone().upcast::<gtk::gdk::Paintable>()).or_else(||data.textures.get(&id).map(|t|t.clone().upcast()))) {
+                        let image=gtk::Image::from_paintable(Some(&paintable));image.set_pixel_size(28);if let Some(animation)=choice.id.and_then(|id|data.animations.get(&id)){animation.watch(&image,None);}button.set_child(Some(&image));
+                    }else{button.set_label(if choice.id.is_none(){&choice.text}else{"◌"});}
+                    let select=select.clone();button.connect_clicked(move |_|select(choice.clone()));grid.insert(&button,-1);
+                }
+                *keys=signatures;
+            });
+            let update=render.clone();let count=limit.clone();let weak=scroll.downgrade();search.connect_search_changed(move |_|{if let Some(scroll)=weak.upgrade(){scroll.vadjustment().set_value(0.0);}count.set(96);update();});
+            let update=render.clone();let count=limit.clone();let size=total.clone();let weak=scroll.downgrade();scroll.vadjustment().connect_value_changed(move |adj|{
+                if !weak.upgrade().is_some_and(|s|s.is_mapped())||adj.value()<=0.0||adj.upper()-adj.page_size()-adj.value()>160.0||count.get()>=size.get(){return;}
+                count.set(count.get()+96);update();
+            });renders.push(render);
         }
-    });
-    let update=render.clone();let count=limit.clone();search.connect_search_changed(move |_|{count.set(96);update();});
-    let update=render.clone();more.connect_clicked(move |_|{limit.set(limit.get()+96);update();});render();
-    if focused{search.grab_focus();search.set_position(caret);}
+        tabs.set_visible_child_name("unicode");let render:std::rc::Rc<dyn Fn()>=std::rc::Rc::new(move ||{for render in &renders{render();}});
+        let picker=Self{root:root.clone(),catalog,server_page:server_page.unwrap(),status,render};(picker.render)();picker
+    }
+    pub fn show_error(&self,message:&str){self.status.set_text(message);self.status.set_visible(true);}
+    pub fn update(&self,name:&str,custom:&[crate::models::Emoji],textures:&HashMap<Uuid,gtk::gdk::Texture>,animations:&HashMap<Uuid,crate::media::animation::Animation>){
+        self.status.set_visible(false);self.status.set_text("");let title=if name.chars().count()>20{format!("{}…",name.chars().take(20).collect::<String>())}else{name.into()};self.server_page.set_title(&title);self.server_page.child().set_tooltip_text(Some(name));let mut data=self.catalog.borrow_mut();data.custom=custom.to_vec();data.textures=textures.clone();data.animations=animations.clone();drop(data);(self.render)();
+    }
+}
+#[cfg(test)]fn picker(list:&gtk::Box,builtin:&[Choice],custom:&[crate::models::Emoji],textures:&HashMap<Uuid,gtk::gdk::Texture>,animations:&HashMap<Uuid,crate::media::animation::Animation>,choose:impl Fn(Choice)+'static){
+    let picker=Picker::new(list,builtin,choose);picker.update("Servidor",custom,textures,animations);
+    list.last_child().and_downcast::<gtk::Stack>().unwrap().set_visible_child_name("server");
+}
+
+#[cfg(test)]pub(crate) fn exercise(context:&gtk::glib::MainContext){
+    use actions::tests::{mock,pump,until};use base64::Engine;
+    let (api,backend,server)=tokio::runtime::Handle::current().block_on(mock());let id=Uuid::new_v4();
+    backend.lock().unwrap().emojis=vec![serde_json::json!({"id":id,"name":"dance","format":"GIF","image_blob":base64::engine::general_purpose::STANDARD.encode(crate::media::animation::fixture()),"created_at":"2026-10-03T00:00:00Z"})];
+    let chat=ChatModel::builder().launch(ChatInit{api:Some(api),..Default::default()}).detach();
+    chat.emit(ChatMsg::Action(ActionMsg::ReloadEmojis));until(context,||chat.model().actions.animations.contains_key(&id)&&chat.model().actions.emojis_request.is_none());
+    let animation=chat.model().actions.animations[&id].clone();
+    let view=chat.model().profile_text("A :dance: emoji");let buffer=view.buffer();let inline=buffer.iter_at_offset(2).paintable().unwrap();assert_eq!(inline,animation.clone().upcast::<gtk::gdk::Paintable>());
+    let column=gtk::Box::new(gtk::Orientation::Vertical,0);column.append(&view);let spacer=gtk::Box::new(gtk::Orientation::Vertical,0);spacer.set_height_request(1000);column.append(&spacer);
+    let scroll=gtk::ScrolledWindow::builder().child(&column).build();let window=gtk::Window::builder().default_width(400).default_height(200).child(&scroll).build();window.present();until(context,||view.is_mapped());
+    let first=inline.current_image();until(context,||inline.current_image()!=first);
+    scroll.vadjustment().set_value(800.0);pump(context);let clipped=inline.current_image();for _ in 0..80{pump(context);std::thread::sleep(std::time::Duration::from_millis(5));}assert_eq!(inline.current_image(),clipped,"offscreen inline emojis must pause");
+    scroll.vadjustment().set_value(0.0);until(context,||inline.current_image()!=clipped);
+    window.set_child(None::<&gtk::Widget>);window.close();pump(context);let hidden=animation.current_image();for _ in 0..40{pump(context);std::thread::sleep(std::time::Duration::from_millis(5));}assert_eq!(animation.current_image(),hidden,"cached channel/profile emoji must not keep animating");
+    let list=gtk::Box::new(gtk::Orientation::Vertical,0);{let model=chat.model();picker(&list,&model.unicode_emojis,&model.actions.emojis,&model.actions.textures,&model.actions.animations,|_|{});}
+    let picker=gtk::Window::builder().default_width(400).default_height(400).child(&list).build();picker.present();until(context,||list.is_mapped());until(context,||animation.current_image()!=hidden);
+    chat.emit(ChatMsg::Action(ActionMsg::ReloadEmojis));until(context,||chat.model().actions.emojis_request.is_none());assert_eq!(chat.model().actions.animations[&id],animation,"catalog refresh reuses decoded frames");
+    picker.set_child(None::<&gtk::Widget>);picker.close();backend.lock().unwrap().emojis.clear();chat.emit(ChatMsg::Action(ActionMsg::ReloadEmojis));until(context,||chat.model().actions.animations.is_empty());
+    drop(inline);drop(buffer);drop(view);drop(column);scroll.set_child(None::<&gtk::Widget>);drop(list);drop(picker);drop(window);drop(scroll);let weak=animation.downgrade();drop(animation);drop(chat);server.abort();until(context,||weak.upgrade().is_none());
 }

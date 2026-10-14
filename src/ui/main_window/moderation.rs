@@ -10,13 +10,19 @@ pub enum ModerationMsg {Open,Close,TargetChanged,Confirm(Operation),Apply{view:U
     Filter,More,Logs{view:Uuid,request:Uuid,append:bool,result:anyhow::Result<AuditPage>}}
 #[derive(Default)]
 pub(super) struct Moderation {view:Option<View>,confirmation:Option<gtk::Window>,jobs:Vec<tokio::task::JoinHandle<()>>,busy:bool,request:Option<Uuid>,filter:AuditFilter,cursor:Option<Uuid>}
-struct View {token:Uuid,window:gtk::Window,body:gtk::Box,user:gtk::Entry,status:gtk::Label,link:gtk::Entry,expiry:gtk::Label,copy:gtk::Button,recovery:Option<RecoveryLink>,recovery_user:Option<Uuid>,filters:Vec<gtk::Entry>,ascending:gtk::CheckButton,logs:gtk::Box,more:gtk::Button}
+struct View {token:Uuid,window:gtk::Window,body:gtk::Box,user:gtk::Entry,status:gtk::Label,link:gtk::Entry,expiry:gtk::Label,copy:gtk::Button,recovery_button:gtk::Button,recovery:Option<RecoveryLink>,recovery_user:Option<Uuid>,filters:Vec<gtk::Entry>,ascending:gtk::CheckButton,logs:gtk::Box,more:gtk::Button}
 impl Moderation {fn clear(&mut self){for j in self.jobs.drain(..){j.abort();}self.request=None;self.busy=false;self.cursor=None;if let Some(w)=self.confirmation.take(){w.close();}if let Some(v)=self.view.take(){v.link.set_text("");v.window.close();}}}
 impl Drop for Moderation {fn drop(&mut self){self.clear();}}
 fn button(body:&gtk::Box,text:&str,s:&ComponentSender<MainWindowModel>,f:impl Fn()->ModerationMsg+'static)->gtk::Button{let b=gtk::Button::with_label(text);let s=s.clone();b.connect_clicked(move |_|s.input(MainWindowMsg::Moderation(f())));body.append(&b);b}
 fn entry(body:&gtk::Box,text:&str)->gtk::Entry{let e=gtk::Entry::new();e.set_placeholder_text(Some(text));body.append(&e);e}
 impl MainWindowModel {
-    pub(super) fn sync_moderation_access(&mut self){if !self.server_access.manage_server{self.moderation.clear();}}
+    fn recovery_owner(&self)->bool{self.server.as_ref().and_then(|s|s.owner_id)==Some(self.current_user.id)}
+    pub(super) fn sync_moderation_access(&mut self){
+        if !self.server_access.manage_server || self.moderation.view.as_ref().is_some_and(|v|v.recovery_button.is_visible()!=self.recovery_owner()){
+            // Close stale confirmations and abort pending recovery requests when ownership changes.
+            self.moderation.clear();
+        }
+    }
     fn load_audit(&mut self,append:bool,s:ComponentSender<Self>){
         if !self.server_access.manage_server||self.moderation.request.is_some(){return;}
         let Some(v)=self.moderation.view.as_ref().filter(|v|v.window.is_visible())else{return;};
@@ -28,6 +34,10 @@ impl MainWindowModel {
         self.moderation.jobs.retain(|j|!j.is_finished());
         if let ModerationMsg::Close=msg{self.moderation.clear();return;}
         if !self.server_access.manage_server{self.moderation.clear();return;}
+        if !self.recovery_owner() && matches!(&msg,ModerationMsg::Confirm(Operation::Recovery)|ModerationMsg::Apply{operation:Operation::Recovery,..}|ModerationMsg::Copy){
+            if let Some(v)=&self.moderation.view{v.status.set_text("Somente o dono do servidor pode gerar recuperações de outros membros.");}
+            return;
+        }
         match msg {
             ModerationMsg::Open=>{
                 if let Some(v)=&self.moderation.view{if v.window.is_visible(){v.window.present();return;}}
@@ -37,8 +47,8 @@ impl MainWindowModel {
                 let user=entry(&body,"UUID do membro (também permite desbanir um membro ausente)");
                 let ids:Vec<_>=self.users.iter().map(|u|u.id).collect();if let Some(id)=ids.first(){user.set_text(&id.to_string());}let e=user.clone();select.connect_selected_notify(move|d|{if let Some(id)=ids.get(d.selected() as usize){e.set_text(&id.to_string());}});
                 let controls=gtk::Box::new(gtk::Orientation::Horizontal,6);body.append(&controls);
-                button(&controls,"Banir membro",&s,||ModerationMsg::Confirm(Operation::Ban(true)));button(&controls,"Desbanir membro",&s,||ModerationMsg::Confirm(Operation::Ban(false)));button(&controls,"Gerar recuperação",&s,||ModerationMsg::Confirm(Operation::Recovery));
-                let link=entry(&body,"Link de recuperação");link.set_editable(false);let expiry=gtk::Label::new(None);body.append(&expiry);let copy=button(&body,"Copiar link",&s,||ModerationMsg::Copy);copy.set_sensitive(false);
+                button(&controls,"Banir membro",&s,||ModerationMsg::Confirm(Operation::Ban(true)));button(&controls,"Desbanir membro",&s,||ModerationMsg::Confirm(Operation::Ban(false)));let recovery_button=button(&controls,"Gerar recuperação",&s,||ModerationMsg::Confirm(Operation::Recovery));recovery_button.set_visible(self.recovery_owner());
+                let link=entry(&body,"Link de recuperação");link.set_editable(false);let expiry=gtk::Label::new(None);body.append(&expiry);let copy=button(&body,"Copiar link",&s,||ModerationMsg::Copy);copy.set_sensitive(false);link.set_visible(self.recovery_owner());expiry.set_visible(self.recovery_owner());copy.set_visible(self.recovery_owner());
                 body.append(&gtk::Separator::new(gtk::Orientation::Horizontal));body.append(&gtk::Label::new(Some("Auditoria · somente leitura")));
                 let filters:Vec<_>=["Ação (ex.: user.ban)","UUID do ator","Tipo de entidade (ex.: user)","Desde (RFC3339, ex.: 2026-10-01T00:00:00Z)","Até (RFC3339)"].iter().map(|l|entry(&body,l)).collect();
                 let ascending=gtk::CheckButton::with_label("Mais antigos primeiro");body.append(&ascending);button(&body,"Aplicar filtros",&s,||ModerationMsg::Filter);
@@ -46,7 +56,7 @@ impl MainWindowModel {
                 let more=button(&body,"Mais registros",&s,||ModerationMsg::More);more.set_sensitive(false);let status=gtk::Label::new(None);status.set_wrap(true);body.append(&status);
                 let l=link.clone();let s2=s.clone();w.connect_close_request(move |_|{l.set_text("");s2.input(MainWindowMsg::Moderation(ModerationMsg::Close));gtk::glib::Propagation::Proceed});
                 let s2=s.clone();user.connect_changed(move |_|s2.input(MainWindowMsg::Moderation(ModerationMsg::TargetChanged)));
-                self.moderation.view=Some(View{token,window:w.clone(),body,user,status,link,expiry,copy,recovery:None,recovery_user:None,filters,ascending,logs,more});self.moderation.filter=AuditFilter::default();w.present();self.load_audit(false,s);
+                self.moderation.view=Some(View{token,window:w.clone(),body,user,status,link,expiry,copy,recovery_button,recovery:None,recovery_user:None,filters,ascending,logs,more});self.moderation.filter=AuditFilter::default();w.present();self.load_audit(false,s);
             }
             ModerationMsg::Confirm(operation)=>{
                 if self.moderation.busy{return;}let Some(v)=self.moderation.view.as_ref().filter(|v|v.window.is_visible())else{return;};
@@ -118,4 +128,20 @@ pub(crate) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::Mai
 pub(crate) fn exercise_denied(main:&Controller<MainWindowModel>,context:&gtk::glib::MainContext){
     use crate::ui::chat::actions::tests::{find_button,pump};assert!(main.model().moderation.view.is_none());assert!(!find_button(main.widget().upcast_ref(),"Moderação e auditoria").get_visible());
     main.emit(MainWindowMsg::Moderation(ModerationMsg::Open));main.emit(MainWindowMsg::Moderation(ModerationMsg::Confirm(Operation::Ban(true))));main.emit(MainWindowMsg::Moderation(ModerationMsg::Filter));pump(context);assert!(main.model().moderation.view.is_none());
+}
+
+#[cfg(test)]pub(crate) fn exercise_recovery_denied(main:&Controller<MainWindowModel>,context:&gtk::glib::MainContext,backend:&std::sync::Arc<std::sync::Mutex<crate::ui::chat::actions::tests::Backend>>){
+    use crate::ui::chat::actions::tests::{find_button,pump,until};
+    main.emit(MainWindowMsg::Moderation(ModerationMsg::Open));until(context,||main.model().moderation.view.is_some()&&main.model().moderation.request.is_none());
+    let window=main.model().moderation.view.as_ref().unwrap().window.clone();
+    assert!(find_button(window.upcast_ref(),"Banir membro").is_visible());
+    assert!(!find_button(window.upcast_ref(),"Gerar recuperação").is_visible());
+    let count=||backend.lock().unwrap().requests.iter().filter(|(m,p,_)|m=="POST"&&p.ends_with("/reset")).count();let before=count();
+    let view=main.model().moderation.view.as_ref().unwrap().token;
+    let peer="12345678-1234-4234-8234-123456789ac0".parse().unwrap();
+    main.emit(MainWindowMsg::Moderation(ModerationMsg::Confirm(Operation::Recovery)));
+    main.emit(MainWindowMsg::Moderation(ModerationMsg::Apply{view,user:peer,operation:Operation::Recovery}));pump(context);
+    assert_eq!(count(),before,"stale recovery actions must not make an unauthorized request");
+    assert!(main.model().moderation.confirmation.is_none());assert!(main.model().moderation.view.as_ref().unwrap().status.text().contains("dono"));
+    main.emit(MainWindowMsg::Moderation(ModerationMsg::Close));pump(context);
 }

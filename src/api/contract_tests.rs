@@ -13,6 +13,16 @@ fn message() -> Value {
     json!({"id":ID, "channel_id":CHANNEL, "author_id":null, "content":"Olá 🌎", "created_at":DATE})
 }
 
+#[tokio::test]async fn moderation_refresh_is_a_small_read_only_inclusive_page(){
+    let page=json!({"channel_id":CHANNEL,"messages":[message()],"has_more":false});
+    let (api,server)=mock(vec![(200,page)]).await;
+    let target:Message=serde_json::from_value(message()).unwrap();
+    assert_eq!(api.moderation_messages(target.channel_id,&target).await.unwrap().messages[0].id,target.id);
+    let requests=server.await.unwrap();assert_eq!(requests.len(),1);let request=&requests[0];assert_eq!(request.method,"GET");
+    let query:std::collections::HashMap<_,_>=request.url.query_pairs().collect();assert_eq!(query["limit"],"30");assert_eq!(query["order"],"desc");assert_eq!(query["last_id"],Uuid::from_u128(target.id.as_u128()+1).to_string());
+    assert_eq!(chrono::DateTime::parse_from_rfc3339(&query["since"]).unwrap(),target.created_at);
+}
+
 async fn mock(responses: Vec<(u16, Value)>) -> (ApiClient, tokio::task::JoinHandle<Vec<Request>>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let client = ApiClient::new(&format!("http://{}", listener.local_addr().unwrap())).unwrap();
@@ -78,9 +88,10 @@ async fn history_pagination_sends_timestamp_and_id_in_descending_order() {
     let cursor = MessageCursor::from(&first.messages[0]);
     client.list_messages(CHANNEL.parse().unwrap(), Some(cursor)).await.unwrap();
     let requests = server.await.unwrap();
-    assert_eq!(requests[0].url.query(), Some("order=desc"));
+    assert_eq!(requests[0].url.query(), Some("order=desc&limit=30"));
     let query: std::collections::HashMap<_,_> = requests[1].url.query_pairs().into_owned().collect();
-    assert_eq!(query.len(),3);
+    assert_eq!(query.len(),4);
+    assert_eq!(query["limit"],"100");
     assert_eq!(query["order"], "desc");
     assert_eq!(query["last_id"], ID);
     assert_eq!(query["since"].parse::<chrono::DateTime<chrono::Utc>>().unwrap(), cursor.created_at);
@@ -89,10 +100,11 @@ async fn history_pagination_sends_timestamp_and_id_in_descending_order() {
 
 #[tokio::test]
 async fn embeds_use_new_endpoint_and_custom_payloads_on_create_and_edit(){
-    let embed=json!({"id":ID,"source_type":"custom","fetch_method":"manual","title":"Rich","color":"#123ABC","created_at":DATE,"fields":[{"position":0,"name":"One","value":"Two","inline":true}],"thumbnail":{"mime_type":"image/png"},"image_data":"AA=="});
+    let embed=json!({"id":ID,"source_type":"custom","fetch_method":"manual","title":"Rich","color":"#123ABC","created_at":DATE,"fields":[{"position":0,"name":"One","value":"Two","inline":true}],"author":{"name":"Discord sender","media":{"mime_type":"image/png"}},"author_image_data":"AQ==","thumbnail":{"mime_type":"image/png"},"image_data":"AA=="});
     let mut response=message();response["embeds"]=json!([embed.clone()]);
     let (client,server)=mock(vec![(200,embed),(200,response.clone()),(200,response.clone()),(200,response)]).await;
     let e=client.get_embed(ID.parse().unwrap()).await.unwrap();assert!(e.fetched_at.is_none());assert_eq!(e.fields[0].value,"Two");
+    assert_eq!(e.author_image_data.as_deref(),Some("AQ=="));assert!(e.metadata().author_image_data.is_none()&&e.metadata().image_data.is_none());
     let input=EmbedInput{title:"Rich 🌎".into(),color:"#123ABC".into(),fields:vec![EmbedFieldInput{name:"One".into(),value:"Two".into(),inline:true}],..Default::default()};
     let create=CreateMessageRequest{channel_id:CHANNEL.parse().unwrap(),content:None,reply_to:None,embeds:vec![input.clone()]};
     client.send_message(&create).await.unwrap();client.send_with_files(&create,&[],|_|{}).await.unwrap();client.edit_message_embeds(ID.parse().unwrap(),"",&[input.clone()]).await.unwrap();
@@ -105,6 +117,61 @@ async fn embeds_use_new_endpoint_and_custom_payloads_on_create_and_edit(){
 async fn wrong_channel_history_is_rejected() {
     let (client, server) = mock(vec![(200,json!({"channel_id":ID,"messages":[],"has_more":false}))]).await;
     assert!(client.list_messages(CHANNEL.parse().unwrap(), None).await.unwrap_err().to_string().contains("outro canal"));
+    server.await.unwrap();
+}
+
+#[tokio::test]
+async fn channel_reads_are_explicit_json_writes_with_empty_success_responses(){
+    let (client,server)=mock(vec![(204,Value::Null),(403,json!({"detail":"Read denied"})),(404,json!({"detail":"Message missing"}))]).await;
+    let channel=CHANNEL.parse().unwrap();let message=ID.parse().unwrap();
+    client.mark_channel_read(channel,message).await.unwrap();
+    for status in [StatusCode::FORBIDDEN,StatusCode::NOT_FOUND]{
+        let error=client.mark_channel_read(channel,message).await.unwrap_err();
+        assert_eq!(error.downcast_ref::<ApiError>().unwrap().status,status);
+    }
+    let requests=server.await.unwrap();assert_eq!(requests.len(),3);
+    for request in requests{
+        assert_eq!(request.method,"PUT");assert_eq!(request.url.path(),format!("/channels/{CHANNEL}/read"));
+        assert_eq!(serde_json::from_str::<Value>(&request.body).unwrap(),json!({"message_id":ID}));
+    }
+}
+
+#[tokio::test]
+async fn manual_channel_read_fetches_one_current_message_and_never_writes_for_empty_or_denied_channels(){
+    let page=json!({"channel_id":CHANNEL,"messages":[message()],"has_more":true});let empty=json!({"channel_id":CHANNEL,"messages":[],"has_more":false});
+    let (client,server)=mock(vec![(200,page),(204,Value::Null),(200,empty),(403,json!({"detail":"Access denied"}))]).await;
+    let channel=CHANNEL.parse().unwrap();assert_eq!(client.mark_latest_read(channel).await.unwrap().unwrap().id,ID.parse::<Uuid>().unwrap());
+    assert!(client.mark_latest_read(channel).await.unwrap().is_none());assert!(client.mark_latest_read(channel).await.is_err());
+    let requests=server.await.unwrap();assert_eq!(requests.iter().filter(|r|r.method=="PUT").count(),1);
+    for request in requests.iter().filter(|r|r.method=="GET"){assert!(request.url.query_pairs().any(|(k,v)|k=="limit"&&v=="1"));}
+    assert_eq!(serde_json::from_str::<Value>(&requests[1].body).unwrap(),json!({"message_id":ID}));
+}
+
+#[tokio::test]
+async fn retained_history_revalidation_uses_large_pages_without_acknowledging_them(){
+    let page=json!({"channel_id":CHANNEL,"messages":[message()],"has_more":false});
+    let (client,server)=mock(vec![(200,page)]).await;
+    let old:Message=serde_json::from_value(message()).unwrap();
+    client.reconcile_messages(CHANNEL.parse().unwrap(),Some(MessageCursor::from(&old))).await.unwrap();
+    let requests=server.await.unwrap();assert_eq!(requests.len(),1);assert_eq!(requests[0].method,"GET");
+    let query:std::collections::HashMap<_,_>=requests[0].url.query_pairs().into_owned().collect();assert_eq!(query["limit"],"100");
+}
+
+#[tokio::test]
+async fn quoted_x_embeds_preserve_quote_fields_and_media_on_fetch_and_message_pages(){
+    let embed=json!({"id":ID,"source_type":"link","fetch_method":"fxtwitter","url":"https://x.com/author/status/123","title":"Author (@author)","description":"Comment on the quoted post","provider":"X","created_at":DATE,
+        "fields":[{"position":0,"name":"Quoted author (@quoted)","value":"The quoted text 🌎","inline":false}],
+        "video":{"url":"https://video.twimg.com/quoted.mp4","mime_type":"video/mp4"},"thumbnail":{"mime_type":"image/jpeg","width":640,"height":360},"image_data":"AA=="});
+    let mut m=message();m["embeds"]=json!([embed.clone()]);
+    let (client,server)=mock(vec![(200,embed),(200,json!({"channel_id":CHANNEL,"messages":[m],"has_more":false}))]).await;
+    let fetched=client.get_embed(ID.parse().unwrap()).await.unwrap();
+    let page=client.list_messages(CHANNEL.parse().unwrap(),None).await.unwrap();
+    for embed in [fetched,page.messages[0].embeds.as_ref().unwrap()[0].clone()]{
+        assert_eq!(embed.fields.len(),1);assert_eq!(embed.fields[0].name,"Quoted author (@quoted)");
+        assert_eq!(embed.fields[0].value,"The quoted text 🌎");assert!(!embed.fields[0].inline);
+        assert_eq!(embed.video.as_ref().unwrap().url.as_deref(),Some("https://video.twimg.com/quoted.mp4"));
+        assert_eq!(embed.metadata().fields,embed.fields);
+    }
     server.await.unwrap();
 }
 
@@ -507,4 +574,36 @@ async fn latest_own_message_does_not_fetch_history_without_an_owned_search_resul
     let result=json!({"type":"message","id":ID,"content":"other text","channel_id":CHANNEL,"channel_name":"general","author_id":null,"author_username":null,"created_at":DATE});
     let(api,server)=mock(vec![(200,json!({"results":[result],"has_more":false}))]).await;
     assert!(api.latest_own_message(CHANNEL.parse().unwrap(),ID.parse().unwrap()).await.unwrap().is_none());assert_eq!(server.await.unwrap().len(),1);
+}
+
+#[tokio::test]
+async fn verbose_authentication_logs_hide_secrets_but_send_real_credentials() {
+    // Exercise the real global logger in an isolated test process. Thread-local
+    // subscribers from concurrent tests must not change this request callsite.
+    if std::env::var_os("PAPO_SAFE_LOGGING_TEST_CHILD").is_none() {
+        for filter in ["trace","papo_gtk=debug,tungstenite::handshake::client=trace,reqwest=trace"] {
+            let result=std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact","api::contract_tests::verbose_authentication_logs_hide_secrets_but_send_real_credentials","--nocapture"])
+                .env("PAPO_SAFE_LOGGING_TEST_CHILD","1").env("RUST_LOG",filter).output().unwrap();
+            assert!(result.status.success(),"isolated logging check failed: {}",String::from_utf8_lossy(&result.stderr));
+            let stderr=String::from_utf8_lossy(&result.stderr);let stdout=String::from_utf8_lossy(&result.stdout);
+            assert!(stderr.contains("HTTP request completed")&&stderr.contains("POST"));
+            assert!(!stdout.contains("HTTP request completed"),"diagnostics belong on stderr");
+            for secret in ["AUTH_SECRET","PASSWORD_SECRET","SERVER_SECRET","http://"] { assert!(!stderr.contains(secret)&&!stdout.contains(secret)); }
+        }
+        return;
+    }
+    crate::logging::init();
+    let (client,server)=mock(vec![(200,json!({"user":{"id":ID,"username":"alice"}})),(200,json!({}))]).await;
+    client.cookies.add_cookie_str("Auth=AUTH_SECRET; HttpOnly; Path=/",&client.base);
+    client.login("alice","PASSWORD_SECRET").await.unwrap();
+    client.login_server("SERVER_SECRET").await.unwrap();
+    let requests=server.await.unwrap();
+    assert!(requests.iter().all(|r|r.headers.contains("Auth=AUTH_SECRET")),"debug redaction must not alter HTTP authentication");
+    assert_eq!(serde_json::from_str::<Value>(&requests[0].body).unwrap()["password"],"PASSWORD_SECRET");
+    assert_eq!(serde_json::from_str::<Value>(&requests[1].body).unwrap()["server_password"],"SERVER_SECRET");
+    let cookie=client.cookies.cookies(&client.base).unwrap();assert!(cookie.is_sensitive());assert!(!format!("{cookie:?}").contains("AUTH_SECRET"));
+    let handshake=client.websocket_request().unwrap();assert!(handshake.headers()["Cookie"].is_sensitive());assert!(!format!("{handshake:?}").contains("AUTH_SECRET"));
+    let error=client.health().await.unwrap_err();let transport=error.downcast_ref::<reqwest::Error>().unwrap();
+    assert!(transport.is_connect());assert!(transport.url().is_none(),"request errors must not retain URLs");
 }

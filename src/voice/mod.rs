@@ -9,6 +9,7 @@ pub struct Device {pub id:String,pub name:String}
 #[derive(Clone,Deserialize)]
 #[serde(tag="type")]
 pub enum EngineEvent {
+    #[serde(rename="microphone_gain")]MicrophoneGain{gain:f64},
     #[serde(rename="speaking")]Speaking{active:bool},
     #[serde(rename="started")]Started{pid:u32},
     #[serde(rename="voice_offer")]Offer{sdp:String},
@@ -62,8 +63,13 @@ mod tests {
     #[ignore="requires native GStreamer/libnice and local ICE sockets; uses synthetic audio"]
     async fn native_voice_worker_drop_releases_process() {
         let (tx,mut rx)=mpsc::unbounded_channel();
-        let engine=Engine::start(serde_json::json!({"type":"start","test_source":true,"muted":true}),move|e|{let _=tx.send(e);});
+        let engine=Engine::start(serde_json::json!({"type":"start","test_source":true,"muted":true,"microphone_gain":2.0}),move|e|{let _=tx.send(e);});
         let pid=tokio::time::timeout(Duration::from_secs(10),async {loop{match rx.recv().await.unwrap(){EngineEvent::Started{pid}=>break pid,EngineEvent::Error{message}=>panic!("{message}"),_=>{}}}}).await.unwrap();
+        let gain=tokio::time::timeout(Duration::from_secs(5),async{loop{match rx.recv().await.unwrap(){EngineEvent::MicrophoneGain{gain}=>break gain,EngineEvent::Error{message}=>panic!("{message}"),_=>{}}}}).await.unwrap();assert_eq!(gain,2.0,"startup honors the configured capture gain");
+        for (requested,expected) in [(-1.0,0.0),(1.5,1.5),(99.0,3.0)]{
+            assert!(engine.send(serde_json::json!({"type":"microphone_gain","gain":requested})));
+            let gain=tokio::time::timeout(Duration::from_secs(5),async{loop{match rx.recv().await.unwrap(){EngineEvent::MicrophoneGain{gain}=>break gain,EngineEvent::Error{message}=>panic!("{message}"),_=>{}}}}).await.unwrap();assert_eq!(gain,expected,"live gain is bounded without replacing or unmuting capture");
+        }
         assert!(std::path::Path::new(&format!("/proc/{pid}")).exists());
         drop(engine);
         tokio::time::timeout(Duration::from_secs(5),async{while std::path::Path::new(&format!("/proc/{pid}")).exists(){tokio::time::sleep(Duration::from_millis(20)).await;}}).await.expect("dropping native voice must release and reap the capture process");

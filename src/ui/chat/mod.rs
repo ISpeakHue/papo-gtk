@@ -6,7 +6,11 @@ pub(crate) mod video;
 pub(crate) mod rich;
 mod embed_editor;
 pub(crate) mod mentions;
+#[cfg(test)]pub(crate) mod mention_background;
+#[cfg(test)]pub(crate) mod multiline;
 pub(crate) mod composer;
+pub(crate) mod input;
+pub(crate) use input::InputExt;
 
 pub(crate) mod state;
 pub(crate) mod actions;
@@ -14,12 +18,16 @@ pub(crate) mod transfers;
 pub(crate) mod clipboard;
 mod viewport;
 mod text;
+mod markdown;
+mod moderation;
+#[cfg(test)]pub(crate) use moderation::exercise as exercise_moderation;
 mod emoji;
 use viewport::{Viewport,Position};
 #[cfg(test)]pub(crate) mod bugs;
 #[cfg(test)]pub(crate) mod bugs5;
 #[cfg(test)]pub(crate) mod bugs6;
 #[cfg(test)]pub(crate) mod bugs7;
+#[cfg(test)]pub(crate) mod bugs8;
 #[cfg(test)]pub(crate) mod performance;
 #[cfg(test)]mod display_frames;
 use transfers::{Transfers, TransferMsg};
@@ -46,6 +54,7 @@ pub struct ChatInit {
 
 pub struct ChatModel {
     pub active_channel: Option<ConversationTarget>,
+    server_name:String,
     history: History,
     conversations: cache::Conversations,
     surfaces:surface_cache::Surfaces,
@@ -53,6 +62,7 @@ pub struct ChatModel {
     reconcile_request:Option<Uuid>,
     edit_lookup:Option<Uuid>,
     media_render_pending: Option<Uuid>,
+    moderation:moderation::Poll,
     #[cfg(test)]
     render_passes: usize,
     #[cfg(test)]media_hydrations:usize,
@@ -86,6 +96,8 @@ pub struct ChatModel {
 
 #[derive(Debug)]
 pub enum ChatMsg {
+    CheckModeration(Uuid),
+    ModerationChecked{request:Uuid,result:anyhow::Result<MessageListResponse>},
     RenderMedia(Uuid),
     EditLatest(u64),
     LatestOwn{epoch:u64,request:Uuid,result:anyhow::Result<Option<Message>>},
@@ -121,6 +133,7 @@ pub enum ChatMsg {
     BeginSnapshot(Uuid),
     SnapshotLoaded { request: Uuid, messages: Option<Vec<Message>> },
     SetUsers(Vec<UserSummary>),
+    ServerName(String),
     SetAvatars(HashMap<Uuid, gtk::gdk::Texture>),
     UserTyping { user_id: Uuid, is_typing: bool },
     ClearStaleTyping,
@@ -142,6 +155,7 @@ pub enum ChatOutput {
     ConversationLoaded,
     Search, Notifications,
     HistoryObserved { channel_id: Uuid, messages: Vec<Message>, latest:bool },
+    AuthorMetadata{channel:Uuid,ids:Vec<Uuid>},
     OpenProfile(Uuid),
     ChannelPreferences,
     ActionError(anyhow::Error),
@@ -170,42 +184,62 @@ impl Component for ChatModel {
             set_vexpand: true,
             add_css_class: "papo-chat",
 
-            // Conversation toolbar stays useful when sidebars are overlaid.
-            gtk::Box {
-                set_spacing:8,add_css_class:"papo-chat-heading",
-                gtk::Button {set_icon_name:"sidebar-show-symbolic",set_has_frame:false,set_tooltip_text:Some("Canais e conversas (F9)"),connect_clicked => ChatMsg::ToggleNavigation},
-                gtk::Label {set_text:"#",add_css_class:"papo-channel-symbol",add_css_class:"dim-label",#[watch] set_visible:!model.active_channel.as_ref().is_some_and(|c|c.is_direct())},
-                gtk::Image {set_icon_name:Some("avatar-default-symbolic"),#[watch] set_visible:model.active_channel.as_ref().is_some_and(|c|c.is_direct())},
-                gtk::Label {
-                    #[watch] set_text:model.active_channel.as_ref().map(|c|c.name()).unwrap_or("Selecione um canal"),
-                    add_css_class:"heading",set_ellipsize:pango::EllipsizeMode::End,set_xalign:0.0,
-                },
-                gtk::Label {
-                    #[watch] set_text:model.active_channel.as_ref().and_then(|c|c.topic()).unwrap_or(""),
-                    set_xalign:0.0,set_hexpand:true,add_css_class:"caption",add_css_class:"dim-label",set_ellipsize:pango::EllipsizeMode::End,
-                },
-                gtk::Button {
-                    set_icon_name:"view-pin-symbolic",set_has_frame:false,set_tooltip_text:Some("Fixadas"),
-                    #[watch] set_sensitive:model.access.read&&model.active_channel.as_ref().is_some_and(|c|!c.is_direct()),
-                    connect_clicked => ChatMsg::Action(ActionMsg::OpenPins),
-                },
-                gtk::Button {set_icon_name:"system-search-symbolic",set_has_frame:false,set_tooltip_text:Some("Buscar mensagens (Ctrl+K)"),connect_clicked => ChatMsg::Search},
-                gtk::Overlay {
-                    gtk::Button {set_icon_name:"preferences-system-notifications-symbolic",set_has_frame:false,set_tooltip_text:Some("Notificações"),connect_clicked => ChatMsg::Notifications},
-                    add_overlay = &gtk::Label {add_css_class:"papo-notification-count",set_halign:gtk::Align::End,set_valign:gtk::Align::Start,
-                        #[watch] set_visible:model.unread_notifications>0,
-                        #[watch] set_text:&format!("{}{}",model.unread_notifications.min(99),if model.unread_notifications>99||model.more_notifications{"+"}else{""}),
+            // Kept here for standalone conversations; the main layout places
+            // this same header above the chat and member pane together.
+            #[name="conversation_header"]
+            adw::HeaderBar {
+                set_widget_name:"conversation-header",
+                pack_start = &gtk::Button {set_icon_name:"sidebar-show-symbolic",set_tooltip_text:Some("Canais e conversas (F9)"),connect_clicked => ChatMsg::ToggleNavigation},
+                #[name="header_title_area"]
+                #[wrap(Some)]
+                set_title_widget = &gtk::Box {
+                    #[name="conversation_title"]
+                    adw::WindowTitle {
+                        set_widget_name:"conversation-title",
+                        #[watch] set_title:&match model.active_channel.as_ref(){Some(c) if c.is_direct()=>c.name().to_owned(),Some(c)=>format!("# {}",c.name()),None=>"Selecione um canal".into()},
+                        #[watch] set_subtitle:model.active_channel.as_ref().and_then(|c|c.topic()).unwrap_or(""),
+                        #[watch] set_tooltip_text:model.active_channel.as_ref().and_then(|c|c.topic()),
                     },
+                    #[name="header_title_offset"]
+                    gtk::Box {set_width_request:0},
                 },
-                gtk::Button {set_icon_name:"system-users-symbolic",set_has_frame:false,set_tooltip_text:Some("Lista de Membros"),connect_clicked => ChatMsg::ToggleUserList},
-                gtk::MenuButton {
-                    set_icon_name:"view-more-symbolic",set_has_frame:false,set_tooltip_text:Some("Opções da conversa"),
-                    #[wrap(Some)] set_popover = &gtk::Popover {
-                        add_css_class:"papo-menu",
-                        gtk::Box {
-                            set_orientation:gtk::Orientation::Vertical,set_spacing:2,
-                            gtk::Button {set_label:"Emojis",add_css_class:"flat",connect_clicked => ChatMsg::Action(ActionMsg::OpenEmojiManager)},
-                            gtk::Button {set_label:"Preferências do canal",add_css_class:"flat",connect_clicked => ChatMsg::ChannelPreferences},
+                #[name="header_actions"]
+                pack_end = &gtk::Box {
+                    set_spacing:6,
+                    #[name="header_pins"]
+                    gtk::Button {
+                        set_icon_name:"view-pin-symbolic",set_tooltip_text:Some("Fixadas"),
+                        #[watch] set_sensitive:model.access.read&&model.active_channel.as_ref().is_some_and(|c|!c.is_direct()),
+                        connect_clicked => ChatMsg::Action(ActionMsg::OpenPins),
+                    },
+                    #[name="header_search"]
+                    gtk::Button {set_icon_name:"system-search-symbolic",set_tooltip_text:Some("Buscar mensagens (Ctrl+K)"),connect_clicked => ChatMsg::Search},
+                    gtk::Overlay {
+                        gtk::Button {set_icon_name:"preferences-system-notifications-symbolic",set_tooltip_text:Some("Notificações"),connect_clicked => ChatMsg::Notifications},
+                        add_overlay = &gtk::Label {add_css_class:"papo-notification-count",set_halign:gtk::Align::End,set_valign:gtk::Align::Start,
+                            #[watch] set_visible:model.unread_notifications>0,
+                            #[watch] set_text:&format!("{}{}",model.unread_notifications.min(99),if model.unread_notifications>99||model.more_notifications{"+"}else{""}),
+                        },
+                    },
+                    #[name="header_members"]
+                    gtk::Button {set_icon_name:"system-users-symbolic",set_tooltip_text:Some("Lista de Membros"),connect_clicked => ChatMsg::ToggleUserList},
+                    gtk::MenuButton {
+                        set_icon_name:"view-more-symbolic",set_tooltip_text:Some("Opções da conversa"),
+                        #[wrap(Some)] set_popover = &gtk::Popover {
+                            add_css_class:"papo-menu",
+                            gtk::Box {
+                                set_orientation:gtk::Orientation::Vertical,set_spacing:2,
+                                #[name="compact_header_actions"]
+                                gtk::Box {
+                                    set_visible:false,set_orientation:gtk::Orientation::Vertical,set_spacing:2,
+                                    gtk::Button {set_label:"Mensagens fixadas",add_css_class:"flat",#[watch] set_sensitive:model.access.read&&model.active_channel.as_ref().is_some_and(|c|!c.is_direct()),connect_clicked => ChatMsg::Action(ActionMsg::OpenPins)},
+                                    gtk::Button {set_label:"Pesquisar mensagens",add_css_class:"flat",connect_clicked => ChatMsg::Search},
+                                    gtk::Button {set_label:"Lista de membros",add_css_class:"flat",connect_clicked => ChatMsg::ToggleUserList},
+                                    gtk::Separator {},
+                                },
+                                gtk::Button {set_label:"Emojis",add_css_class:"flat",connect_clicked => ChatMsg::Action(ActionMsg::OpenEmojiManager)},
+                                gtk::Button {set_label:"Preferências do canal",add_css_class:"flat",connect_clicked => ChatMsg::ChannelPreferences},
+                            },
                         },
                     },
                 },
@@ -383,6 +417,7 @@ impl Component for ChatModel {
                 add_css_class:"papo-composer",
 
                 gtk::Button {
+                    set_valign:gtk::Align::End,
                     set_icon_name: "mail-attachment-symbolic",
                     set_tooltip_text: Some("Adicionar arquivos"),set_has_frame:false,
                     #[watch]
@@ -391,38 +426,59 @@ impl Component for ChatModel {
                 },
                 #[name="emoji_button"]
                 gtk::Button {
+                    set_valign:gtk::Align::End,
                     set_icon_name:"face-smile-symbolic",set_has_frame:false,
                     set_tooltip_text:Some("Emojis (digite : para filtrar)"),
                     #[watch] set_sensitive:model.access.send&&!model.draft.is_sending(),
                     connect_clicked=>ChatMsg::OpenEmojis,
                 },
                 gtk::Button {
+                    set_valign:gtk::Align::End,
                     set_icon_name:"document-properties-symbolic",set_has_frame:false,set_tooltip_text:Some("Embeds personalizados"),
                     #[watch] set_sensitive:model.active_channel.is_some()&&model.access.send&&!model.draft.is_sending(),
                     connect_clicked=>ChatMsg::OpenEmbeds,
                 },
                 #[name="mention_button"]
                 gtk::Button {
+                    set_valign:gtk::Align::End,
                     set_label: "@",
                     set_tooltip_text: Some("Mencionar membro (digite @ para filtrar)"),set_has_frame:false,
                     #[watch] set_sensitive: model.access.send && !model.draft.is_sending(),
                     connect_clicked => ChatMsg::OpenMentions,
                 },
-                #[name = "message_entry"]
-                gtk::Entry {
-                    #[watch]
-                    set_placeholder_text: Some(&match model.active_channel.as_ref(){Some(c) if c.is_direct()=>format!("Mensagem para {}",c.name()),Some(c)=>format!("Conversar em #{}",c.name()),None=>"Selecione um canal para conversar".into()}),
-                    set_hexpand: true,set_width_chars:1,
-                    #[watch]
-                    set_sensitive: model.active_channel.is_some() && model.access.send,
-                    #[watch] set_editable:!model.draft.is_sending(),
-
-                    connect_activate[sender] => move |_| {
-                        sender.input(ChatMsg::SendClicked);
+                gtk::Overlay {
+                    set_hexpand:true,
+                    #[name="composer_scroll"]
+                    gtk::ScrolledWindow {
+                        set_hexpand:true,set_vexpand:false,
+                        set_height_request:36,
+                        set_hscrollbar_policy:gtk::PolicyType::Never,
+                        set_vscrollbar_policy:gtk::PolicyType::External,
+                        #[name="message_entry"]
+                        gtk::TextView {
+                            set_widget_name:"message-composer",
+                            add_css_class:"papo-composer-text",
+                            set_wrap_mode:gtk::WrapMode::WordChar,
+                            set_accepts_tab:false,
+                            set_top_margin:8,set_bottom_margin:8,set_left_margin:4,set_right_margin:4,
+                            set_input_purpose:gtk::InputPurpose::FreeForm,
+                            set_input_hints:gtk::InputHints::NONE,
+                            #[watch] set_sensitive:model.active_channel.is_some()&&model.access.send,
+                            #[watch] set_editable:!model.draft.is_sending(),
+                        },
+                    },
+                    add_overlay = composer_placeholder = &gtk::Label {
+                        set_can_target:false,set_halign:gtk::Align::Fill,set_valign:gtk::Align::Start,
+                        set_xalign:0.0,set_margin_start:4,set_margin_end:4,set_margin_top:8,
+                        set_ellipsize:pango::EllipsizeMode::End,
+                        add_css_class:"dim-label",
+                        #[watch] set_visible:model.draft.text.is_empty()&&!model.composer.is_composing(),
+                        #[watch] set_text:&match model.active_channel.as_ref(){Some(c) if c.is_direct()=>format!("Mensagem para {}",c.name()),Some(c)=>format!("Conversar em #{}",c.name()),None=>"Selecione um canal para conversar".into()},
                     },
                 },
 
                 gtk::Button {
+                    set_valign:gtk::Align::End,
                     set_icon_name: "mail-send-symbolic",
                     add_css_class: "suggested-action",
                     #[watch]
@@ -440,8 +496,9 @@ impl Component for ChatModel {
     fn init(init: Self::Init, root: Self::Root, sender: ComponentSender<Self>) -> ComponentParts<Self> {
         let mut model = ChatModel {
             conversations: Default::default(),surfaces:Default::default(),
-            history_ready: !init.messages.is_empty(),reconcile_request:None,edit_lookup:None,render_window:Default::default(),
+            server_name:"Servidor".into(),history_ready: !init.messages.is_empty(),reconcile_request:None,edit_lookup:None,render_window:Default::default(),
             media_render_pending: None,
+            moderation:Default::default(),
             #[cfg(test)]
             render_passes: 0,
             #[cfg(test)]media_hydrations:0,
@@ -481,22 +538,40 @@ impl Component for ChatModel {
         let controller=outside.clone();root.connect_root_notify(move |root|{if let Some(parent)=root.root().and_downcast::<gtk::Window>(){if controller.widget().is_none(){parent.add_controller(controller.clone());}}else if let Some(parent)=controller.widget(){parent.remove_controller(&controller);}});
 
         model.composer.connect(&widgets.message_entry,&sender);
-        let input=sender.input_sender().clone();widgets.message_entry.connect_notify_local(Some("cursor-position"),move |_,_|{let _=input.send(ChatMsg::MentionCursorChanged);});
+        input::configure_im(&widgets.message_entry);
+        let placeholder=widgets.composer_placeholder.downgrade();let composing=model.composer.clone();
+        widgets.message_entry.connect_preedit_changed(move |view,text|{
+            if let Some(placeholder)=placeholder.upgrade(){placeholder.set_visible(text.is_empty()&&!composing.is_composing()&&view.buffer().char_count()==0);}
+        });
+        let input=sender.input_sender().clone();widgets.message_entry.buffer().connect_mark_set(move |_,_,mark|{if mark.name().as_deref()==Some("insert"){let _=input.send(ChatMsg::MentionCursorChanged);}});
+        input::connect_size(&widgets.message_entry,&widgets.composer_scroll);
         let keys=gtk::EventControllerKey::new();keys.set_propagation_phase(gtk::PropagationPhase::Capture);
         clipboard::connect(&widgets.message_entry,&sender,model.viewport.input_epoch_flag());
-        let input=sender.input_sender().clone();let mentions=widgets.mention_panel.downgrade();let emojis=widgets.emoji_panel.downgrade();let entry=widgets.message_entry.downgrade();let epoch=model.viewport.input_epoch_flag();
-        keys.connect_key_pressed(move |_,key,_,mods|{
+        let input=sender.input_sender().clone();let mentions=widgets.mention_panel.downgrade();let emojis=widgets.emoji_panel.downgrade();let entry=widgets.message_entry.downgrade();let epoch=model.viewport.input_epoch_flag();let composing=model.composer.clone();
+        keys.connect_key_pressed(move |controller,key,_,mods|{
+            let modifiers=mods & (gtk::gdk::ModifierType::SHIFT_MASK|gtk::gdk::ModifierType::CONTROL_MASK|gtk::gdk::ModifierType::ALT_MASK|gtk::gdk::ModifierType::SUPER_MASK|gtk::gdk::ModifierType::META_MASK|gtk::gdk::ModifierType::HYPER_MASK);
             let paste=(matches!(key,gtk::gdk::Key::v|gtk::gdk::Key::V)&&mods.contains(gtk::gdk::ModifierType::CONTROL_MASK)&&!mods.intersects(gtk::gdk::ModifierType::ALT_MASK|gtk::gdk::ModifierType::SUPER_MASK))
                 || (key==gtk::gdk::Key::Insert&&mods==gtk::gdk::ModifierType::SHIFT_MASK);
             if paste&&entry.upgrade().is_some_and(|entry|clipboard::intercept(&entry,&input,epoch.get())){return gtk::glib::Propagation::Stop;}
+            // Let native IM contexts commit/cancel candidates before shortcuts.
+            if composing.is_composing(){return gtk::glib::Propagation::Proceed;}
+            if matches!(key,gtk::gdk::Key::Return|gtk::gdk::Key::KP_Enter)&&mods.contains(gtk::gdk::ModifierType::SHIFT_MASK){return gtk::glib::Propagation::Proceed;}
             let selected=emojis.upgrade().filter(|p|p.is_visible()).map(|p|(p,true)).or_else(||mentions.upgrade().filter(|p|p.is_visible()).map(|p|(p,false)));
+            // An engine can consume Enter/Tab without visible inline preedit.
+            // Let it handle the real event before sending or autocompleting.
+            if matches!(key,gtk::gdk::Key::Return|gtk::gdk::Key::KP_Enter)||key==gtk::gdk::Key::Tab&&selected.is_some(){
+                if let (Some(view),Some(event))=(entry.upgrade(),controller.current_event()){
+                    if view.im_context_filter_keypress(&event){return gtk::glib::Propagation::Stop;}
+                }
+            }
             let completing=selected.is_some();
             if let Some((panel,emoji))=selected{
                 if key==gtk::gdk::Key::Escape{let _=input.send(if emoji{ChatMsg::CloseEmojis}else{ChatMsg::CloseMentions});return gtk::glib::Propagation::Stop;}
                 if matches!(key,gtk::gdk::Key::Return|gtk::gdk::Key::KP_Enter|gtk::gdk::Key::Tab){if let Some(button)=first_mention_button(panel.upcast_ref()){button.emit_clicked();return gtk::glib::Propagation::Stop;}}
                 if key==gtk::gdk::Key::Down{panel.child_focus(gtk::DirectionType::TabForward);return gtk::glib::Propagation::Stop;}
             }
-            if !completing&&key==gtk::gdk::Key::Up&&mods.is_empty()&&entry.upgrade().is_some_and(|e|e.text().is_empty()){
+            if matches!(key,gtk::gdk::Key::Return|gtk::gdk::Key::KP_Enter)&&modifiers.is_empty(){let _=input.send(ChatMsg::SendClicked);return gtk::glib::Propagation::Stop;}
+            if !completing&&key==gtk::gdk::Key::Up&&modifiers.is_empty()&&entry.upgrade().is_some_and(|e|e.text().is_empty()){
                 let _=input.send(ChatMsg::EditLatest(epoch.get()));return gtk::glib::Propagation::Stop;
             }gtk::glib::Propagation::Proceed
         });widgets.message_entry.add_controller(keys);
@@ -521,7 +596,7 @@ impl Component for ChatModel {
             let focus=gtk::EventControllerFocus::new();let entry=widgets.message_entry.downgrade();let panel=widgets.emoji_panel.downgrade();let button=widgets.emoji_button.downgrade();let input=sender.input_sender().clone();
             focus.connect_leave(move |_|{let entry=entry.clone();let panel=panel.clone();let button=button.clone();let input=input.clone();gtk::glib::idle_add_local_once(move ||{let within=|w:&gtk::Widget|w.state_flags().contains(gtk::StateFlags::FOCUS_WITHIN);if entry.upgrade().is_some_and(|w|within(w.upcast_ref()))||panel.upgrade().is_some_and(|w|within(w.upcast_ref()))||button.upgrade().is_some_and(|w|within(w.upcast_ref())){return;}let _=input.send(ChatMsg::CloseEmojis);});});target.add_controller(focus);
         }
-        widgets.message_entry.set_enable_emoji_completion(false);
+        widgets.message_entry.buffer().set_enable_undo(true);
         model.viewport.connect(&widgets.scrolled_window,&widgets.messages_list,&widgets.history_cover,&sender);
         let initial_position=if model.history_ready{model.initial_read.take().map_or(Position::Bottom,|boundary|boundary.position(&model.history.messages))}else{Position::Bottom};
         model.unread_start=if let Position::Unread(id)=initial_position{Some(id)}else{None};
@@ -550,7 +625,8 @@ impl Component for ChatModel {
             ChatMsg::SetDirect(d)=>(ChatMsg::SetTarget(ConversationTarget::Direct(d)),None),
             ChatMsg::InsertEmoji(value)=>{self.emoji_manual=true;(ChatMsg::EmojiSelected(value),None)},other=>(other,None),
         };
-        let incremental=matches!(&message,ChatMsg::AddMessage(_)|ChatMsg::ApplyChange(_)|ChatMsg::DeleteMessage(_)|ChatMsg::RenderMedia(_)|ChatMsg::MediaViewport|ChatMsg::SnapshotLoaded{..}|ChatMsg::SendFinished{..}|ChatMsg::Action(ActionMsg::ReactionsLoaded{..}|ActionMsg::ToggleReaction{..}));
+        let incremental=matches!(&message,ChatMsg::AddMessage(_)|ChatMsg::ApplyChange(_)|ChatMsg::ModerationChecked{..}|ChatMsg::DeleteMessage(_)|ChatMsg::RenderMedia(_)|ChatMsg::MediaViewport|ChatMsg::SnapshotLoaded{..}|ChatMsg::SendFinished{..}|ChatMsg::Action(ActionMsg::ReactionsLoaded{..}|ActionMsg::ToggleReaction{..}));
+        let update_moderation=matches!(&message,ChatMsg::CheckModeration(_)|ChatMsg::ModerationChecked{..}|ChatMsg::MediaViewport|ChatMsg::ViewportChanged(_)|ChatMsg::BeginHistory{..}|ChatMsg::HistoryFailure{..});
         let hydrate=!matches!(&message,ChatMsg::RenderMedia(_));
         let update_emojis=matches!(&message,ChatMsg::OpenEmojis|ChatMsg::CloseEmojis|ChatMsg::EmojiSelected(_)|ChatMsg::InputChanged(_)|ChatMsg::MentionCursorChanged|ChatMsg::SetTarget(_)|ChatMsg::ClearChannel|ChatMsg::SetAccess{..}|ChatMsg::SendClicked|ChatMsg::SendFinished{..}|ChatMsg::OpenMentions|ChatMsg::Action(ActionMsg::EmojiPage{..}|ActionMsg::EmojisLoaded{..}));
         let update_mentions=matches!(&message,ChatMsg::OpenMentions|ChatMsg::MentionCursorChanged|ChatMsg::CloseMentions|ChatMsg::SendClicked|ChatMsg::SendFinished{..}|ChatMsg::InputChanged(_)|ChatMsg::MentionSelected(_)|ChatMsg::SetUsers(_)|ChatMsg::SetConfig(_)|ChatMsg::SetAccess{..}|ChatMsg::SetTarget(_)|ChatMsg::ClearChannel);
@@ -563,6 +639,8 @@ impl Component for ChatModel {
             _ => {},
         }
         match message {
+            ChatMsg::CheckModeration(token)=>{if root.is_mapped(){self.check_moderation(token,&sender);}else{self.schedule_moderation(&sender,false);}},
+            ChatMsg::ModerationChecked{request,result}=>{render_history=self.moderation_checked(request,result);},
             ChatMsg::RetainConversations(allowed) => {self.conversations.retain(&allowed);self.surfaces.retain(&allowed);},
             ChatMsg::ClearConversations => {self.conversations.clear();self.surfaces.clear();},
             ChatMsg::InvalidateConversation(id) => {self.conversations.invalidate_channel(id);self.surfaces.invalidate(id);},
@@ -665,7 +743,7 @@ impl Component for ChatModel {
                 if self.media_render_pending==Some(token){if self.viewport.scrolling(){self.viewport.media_when_idle(&sender);}else{self.media_render_pending=None;render_history=true;}}
             },
             ChatMsg::Transfer(msg) => {
-                let background=matches!(&msg,TransferMsg::ImageReady{..}|TransferMsg::AnimationReady{..}|TransferMsg::Preview{..});
+                let background=matches!(&msg,TransferMsg::ImageReady{..}|TransferMsg::AnimationReady{..}|TransferMsg::AuthorReady{..}|TransferMsg::Preview{..});
                 render_history=matches!(&msg,TransferMsg::AttachmentVideo{..}|TransferMsg::File{..}|TransferMsg::Video{..}|TransferMsg::CloseVideo{..}|TransferMsg::Reveal{..}|TransferMsg::RetryImage(_));
                 let revision=self.transfers.revision;
                 self.handle_transfer(msg,&sender,root);
@@ -679,7 +757,7 @@ impl Component for ChatModel {
             ChatMsg::SetAccess { user_id, access } => {
                 render_history=self.user_id!=Some(user_id)||self.access!=access;
                 let gained_read=!self.access.read&&access.read;
-                if self.user_id!=Some(user_id) { self.conversations.clear();self.surfaces.clear(); }
+                if self.user_id!=Some(user_id) { self.conversations.clear();self.surfaces.clear();self.transfers.reset(); }
                 self.user_id = Some(user_id); self.access = access;
                 if !self.access.read {
                     self.initial_read=None;self.viewport.cancel_open(&widgets.scrolled_window);
@@ -730,7 +808,7 @@ impl Component for ChatModel {
                 }
                 self.emoji_visible=false;self.emoji_manual=false;self.emoji_dismissed=false;
                 self.actions.reset_channel();
-                self.transfers.switch_channel();
+                if same_user{self.transfers.switch_channel();}else{self.transfers.reset();}
                 self.render_window.measure(&widgets.messages_list);
                 if let Some(previous)=previous_surface.filter(|_|same_user){
                     self.surfaces.store(previous,std::mem::take(&mut self.rendered),std::mem::take(&mut self.render_window),&widgets.messages_list,&recent);
@@ -792,6 +870,9 @@ impl Component for ChatModel {
                 }
             }
             ChatMsg::ApplyChange(change) => {
+                if let Change::Moderation(message,attachment,status)=&change{
+                    render_history=self.apply_moderation_change(*message,*attachment,status);
+                }else{
                 if let Change::Embeds(id,embeds)=&change{
                     if let Some(message)=self.history.messages.iter().find(|m|m.id==*id){
                         for old in message.embeds.iter().flatten(){
@@ -801,11 +882,11 @@ impl Component for ChatModel {
                         }
                     }
                 }
-                if let Change::Moderation(message, attachment, status) = &change { self.transfers.invalidate(*attachment); if status=="blocked" {self.transfers.invalidate_message(*message);} }
                 if let Change::Preview(_, preview) = &change { self.transfers.invalidate(preview.id); }
                 if let Change::RemovePreview(_, id) = &change { self.transfers.invalidate(*id); }
                 self.history.apply(change);
                 render_history=true;
+                }
             }
             ChatMsg::HistoryFailure{request_id,error} => {
                 if !self.history.is_pending(request_id) && self.reconcile_request!=Some(request_id) { return; }
@@ -898,10 +979,11 @@ impl Component for ChatModel {
             }
             ChatMsg::SetAvatars(avatars) => {
                 crate::media::update_member_avatars(widgets.messages_list.upcast_ref(),&self.avatars,&avatars);
-                crate::media::update_member_avatars(widgets.mention_choices.upcast_ref(),&self.avatars,&avatars);self.avatars=avatars;
+                crate::media::update_member_avatars(widgets.mention_choices.upcast_ref(),&self.avatars,&avatars);self.avatars=avatars;self.render_pins(&sender);
             }
+            ChatMsg::ServerName(name)=>{self.server_name=name;self.render_picker(&sender);},
             ChatMsg::SetUsers(users) => {
-                let users:HashMap<_,_>=users.into_iter().map(|u| (u.id, u)).collect();render_history=self.users_map.len()!=users.len()||users.iter().any(|(id,u)|self.users_map.get(id).is_none_or(|old|old.display_name()!=u.display_name()||old.roles!=u.roles));self.users_map=users;self.refresh_reaction_hints();
+                let users:HashMap<_,_>=users.into_iter().map(|u| (u.id, u)).collect();render_history=self.users_map.len()!=users.len()||users.iter().any(|(id,u)|self.users_map.get(id).is_none_or(|old|old.display_name()!=u.display_name()||old.roles!=u.roles));self.users_map=users;self.refresh_reaction_hints();self.render_pins(&sender);
                 self.composer.refresh_names(&widgets.message_entry,&self.users_map);
             }
             ChatMsg::UserTyping { user_id, is_typing } => {
@@ -956,6 +1038,12 @@ impl Component for ChatModel {
             ChatMsg::SendFinished { request_id, channel_id, result } => {
                 let outcome = result.as_ref().map(|_| ()).map_err(Clone::clone);
                 if let Ok(mut message) = result {if self.active_channel.as_ref().is_some_and(|c|c.id()==channel_id){
+                    if self.draft.pending_id()==Some(request_id)&&!self.draft.files.is_empty()&&self.user_id.is_some()&&message.author_id==self.user_id{
+                        let known=self.history.messages.iter().find(|m|m.id==message.id);
+                        self.transfers.sent_attachments.extend(message.attachments.iter().flatten().filter(|a|
+                            matches!(a.moderation_status.as_deref(),Some("pending"|"processing"))&&!known.is_some_and(|m|m.attachments.iter().flatten().any(|old|old.id==a.id&&matches!(old.moderation_status.as_deref(),Some("clean"|"sensitive"|"failed"|"blocked"|""))))
+                        ).map(|a|a.id));
+                    }
                     // POST returns only custom embeds; the ordered WS list may
                     // already include automatic embeds processed in background.
                     if self.history.messages.iter().find(|m|m.id==message.id).is_some_and(|m|m.embeds.is_some()){message.embeds=None;}
@@ -1012,7 +1100,7 @@ impl Component for ChatModel {
                 if self.emoji_signature!=signature{
                     self.emoji_signature=signature;while let Some(child)=widgets.emoji_choices.first_child(){widgets.emoji_choices.remove(&child);}
                     for choice in choices.iter().take(if self.emoji_manual{500}else{30}){let button=gtk::Button::new();button.add_css_class("flat");let row=gtk::Box::new(gtk::Orientation::Horizontal,8);
-                        if let Some(texture)=choice.id.and_then(|id|self.actions.textures.get(&id)){let image=gtk::Image::from_paintable(Some(texture));image.set_pixel_size(24);row.append(&image);}else{row.append(&gtk::Label::new(Some(if choice.id.is_none(){&choice.text}else{"◌"})));}
+                        if let Some(image)=choice.id.and_then(|id|self.actions.emoji_image(id,24)){row.append(&image);}else{row.append(&gtk::Label::new(Some(if choice.id.is_none(){&choice.text}else{"◌"})));}
                         let label=gtk::Label::new(Some(&format!(":{}:",choice.name)));label.set_xalign(0.0);label.set_hexpand(true);label.set_ellipsize(pango::EllipsizeMode::End);row.append(&label);button.set_child(Some(&row));let input=sender.input_sender().clone();let value=choice.text.clone();button.connect_clicked(move |_|{let _=input.send(ChatMsg::EmojiSelected(value.clone()));});widgets.emoji_choices.append(&button);
                     }
                     if self.emoji_manual{let all=gtk::Button::with_label("Todos os emojis Unicode…");let input=sender.input_sender().clone();all.connect_clicked(move |_|{let _=input.send(ChatMsg::UnicodePicker);});widgets.emoji_choices.prepend(&all);}
@@ -1073,11 +1161,23 @@ impl Component for ChatModel {
         }
         widgets.reply_author.set_attributes(None);
         if let Some(roles)=self.draft.reply.as_ref().and_then(|m|m.author_id).and_then(|id|self.users_map.get(&id)).and_then(|u|u.roles.as_deref()){crate::ui::style::role_color(&widgets.reply_author,roles);}
+        if render_history||update_moderation{self.schedule_moderation(&sender,root.is_mapped());}
         self.update_view(widgets, sender);
     }
 }
 
 impl ChatModel {
+    /// Never acknowledge unread navigation, pagination or an unsettled opening.
+    pub(crate) fn read_candidate(&self)->Option<Message> {
+        if !self.access.read || !self.history_ready || self.history.loading()
+            || self.reconcile_request.is_some() || self.initial_read.is_some()
+            || self.viewing_old || !self.viewport.read_ready() {
+            return None;
+        }
+        let channel=self.active_channel.as_ref()?.id();
+        self.history.messages.iter().filter(|m|m.channel_id==channel)
+            .max_by_key(|m|(m.created_at,m.id)).cloned()
+    }
     pub(crate) fn profile_text(&self,value:&str)->gtk::TextView{text::widget(value,&self.users_map,&self.actions)}
     pub(crate) fn has_profile_emoji(&self,value:&str)->bool{text::parts_index(value,&self.actions.emoji_names).iter().any(|p|matches!(p,text::Part::Emoji(..)))}
 }
@@ -1118,6 +1218,7 @@ mod render_tests {
         let mut message:Message=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"channel_id":Uuid::new_v4(),"content":"hello","created_at":"2026-10-07T12:00:00Z","previews":[{"id":Uuid::new_v4(),"url":"https://example.test","kind":"og","title":"Photo","fetched_at":"2026-10-07T12:00:00Z"}]})).unwrap();
         let original=message_visual_signature(&message);
         message.embeds.as_mut().unwrap()[0].image_data=Some("A".repeat(4<<20));
+        message.embeds.as_mut().unwrap()[0].author_image_data=Some("B".repeat(1<<20));
         assert_eq!(message_visual_signature(&message),original);
         message.embeds.as_mut().unwrap()[0].title=Some("Updated title".into());
         assert_ne!(message_visual_signature(&message),original);
@@ -1209,6 +1310,7 @@ fn rebuild_messages_view(
             if let Some((_,row))=rendered.get(&key){refresh_row_actions(row,msg,actions,access);if actions.highlight==Some(msg.id){row.add_css_class("papo-message-highlight");}else{row.remove_css_class("papo-message-highlight");}ordered.push(row.clone());continue;}
         }
         let author=msg.author_id.and_then(|id|users_map.get(&id));
+        let mentioned=user_id.is_some_and(|id|msg.author_id!=Some(id)&&mentions::addressed_to(msg.content.as_deref().unwrap_or(""),id,users_map));
         let text=msg.content.as_deref().map(|text|mentions::render(text,users_map));
         let reply_text=msg.reply_to.map(|id|mentions::render(by_id.get(&id).and_then(|m|m.content.as_deref()).unwrap_or("Abrir mensagem respondida"),users_map));
         let emoji_state:Vec<_>=msg.reactions.iter().flatten().filter_map(|r|r.emoji_id.map(|id|(id,actions.emoji_label(id),actions.textures.get(&id).map_or(0,|t|t.as_ptr() as usize)))).collect();
@@ -1218,14 +1320,15 @@ fn rebuild_messages_view(
         let signature=format!("{message_state}|{grouped}|{access:?}|{user_id:?}|{config:?}|{:?}|{}|{:?}|{}",author.map(|u|(u.display_name(),&u.roles)),pinned.contains(&msg.id),emoji_state,msg.created_at.with_timezone(&chrono::Local).format("%H:%M"));
         let inline=text::parts_index(msg.content.as_deref().unwrap_or(""),&actions.emoji_names);let inline_state:Vec<_>=inline.iter().filter_map(|p|if let text::Part::Emoji(id,name)=p{Some((*id,name,actions.textures.get(id).map_or(0,|t|t.as_ptr() as usize)))}else{None}).collect();
         let reply_author=msg.reply_to.and_then(|id|by_id.get(&id)).and_then(|m|m.author_id).and_then(|id|users_map.get(&id)).map(|u|u.display_name());
-        let signature=format!("{signature}|{text:?}|{reply_text:?}|{reply_author:?}|{inline_state:?}");
+        let signature=format!("{signature}|{text:?}|{reply_text:?}|{reply_author:?}|{inline_state:?}|{mentioned}");
         if let Some((old,row))=rendered.get(&key){if old==&signature{
             refresh_row_actions(row,msg,actions,access);
-            if !defer_media{if let Some(container)=find_media_box(row.upcast_ref()){transfers::update_media_box(&container,msg,media,sender);}}
+            if !defer_media{if let Some(container)=find_media_box(row.upcast_ref()){transfers::update_media_box(&container,msg,media,users_map,actions,sender);}}
             if actions.highlight==Some(msg.id){row.add_css_class("papo-message-highlight");}else{row.remove_css_class("papo-message-highlight");}ordered.push(row.clone());continue;}}
         let row = gtk::ListBoxRow::new();
         row.set_widget_name(&key);
         row.set_focusable(true);
+        if mentioned{row.add_css_class("papo-message-mentioned");}
         if config.display.as_ref().and_then(|d|d.show_timestamps).unwrap_or(true){row.set_tooltip_text(Some(&msg.created_at.with_timezone(&chrono::Local).format("%d/%m/%Y %H:%M").to_string()));}
         if actions.highlight == Some(msg.id) { row.add_css_class("papo-message-highlight"); }
         row.set_activatable(false);
@@ -1296,7 +1399,7 @@ fn rebuild_messages_view(
         if let Some(raw)=&msg.content{let input=sender.input_sender().clone();content_box.append(&text::with_profiles(raw,users_map,actions,move |id|{let _=input.send(ChatMsg::OpenProfile(id));}));}
 
         let media_box=gtk::Box::new(gtk::Orientation::Vertical,4);media_box.set_widget_name("message-media");
-        transfers::update_media_box(&media_box,msg,media,sender);content_box.append(&media_box);
+        transfers::update_media_box(&media_box,msg,media,users_map,actions,sender);content_box.append(&media_box);
 
         // Reactions Flow / Pill List
         let reactions_box = gtk::FlowBox::new();
@@ -1324,9 +1427,9 @@ fn rebuild_messages_view(
                 motion.connect_enter(move |_,_,_|{let _=hover_input.send(ChatMsg::Action(ActionMsg::HoverReactions(message)));});btn.add_controller(motion);
                 btn.connect_query_tooltip(move |_,_,_,_,tooltip|{if let Some(text)=hints.borrow().get(&key){tooltip.set_text(Some(text));}else{tooltip.set_text(Some("Carregando quem reagiu…"));let _=input.send(ChatMsg::Action(ActionMsg::HoverReactions(key.0)));}true});
                 btn.set_sensitive(!actions.busy.contains(&msg.id) && (access.send || (access.read && own)));
-                if let Some(texture) = reaction.emoji_id.and_then(|id| actions.textures.get(&id)) {
+                if let Some(img) = reaction.emoji_id.and_then(|id| actions.emoji_image(id,20)) {
                     let inner = gtk::Box::new(gtk::Orientation::Horizontal, 4);
-                    let img = gtk::Image::from_paintable(Some(texture)); img.set_pixel_size(20); inner.append(&img);
+                    inner.append(&img);
                     inner.append(&gtk::Label::new(Some(&count.to_string()))); btn.set_child(Some(&inner));
                 }
 
@@ -1451,4 +1554,76 @@ impl ChatModel {
 fn find_media_box(widget:&gtk::Widget)->Option<gtk::Box>{
     if widget.widget_name()=="message-media"{return widget.clone().downcast().ok();}
     let mut child=widget.first_child();while let Some(w)=child{if let Some(found)=find_media_box(&w){return Some(found);}child=w.next_sibling();}None
+}
+
+#[cfg(test)]pub(crate) fn exercise_animated_emojis(context:&gtk::glib::MainContext){emoji::exercise(context);}
+
+#[cfg(test)]pub(crate) fn exercise_read_candidate(context:&gtk::glib::MainContext){
+    use adw::prelude::*;
+    use actions::tests::pump;
+    use performance::settle;
+    let channel=Uuid::new_v4();let user=Uuid::new_v4();let now=chrono::Utc::now();
+    let messages:Vec<Message>=(0..80).map(|i|serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"channel_id":channel,"created_at":now+chrono::Duration::seconds(i),"content":format!("Unread message {i}")})).unwrap()).collect();
+    let target=serde_json::from_value(serde_json::json!({"id":channel,"name":"Unread channel","created_at":now,"last_read_message":messages[0].id,"last_message":{"id":messages[79].id,"created_at":messages[79].created_at}})).unwrap();
+    let chat=ChatModel::builder().launch(ChatInit{active_channel:Some(target),messages:messages.clone(),user_id:Some(user),..Default::default()}).detach();
+    chat.emit(ChatMsg::SetAccess{user_id:user,access:crate::models::Access::direct()});
+    assert!(chat.model().read_candidate().is_none(),"opening before allocation cannot acknowledge history");
+    let window=adw::Window::builder().default_width(850).default_height(650).content(chat.widget()).build();window.present();settle(context);
+    assert!(chat.model().read_candidate().is_none(),"opening at the unread boundary is not reading the latest message");
+    chat.emit(ChatMsg::Latest);settle(context);assert_eq!(chat.model().read_candidate().unwrap().id,messages[79].id);
+    let request=Uuid::new_v4();chat.emit(ChatMsg::BeginHistory{request_id:request,cursor:Some(MessageCursor::from(&messages[0]))});pump(context);
+    assert!(chat.model().read_candidate().is_none(),"history loading cannot acknowledge a cached message");
+    chat.emit(ChatMsg::HistoryLoaded{request_id:request,append:true,result:Ok(MessageListResponse{channel_id:channel,messages:vec![],has_more:false})});settle(context);
+    assert_eq!(chat.model().read_candidate().unwrap().id,messages[79].id);
+    chat.emit(ChatMsg::SetAccess{user_id:user,access:Default::default()});settle(context);assert!(chat.model().read_candidate().is_none());
+    window.set_content(None::<&gtk::Widget>);window.close();drop(chat);pump(context);
+}
+
+impl ChatModel {
+    pub(crate) fn adapt_header(controller:&Controller<Self>,bin:&adw::BreakpointBin,members:&adw::OverlaySplitView)->(gtk::Settings,gtk::glib::SignalHandlerId){
+        use adw::prelude::BreakpointBinExt;
+        let widgets=controller.widgets();
+        widgets.conversation_header.set_centering_policy(adw::CenteringPolicy::Strict);
+        widgets.header_title_area.set_hexpand(true);
+        widgets.conversation_title.set_hexpand(true);
+        let compact=adw::Breakpoint::new(adw::BreakpointCondition::new_length(adw::BreakpointConditionLengthType::MaxWidth,720.0,adw::LengthUnit::Sp));
+        compact.add_setters(&[(&widgets.header_pins,"visible",false),(&widgets.header_search,"visible",false),(&widgets.header_members,"visible",false)]);
+        compact.add_setters(&[(&widgets.compact_header_actions,"visible",true)]);
+        // Balance the compact action group against native window controls
+        // without changing the title's centering policy or duplicating actions.
+        let header=widgets.conversation_header.clone();let actions=widgets.header_actions.clone();
+        compact.connect_apply(move |_|{header.remove(&actions);header.pack_start(&actions);});
+        let header=widgets.conversation_header.clone();let actions=widgets.header_actions.clone();
+        compact.connect_unapply(move |_|{header.remove(&actions);header.pack_end(&actions);});
+        // Reserve the docked member column inside the title area, so the
+        // title itself is centered above the chat. An overlay takes no width.
+        let offset=widgets.header_title_offset.downgrade();let pane=members.downgrade();
+        let condition=compact.clone();
+        let align=std::rc::Rc::new(move ||{
+            if let (Some(offset),Some(pane))=(offset.upgrade(),pane.upgrade()){
+                let docked=!pane.is_collapsed()&&pane.shows_sidebar();
+                let width=if docked{pane.sidebar_width_unit().to_px(pane.max_sidebar_width(),Some(&offset.settings())).round() as i32+1}else{0};
+                offset.set_width_request(width);
+                let limit=720.0+if docked{pane.max_sidebar_width()}else{0.0};
+                condition.set_condition(Some(&adw::BreakpointCondition::new_length(adw::BreakpointConditionLengthType::MaxWidth,limit,adw::LengthUnit::Sp)));
+            }
+        });
+        let update=align.clone();members.connect_collapsed_notify(move |_|update());
+        let update=align.clone();members.connect_show_sidebar_notify(move |_|update());
+        align();
+        // The split view uses Sp units; keep the offset in sync with desktop
+        // font scaling. Layout disconnects this global settings handler on drop.
+        let settings=widgets.conversation_header.settings();let update=align.clone();
+        let handler=settings.connect_notify_local(None,move |_,property|{if matches!(property.name(),"gtk-xft-dpi"|"gtk-font-name"){update();}});
+        bin.add_breakpoint(compact);
+        (settings,handler)
+    }
+
+    /// Move the live header into the main pane's ToolbarView without duplicating
+    /// its watched channel state, badges or action handlers.
+    pub(crate) fn take_header(controller:&Controller<Self>)->adw::HeaderBar {
+        let header=controller.widgets().conversation_header.clone();
+        controller.widget().remove(&header);
+        header
+    }
 }

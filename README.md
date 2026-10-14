@@ -8,6 +8,16 @@ messages, attachments and rich link/custom embeds, reactions and mentions, membe
 notifications, moderation, voice calls, cameras and screen sharing. The interface
 uses an adaptive server/channel sidebar and native GNOME controls.
 
+## Diagnostics
+
+Terminal logging defaults to warnings and errors, written to stderr. Enable
+application debug diagnostics with `RUST_LOG=papo_gtk=debug cargo run`.
+HTTP diagnostics contain only method, status, elapsed time and attempt number;
+URLs, headers, cookies, passwords and request/response bodies are excluded.
+Raw dependency dumps remain disabled even with `RUST_LOG=trace` or an explicit
+transport logging directive. Authentication models and cookie header values
+also redact secrets in debug output.
+
 ## Build and run
 
 Requires Rust, a C compiler, pkg-config, GLib development tools (`glib-compile-resources`), OpenSSL development files, GTK 4.12+

@@ -12,3 +12,32 @@ The application cue in `src/media/voice_join.wav` is an original 220 ms mono
 PCM waveform at 22,050 Hz: 660 Hz followed by 880 Hz, with an attack and decay.
 Tests mute native media while checking decoding. Neither fixture needs FFmpeg
 at test runtime. Both are distributed under this repository's GPL-3.0 license.
+
+`animated-emoji.png` (APNG) and `animated-emoji.webp` are original 64×64 red
+and green frames with 40 ms and 80 ms delays. They exercise server emoji
+animation decoding and downsampling. Regenerate using Pillow (needed only to
+regenerate fixtures, not to run the application or tests):
+
+```python
+from PIL import Image
+frames = [Image.new("RGBA", (64, 64), color) for color in ["red", "lime"]]
+for ext in ["png", "webp"]:
+    frames[0].save(f"tests/fixtures/animated-emoji.{ext}", save_all=True,
+                   append_images=frames[1:], duration=[40, 80], loop=0,
+                   lossless=True)
+```
+
+These fixtures are distributed under this repository's GPL-3.0 license.
+
+`chat-h264.mp4` is an original two-second 160×96 test pattern and synthesized
+330 Hz tone, encoded as H.264/AAC. AppImage validation decodes its video through
+the software H.264 fallback to verify packaging on machines without GPU drivers.
+Tests use a discard sink, with no audio playback. Regenerate with FFmpeg and its
+OpenH264 encoder (needed only when regenerating):
+
+```sh
+ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=size=160x96:rate=24 -f lavfi -i sine=frequency=330:sample_rate=44100 -t 2 -c:v libopenh264 -b:v 160k -pix_fmt yuv420p -c:a aac -n tests/fixtures/chat-h264.mp4
+```
+
+This fixture contains no downloaded or personal media and is distributed under
+this repository's GPL-3.0 license.

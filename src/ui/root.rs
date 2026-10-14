@@ -79,7 +79,27 @@ mod tests {
             window.close();
             return;
         }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("gnome-layout"){
+            exercise_gnome_layout(&controller,&context);window.close();return;
+        }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("presence-selector"){
+            crate::ui::main_window::account::exercise_presence_selector(&context);window.close();return;
+        }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("multiline"){crate::ui::chat::multiline::exercise(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("full-app-input"){crate::ui::chat::multiline::exercise_full_app(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("login-input"){
+            exercise_login_input(&controller,&context);window.close();return;
+        }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("mention-background"){crate::ui::chat::mention_background::exercise(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("emoji-notifications"){crate::media::animation::exercise(&context);crate::ui::chat::exercise_animated_emojis(&context);crate::ui::main_window::notifications::exercise_tabs(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("account-notices"){crate::ui::main_window::bugs7::exercise(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("backend-update"){
+            crate::ui::chat::exercise_read_candidate(&context);
+            crate::ui::main_window::notifications::exercise_backend_update(&context);window.close();return;
+        }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("report8"){
+            crate::ui::user_list::exercise_corrections(&context);crate::ui::chat::bugs8::exercise(&context);crate::ui::chat::exercise_moderation(&context);crate::ui::main_window::bugs8::exercise(&context);window.close();return;
+        }
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("profile-emojis"){crate::ui::main_window::account::exercise_profile_emojis(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("status-viewer"){crate::ui::status::exercise(&context);crate::ui::user_list::exercise_corrections(&context);crate::ui::chat::transfers::exercise_viewer(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("clipboard"){crate::ui::chat::clipboard::exercise(&context);window.close();return;}
@@ -99,6 +119,9 @@ mod tests {
         }
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("scroll-media"){
             crate::ui::chat::performance::exercise_media_scroll(&context);window.close();return;
+        }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("image-geometry"){
+            crate::ui::chat::transfers::exercise_geometry(&context);window.close();return;
         }
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("channel-cache"){
             crate::ui::chat::performance::exercise_channel_cache(&context);window.close();return;
@@ -191,7 +214,7 @@ mod tests {
         chat.emit(ChatMsg::ClearChannel);
         drain();
         assert!(!retry.is_visible());
-        assert!(!chat_widgets.iter().find_map(|widget| widget.downcast_ref::<gtk::Entry>()).unwrap().is_sensitive());
+        assert!(!crate::ui::chat::composer::field(chat.widget().upcast_ref()).is_sensitive());
 
         // Presence snapshots received before member lists must still render away/busy.
         use crate::ui::user_list::{UserListInit, UserListModel, UserListMsg};
@@ -277,9 +300,11 @@ mod tests {
         crate::ui::chat::clipboard::exercise(&context);
         crate::ui::chat::composer::exercise(&context);
         crate::ui::main_window::account::exercise_profile_emojis(&context);
+        crate::ui::main_window::account::exercise_presence_selector(&context);
         crate::ui::status::exercise(&context);
         crate::ui::chat::transfers::exercise_viewer(&context);
         crate::ui::chat::transfers::exercise_retention(&context);
+        crate::ui::chat::transfers::exercise_geometry(&context);
         crate::ui::chat::rich::exercise(&context);
         crate::ui::chat::video::exercise_initial_audio();
         crate::ui::chat::bugs6::exercise_send_feedback(&context);
@@ -295,6 +320,11 @@ mod tests {
         crate::ui::user_list::exercise_corrections(&context);
         crate::media::avatars::exercise_corrections(&context);
         crate::media::animation::exercise(&context);
+        crate::ui::chat::multiline::exercise(&context);
+        crate::ui::chat::multiline::exercise_full_app(&context);
+        crate::ui::chat::mention_background::exercise(&context);
+        crate::ui::chat::exercise_animated_emojis(&context);
+        crate::ui::main_window::notifications::exercise_tabs(&context);
         crate::media::sound::exercise(&context);
 
         // Authenticating must actually switch the watched stack to the main view.
@@ -320,6 +350,69 @@ mod tests {
             .filter_map(|widget| widget.downcast_ref::<gtk::Label>())
             .any(|label| label.text().contains("Sua sessão terminou")));
         window.close();
+    }
+
+    fn exercise_gnome_layout(controller:&Controller<RootModel>,context:&gtk::glib::MainContext){
+        use crate::ui::chat::actions::tests::{mock,until,pump,find_button};
+        let(api,backend,server)=tokio::runtime::Handle::current().block_on(mock());
+        let whoami=tokio::runtime::Handle::current().block_on(api.whoami()).unwrap();
+        controller.emit(RootMsg::Authenticated{whoami,client:api});
+        until(context,||controller.model().view==View::Main);
+        let window=controller.widget();
+        {
+            let model=controller.model();let main=model.main_controller.as_ref().unwrap();
+            crate::ui::main_window::layout::tests::exercise_header(main,window,context);
+            let widgets=descendants(&window.content().unwrap());
+            assert!(!widgets.iter().find(|w|w.widget_name()=="login-header").unwrap().is_mapped());
+            assert_eq!(widgets.iter().filter(|w|w.is::<adw::HeaderBar>()&&w.is_mapped()).count(),1);
+        }
+        find_button(&window.content().unwrap(),"Desconectar").emit_clicked();
+        until(context,||window.visible_dialog().is_some());
+        let dialog=window.visible_dialog().unwrap();
+        assert_eq!(controller.model().view,View::Main);
+        find_button(dialog.upcast_ref(),"Cancelar").emit_clicked();
+        until(context,||window.visible_dialog().is_none());
+        assert_eq!(controller.model().view,View::Main,"cancelling must retain the session");
+        assert!(!backend.lock().unwrap().requests.iter().any(|(_,p,_)|p=="/auth/logout"));
+        find_button(&window.content().unwrap(),"Desconectar").emit_clicked();
+        until(context,||window.visible_dialog().is_some());
+        let dialog=window.visible_dialog().unwrap();
+        dialog.close();
+        until(context,||window.visible_dialog().is_none());
+        assert_eq!(controller.model().view,View::Main,"dismissing must retain the session");
+        find_button(&window.content().unwrap(),"Desconectar").emit_clicked();
+        until(context,||window.visible_dialog().is_some());
+        crate::ui::main_window::layout::tests::preview(window,"disconnect-confirmation",context);
+        find_button(window.visible_dialog().unwrap().upcast_ref(),"Desconectar").emit_clicked();
+        until(context,||controller.model().view==View::Login);
+        crate::ui::chat::performance::settle(context);
+        let widgets=descendants(&window.content().unwrap());
+        assert!(widgets.iter().find(|w|w.widget_name()=="login-header").unwrap().is_mapped());
+        assert!(!widgets.iter().any(|w|w.widget_name()=="conversation-header"));
+        server.abort();pump(context);
+    }
+
+    fn exercise_login_input(controller:&Controller<RootModel>,context:&gtk::glib::MainContext){
+        use crate::ui::chat::{composer,multiline,InputExt};
+        use crate::ui::chat::actions::tests::{mock,pump,until};
+        let window=controller.widget();window.set_title(Some("Papo login input test"));
+        let native=std::env::var_os("PAPO_NATIVE_INPUT_TEST").is_some();
+        if native{assert_eq!(window.upcast_ref::<gtk::Widget>().display().type_().name(),"GdkX11Display");assert!(std::process::Command::new("setxkbmap").args(["-layout","br","-variant",""]).status().unwrap().success());}
+        let row=descendants(&window.content().unwrap()).into_iter().find_map(|w|w.downcast::<adw::EntryRow>().ok().filter(|row|row.title()=="Usuário")).unwrap();
+        let text=row.delegate().and_downcast::<gtk::Text>().unwrap();row.set_text("");row.grab_focus();
+        until(context,||row.is_mapped());crate::ui::chat::performance::settle(context);
+        if native{multiline::keys_for("Papo login input test",&["dead_acute"]);crate::ui::chat::performance::settle(context);multiline::keys_for("Papo login input test",&["a"]);}else{text.emit_by_name::<()>("insert-at-cursor",&[&"á"]);}
+        until(context,||row.text()=="á");
+        let(api,backend,server)=tokio::runtime::Handle::current().block_on(mock());let whoami=tokio::runtime::Handle::current().block_on(api.whoami()).unwrap();
+        // Keep the actual login editable focused as authentication changes the
+        // watched stack. The login controller stays alive, as in the real app.
+        controller.emit(RootMsg::Authenticated{whoami,client:api});
+        until(context,||controller.model().view==View::Main);
+        let field=composer::field(&window.content().unwrap());until(context,||field.is_mapped()&&field.is_sensitive());field.grab_focus();
+        if window.upcast_ref::<gtk::Widget>().display().type_().name()=="GdkWaylandDisplay"&&std::env::var_os("GTK_IM_MODULE").is_none(){assert_eq!(window.settings().gtk_im_module().as_deref(),Some("gtk-im-context-simple"));assert!(field.im_module().is_none(),"login and chat inherit one process-wide transport");}
+        if native{multiline::keys_for("Papo login input test",&["dead_acute"]);crate::ui::chat::performance::settle(context);multiline::keys_for("Papo login input test",&["e","space","Control_L+Shift_L+u","e","7","Return"]);}else{field.emit_by_name::<()>("insert-at-cursor",&[&"é ç"]);}
+        until(context,||field.text()=="é ç");assert!(!backend.lock().unwrap().requests.iter().any(|(m,p,_)|m=="POST"&&p=="/messages"),"an input-method Enter commit must not send after login");
+        server.abort();pump(context);
     }
 }
 
@@ -365,6 +458,8 @@ impl Component for RootModel {
             #[wrap(Some)]
             set_content = &adw::ToolbarView {
                 add_top_bar = &adw::HeaderBar {
+                    set_widget_name:"login-header",
+                    #[watch] set_visible:model.view==View::Login,
                     set_show_start_title_buttons: true,
                     set_show_end_title_buttons: true,
                     #[wrap(Some)]
@@ -381,8 +476,9 @@ impl Component for RootModel {
                 set_content = &gtk::Stack {
                     set_vexpand: true,
                     set_hhomogeneous:false,set_vhomogeneous:false,
-                    set_transition_type: gtk::StackTransitionType::Crossfade,
-                    set_transition_duration: 250,
+                    // Each view owns its header; avoid crossfading two sets
+                    // of window controls during authentication or logout.
+                    set_transition_type: gtk::StackTransitionType::None,
                     add_named[Some("login")] = model.login_controller.widget(),
                     #[watch]
                     set_visible_child_name: match model.view {
@@ -397,6 +493,7 @@ impl Component for RootModel {
     fn init(_init: (), root: Self::Root, sender: ComponentSender<Self>) -> ComponentParts<Self> {
         crate::app::branding::install();
         crate::ui::style::install();
+        crate::ui::chat::input::configure_desktop_im();
         let config = AppConfig::load();
 
         // Initialize Login child component controller

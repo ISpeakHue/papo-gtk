@@ -25,6 +25,7 @@ pub struct Embed {
     #[serde(default)] pub created_at: DateTime<Utc>,
     pub fetched_at: Option<DateTime<Utc>>,
     pub image_data: Option<String>,
+    pub author_image_data: Option<String>,
 }
 // Accept older history/fixture payloads while exposing the new nested contract.
 #[derive(Deserialize)]
@@ -48,6 +49,7 @@ struct EmbedWire {
     #[serde(default)] pub created_at: DateTime<Utc>,
     pub fetched_at: Option<DateTime<Utc>>,
     pub image_data: Option<String>,
+    pub author_image_data: Option<String>,
     provider_name: Option<String>,
     image_mime_type: Option<String>,
     image_size_bytes: Option<i64>,
@@ -59,7 +61,7 @@ impl From<EmbedWire> for Embed {
             provider:w.provider.or(w.provider_name),site_name:w.site_name,url:w.url,title:w.title,description:w.description,color:w.color,
             author:w.author,thumbnail:w.thumbnail.or_else(||w.image_mime_type.map(|mime|EmbedMedia{mime_type:Some(mime),size_bytes:w.image_size_bytes,..Default::default()})),
             image:w.image,video:w.video.or_else(||w.video_url.map(|url|EmbedMedia{url:Some(url),..Default::default()})),footer:w.footer,fields:w.fields,
-            embed_url:w.embed_url,created_at:w.created_at,fetched_at:w.fetched_at,image_data:w.image_data }
+            embed_url:w.embed_url,created_at:w.created_at,fetched_at:w.fetched_at,image_data:w.image_data,author_image_data:w.author_image_data }
     }
 }
 fn nullable_fields<'de,D:serde::Deserializer<'de>>(d:D)->Result<Vec<EmbedField>,D::Error>{Ok(Option::<Vec<EmbedField>>::deserialize(d)?.unwrap_or_default())}
@@ -75,7 +77,7 @@ impl Embed {
     pub fn version(&self)->DateTime<Utc>{self.fetched_at.unwrap_or(self.created_at)}
     pub fn has_video(&self)->bool{self.video.as_ref().and_then(|v|v.url.as_ref()).is_some()}
     pub fn metadata(&self)->Self{
-        Self{id:self.id,source_type:self.source_type.clone(),fetch_method:self.fetch_method.clone(),provider:self.provider.clone(),site_name:self.site_name.clone(),url:self.url.clone(),title:self.title.clone(),description:self.description.clone(),color:self.color.clone(),author:self.author.clone(),thumbnail:self.thumbnail.clone(),image:self.image.clone(),video:self.video.clone(),footer:self.footer.clone(),fields:self.fields.clone(),embed_url:self.embed_url.clone(),created_at:self.created_at,fetched_at:self.fetched_at,image_data:None}
+        Self{id:self.id,source_type:self.source_type.clone(),fetch_method:self.fetch_method.clone(),provider:self.provider.clone(),site_name:self.site_name.clone(),url:self.url.clone(),title:self.title.clone(),description:self.description.clone(),color:self.color.clone(),author:self.author.clone(),thumbnail:self.thumbnail.clone(),image:self.image.clone(),video:self.video.clone(),footer:self.footer.clone(),fields:self.fields.clone(),embed_url:self.embed_url.clone(),created_at:self.created_at,fetched_at:self.fetched_at,image_data:None,author_image_data:None}
     }
 }
 

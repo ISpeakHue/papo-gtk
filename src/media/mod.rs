@@ -12,6 +12,7 @@ pub mod runtime;
 pub mod preview;
 pub mod frame;
 pub mod animation;
+pub mod emoji;
 pub mod giphy;
 pub mod gif_links;
 
@@ -48,19 +49,6 @@ impl PreparedImage{
     pub fn texture(self)->Texture{use gtk::prelude::*;gtk::gdk::MemoryTexture::new(self.width as i32,self.height as i32,gtk::gdk::MemoryFormat::R8g8b8a8,&Bytes::from_owned(self.pixels),self.width as usize*4).upcast()}
 }
 pub fn bounded_texture_size(bytes:&[u8],width:u32,height:u32)->Option<Texture>{PreparedImage::decode(bytes,width,height).map(PreparedImage::texture)}
-
-/// Compact static emoji textures. Bound decoding and discard large source blobs.
-pub fn emoji_texture(b64: &str) -> Option<Texture> {
-    prepare_emoji(b64).map(PreparedImage::texture)
-}
-pub fn prepare_emoji(b64:&str)->Option<PreparedImage>{
-    if b64.len()>350_000{return None;}
-    let data=BASE64_STANDARD.decode(b64).ok()?;
-    let format=image::guess_format(&data).ok()?;
-    let(w,h)=image::ImageReader::with_format(std::io::Cursor::new(&data),format).into_dimensions().ok()?;
-    if w==0||h==0||w>512||h>512{return None;}
-    PreparedImage::decode_thumbnail(&data,32,32)
-}
 
 /// Reuse decoded textures when rebuilding rows, with a fallback for missing avatars.
 pub fn avatar_image(texture: Option<&Texture>, size: i32) -> adw::Avatar {

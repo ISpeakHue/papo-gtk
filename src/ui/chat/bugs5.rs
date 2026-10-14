@@ -9,7 +9,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let target=|read:Option<Uuid>,last:Option<Uuid>|serde_json::from_value::<Channel>(serde_json::json!({"id":channel,"name":"bug5","created_at":created,"last_read_message":read,"last_message":last.map(|id|serde_json::json!({"id":id,"created_at":created}))})).unwrap();
     let chat=ChatModel::builder().launch(ChatInit{user_id:Some(user),..Default::default()}).detach();chat.emit(ChatMsg::SetAccess{user_id:user,access:crate::models::Access::resolve(user,Some(user),&[],&[],&[])});chat.emit(ChatMsg::SetChannel(target(None,None)));pump(context);
     let window=adw::Window::builder().default_width(800).default_height(640).content(chat.widget()).build();window.present();settle(context);
-    let entry=descendants(chat.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Entry>().ok()).unwrap();
+    let entry=composer::field(chat.widget().upcast_ref());
     assert!(chat.model().unicode_emojis.len()>1500,"the installed GTK catalog should expose all Unicode emoji names");
     entry.grab_focus();entry.set_text(":smi");entry.set_position(-1);settle(context);assert!(chat.model().emoji_visible);assert!(entry.state_flags().contains(gtk::StateFlags::FOCUS_WITHIN),"typing ':' must not move focus");
     let panel=descendants(chat.widget().upcast_ref()).into_iter().find(|w|w.widget_name()=="emoji-suggestions").unwrap();let button=first_mention_button(&panel).unwrap();button.emit_clicked();settle(context);assert!(!chat.model().emoji_visible);assert!(!entry.text().starts_with(':'));assert!(entry.state_flags().contains(gtk::StateFlags::FOCUS_WITHIN));

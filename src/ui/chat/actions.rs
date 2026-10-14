@@ -18,6 +18,8 @@ pub(super) struct Actions {
     pub emojis: Vec<Emoji>,
     pub emoji_names:HashMap<String,Uuid>,
     pub textures: HashMap<Uuid, gtk::gdk::Texture>,
+    pub animations:HashMap<Uuid,crate::media::animation::Animation>,
+    emoji_bytes:HashMap<Uuid,usize>,
     pub reaction_hints:std::rc::Rc<std::cell::RefCell<HashMap<(Uuid,Option<Uuid>,Option<String>),String>>>,
     pub(super) emojis_request: Option<Uuid>,
     emojis_loaded: Option<std::time::Instant>,
@@ -28,8 +30,8 @@ pub(super) struct Actions {
     reaction_groups: HashMap<Uuid, Vec<ReactionGroup>>,
     edit: Option<EditView>,
     confirmation: Option<gtk::Window>,
-    picker: Option<(gtk::Window, gtk::Box, Uuid)>,
-    pub(super) composer_picker:Option<(gtk::Window,gtk::Box)>,
+    picker: Option<(gtk::Window, emoji::Picker, Uuid)>,
+    pub(super) composer_picker:Option<(gtk::Window,emoji::Picker)>,
     pub(super) embed_editor:Option<(gtk::Window,super::embed_editor::Editors,gtk::Label)>,
     participants: Option<(gtk::Window, gtk::Box, Uuid)>,
     manager: Option<EmojiManager>,
@@ -64,7 +66,7 @@ pub enum ActionMsg {
     ToggleReaction { id: Uuid, emoji_id: Option<Uuid>, unicode: Option<String> },
     ReactionsLoaded { epoch: Uuid, token: Uuid, id: Uuid, mutation: bool, result: anyhow::Result<Vec<ReactionGroup>> },
     OpenEmojiManager, ReloadEmojis,
-    EmojiPage{token:Uuid,emojis:Vec<Emoji>,images:Vec<(Uuid,crate::media::PreparedImage)>},
+    EmojiPage{token:Uuid,emojis:Vec<Emoji>,images:Vec<(Uuid,crate::media::emoji::PreparedEmoji)>},
     EmojisLoaded { token: Uuid, result: anyhow::Result<Vec<Emoji>> },
     ChooseEmojiFile(Uuid), EmojiFileLoaded { token: Uuid, result: anyhow::Result<Vec<u8>> },
     UploadEmoji(Uuid), ConfirmDeleteEmoji(Uuid), DeleteEmoji { token: Uuid, id: Uuid },
@@ -99,6 +101,24 @@ impl Actions {
     pub fn new(api: Option<ApiClient>) -> Self { let mut state = Self::default(); state.api = api; state }
     pub fn emoji_label(&self, id: Uuid) -> String {
         self.emojis.iter().find(|e| e.id == id).map(|e| format!(":{}:", e.name)).unwrap_or_else(|| "Emoji personalizado".into())
+    }
+    pub fn emoji_image(&self,id:Uuid,size:i32)->Option<gtk::Image>{
+        let image=gtk::Image::from_paintable(Some(&self.emoji_paintable(id)?));image.set_pixel_size(size);
+        if let Some(animation)=self.animations.get(&id){animation.watch(&image,None);}Some(image)
+    }
+    pub fn emoji_paintable(&self,id:Uuid)->Option<gtk::gdk::Paintable>{
+        self.animations.get(&id).map(|a|a.clone().upcast()).or_else(||self.textures.get(&id).map(|t|t.clone().upcast()))
+    }
+    fn install_emoji(&mut self,id:Uuid,image:crate::media::emoji::PreparedEmoji){
+        if self.textures.contains_key(&id){return;}
+        // The catalog is shared by messages, profiles and pickers. Keep its
+        // decoded frame budget bounded even with hundreds of animated files.
+        let image=if self.emoji_bytes.values().sum::<usize>()+image.bytes()>32<<20{image.into_static()}else{image};
+        self.emoji_bytes.insert(id,image.bytes());
+        match image{
+            crate::media::emoji::PreparedEmoji::Static(image)=>{self.textures.insert(id,image.texture());},
+            crate::media::emoji::PreparedEmoji::Animated(prepared)=>{let animation=prepared.paintable();self.textures.insert(id,animation.first());self.animations.insert(id,animation);},
+        }
     }
     pub fn is_pinned(&self, id: Uuid) -> bool { self.pinned.iter().any(|m| m.id == id) }
     pub fn reset_channel(&mut self) {
@@ -138,17 +158,24 @@ impl ChatModel {
         if self.actions.emojis_request.is_some() { self.actions.emojis_again = true; return; }
         let Some(api) = self.actions.api.clone() else { return; };
         let token = Uuid::new_v4(); self.actions.emojis_request = Some(token);
+        let known:HashSet<_>=self.actions.textures.keys().copied().collect();
+        let decoded=self.actions.emoji_bytes.values().sum::<usize>();
         let sender = sender.clone(); tokio::spawn(async move {
             let result=async{
-                let mut cursor:Option<MessageCursor>=None;let mut all:Vec<Emoji>=vec![];
+                let mut cursor:Option<MessageCursor>=None;let mut all:Vec<Emoji>=vec![];let mut decoded=decoded;
                 loop{
                     let page=api.emoji_page(cursor).await?;
                     let next=page.emojis.iter().max_by_key(|e|(e.created_at,e.id)).map(|e|MessageCursor{id:e.id,created_at:e.created_at});
-                    let (emojis,images)=tokio::task::spawn_blocking(move ||{
+                    let known=known.clone();
+                    let (emojis,images,used)=tokio::task::spawn_blocking(move ||{
                         let mut emojis=page.emojis;let mut images=vec![];
-                        for e in &mut emojis{if let Some(blob)=e.image_blob.take(){if let Some(image)=crate::media::prepare_emoji(&blob){images.push((e.id,image));}}}
-                        (emojis,images)
+                        let mut used=decoded;
+                        for e in &mut emojis{if let Some(blob)=e.image_blob.take(){if !known.contains(&e.id){if let Some(image)=crate::media::emoji::prepare(&blob){
+                            let image=if used+image.bytes()>32<<20{image.into_static()}else{image};used+=image.bytes();images.push((e.id,image));
+                        }}}}
+                        (emojis,images,used)
                     }).await?;
+                    decoded=used;
                     for e in &emojis{if !all.iter().any(|old|old.id==e.id){all.push(e.clone());}}
                     anyhow::ensure!(all.len()<=500,"A API excedeu o limite de 500 emojis.");
                     sender.input(ChatMsg::Action(ActionMsg::EmojiPage{token,emojis,images}));
@@ -287,7 +314,6 @@ impl ChatModel {
             ActionMsg::OpenPins => {
                 if !self.access.read { return; }
                 let (w, outer) = window(root, "Mensagens fixadas"); let list = scroll_box(&outer);
-                outer.append(&button("Atualizar mensagens fixadas", sender, || ActionMsg::OpenPins));
                 if let Some((old, _)) = self.actions.pins_window.replace((w.clone(), list)) { old.close(); }
                 self.render_pins(sender); self.request_pins(sender); w.present();
             }
@@ -295,7 +321,10 @@ impl ChatModel {
                 let current = epoch == self.actions.epoch && self.actions.pins_request == Some(token);
                 if current { self.actions.pins_request = None; }
                 match result {
-                    Ok(pinned) if current => { self.actions.pinned = pinned.into_iter().filter(|m| !self.history.is_deleted(m.id)).collect(); self.actions.pins_ready = true; self.render_pins(sender); }
+                    Ok(pinned) if current => {
+                        self.actions.pinned=pinned.into_iter().filter(|m|!self.history.is_deleted(m.id)).collect();self.actions.pins_ready=true;self.render_pins(sender);
+                        if self.actions.pins_window.as_ref().is_some_and(|(window,_)|window.is_visible()){if let Some(channel)=self.active_channel.as_ref(){let _=sender.output(ChatOutput::AuthorMetadata{channel:channel.id(),ids:self.actions.pinned.iter().filter_map(|m|m.author_id).collect()});}}
+                    }
                     Err(error) => { if current { self.actions.pins_ready = false; if let Some((_, list)) = &self.actions.pins_window { clear(list); list.append(&label(&format!("Não foi possível carregar: {error}"))); } } self.action_error(error, sender, current); }
                     _ => {}
                 }
@@ -311,7 +340,9 @@ impl ChatModel {
                 let _ = sender.output(ChatOutput::RefreshAccess);
                 if !self.access.send { return; }
                 let (w, list) = window(root, "Escolher reação");w.set_default_size(360,420);
-                if let Some((old, _, _)) = self.actions.picker.replace((w.clone(), list, id)) { old.close(); }
+                let output=sender.input_sender().clone();let weak=w.downgrade();
+                let picker=emoji::Picker::new(&list,&self.unicode_emojis,move|choice|{let _=output.send(ChatMsg::Action(ActionMsg::ToggleReaction{id,emoji_id:choice.id,unicode:choice.id.is_none().then_some(choice.text)}));if let Some(window)=weak.upgrade(){window.close();}});
+                if let Some((old, _, _)) = self.actions.picker.replace((w.clone(), picker, id)) { old.close(); }
                 self.render_picker(sender); self.request_emojis(sender); w.present();
             }
             ActionMsg::OpenParticipants(id) => {
@@ -379,7 +410,7 @@ impl ChatModel {
             ActionMsg::ReloadEmojis => self.request_emojis(sender),
             ActionMsg::EmojiPage{token,emojis,images}=>{
                 if self.actions.emojis_request!=Some(token){return;}
-                for (id,image) in images{if !self.actions.textures.contains_key(&id){self.actions.textures.insert(id,image.texture());}}
+                for (id,image) in images{self.actions.install_emoji(id,image);}
                 for e in emojis{if let Some(old)=self.actions.emojis.iter_mut().find(|old|old.id==e.id){*old=e;}else{self.actions.emojis.push(e);}}
                 self.actions.emoji_names=self.actions.emojis.iter().map(|e|(e.name.clone(),e.id)).collect();
                 self.render_picker(sender);self.render_manager(sender);
@@ -389,17 +420,16 @@ impl ChatModel {
                 match result {
                     Ok(mut emojis) if current => {
                         self.actions.textures.retain(|id, _| emojis.iter().any(|e| e.id == *id));
+                        self.actions.animations.retain(|id,_|emojis.iter().any(|e|e.id==*id));
+                        self.actions.emoji_bytes.retain(|id,_|emojis.iter().any(|e|e.id==*id));
                         for e in &mut emojis {
-                            if !self.actions.textures.contains_key(&e.id) {
-                                if let Some(t) = e.image_blob.as_deref().and_then(crate::media::emoji_texture) { self.actions.textures.insert(e.id, t); }
-                            }
-                            // Emoji blobs are immutable by ID; retain compact textures only.
+                            // Emoji blobs are immutable by ID; retain compact textures and bounded animation frames only.
                             e.image_blob = None;
                         }
                         self.actions.emojis_loaded = Some(std::time::Instant::now());
                         self.actions.emojis = emojis; self.actions.emoji_names=self.actions.emojis.iter().map(|e|(e.name.clone(),e.id)).collect(); self.render_picker(sender); self.render_manager(sender);
                     }
-                    Err(error) => { if current { if let Some(m) = &self.actions.manager { m.error.set_text(&error.to_string()); } if let Some((_, list, _)) = &self.actions.picker { list.append(&label(&format!("Emojis personalizados indisponíveis: {error}"))); } } self.action_error(error, sender, current); }
+                    Err(error) => { if current { if let Some(m) = &self.actions.manager { m.error.set_text(&error.to_string()); } if let Some((_,picker,_))=&self.actions.picker{picker.show_error(&format!("Emojis personalizados indisponíveis: {error}"));}if let Some((_,picker))=&self.actions.composer_picker{picker.show_error(&format!("Emojis personalizados indisponíveis: {error}"));} } self.action_error(error, sender, current); }
                     _ => {}
                 }
                 if current && std::mem::take(&mut self.actions.emojis_again) { self.request_emojis(sender); }
@@ -481,32 +511,29 @@ impl ChatModel {
         self.actions.navigation_cursor = cursor;
         if let Some(channel) = &self.active_channel { let _ = sender.output(ChatOutput::LoadMoreMessages { channel_id: channel.id(), cursor }); }
     }
-    fn render_pins(&self, sender: &ComponentSender<Self>) {
+    pub(super) fn render_pins(&self, sender: &ComponentSender<Self>) {
         let Some((_, list)) = &self.actions.pins_window else { return; }; clear(list);
         if !self.actions.pins_ready { list.append(&label("Carregando mensagens fixadas…")); }
         else if self.actions.pinned.is_empty() { list.append(&label("Nenhuma mensagem fixada.")); }
         for m in &self.actions.pinned {
-            let id = m.id; let open = button(m.content.as_deref().unwrap_or("Mensagem com anexos"), sender, move || ActionMsg::Navigate(id)); open.set_tooltip_text(Some("Abrir mensagem no histórico")); list.append(&open);
+            let id=m.id;let open=button("",sender,move||ActionMsg::Navigate(id));open.set_tooltip_text(Some("Abrir mensagem no histórico"));
+            let row=gtk::Box::new(gtk::Orientation::Horizontal,10);let user=m.author_id.and_then(|id|self.users_map.get(&id));let name=user.map(|u|u.display_name()).unwrap_or("Membro indisponível");
+            let avatar=crate::media::avatar_image(m.author_id.and_then(|id|self.avatars.get(&id)),36);avatar.set_text(Some(name));avatar.set_valign(gtk::Align::Start);row.append(&avatar);
+            let column=gtk::Box::new(gtk::Orientation::Vertical,4);column.set_hexpand(true);let heading=label(name);heading.add_css_class("heading");if let Some(roles)=user.and_then(|u|u.roles.as_deref()){crate::ui::style::role_color(&heading,roles);}column.append(&heading);
+            column.append(&label(&mentions::render(&markdown::plain(m.content.as_deref().unwrap_or("Mensagem com anexos")),&self.users_map)));row.append(&column);open.set_child(Some(&row));list.append(&open);
         }
     }
-    fn render_picker(&self, sender: &ComponentSender<Self>) {
-        if let Some((window,list,id))=&self.actions.picker {
-            let id=*id;let output=sender.input_sender().clone();let window=window.downgrade();
-            emoji::picker(list,&self.unicode_emojis,&self.actions.emojis,&self.actions.textures,move |choice|{
-                let _=output.send(ChatMsg::Action(ActionMsg::ToggleReaction{id,emoji_id:choice.id,unicode:choice.id.is_none().then_some(choice.text)}));if let Some(window)=window.upgrade(){window.close();}
-            });
-        }
-        if let Some((window,list))=&self.actions.composer_picker {
-            let output=sender.input_sender().clone();let window=window.downgrade();
-            emoji::picker(list,&self.unicode_emojis,&self.actions.emojis,&self.actions.textures,move |choice|{let _=output.send(ChatMsg::InsertEmoji(choice.text));if let Some(window)=window.upgrade(){window.close();}});
-        }
+    pub(super) fn render_picker(&self,_sender:&ComponentSender<Self>){
+        if let Some((_,picker,_))=&self.actions.picker{picker.update(&self.server_name,&self.actions.emojis,&self.actions.textures,&self.actions.animations);}
+        if let Some((_,picker))=&self.actions.composer_picker{picker.update(&self.server_name,&self.actions.emojis,&self.actions.textures,&self.actions.animations);}
     }
     pub(super) fn open_composer_picker(&mut self,root:&gtk::Box,sender:&ComponentSender<Self>){
         if let Some((window,_))=self.actions.composer_picker.as_ref().filter(|(w,_)|w.is_visible()){window.present();return;}
         let (window,list)=window(root,"Escolher emoji");window.set_default_size(360,420);
         let output=sender.input_sender().clone();let epoch=self.actions.epoch;window.connect_close_request(move |_|{let _=output.send(ChatMsg::ComposerClosed(epoch));gtk::glib::Propagation::Proceed});
         let keys=gtk::EventControllerKey::new();let weak=window.downgrade();keys.connect_key_pressed(move |_,key,_,_|{if key==gtk::gdk::Key::Escape{if let Some(window)=weak.upgrade(){window.close();}gtk::glib::Propagation::Stop}else{gtk::glib::Propagation::Proceed}});window.add_controller(keys);
-        self.actions.composer_picker=Some((window.clone(),list));self.render_picker(sender);
+        let output=sender.input_sender().clone();let weak=window.downgrade();let picker=emoji::Picker::new(&list,&self.unicode_emojis,move|choice|{let _=output.send(ChatMsg::InsertEmoji(choice.text));if let Some(window)=weak.upgrade(){window.close();}});
+        self.actions.composer_picker=Some((window.clone(),picker));self.render_picker(sender);
         if self.actions.emojis_loaded.is_none()&&self.actions.emojis_request.is_none(){self.request_emojis(sender);}window.present();
     }
     pub(super) fn refresh_reaction_hints(&self){
@@ -539,7 +566,7 @@ impl ChatModel {
         m.upload.set_visible(self.access.manage_server); m.upload.set_sensitive(self.access.manage_server && m.bytes.is_some() && !m.pending);
         for e in &self.actions.emojis {
             let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-            if let Some(t) = self.actions.textures.get(&e.id) { row.append(&emoji_image(t)); }
+            if let Some(image)=self.actions.emoji_image(e.id,24){row.append(&image);}
             let name = label(&format!(":{}:", e.name)); name.set_hexpand(true); row.append(&name);
             if self.user_id.is_some_and(|user| self.access.can_delete_emoji(user, e.created_by)) {
                 let id = e.id; let delete = button("Excluir", sender, move || ActionMsg::ConfirmDeleteEmoji(id)); delete.set_sensitive(!m.pending); row.append(&delete);
@@ -547,7 +574,7 @@ impl ChatModel {
         }
     }
 }
-fn emoji_image(texture: &gtk::gdk::Texture) -> gtk::Image { let image = gtk::Image::from_paintable(Some(texture)); image.set_pixel_size(24); image }
+
 async fn read_emoji_file(path: std::path::PathBuf) -> anyhow::Result<Vec<u8>> {
     use tokio::io::AsyncReadExt;
     let file = tokio::fs::File::open(path).await?;

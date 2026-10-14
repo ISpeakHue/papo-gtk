@@ -48,7 +48,7 @@ impl PreparedAnimation{
 }
 mod imp{
     use super::*;
-    #[derive(Default)]pub struct Animation{pub frames:OnceCell<Vec<(gdk::Texture,Duration)>>,pub index:Cell<usize>,pub timer:RefCell<Option<glib::SourceId>>,pub pictures:RefCell<Vec<glib::WeakRef<gtk::Picture>>>}
+    #[derive(Default)]pub struct Animation{pub frames:OnceCell<Vec<(gdk::Texture,Duration)>>,pub index:Cell<usize>,pub timer:RefCell<Option<glib::SourceId>>,pub consumers:RefCell<Vec<(glib::WeakRef<gtk::Widget>,Option<i32>)>>}
     #[glib::object_subclass]impl ObjectSubclass for Animation{const NAME:&'static str="PapoGifAnimation";type Type=super::Animation;type Interfaces=(gdk::Paintable,);}
     impl ObjectImpl for Animation{fn dispose(&self){if let Some(timer)=self.timer.borrow_mut().take(){timer.remove();}}}
     impl PaintableImpl for Animation{
@@ -66,33 +66,54 @@ impl Animation{
     pub fn first(&self)->gdk::Texture{self.imp().frames.get().unwrap()[0].0.clone()}
     pub fn picture(&self)->gtk::Picture{
         let picture=gtk::Picture::for_paintable(self);picture.set_can_shrink(true);picture.set_content_fit(gtk::ContentFit::Contain);
-        self.imp().pictures.borrow_mut().push(picture.downgrade());
-        let weak=self.downgrade();picture.connect_map(move |_|{if let Some(animation)=weak.upgrade(){schedule(&animation);}});
-        let weak=self.downgrade();picture.connect_unmap(move |_|{if let Some(animation)=weak.upgrade(){
-            if !animation.has_mapped_picture(){if let Some(timer)=animation.imp().timer.borrow_mut().take(){timer.remove();}}
-        }});picture
+        self.watch(&picture,None);picture
     }
-    fn has_mapped_picture(&self)->bool{self.pictures().iter().any(|p|p.is_mapped())}
-    fn pictures(&self)->Vec<gtk::Picture>{
-        let mut pictures=self.imp().pictures.borrow_mut();pictures.retain(|p|p.upgrade().is_some());pictures.iter().filter_map(|p|p.upgrade()).collect()
+    /// Inline text supplies a character offset so an offscreen line does not
+    /// animate just because another part of its TextView is visible.
+    pub fn watch(&self,widget:&impl IsA<gtk::Widget>,offset:Option<i32>){
+        let widget=widget.as_ref();
+        let already_watched={let mut consumers=self.imp().consumers.borrow_mut();consumers.retain(|(w,_)|w.upgrade().is_some());
+            let existing=consumers.iter().any(|(w,_)|w.upgrade().as_ref()==Some(widget));consumers.push((widget.downgrade(),offset));existing};
+        if already_watched{return;}
+        let weak=self.downgrade();widget.connect_map(move |_|{if let Some(animation)=weak.upgrade(){schedule(&animation);}});
+        let weak=self.downgrade();widget.connect_unmap(move |_|{if let Some(animation)=weak.upgrade(){
+            if !animation.has_mapped_consumer(){if let Some(timer)=animation.imp().timer.borrow_mut().take(){timer.remove();}}
+        }});
+        if widget.is_mapped(){schedule(self);}
+    }
+    fn has_mapped_consumer(&self)->bool{self.consumers().iter().any(|(w,_)|w.is_mapped())}
+    fn consumers(&self)->Vec<(gtk::Widget,Option<i32>)>{
+        let mut consumers=self.imp().consumers.borrow_mut();consumers.retain(|(w,_)|w.upgrade().is_some());consumers.iter().filter_map(|(w,offset)|w.upgrade().map(|w|(w,*offset))).collect()
     }
     fn on_screen(&self)->bool{
-        self.pictures().iter().any(|picture|{
-            if !picture.is_mapped(){return false;}
-            let mut parent=picture.parent();
-            while let Some(widget)=parent{
-                if let Some(scroll)=widget.downcast_ref::<gtk::ScrolledWindow>(){
-                    if picture.compute_bounds(scroll).is_none_or(|r|r.y()+r.height()<=0.0||r.y()>=scroll.height() as f32||r.x()+r.width()<=0.0||r.x()>=scroll.width() as f32){return false;}
-                }
-                parent=widget.parent();
-            }true
+        self.consumers().iter().any(|(widget,offset)|{
+            if !widget.is_mapped(){return false;}
+            // Reject clipped rows before asking TextView to validate line layout.
+            let bounds=gtk::graphene::Rect::new(0.0,0.0,widget.width() as f32,widget.height() as f32);
+            if !in_scroll_viewports(widget,&bounds){return false;}
+            let local=if let (Some(offset),Some(view))=(offset,widget.downcast_ref::<gtk::TextView>()){
+                let rect=view.iter_location(&view.buffer().iter_at_offset(*offset));
+                let (x,y)=view.buffer_to_window_coords(gtk::TextWindowType::Widget,rect.x(),rect.y());
+                gtk::graphene::Rect::new(x as f32,y as f32,rect.width().max(1) as f32,rect.height().max(1) as f32)
+            }else{gtk::graphene::Rect::new(0.0,0.0,widget.width() as f32,widget.height() as f32)};
+            in_scroll_viewports(widget,&local)
         })
     }
 }
+fn in_scroll_viewports(widget:&gtk::Widget,local:&gtk::graphene::Rect)->bool{
+    let mut parent=widget.parent();
+    while let Some(ancestor)=parent{
+        if let Some(scroll)=ancestor.downcast_ref::<gtk::ScrolledWindow>(){
+            let Some(transform)=widget.compute_transform(scroll)else{return false;};let r=transform.transform_bounds(local);
+            if r.y()+r.height()<=0.0||r.y()>=scroll.height() as f32||r.x()+r.width()<=0.0||r.x()>=scroll.width() as f32{return false;}
+        }
+        parent=ancestor.parent();
+    }true
+}
 fn schedule(animation:&Animation){
-    let frames=animation.imp().frames.get().unwrap();if frames.len()<2||animation.imp().timer.borrow().is_some()||!animation.has_mapped_picture(){return;}
+    let frames=animation.imp().frames.get().unwrap();if frames.len()<2||animation.imp().timer.borrow().is_some()||!animation.has_mapped_consumer(){return;}
     // Cached or clipped GIFs must not continually invalidate the entire chat.
-    // Poll clipped, mapped pictures slowly so scrolling them into view resumes.
+    // Poll clipped, mapped consumers slowly so scrolling them into view resumes.
     let delay=if animation.on_screen(){frames[animation.imp().index.get()].1}else{Duration::from_millis(250)};let weak=animation.downgrade();
     *animation.imp().timer.borrow_mut()=Some(glib::timeout_add_local_once(delay,move ||{if let Some(animation)=weak.upgrade(){
         animation.imp().timer.borrow_mut().take();if animation.on_screen(){let count=animation.imp().frames.get().unwrap().len();animation.imp().index.set((animation.imp().index.get()+1)%count);animation.invalidate_contents();}schedule(&animation);

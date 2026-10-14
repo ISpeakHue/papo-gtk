@@ -2,9 +2,19 @@
 set -euo pipefail
 PAPO_APPDIR="${APPDIR:-$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)}"
 export PAPO_APPDIR
+PAPO_HOST_LIBC=$(getconf GNU_LIBC_VERSION 2>/dev/null || true)
+if [[ "$PAPO_HOST_LIBC" =~ glibc\ ([0-9]+)\.([0-9]+) ]] && \
+    (( BASH_REMATCH[1] < 2 || (BASH_REMATCH[1] == 2 && BASH_REMATCH[2] < 43) )); then
+    printf 'Papo requires glibc 2.43 or newer (Fedora 44/current Arch). Found %s.\n' "$PAPO_HOST_LIBC" >&2
+    exit 1
+fi
 source "$PAPO_APPDIR/usr/share/papo-gtk/runtime-env.sh"
 if [[ "${1:-}" == --runtime-check ]]; then
     shift
     exec "$PAPO_PYTHON" "$PAPO_APPDIR/usr/share/papo-gtk/runtime-check.py" "$@"
+fi
+if [[ "${1:-}" == --font-check ]]; then
+    shift
+    exec "$PAPO_PYTHON" "$PAPO_APPDIR/usr/share/papo-gtk/font-check.py" "$@"
 fi
 exec "$PAPO_APPDIR/usr/bin/papo-gtk" "$@"

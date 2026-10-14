@@ -43,6 +43,14 @@ impl Inbox {
         while self.message_order.len()>512 {if let Some(id)=self.message_order.pop_front(){self.messages.remove(&id);}}
     }
     pub fn mark(&mut self,id:Uuid){if let Some(n)=self.rows.get_mut(&id){n.read=true;n.pending_desktop=false;if n.persisted{self.read.insert(id);}}}
+    pub fn mark_through(&mut self,message:&Message){
+        // Notification timestamps can differ from their message timestamps.
+        // Unknown messages remain unread until a server refresh confirms them.
+        let ids:Vec<_>=self.rows.values().filter(|n|n.channel_id==Some(message.channel_id))
+            .filter(|n|n.message_id==message.id||self.messages.get(&n.message_id).is_some_and(|m|(m.created_at,m.id)<=(message.created_at,message.id)))
+            .map(|n|n.id).collect();
+        for id in ids{self.mark(id);}
+    }
     pub fn delete(&mut self,message:Uuid){self.deleted.insert(message);self.messages.remove(&message);self.rows.retain(|_,n|n.message_id!=message);}
     pub fn ordered(&self)->Vec<&Notice>{let mut rows:Vec<_>=self.rows.values().collect();rows.sort_by_key(|n|std::cmp::Reverse((n.created_at,n.id)));rows}
     pub fn unread(&self,channels:&[NoticeChannel])->usize {self.rows.values().filter(|n|!n.read&&n.channel_id.map_or(true,|id|channels.iter().any(|c|c.id==id))).count()}
@@ -98,6 +106,17 @@ impl ReadJournal {
     fn message(channel:Uuid,id:Uuid,second:i64)->Message{serde_json::from_value(serde_json::json!({"id":id,"channel_id":channel,"author_id":Uuid::nil(),"content":"hello","created_at":chrono::DateTime::from_timestamp(second,0).unwrap()})).unwrap()}
     fn channel(id:Uuid)->Channel{serde_json::from_value(serde_json::json!({"id":id,"name":"general","created_at":"2026-10-03T00:00:00Z"})).unwrap()}
     fn event(id:Uuid,message_id:Uuid)->NotificationEvent{NotificationEvent{id,message_id,user_id:Some(Uuid::nil()),message_content:"hello".into()}}
+    #[test]fn channel_acknowledgements_mark_only_known_messages_through_the_exact_cursor(){
+        let channel=Uuid::new_v4();let other=Uuid::new_v4();let first=message(channel,Uuid::from_u128(1),1);let next=message(channel,Uuid::from_u128(2),1);
+        let mut inbox=Inbox::default();
+        let messages=[first.clone(),next.clone(),message(other,Uuid::new_v4(),0)];
+        let ids:Vec<_>=messages.iter().map(|m|{
+            let id=Uuid::new_v4();inbox.merge(vec![NotificationSummary{id,message_id:m.id,channel_id:m.channel_id,author_id:None,message_content:"preview".into(),read:false,created_at:chrono::Utc::now()}]);inbox.observe(m.clone());id
+        }).collect();
+        let unknown=Uuid::new_v4();inbox.event(event(unknown,Uuid::new_v4()));inbox.rows.get_mut(&unknown).unwrap().channel_id=Some(channel);
+        inbox.mark_through(&first);assert!(inbox.rows[&ids[0]].read);assert!(!inbox.rows[&ids[1]].read);assert!(!inbox.rows[&ids[2]].read);assert!(!inbox.rows[&unknown].read);
+        inbox.mark_through(&next);assert!(inbox.rows[&ids[1]].read);
+    }
     #[test] fn event_rest_echo_resolves_once_and_stale_unread_cannot_undo_success(){
         let(id,msg,ch)=(Uuid::new_v4(),Uuid::new_v4(),Uuid::new_v4());let mut inbox=Inbox::default();inbox.event(event(id,msg));inbox.event(event(id,msg));assert_eq!(inbox.rows.len(),1);assert_eq!(inbox.rows[&id].channel_id,None);assert!(!inbox.rows[&id].persisted);
         let row=NotificationSummary{id,message_id:msg,channel_id:ch,author_id:None,message_content:"hello".into(),read:false,created_at:chrono::Utc::now()};inbox.merge(vec![row.clone()]);assert_eq!(inbox.rows.len(),1);assert!(inbox.rows[&id].persisted);assert_eq!(inbox.rows[&id].channel_id,Some(ch));inbox.mark(id);inbox.merge(vec![row]);assert!(inbox.rows[&id].read);

@@ -1,23 +1,29 @@
-FROM docker.io/library/ubuntu:24.04
+FROM registry.fedoraproject.org/fedora:44
 
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential ca-certificates curl xz-utils git pkg-config meson ninja-build \
-    gettext libssl-dev libgtk-4-dev libappstream-dev libgirepository1.0-dev \
-    libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev \
-    python3 python3-gi python3-gst-1.0 python3-cairo gir1.2-gst-plugins-bad-1.0 \
-    gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
-    gstreamer1.0-plugins-ugly gstreamer1.0-libav gstreamer1.0-nice gstreamer1.0-pipewire \
-    gstreamer1.0-tools libgtk-4-media-gstreamer librsvg2-common \
-    adwaita-icon-theme fonts-dejavu-core desktop-file-utils squashfs-tools \
-    xvfb xauth dbus-x11 && rm -rf /var/lib/apt/lists/*
+# Match current Fedora/Arch desktops rather than rebuilding older GTK releases.
+# RPM Fusion's free codec library restores H.264/AAC support omitted from Fedora.
+RUN dnf -y --refresh install \
+    gcc gcc-c++ rust cargo git pkgconf-pkg-config glib2-devel openssl-devel \
+    gtk4-devel libadwaita-devel python3-gobject python3-cairo python3-gstreamer1 \
+    gstreamer1-plugins-base gstreamer1-plugins-good gstreamer1-plugins-bad-free \
+    gstreamer1-plugin-libav gstreamer1-plugins-ugly-free libnice-gstreamer1 \
+    pipewire-gstreamer gstreamer1 librsvg2 gdk-pixbuf2 \
+    adwaita-icon-theme adwaita-sans-fonts adwaita-mono-fonts \
+    google-noto-sans-vf-fonts google-noto-color-emoji-fonts dejavu-sans-fonts \
+    fontconfig desktop-file-utils squashfs-tools ca-certificates \
+    xorg-x11-server-Xvfb xorg-x11-xauth dbus-daemon weston mesa-dri-drivers && \
+    dnf -y install https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-44.noarch.rpm && \
+    dnf -y install libavcodec-freeworld && dnf clean all
 
-COPY bootstrap.sh /build/bootstrap.sh
-RUN bash /build/bootstrap.sh
+# Ship GTK clients for the desktop input-method services, without bundling daemons.
+RUN dnf -y --refresh install ibus-gtk4 fcitx5-gtk4 && dnf clean all
 
-ENV PATH=/opt/rust/bin:/usr/local/bin:/usr/bin:/bin \
-    PKG_CONFIG_PATH=/usr/local/lib/pkgconfig \
-    LD_LIBRARY_PATH=/usr/local/lib \
-    CARGO_HOME=/cargo \
-    CARGO_TARGET_DIR=/work/target/appimage
+# Both optional GPU plugins must be present even in this GPU-less builder.
+# GPU drivers are supplied by the target desktop, not copied from the builder.
+RUN test -f /usr/lib64/gstreamer-1.0/libgstva.so && \
+    test -f /usr/lib64/gstreamer-1.0/libgstnvcodec.so
+
+
+ENV CARGO_HOME=/cargo \
+    CARGO_TARGET_DIR=/work/target/appimage-fedora44
 WORKDIR /work

@@ -70,7 +70,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     chat.emit(ChatMsg::SetAccess{user_id:user,access:crate::models::Access::resolve(user,Some(user),&[],&[],&[])});settle(context);
     let blank:UserSummary=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"username":"Aaron","nickname":" ","created_at":start})).unwrap();
     let members:Vec<_>=chat.model().users_map.values().cloned().chain([blank]).collect();chat.emit(ChatMsg::SetUsers(members));settle(context);
-    let entry=descendants(chat.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Entry>().ok()).unwrap();entry.grab_focus();entry.set_text("");entry.set_position(-1);settle(context);
+    let entry=composer::field(chat.widget().upcast_ref());entry.grab_focus();entry.set_text("");entry.set_position(-1);settle(context);
     let mention=descendants(chat.widget().upcast_ref()).into_iter().find(|w|w.widget_name()=="mention-suggestions").unwrap();
     // Insert characters as the native editable does, pumping after each keystroke.
     // A whole-string set_text misses focus and cursor races on the @ character.

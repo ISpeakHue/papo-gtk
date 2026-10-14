@@ -84,14 +84,14 @@ snapshots. Deletion tombstones are bounded; conversations exceeding that budget
 are discarded. Nothing is persisted to
 disk or reused by another login.
 
-Media survives channel switches with up to 64 image textures and a 64 MiB
-RGBA-pixel budget. GIF animation retains its separate existing budget. Known
-image dimensions size placeholders; unknown dimensions keep the frame allocated
-on that visit, so the initial image completion does not resize surrounding rows.
-Snapshots beneath the opening cover can still refine image dimensions; the
-geometry is fixed when the history is presented, preserving already-loaded
-images' aspect ratios without moving visible rows.
-Later visits can use the learned dimensions. Server emoji textures remain shared
+Lightweight media metadata and learned dimensions survive channel switches;
+decoded pixels are released. The active cache holds up to 64 image textures
+with a 64 MiB RGBA-pixel budget. GIF animation has a separate budget. Known
+image dimensions size placeholders. When dimensions are unknown, the first
+decoded image replaces the guessed frame ratio immediately, without requiring
+a channel revisit. Layout changes wait until scrolling pauses and preserve the
+reading anchor or latest-message position before painting. Learned dimensions
+are reused for unloaded placeholders and later visits. Server emoji textures remain shared
 across channels for the session.
 
 The headless cache tests cover retention limits, eviction, oversized histories,
@@ -1264,3 +1264,429 @@ bottom positioning, older-page reload, and shared assets used by nearby messages
 The Rust suite verifies history trimming rejects stale pagination while retaining
 live edits. Freed allocations may remain in allocator or renderer pools, so process
 RSS need not fall immediately after each eviction.
+
+### Animated custom emojis and separate notification tabs
+
+Custom GIF, animated WebP and APNG emojis retain their frames and timing at a
+32-pixel thumbnail size. Decoding runs on a worker. Cached emoji IDs reuse their
+frames across channels and catalog refreshes. Animation pauses when its widgets
+are unmapped or outside the scroll viewport, including inline profile text.
+The catalog has a 32 MiB decoded animation budget; oversized animations fall
+back to a static thumbnail. Each animation is limited to 240 frames and 1 MiB.
+
+The notification window has **Servidor** and **Mensagens diretas** tabs. Only
+accessible notices in the selected tab are automatically acknowledged; switching
+tabs uses the existing loaded pages and does not make another GET request. Both
+tabs share backend pagination. Known hidden conversations keep their notices in
+the DM tab, with unavailable message contents concealed. The top-left DM icon
+shows an unread message count (capped visually at `99+`), sourced from existing
+conversation snapshots and live events, and clears after reading the messages.
+Reading notification previews alone does not mark the conversation history read.
+
+```sh
+cargo test --locked --offline
+PAPO_UI_CASE=emoji-notifications dbus-run-session -- xvfb-run -a cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+PAPO_UI_CASE=account-notices dbus-run-session -- xvfb-run -a cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+PAPO_UI_CASE=profile-emojis dbus-run-session -- xvfb-run -a cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+```
+
+The focused GTK check verifies visible frame changes, offscreen pause/resume,
+picker playback, frame reuse and release, startup/live DM counts, duplicate-event
+handling, badge clearing, separate rows and read batches, no GET on tab changes,
+and classification after hiding a DM. Decoder tests cover GIF, APNG and WebP,
+invalid data, downsampling, frame delays and excessive frame counts.
+
+### Private terminal diagnostics
+
+The logging subscriber defaults to `warn`, writes to stderr and accepts
+`RUST_LOG` for application diagnostics. Its independent target filter disables
+third-party HTTP/WebSocket dumps and component state/message dumps, including
+foreign span fields, even when a more specific transport directive requests
+`trace`. Use `RUST_LOG=papo_gtk=debug cargo run` for HTTP method/status/timing and
+attempt counts. No request URLs, headers or bodies are included in these logs.
+
+Authentication request models redact passwords in Debug while preserving JSON
+serialization. Session cookie headers are marked sensitive for both HTTP and
+WebSocket requests. Request errors strip their URL; terminal transport and
+backend diagnostics retain typed error categories or status rather than raw
+server text. Invalid WebSocket frames report only parse positions.
+
+```sh
+cargo test --locked --offline logging
+cargo test --locked --offline authentication_debug
+cargo test --locked --offline verbose_authentication_logs
+cargo test --locked --offline
+```
+
+Captured-output checks use fake passwords/cookies and hostile response/error
+payloads. They verify safe diagnostics survive debug logging, default/invalid
+filters remain quiet, verbose dependency filters and spans cannot expose
+credentials, and real login/server-password bodies and cookies still reach the
+local mock server unchanged. Existing session rotation, authentication,
+WebSocket connection and request pacing/retry tests exercise the same paths.
+
+### Backgrounds for messages mentioning the current account
+
+Received messages addressed to the current account have a persistent amber tint
+and left accent, including `@everyone`. Canonical IDs work before member metadata
+loads; plain usernames/nicknames resolve only when unambiguous. Self-authored
+messages, other recipients, code examples, URLs and longer lookalike names do
+not receive the tint. It does not depend on notification settings or read state.
+
+Edits and member-name changes update the background. Incremental updates keep
+cached message rows, and the permanent mention tint survives the separate
+navigation highlight's expiry. Theme colors keep it legible in light and dark
+mode; hover/focus retain the tint. Styling changes no row dimensions.
+
+```sh
+cargo test --locked --offline addressed_messages
+PAPO_UI_CASE=mention-background dbus-run-session -- xvfb-run -a cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+```
+
+The focused GTK check covers late metadata, exact IDs, names, everyone, excluded
+literals, own/other messages, live arrivals, edits, nickname changes/ambiguity,
+row reuse, navigation expiry and cached channel restoration. Light/dark
+screenshots can be saved by setting `PAPO_DESIGN_PREVIEW=1`.
+
+### Multiline composer and native input methods
+
+Enter sends a message; Shift+Enter inserts a newline. The native text editor
+wraps at the available width and grows from 36 to 160 pixels, then scrolls
+vertically. Mentions retain their IDs, highlighting and caret position across
+multiline edits, failed sends and restored channel drafts. Input-method preedit
+and commit keys are handled by GTK before sending or autocomplete shortcuts.
+
+```sh
+cargo test --locked --offline
+PAPO_UI_CASE=multiline PAPO_NATIVE_INPUT_TEST=1 GTK_IM_MODULE=simple dbus-run-session -- xvfb-run -a cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+```
+
+The native test requires Python, `setxkbmap` and libXtst. It sends real keyboard
+events only to its named window on a private X11 display. It checks dead-key
+`á`/`é`, Unicode `ç` committed with Enter without sending, Shift+Enter, mention
+completion, wrapping, height limits, failed-send preservation and Enter-to-send.
+Its keyboard layout change stays inside that test display. Without
+`PAPO_NATIVE_INPUT_TEST`, the full GTK smoke test exercises native editing signals.
+Dead keys are pressed separately, with GTK updates dispatched between the accent
+and the letter, matching human typing. Set `PAPO_NATIVE_INPUT_LAYOUT=br` to run
+the same private-display check with the Brazilian layout.
+
+The AppImage includes GTK clients for IBus and Fcitx5 and preserves the desktop's
+input-method selection. Its runtime check loads both modules and their bundled
+dependencies. The 20261013-input build passed the native keyboard test with the
+bundled GTK runtime using `simple`, `ibus` and `fcitx`; those private tests do not
+run desktop input-method daemons. Testers should also check their actual GNOME/KDE
+session: type dead-key accents, paste text, compose multiple lines, and confirm
+Enter commits active input-method candidates before sending a message.
+
+On Wayland, the composer prefers the IBus/Fcitx GTK client selected by
+`XMODIFIERS`, respecting available explicit `GTK_IM_MODULE` and GTK settings
+(including preference lists and GTK aliases). If that client is missing, or a
+terminal provides no framework hint, the composer uses the registered
+`gtk-im-context-simple` context for
+dead keys, Compose and Unicode input. The AppImage already includes both framework
+clients. Source installs needing full IBus/Fcitx candidate input should install
+their GTK4 client (Fedora: `ibus-gtk4` or `fcitx5-gtk4`). This fallback cannot provide
+the framework's language engines. The root chooses a consistent process-local
+input method before constructing login fields; desktop settings remain unchanged.
+Preedit updates stay in GTK rather than rebuilding the component; the placeholder
+updates directly, and forced word-completion hints are omitted.
+
+The default native GTK path dropped accents in both controls of a desktop check
+on this GNOME Wayland system. The user confirmed dead-key typing works in the
+updated composer with the registered built-in context. The full-application
+check was also confirmed by the user on the GNOME Wayland desktop. A manual
+comparison is available using a private localhost mock server, without opening
+the user's account or contacting the remote backend:
+
+```sh
+cargo test --locked --offline ui::chat::multiline::desktop_accent_check -- --ignored --test-threads=1 --nocapture
+```
+
+This opens a visible test window for at most three minutes and reports only
+whether accented text was entered, not the typed contents. Explicitly close it
+with **Concluir teste**. Automated X11 checks alone do not validate the desktop's
+Wayland input-method connection. The full-app check embeds the initially
+disabled composer in the actual main application hierarchy, with local startup
+requests and the normal activity/shortcut handlers.
+
+A composer-only fallback still failed after actual login: diagnostics showed no
+dead-key/preedit events reaching a focused, editable composer with the correct
+built-in module. The user confirmed that `GTK_IM_MODULE=simple` restores accents
+in the real server session. Startup now selects the transport for the entire
+application through process-local GTK settings, so login and chat inherit the
+same method. Available framework clients and valid explicit preferences retain
+priority. This removes the need for that temporary launch variable.
+
+The previous fallback depended on `XMODIFIERS` and skipped any nonempty GTK
+preference, including an unavailable module. Selection now handles an absent
+hint and missing clients, runs again on map, and follows later GTK settings
+changes. It changes the widget module only when the selection differs, preserving
+active composition during ordinary updates. Tests cover those preference cases
+and full-app startup with real Brazilian dead keys on a private X11 display:
+
+```sh
+PAPO_UI_CASE=full-app-input PAPO_NATIVE_INPUT_TEST=1 GTK_IM_MODULE=simple dbus-run-session -- xvfb-run -a cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+```
+
+Run `PAPO_UI_CASE=full-app-input` without `XMODIFIERS` or `GTK_IM_MODULE` in an
+isolated Wayland test session to check the no-hint fallback and process-local
+settings updates. This policy check does not simulate physical Wayland dead keys;
+the desktop interactive check verifies those. CI also runs the full-app X11
+keyboard check separately.
+
+### Bridged Discord embed authors
+
+Custom cards use a 2-pixel accent border, 4-pixel corners and compact padding.
+The live backend supplies `author_image_data` separately from `image_data` on
+the authorized `/embeds/{id}` endpoint. The renderer displays a 24-pixel sender
+avatar beside the author name, reserving its geometry before decoding finishes.
+Author images decode off the GTK thread and retain at most 72×72 pixels in a
+separate, bounded cache. They never replace the main thumbnail or become a
+full-image viewer source. Original author URLs are not fetched directly.
+
+```sh
+cargo test --locked --offline
+PAPO_UI_CASE=embeds dbus-run-session -- xvfb-run -a cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+```
+
+The mapped workflow checks author-only cards, main thumbnails plus author icons,
+shared-card request deduplication, malformed icons, stable avatar height, encoded
+payload removal, offscreen texture release and rejected late results after a
+channel switch. Set `PAPO_DESIGN_PREVIEW=1` to save the bridge-card screenshot.
+
+### First-load image geometry
+
+A decoded image uses its actual aspect ratio on the first visit, even if its
+placeholder was already painted. Guessed geometry never overrides known image
+dimensions. Landscape, portrait, embedded images and animated GIFs fill their
+frames without added letterboxing. The existing deferred media update and
+pre-paint anchor restoration handle the height change after scrolling pauses.
+
+```sh
+PAPO_UI_CASE=image-geometry dbus-run-session -- xvfb-run -a cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+PAPO_UI_CASE=smooth-updates dbus-run-session -- xvfb-run -a cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+```
+
+The geometry check paints the unknown-size placeholder before delivering bytes
+through the worker decoder. It compares allocated picture dimensions with the
+paintable's aspect ratio, checks narrow layouts, and verifies that unloading,
+channel restoration and a second decode retain the corrected geometry. The
+smooth-update regressions check scrolling continuity and reading-anchor pixels
+when media changes height. `PAPO_DESIGN_PREVIEW=1` saves a first-load screenshot.
+
+### Mentions in bot embeds and image zoom
+
+Bot embed descriptions, field values and footer text use the normal read-only
+chat renderer for mentions and custom emoji. Canonical mention IDs become blue,
+clickable `@nickname` labels. Loading member metadata or changing a nickname
+refreshes the reused card without replacing its surrounding chat row. Member
+names remain plain text, including names containing markup characters.
+
+Click an image preview to open the fitted windowed view, then use its fullscreen
+button to reveal zoom, fit and 100% controls. Leaving fullscreen restores fit and
+hides zoom controls. `F11` toggles fullscreen;
+`Escape` exits fullscreen first, then closes the viewer. `+`/`-`, Ctrl+wheel and
+pinch gestures zoom; Ctrl+0 fits the image. Drag a zoomed image or use scrollbars
+to pan. Fullscreen controls remain visible. A higher-quality image arriving while
+zoomed preserves the displayed size. Zoom and fullscreen reuse the paintable
+without downloading or decoding additional copies. Closing the viewer clears
+its paintable even if the window object is still retained.
+
+```sh
+PAPO_UI_CASE=embeds dbus-run-session -- xvfb-run -a cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+PAPO_UI_CASE=status-viewer dbus-run-session -- xvfb-run -a cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+```
+
+The embed check covers delayed member metadata, nickname updates, profile clicks,
+selection without navigation, literal markup characters and narrow layouts.
+The viewer check covers zoom allocations, panning, keyboard controls, fitting,
+unchanged chat textures/requests, animation playback and memory cleanup, as well
+as the existing original-image cancellation, authorization and failure checks.
+On a test compositor that implements fullscreen, set
+`PAPO_NATIVE_FULLSCREEN_TEST=1` to assert native fullscreen transitions, visible
+controls, Escape behavior and F11. A bare Xvfb display has no window manager and
+cannot verify those transitions. `PAPO_DESIGN_PREVIEW=1` saves
+`/tmp/papo-design-image-zoom-controls.png`.
+
+### Diagnosing input in the running application
+
+If a local test works but the application launched in another terminal/runtime
+still fails, opt-in composer diagnostics are available:
+
+```sh
+PAPO_INPUT_DIAGNOSTICS=1 cargo run
+```
+
+After reproducing the failure, inspect `target/papo-input-diagnostic.json`.
+The ignored local artifact records the runtime GTK version, backend, known
+input-module preferences, registered framework clients, focus/editability and
+aggregate key/preedit/buffer-change event counts. It never stores key values,
+typed text, message contents, credentials or server/session data. Unknown module
+preference values are masked. `test_build` distinguishes test windows from the
+actual application. The hooks and file writes are disabled unless explicitly
+requested with `PAPO_INPUT_DIAGNOSTICS=1`. Normal startup and typing incur no
+diagnostic file writes.
+
+The `login-input` regression focuses and edits the actual login username field,
+then transitions the existing root stack to the main chat while retaining the
+login controller. It checks subsequent composition and confirms that committing
+Unicode input with Enter never sends a message. The private Wayland run checks
+that both views inherit the same process-wide Compose setting; CI uses actual
+Brazilian dead-key events on its private X11 display:
+
+```sh
+PAPO_UI_CASE=login-input PAPO_NATIVE_INPUT_TEST=1 GTK_IM_MODULE=simple dbus-run-session -- xvfb-run -a cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+```
+
+### Updated backend contract (2026-10-13, `b015f18`)
+
+The adjacent `papo-backend` update adds explicit channel read acknowledgements,
+configurable message page sizes, a public avatar URL for bridge consumers and
+quoted Twitter/X rich embed fields. It also restricts another user's password
+reset to the server owner. Profile and avatar batch response shapes, authenticated
+attachment/media routes, and WebSocket event shapes remain compatible.
+
+The frontend now uses `PUT /channels/{id}/read` with `message_id`, accepting its
+empty 204 response. Server channels and DMs are acknowledged only while their
+window is active and the history has settled at the newest message. Initial
+unread navigation, older pages, cached-page revalidation and background windows
+do not mark history read. Repeated ticks coalesce; a failure preserves unread
+state and waits at least 30 seconds before another attempt for that channel.
+Responses apply the exact submitted cursor, even after channel switching or a
+new incoming message. Known notices through that cursor are cleared; notices
+outside cached history are confirmed by a coalesced inbox refresh. Late events
+for already acknowledged, cached messages do not restore their unread status.
+
+Opening fetches 30 messages; older pages and retained-history validation request
+100. Both paths retain exact timestamp/UUID cursors and the existing bounded
+history/media caches. The frontend keeps batched profile/avatar loading instead
+of creating one public avatar request per member. Rich cards already render the
+quote author's name/text and the backend-selected quoted media; regression
+fixtures cover both `/embeds` and message-list responses.
+
+Moderators keep ban and audit controls. Only owners see recovery-link controls,
+and dispatched/stale recovery actions check ownership again. Ownership changes
+close pending moderation dialogs; self-service password changes remain in
+Security.
+
+```sh
+cargo test --locked --offline
+PAPO_UI_CASE=backend-update dbus-run-session -- xvfb-run -a cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+PAPO_UI_CASE=embeds dbus-run-session -- xvfb-run -a cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+```
+
+The focused backend workflow uses an isolated X11 display and the existing
+`tests/helpers/input_keys.py` helper to give keyboard focus to its named test
+window without requiring a window manager. It checks unread navigation,
+unmapped-window handling, single read writes without message refetches, failed
+writes/cooldowns, successful retry, owner recovery and denied moderator actions.
+These checks and the rich-card check run in CI against local mock servers;
+they do not use a saved session or contact a real server.
+
+Validated locally: 205 unit/integration tests passed, along with the focused
+`backend-update`, `embeds`, `account-notices`, and `emoji-notifications` GTK
+workflows. The application also builds with `cargo build --locked --offline`.
+
+
+### Bug fixes 8: dialogs, emoji browsing, voice gain and Markdown
+
+See [BUG_FIXES_8.md](BUG_FIXES_8.md) for the eleven requests, implementation
+boundaries and test commands. `PAPO_UI_CASE=report8` covers the away group,
+native formatting/mentions, hidden and revealed animated spoiler images, pin
+nicknames/avatars, incremental emoji tabs, right-click channel read with retry,
+search Escape and the leaner notification/call dialogs. It runs in CI with
+private HTTP fixtures. Existing animated emoji, rich embed, notification and
+scroll/cache workflows remain regression checks.
+
+`native_voice_worker_drop_releases_process` now also checks the configured
+microphone gain and live, bounded updates on a generated audio source. It never
+opens a physical microphone. Windowed viewer checks run without a window
+manager; the private Wayland run with `PAPO_NATIVE_FULLSCREEN_TEST=1` additionally
+checks control visibility on entry/exit, fitted reset, zoom/pan and retained
+original/animated-image quality and cleanup.
+
+The `report8` workflow also covers uploaded images waiting for moderation on
+backends without clean-result events: both empty and omitted history status
+fields update the current chat and fetch its thumbnail without navigation;
+late send echoes cannot restore the stale pending state,
+sensitive images stay concealed, and leaving the channel cancels pending checks
+and rejects old responses. Unit tests cover the read-only inclusive page cursor,
+fallback cancellation and moderation races with live edits, status changes and
+deletions. The suite currently passes 218 headless tests.
+
+The moderation event checks count HTTP requests: an acknowledged own upload and
+normal completion events perform no message-history GETs; each image thumbnail
+is fetched once. Replaying 25 identical events must preserve the texture and row
+without another render pass or download. An early completion must survive the
+message/POST race. Three unchanged pending messages from an older backend share
+one fallback read and cannot schedule further checks for the same batch. Explicit
+sensitive/blocked events still conceal or delete media. Fallback work is cancelled
+on navigation without resetting its per-message budget during the current visit.
+
+The `embeds` workflow also checks rendered bot sentence geometry. A formatted
+sentence with a resolved mention must fit on one line in a wide chat, and must
+wrap in a narrow window while staying inside the card. This catches the former
+8-pixel text allocation, which checking buffer contents alone would miss. Native
+author-avatar geometry checks wait for GTK allocation before comparing sizes.
+
+The `embeds` workflow also checks the bridge author avatar cache across three
+channel round trips while avatar decoding is blocked. Resolved avatar-only cards
+must render their existing texture without another embed GET or decode job;
+missing icons must also avoid repeat requests. The test fills the 256-entry LRU,
+checks its 72px pixel budget and verifies release on eviction/session reset and
+rejection of old worker results. `retention` checks that large message media still
+unloads. The headless suite currently contains 219 passing tests.
+
+## Conversation header and full-height navigation
+
+Run the focused native layout regression with a private/mock server:
+
+```sh
+GSK_RENDERER=cairo PAPO_UI_CASE=gnome-layout dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+```
+
+It authenticates through the real root component against the local fixture,
+checks that only the conversation header is mapped after login, and verifies
+that navigation starts at the top while the header spans the chat and member
+pane. It covers 1280, 900, 540 and 360 pixel widths, including a long channel
+topic, live title updates, geometric title centering over the chat with
+absent/short/long descriptions, visible toolbar controls, compact overflow actions, sidebar breakpoints,
+navigation/member toggles (docked, hidden and overlay), title alignment after
+those toggles, search and notification windows, and restoration of the login
+header after confirming disconnect from the icon beside the account settings
+gear. Cancelling or dismissing the confirmation preserves the active session
+and sends no logout request.
+`PAPO_DESIGN_PREVIEW=1` saves
+`/tmp/papo-design-gnome-{width}.png`. No saved session or remote server is used.
+
+## Quick presence selector
+
+Run the native GTK smoke test with `PAPO_UI_CASE=presence-selector` in the
+existing private-display test environment. It uses only a local mock server.
+The check covers placement above the member list, colored option icons, saved
+status on startup, no-op/repeated selections, a failed write followed by retry,
+Online clearing the manual status, one status-only request per change, and
+synchronization with the profile editor without losing unsaved profile fields.
+`PAPO_DESIGN_PREVIEW=1` also saves `/tmp/papo-design-presence-selector.png`.
+The `PAPO_UI_CASE=status-viewer` member-list checks cover separate Online,
+Busy, Away and Offline sections, section ordering/counts, full presence syncs,
+empty-section removal and preservation of existing rows during status changes.
+
+## AppImage hardware video plugins
+
+```sh
+python3 -m unittest discover -s tests -p 'appimage_packaging_test.py'
+bash scripts/build-appimage.sh
+```
+
+The packaging regressions verify GPU-less operation, required plugin files,
+exclusion of host/vendor drivers, and rejection of host GStreamer plugins in
+the bundled decoder report. The build runs `AppRun --runtime-check` in the
+isolated builder without GPU devices. That check loads both VA-API/NVIDIA
+plugin libraries, permits empty hardware decoder registrations, and explicitly
+decodes the original H.264 fixture with `avdec_h264` to validate software fallback.
+It also retains the existing Opus/VP8, font/input-client and image-loader checks.
+On a tester's machine, the same runtime check reports the registered hardware
+video decoders; it does not require them to exist or claim that a particular
+chat video selected one. See [APPIMAGE.md](APPIMAGE.md#hardware-video-decoding).

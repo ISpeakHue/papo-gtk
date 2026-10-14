@@ -32,7 +32,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     chat.emit(ChatMsg::AddMessage({let mut m=messages[999].clone();m.id=Uuid::new_v4();m.created_at+=chrono::Duration::seconds(1);m}));pump(context);assert_eq!(chat.model().rendered[&format!("unread-start-{}",messages[991].id)].1,divider);
     // Exercise the actual GTK controller, preserving drafts and rejecting a
     // queued key from the previous selection.
-    let entry=descendants(chat.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Entry>().ok()).unwrap();entry.grab_focus();
+    let entry=composer::field(chat.widget().upcast_ref());entry.grab_focus();
     let controllers=entry.observe_controllers();let key=(0..controllers.n_items()).find_map(|i|controllers.item(i).and_downcast::<gtk::EventControllerKey>().filter(|c|c.propagation_phase()==gtk::PropagationPhase::Capture)).unwrap();
     entry.set_text("keep this draft");pump(context);let stopped=key.emit_by_name::<bool>("key-pressed",&[&gtk::gdk::Key::Up,&0u32,&gtk::gdk::ModifierType::empty()]);pump(context);assert!(!stopped);assert_eq!(entry.text(),"keep this draft");assert!(!gtk::Window::list_toplevels().iter().filter_map(|w|w.downcast_ref::<gtk::Window>()).any(|w|w.is_visible()&&w.title().as_deref()==Some("Editar mensagem")));
     entry.set_text("");pump(context);assert!(key.emit_by_name::<bool>("key-pressed",&[&gtk::gdk::Key::Up,&0u32,&gtk::gdk::ModifierType::empty()]));

@@ -11,15 +11,10 @@ mod models;
 mod ui;
 mod ws;
 mod voice;
+mod logging;
 
 fn main() {
-    // Initialise logging
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .init();
+    logging::init();
 
     // Create a Tokio runtime to allow reqwest and other async operations to work.
     let rt = tokio::runtime::Builder::new_multi_thread()

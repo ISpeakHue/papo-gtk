@@ -8,22 +8,16 @@ fn has_image(clipboard: &gtk::gdk::Clipboard) -> bool {
         || formats.mime_types().iter().any(|mime|mime.starts_with("image/"))
 }
 
-pub(super) fn intercept(entry: &gtk::Entry, input: &relm4::Sender<ChatMsg>, epoch: u64) -> bool {
+pub(super) fn intercept(entry: &gtk::TextView, input: &relm4::Sender<ChatMsg>, epoch: u64) -> bool {
     if !entry.is_sensitive() || !entry.is_editable() || !has_image(&entry.clipboard()) {return false;}
     let _=input.send(ChatMsg::Transfer(TransferMsg::PasteImage(epoch)));
     true
 }
 
-pub(super) fn connect(entry: &gtk::Entry, sender: &ComponentSender<ChatModel>, epoch: std::rc::Rc<std::cell::Cell<u64>>) {
-    // GtkEntry delegates its native paste signal (including menu paste) to GtkText.
-    if let Some(text)=entry.first_child().and_downcast::<gtk::Text>() {
-        let weak=entry.downgrade();let input=sender.input_sender().clone();
-        text.connect_paste_clipboard(move |text| {
-            if weak.upgrade().is_some_and(|entry|intercept(&entry,&input,epoch.get())) {
-                text.stop_signal_emission_by_name("paste-clipboard");
-            }
-        });
-    }
+pub(super) fn connect(entry: &gtk::TextView, sender: &ComponentSender<ChatModel>, epoch: std::rc::Rc<std::cell::Cell<u64>>) {
+    let input=sender.input_sender().clone();entry.connect_paste_clipboard(move |view|{
+        if intercept(view,&input,epoch.get()){view.stop_signal_emission_by_name("paste-clipboard");}
+    });
 }
 
 impl ChatModel {
@@ -69,8 +63,8 @@ pub(crate) fn exercise(context: &gtk::glib::MainContext) {
     let chat=ChatModel::builder().launch(ChatInit{active_channel:Some(channel(a)),user_id:Some(user),api:Some(api),..Default::default()}).detach();
     let access=crate::models::Access::direct();chat.emit(ChatMsg::SetAccess{user_id:user,access:access.clone()});
     let window=adw::Window::builder().default_width(800).default_height(640).content(chat.widget()).build();window.present();performance::settle(context);
-    let entry=descendants(chat.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Entry>().ok()).unwrap();
-    let text=entry.first_child().and_downcast::<gtk::Text>().unwrap();
+    let entry=composer::field(chat.widget().upcast_ref());
+    let text=entry.clone();
     let clipboard=entry.clipboard();entry.grab_focus();
     let controllers=entry.observe_controllers();
     let key=(0..controllers.n_items()).find_map(|i|controllers.item(i).and_downcast::<gtk::EventControllerKey>().filter(|c|c.propagation_phase()==gtk::PropagationPhase::Capture)).unwrap();

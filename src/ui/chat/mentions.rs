@@ -81,6 +81,35 @@ impl DisplayText {
 pub fn render(text:&str,users:&HashMap<Uuid,UserSummary>)->String {
     DisplayText::parse(text,users).text
 }
+/// Highlight received mentions using the same IDs/names as the displayed text.
+/// Literal code and URLs cannot address the current account.
+pub fn addressed_to(text:&str,user:Uuid,users:&HashMap<Uuid,UserSummary>)->bool {
+    if !text.contains('@'){return false;}
+    let addressed=|text:&str|{
+        if !text.contains('@'){return false;}
+        let displayed=DisplayText::read(text,users);
+        displayed.spans.iter().any(|span|span.id==Some(user)||span.id.is_none()&&{
+            let before=displayed.text[..span.start].chars().last();
+            let after=displayed.text[span.end..].chars().next();
+            before.is_none_or(|c|!c.is_alphanumeric()&&!matches!(c,'_'|'@'|'.'|'/'))
+                &&after.is_none_or(|c|!c.is_alphanumeric()&&!matches!(c,'_'|'.'))
+        })
+    };
+    let mut start=0;let mut i=0;
+    while i<text.len(){
+        let rest=&text[i..];
+        let url=rest.get(..7).is_some_and(|s|s.eq_ignore_ascii_case("http://"))
+            ||rest.get(..8).is_some_and(|s|s.eq_ignore_ascii_case("https://"));
+        if url||rest.starts_with('`'){
+            if addressed(&text[start..i]){return true;}
+            if url{i+=rest.find(char::is_whitespace).unwrap_or(rest.len());}
+            else{let n=rest.bytes().take_while(|c|*c==b'`').count();i+=rest[n..].find(&rest[..n]).map_or(rest.len(),|end|n+end+n);}
+            start=i;continue;
+        }
+        i+=rest.chars().next().unwrap().len_utf8();
+    }
+    addressed(&text[start..])
+}
 /// GTK positions count Unicode characters, whereas string offsets count bytes.
 pub fn completion(text:&str,position:i32)->Option<(usize,usize,&str)> {
     let end=if position<0{text.len()}else{text.char_indices().nth(position as usize).map(|(i,_)|i).unwrap_or(text.len())};
@@ -96,6 +125,17 @@ pub fn completion(text:&str,position:i32)->Option<(usize,usize,&str)> {
 }
 #[cfg(test)] mod tests {
     use super::*;
+    #[test]fn addressed_messages_match_the_recipient_and_ignore_literal_or_ambiguous_names(){
+        let user=Uuid::new_v4();let other=Uuid::new_v4();
+        let member=|id,username,nickname|serde_json::from_value(serde_json::json!({"id":id,"username":username,"nickname":nickname,"created_at":"2026-10-13T00:00:00Z"})).unwrap();
+        let users=HashMap::from([(user,member(user,"ISpeakHue","Íris")),(other,member(other,"bob","Bob"))]);
+        let token=format!("@mention(<@{user}>)");
+        for text in [token.as_str(),"Olá @ISpeakHue!","Oi @Íris, tudo bem?","@everyone!","é `código` @ISpeakHue"]{assert!(addressed_to(text,user,&users),"{text}");}
+        assert!(addressed_to(&token,user,&HashMap::new()),"canonical IDs work before profiles arrive");
+        for text in [format!("@mention(<@{other}>)"),format!("`{token}`"),format!("```rust\n{token}\n```"),format!("https://example.test/{token}"),"https://example.test/@ISpeakHue".into(),"HTTPS://example.test/@everyone".into(),"`@everyone`".into(),"@everyone_else".into(),"email@everyone.example".into(),"@everyone.example".into(),"_@everyone".into(),"@ISpeakHue_extra".into(),"email@ISpeakHue.example".into(),"@mention(<@invalid>)".into(),"`unclosed @ISpeakHue".into()]{assert!(!addressed_to(&text,user,&users),"{text}");}
+        let duplicate=HashMap::from([(user,member(user,"one","Same")),(other,member(other,"two","Same"))]);
+        assert!(!addressed_to("@Same",user,&duplicate));assert!(addressed_to("@one",user,&duplicate));
+    }
     #[test] fn tokens_render_without_markup_and_unknown_users_are_safe(){let id=Uuid::new_v4();assert_eq!(render(&format!("olá @MENTION(<@{id}>) <b>!"),&HashMap::new()),"olá @Usuário removido <b>!");assert_eq!(render("@mention(<@invalid>)",&HashMap::new()),"@mention(<@invalid>)");}
     #[test] fn completion_preserves_unicode_and_text_after_caret(){let id=Uuid::new_v4();let(text,caret)=insert("é @jo depois",5,Some(id)).unwrap();assert_eq!(text,format!("é @mention(<@{id}>)  depois"));assert_eq!(caret,text[..text.find(" depois").unwrap()].chars().count() as i32);assert!(completion("email@host",10).is_none());assert!(completion(&text,caret).is_none());}
     #[test] fn duplicate_names_keep_exact_ids_through_edits_and_plain_names_never_tag(){

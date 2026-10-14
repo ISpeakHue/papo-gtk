@@ -1,79 +1,160 @@
-# Distributable Linux test build
+# Modern GNOME/KDE AppImage
 
-The x86_64 recipe builds on Ubuntu 24.04 (glibc 2.39) rather than using the host's
-Fedora libraries. It bundles GTK 4.16.13, libadwaita 1.6.10, Python 3.12/PyGObject,
-GStreamer 1.24, software media codecs, WebRTC/libnice, PipeWire client libraries,
-fonts, standard icons, HTTPS certificates and the Papo pelican icon.
+This x86_64 recipe builds the current frontend in an isolated **Fedora 44**
+container. It requires **glibc 2.43 or newer**, as found in Fedora 44 and current
+compatible Arch installations. It deliberately does not target Ubuntu 24.04 or
+older Linux releases. Desktop environment choice does not change the package.
 
-The host still supplies its kernel, graphics drivers, X11/Wayland, audio service,
-D-Bus, and desktop portal. Screen sharing needs a ScreenCast portal backend and
-PipeWire; on KDE this is normally `xdg-desktop-portal-kde`. Remembered login uses
-a Secret Service keyring. These are desktop services, not bundled daemons.
+The runtime bundles Fedora's GTK 4.22, libadwaita 1.9, current Pango,
+Python 3.14/PyGObject, GStreamer 1.28, software H.264/AAC codecs, optional VA-API/NVIDIA video decoding, WebRTC/libnice,
+PipeWire clients, icons, certificates and fallback fonts. Exact versions, source
+RPM names and the frontend binary hash are recorded inside the package.
+
+The desktop supplies glibc, its Fontconfig/FreeType/HarfBuzz libraries, graphics
+drivers, X11/Wayland, audio services, D-Bus,
+and its desktop portal. Screen sharing requires a ScreenCast portal backend and
+PipeWire (usually `xdg-desktop-portal-kde` on KDE). Remembered login uses a Secret
+Service keyring. These desktop services are not bundled daemons.
+
+## Hardware video decoding
+
+The AppImage includes GStreamer's `va` and `nvcodec` plugins and their runtime
+libraries. VA-API can use compatible AMD/Intel hardware through the desktop's
+video driver; NVIDIA decoding requires the host's compatible NVIDIA driver and
+its CUDA/NVDEC libraries. The package does not distribute vendor GPU drivers or
+Mesa's DRI/VA driver modules. Existing `LIBVA_*`, CUDA and decoder-rank overrides
+are preserved, and host GStreamer plugins are not mixed with the bundle.
+
+GStreamer selects compatible decoders automatically. Software codecs, including
+`avdec_h264`, remain available when hardware decoding is unavailable. This adds
+backends for chat attachments and embeds; calls and screen sharing still use
+the application's explicit software VP8 pipeline.
+
+`--runtime-check` verifies both plugin files and their dependencies, reports the
+hardware video decoders registered on that machine, and decodes a synthetic
+H.264 clip explicitly through the software fallback. An empty registered-decoder
+list is valid on a machine without the corresponding hardware or driver. A
+registered decoder is not proof that a particular video used it: codec/profile
+support and GStreamer's selection still apply. Hardware plugin discovery may
+probe GPU capabilities; the check does not capture microphone, camera or screen
+contents. A separate registry cache is used for hardware-enabled builds.
+
+References: [GStreamer VA-API](https://gstreamer.freedesktop.org/documentation/va/index.html),
+[GStreamer NVIDIA codecs](https://gstreamer.freedesktop.org/documentation/nvcodec/index.html).
+
+## Font rendering
+
+The launcher preserves the complete desktop Fontconfig configuration, including
+user font rules, and adds bundled Adwaita/Noto/DejaVu fonts as fallbacks. Explicit
+`FONTCONFIG_FILE`/`FONTCONFIG_PATH` overrides remain intact. It does not force a
+font family, hinting mode, GDK scale, XWayland backend or software renderer.
+GTK uses the desktop's native backend and monitor scaling.
+Core font libraries come from the desktop to keep newer font configuration rules
+compatible on rolling distributions such as Arch. The MIME database is bundled
+so image identification does not depend on other GTK apps being installed.
+Current GTK's font rendering behavior is described in its
+[settings documentation](https://docs.gtk.org/gtk4/property.Settings.gtk-font-rendering.html).
+
+Modern PNG/SVG decoding includes Glycin's loaders and a Bubblewrap wrapper that
+adds the read-only AppDir and its libraries to the existing decoder sandbox.
+Loader configuration is relocated in the user's cache for each mount path.
+Namespaces, seccomp and network isolation are retained; the launcher does not
+disable sandboxing. The self-check exercises real PNG and SVG decoding.
+
+IBus and Fcitx5 GTK input-method clients are included, along with their library
+dependencies. The launcher preserves the desktop's input-method selection;
+input-method daemons remain supplied by the desktop. GTK's native compose
+handling supports dead-key accents in the editor.
 
 ## Build
 
 Install Podman, curl and Python 3.11+ on the build machine. Cache the locked Rust
-dependencies first with `cargo fetch --locked`; container compilation uses that
-registry offline. Then run:
+dependencies with `cargo fetch --locked`, then run:
 
 ```sh
 bash scripts/build-appimage.sh
 ```
 
-The first run downloads the Ubuntu container, native build/runtime packages,
-the checksum-verified Rust 1.90.0 toolchain, GNOME source archives and the pinned,
-checksum-verified AppImage builder 1.9.1 and SHA-256-pinned type-2 runtime. Later runs reuse the container and Cargo
-build cache. The GTK build also resolves its versioned Meson subprojects.
+The first run downloads Fedora packages and RPM Fusion's free codec library.
+Later builds reuse the container and `target/appimage-fedora44` Cargo cache.
+The AppImage builder 1.9.1 and type-2 runtime are checksum verified. No GTK or
+libadwaita downgrade or source rebuild is performed.
 
-Outputs are kept in the ignored `dist/` directory:
+The UTC build date distinguishes the new package from earlier preview builds.
+Set `PAPO_BUILD_LABEL` to another letters/numbers/underscore/hyphen label if needed.
+Outputs in ignored `dist/` are:
 
-- `Papo-0.1.0-preview-x86_64.AppImage`
-- Its SHA-256 checksum
-- `papo-gtk-0.1.0-source.tar.gz`, matching frontend source/build recipes
-- `README.txt`, instructions for testers
+- `Papo-0.1.0-preview-<date>-x86_64.AppImage`
+- Its `.sha256` checksum
+- `papo-gtk-0.1.0-preview-<date>-source.tar.gz`
+- `Papo-0.1.0-<date>-README.txt`, instructions for testers
 
-The AppDir is assembled under `target/appimage/AppDir`. It contains only build
-outputs and explicitly selected runtime resources. User settings, keyring data,
-chat caches and account credentials are not copied. Development launches retain
-the system Python interpreter; the AppImage supplies its bundled interpreter
-through `PAPO_PYTHON`.
+The AppDir is assembled under `target/appimage-fedora44/AppDir`, containing only
+build outputs and selected builder resources. Personal settings, caches, tokens
+and account credentials are not copied. Development launches keep using the
+system Python interpreter; the AppImage sets its own `PAPO_PYTHON`.
 
 ## Test and distribute
 
+Make the new AppImage executable and run:
+
 ```sh
-chmod +x dist/Papo-0.1.0-preview-x86_64.AppImage
-dist/Papo-0.1.0-preview-x86_64.AppImage --runtime-check
-dist/Papo-0.1.0-preview-x86_64.AppImage
+./Papo-0.1.0-preview-<date>-x86_64.AppImage --runtime-check
+./Papo-0.1.0-preview-<date>-x86_64.AppImage --font-check
+./Papo-0.1.0-preview-<date>-x86_64.AppImage
 ```
 
-The self-check verifies bundled imports/libraries, codec and capture element
-availability, synthetic Opus/VP8 encoding/decoding, and HTTPS certificate loading.
-It does not open a microphone, camera, screen picker or server connection.
+The runtime check uses synthetic audio/video and validates imports, codecs,
+certificates, fallback fonts, desktop Fontconfig rules and PNG/SVG loaders. It
+opens no microphone, camera, screen picker or server connection; hardware
+plugins can probe GPU capabilities. `--font-check` briefly shows a
+sample window and reports the backend, font match, renderer and scale; add
+`--snapshot /tmp/papo-fonts.png` to save its rendering.
 
-When FUSE mounting is unavailable, use
-`--appimage-extract-and-run` before application arguments. AppImage desktop
-integration should point its launcher at the distributed AppImage file; the
-development `install-desktop.py` helper instead points at a checkout's binary.
+When FUSE is unavailable, put `--appimage-extract-and-run` before app arguments.
+Share the dated AppImage, checksum, tester instructions and matching source
+archive. Testers enter their own backend URL and credentials. A backend is not
+included. Real calls/devices and the friends' GNOME/KDE setups need their own
+checks; desktop configuration and graphics drivers can still affect rendering.
 
-Share the AppImage, tester instructions and matching source archive. Testers
-enter their own backend URL and credentials. A Papo backend is not bundled.
+## Validation
 
-Local validation on 2026-10-09: 168 regular release tests passed on the Ubuntu
-baseline; the complete GTK workflow passed in 145.13 seconds with the bundled
-runtime, including native playback and chat/media regressions. Synthetic native
-voice cleanup and all four private portal tests passed. The actual AppImage
-self-check passed using both FUSE and extraction mode on Fedora 44, and its login
-window/pelican icon were verified on a private display. Physical devices, real
-multi-user calls and other desktops still need the testers' checks.
+Validation for the 2026-10-12 build: 186 release tests passed in the Fedora builder.
+Mapped mention, avatar, clipboard and chat regressions passed with the bundle.
+The final AppImage passed runtime checks on Fedora (FUSE and extraction) and on
+current Arch with glibc 2.44 and its native font libraries. PNG/SVG, 37 media
+elements, synthetic Opus/VP8 decoding, certificates and Fontconfig were checked.
+Native Wayland font diagnostics passed at 100%, 125% and 200%; the mounted final
+image selected Adwaita Sans and Vulkan at true 125% on an isolated GNOME compositor.
+The login window/pelican icon were checked on a private X11 display. Actual KDE
+desktop sessions and physical calls/camera/screen sharing remain tester checks.
+
+The 20261013-input update adds the multiline, wrapping composer and input-method
+clients. All 196 regular tests passed. Focused mention/clipboard regressions and
+real keyboard checks passed, including dead-key accents, Shift+Enter, Unicode
+commit without sending, autocomplete, bounded input height and failed-send retry.
+The keyboard checks also passed with bundled GTK using `simple`, `ibus` and
+`fcitx`, without running desktop input-method daemons. The mounted final AppImage
+passed its runtime check, including loading both clients and all 37 media elements.
+
+The 20261013-hardware update adds the VA-API and NVIDIA decoder plugins. Four
+packaging boundary regressions passed. The finished AppImage passed runtime
+checks on the Fedora desktop and in isolated Fedora/Arch environments without
+GPU devices, including the explicit software H.264 decode. Using the bundled
+runtime, automatic decoding on the AMD GPU selected `vah264dec` and produced all
+48 frames of the fixture; the same pipeline without GPU access selected
+`avdec_h264` and also produced 48 frames. NVIDIA plugin dependency loading was
+checked without an NVIDIA driver; decoding on physical NVIDIA hardware remains
+unverified. GPU driver files were checked to be absent from the AppDir.
 
 ## Runtime sources and licenses
 
-The frontend remains GPL-3.0-only. Runtime copyright/license notices are included
-under `usr/share/licenses`, and the builder's exact Ubuntu package/source
-versions are listed in `usr/share/papo-gtk/ubuntu-packages.tsv`.
+The frontend is GPL-3.0-only. Runtime license notices are in `usr/share/licenses`;
+exact package versions/source RPM names are in
+`usr/share/papo-gtk/fedora-packages.tsv`; build information and the binary hash are
+in `usr/share/papo-gtk/build-info.json`.
 
-- [GTK 4.16.13 source](https://download.gnome.org/sources/gtk/4.16/gtk-4.16.13.tar.xz)
-- [libadwaita 1.6.10 source](https://download.gnome.org/sources/libadwaita/1.6/libadwaita-1.6.10.tar.xz)
-- [Ubuntu package/source archive](https://archive.ubuntu.com/ubuntu/)
+- [Fedora sources](https://src.fedoraproject.org/)
+- [RPM Fusion free sources](https://download1.rpmfusion.org/free/fedora/)
+- [Glycin source](https://github.com/GNOME/glycin)
 - [AppImage builder/runtime sources](https://github.com/AppImage/appimagetool)
-- [AppImage packaging requirements](https://docs.appimage.org/reference/best-practices.html)

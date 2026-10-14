@@ -1,4 +1,5 @@
 mod desktop;
+mod read;
 pub(crate) mod state;
 use super::*;
 use crate::models::{Message,NotificationList,NotificationEvent};
@@ -6,7 +7,7 @@ use state::{Inbox,ReadJournal};
 use std::collections::HashSet;
 #[derive(Debug)]
 pub enum NoticeMsg {
-    Open, Refresh, More, Mark(Uuid), OpenMessage(Uuid),
+    Open, TabChanged, Refresh, More, Mark(Uuid), OpenMessage(Uuid),
     Loaded{token:Uuid,cursor:Option<MessageCursor>,result:anyhow::Result<NotificationList>},
     Marked{id:Uuid,result:anyhow::Result<u32>},
     MarkedBatch{ids:Vec<Uuid>,result:anyhow::Result<u32>},
@@ -18,9 +19,11 @@ pub(super) struct Notifications {
     request:Option<Uuid>,refresh_again:bool,cursor:Option<MessageCursor>,more:bool,
     marks:HashSet<Uuid>,failed_marks:HashSet<Uuid>,read_error:Option<String>,seen_events:HashSet<Uuid>,pub(super) jobs:Vec<tokio::task::JoinHandle<()>>,desktop:desktop::Desktop,
     pending_open:Option<Uuid>,
-    pub read_pending:bool,pub read_request:Option<Uuid>,
+    reads:read::Reads,
+    pub(super) manual_reads:std::collections::HashMap<Uuid,Uuid>,
 }
-struct InboxView {window:gtk::Window,rows:gtk::Box,status:gtk::Label,more:gtk::Button}
+struct InboxView {window:gtk::Window,rows:gtk::Box,personal_rows:gtk::Box,tabs:gtk::Stack,status:gtk::Label,more:gtk::Button}
+impl InboxView{fn personal(&self)->bool{self.tabs.visible_child_name().as_deref()==Some("personal")}}
 impl Drop for Notifications{fn drop(&mut self){for job in self.jobs.drain(..){job.abort();}if let Some(v)=self.view.take(){v.window.close();}}}
 impl MainWindowModel {
     fn notification_channels(&self)->Vec<state::NoticeChannel>{
@@ -35,11 +38,18 @@ impl MainWindowModel {
                 if let Some(v)=self.notifications.view.as_ref().filter(|v|v.window.is_visible()){v.window.present();self.mark_open_notices(&sender);sender.input(MainWindowMsg::Notification(NoticeMsg::Refresh));return;}
                 let window=gtk::Window::builder().title("Notificações").default_width(550).default_height(550).build();if let Some(parent)=root.root().and_downcast::<gtk::Window>(){window.set_transient_for(Some(&parent));}
                 let body=gtk::Box::new(gtk::Orientation::Vertical,8);body.set_margin_top(16);body.set_margin_bottom(16);body.set_margin_start(16);body.set_margin_end(16);
-                let refresh=gtk::Button::with_label("Atualizar notificações");let input=sender.input_sender().clone();refresh.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Notification(NoticeMsg::Refresh));});body.append(&refresh);
-                let status=gtk::Label::new(None);status.set_wrap(true);body.append(&status);let rows=gtk::Box::new(gtk::Orientation::Vertical,8);body.append(&gtk::ScrolledWindow::builder().vexpand(true).child(&rows).build());
+                let tabs=gtk::Stack::new();tabs.set_transition_type(gtk::StackTransitionType::None);tabs.set_vexpand(true);
+                let rows=gtk::Box::new(gtk::Orientation::Vertical,8);let personal_rows=gtk::Box::new(gtk::Orientation::Vertical,8);
+                tabs.add_titled(&gtk::ScrolledWindow::builder().child(&rows).build(),Some("server"),"Servidor");
+                tabs.add_titled(&gtk::ScrolledWindow::builder().child(&personal_rows).build(),Some("personal"),"Mensagens diretas");
+                tabs.set_visible_child_name("server");
+                let switcher=gtk::StackSwitcher::builder().stack(&tabs).halign(gtk::Align::Center).build();body.append(&switcher);
+                let status=gtk::Label::new(None);status.set_wrap(true);body.append(&status);body.append(&tabs);
+                let input=sender.input_sender().clone();tabs.connect_visible_child_name_notify(move |_|{let _=input.send(MainWindowMsg::Notification(NoticeMsg::TabChanged));});
                 let more=gtk::Button::with_label("Mais notificações");let input=sender.input_sender().clone();more.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Notification(NoticeMsg::More));});body.append(&more);window.set_child(Some(&body));window.present();
-                self.notifications.view=Some(InboxView{window,rows,status,more});self.load_notice_authors(&sender);self.render_inbox(&sender);self.mark_open_notices(&sender);self.refresh_notifications(None,sender);
+                self.notifications.view=Some(InboxView{window,rows,personal_rows,tabs,status,more});self.load_notice_authors(&sender);self.render_inbox(&sender);self.mark_open_notices(&sender);self.refresh_notifications(None,sender);
             }
+            NoticeMsg::TabChanged=>{self.mark_open_notices(&sender);self.render_inbox(&sender);},
             NoticeMsg::Refresh=>self.refresh_notifications(None,sender),
             NoticeMsg::More=>{if self.notifications.more&&self.notifications.request.is_none(){self.refresh_notifications(self.notifications.cursor,sender);}}
             NoticeMsg::Loaded{token,cursor,result}=>{
@@ -95,13 +105,15 @@ impl MainWindowModel {
             NoticeMsg::DesktopReady(result)=>{self.notifications.desktop.ready(result,sender.input_sender().clone());self.deliver_notices(sender);}
         }
     }
+    fn personal_notice(&self,n:&state::Notice)->bool{n.channel_id.is_some_and(|id|self.direct.known.contains(&id)||self.direct.items.iter().any(|d|d.id==id))}
     fn mark_open_notices(&mut self,sender:&ComponentSender<Self>){
         let open=self.notifications.view.as_ref().is_some_and(|v|v.window.is_visible());
+        let personal=self.notifications.view.as_ref().is_some_and(InboxView::personal);
         let rows=&self.notifications.inbox.rows;self.notifications.seen_events.retain(|id|rows.contains_key(id));
         if !open&&self.notifications.seen_events.is_empty(){return;}
         let channels=self.notification_channels();
         let ids:Vec<_>=self.notifications.inbox.ordered().into_iter().filter(|n|
-            ((open&&!n.read)||(n.persisted&&self.notifications.seen_events.contains(&n.id)))
+            ((open&&!n.read&&self.personal_notice(n)==personal)||(n.persisted&&self.notifications.seen_events.contains(&n.id)))
             &&!self.notifications.marks.contains(&n.id)&&!self.notifications.failed_marks.contains(&n.id)
             &&n.channel_id.is_some_and(|id|channels.iter().any(|c|c.id==id))).map(|n|(n.id,n.persisted)).collect();
         let mut persisted=vec![];
@@ -119,7 +131,8 @@ impl MainWindowModel {
         self.notifications.jobs.push(tokio::spawn(async move{let result=api.notifications(user,cursor).await;sender.input(MainWindowMsg::Notification(NoticeMsg::Loaded{token,cursor,result}));}));
     }
     pub(super) fn incoming_notice(&mut self,event:NotificationEvent,sender:ComponentSender<Self>){
-        self.notifications.inbox.event(event);self.load_notice_authors(&sender);self.mark_open_notices(&sender);self.deliver_notices(sender.clone());self.render_inbox(&sender);self.mark_open_notices(&sender);self.refresh_notifications(None,sender);
+        let read=self.notifications.inbox.messages.get(&event.message_id).is_some_and(|m|self.notifications.reads.covers(m));let id=event.id;
+        self.notifications.inbox.event(event);if read{self.notifications.inbox.mark(id);}self.load_notice_authors(&sender);self.mark_open_notices(&sender);self.deliver_notices(sender.clone());self.render_inbox(&sender);self.mark_open_notices(&sender);self.refresh_notifications(None,sender);
     }
     pub(super) fn deliver_notices(&mut self,sender:ComponentSender<Self>){
         if self.account.config.notifications.as_ref().is_some_and(|p|p.enabled==Some(true)){self.notifications.desktop.initialize(sender.input_sender().clone());}
@@ -145,10 +158,10 @@ impl MainWindowModel {
         let channels=self.notification_channels();
         self.sidebar.emit(SidebarMsg::UnreadNotifications{count:self.notifications.inbox.unread(&channels),more:self.notifications.more});
         self.chat.emit(ChatMsg::NotificationCount{count:self.notifications.inbox.unread(&channels),more:self.notifications.more});
-        let Some(v)=&self.notifications.view else{return;};while let Some(c)=v.rows.first_child(){v.rows.remove(&c);}
+        let Some(v)=&self.notifications.view else{return;};for rows in [&v.rows,&v.personal_rows]{while let Some(c)=rows.first_child(){rows.remove(&c);}}
         for n in self.notifications.inbox.ordered(){
             let channel=n.channel_id.and_then(|id|channels.iter().find(|c|c.id==id));
-            let label=if let Some(channel)=channel{let preview=self.account.config.notifications.as_ref().and_then(|p|p.message_preview).unwrap_or(true);let users=self.users.iter().map(|u|(u.id,u.clone())).collect();format!("{}#{} · {}\n{}",if n.read{""}else{"● "},channel.name,n.created_at.format("%d/%m/%Y %H:%M"),if preview{crate::ui::chat::mentions::render(&n.content,&users)}else{"Nova mensagem".into()})}else{"Nova notificação — mensagem não localizada ou canal indisponível".into()};
+            let label=if let Some(channel)=channel{let preview=self.account.config.notifications.as_ref().and_then(|p|p.message_preview).unwrap_or(true);let users=self.users.iter().map(|u|(u.id,u.clone())).collect();format!("{}{}{} · {}\n{}",if n.read{""}else{"● "},if self.personal_notice(n){""}else{"#"},channel.name,n.created_at.format("%d/%m/%Y %H:%M"),if preview{crate::ui::chat::mentions::render(&n.content,&users)}else{"Nova mensagem".into()})}else{"Nova notificação — mensagem não localizada ou canal indisponível".into()};
             let row=gtk::Box::new(gtk::Orientation::Horizontal,8);let open=gtk::Button::new();open.set_widget_name(&format!("notification-{}",n.id));open.set_hexpand(true);
             let content=gtk::Box::new(gtk::Orientation::Horizontal,10);let details=gtk::Box::new(gtk::Orientation::Vertical,4);
             if channel.is_some(){
@@ -158,19 +171,29 @@ impl MainWindowModel {
                 let heading=gtk::Label::new(Some(name));heading.set_xalign(0.0);heading.add_css_class("heading");if let Some(roles)=author.and_then(|u|u.roles.as_deref()){crate::ui::style::role_color(&heading,roles);}details.append(&heading);
             }
             let l=gtk::Label::new(Some(&label));l.set_wrap(true);l.set_xalign(0.0);details.append(&l);content.append(&details);open.set_child(Some(&content));let input=sender.input_sender().clone();let id=n.id;open.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Notification(NoticeMsg::OpenMessage(id)));});row.append(&open);
-            if (!n.read||self.notifications.seen_events.contains(&id))&&(self.notifications.failed_marks.contains(&id)||channel.is_none()){let mark=gtk::Button::with_label(if n.persisted{"Marcar lida"}else{"Dispensar"});mark.set_sensitive(!self.notifications.marks.contains(&id));let input=sender.input_sender().clone();mark.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Notification(NoticeMsg::Mark(id)));});row.append(&mark);}v.rows.append(&row);
-        }v.more.set_sensitive(self.notifications.more&&self.notifications.request.is_none());
+            if (!n.read||self.notifications.seen_events.contains(&id))&&(self.notifications.failed_marks.contains(&id)||channel.is_none()){let mark=gtk::Button::with_label(if n.persisted{"Marcar lida"}else{"Dispensar"});mark.set_sensitive(!self.notifications.marks.contains(&id));let input=sender.input_sender().clone();mark.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Notification(NoticeMsg::Mark(id)));});row.append(&mark);}if self.personal_notice(n){v.personal_rows.append(&row);}else{v.rows.append(&row);}
+        }
+        for (rows,text) in [(&v.rows,"Nenhuma notificação do servidor."),(&v.personal_rows,"Nenhuma notificação de mensagem direta.")]{if rows.first_child().is_none(){let empty=gtk::Label::new(Some(text));empty.set_margin_top(24);empty.set_margin_bottom(24);empty.add_css_class("dim-label");rows.append(&empty);}}
+        v.more.set_sensitive(self.notifications.more&&self.notifications.request.is_none());
     }
     pub(super) fn history_observed(&mut self,channel:Uuid,messages:Vec<Message>,latest:bool,sender:&ComponentSender<Self>){
         if !self.can_read_target(channel){return;}
-        if latest{self.direct_history(channel,&messages,sender);}
-        if latest{self.notifications.journal.observed_read(channel,&messages,&mut self.channels);}for m in messages{self.notifications.inbox.observe(m);}self.publish_voice_channels();self.mark_open_notices(sender);self.deliver_notices(sender.clone());self.render_inbox(sender);
+        for m in messages{
+            self.notifications.journal.message(&m,&mut self.channels);
+            if latest{self.direct_message(&m);}
+            self.notifications.inbox.observe(m);
+        }
+        self.publish_voice_channels();self.mark_open_notices(sender);self.deliver_notices(sender.clone());self.render_inbox(sender);
     }
 }
 #[cfg(test)]
 pub(crate) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::MainContext,backend:&std::sync::Arc<std::sync::Mutex<crate::ui::chat::actions::tests::Backend>>){
     use adw::prelude::*;
     use crate::ui::chat::actions::tests::{find_button,pump,until};
+    // Earlier workflows share this controller and may already have read these
+    // fixture notices. Seed the failed-write case independently of that state.
+    {let mut b=backend.lock().unwrap();b.fail_read=true;b.read_notices.clear();}
+    main.state().get_mut().model.notifications=Notifications::default();
     let host=adw::Window::builder().default_width(1100).default_height(740).content(main.widget()).build();host.present();
     main.emit(MainWindowMsg::Notification(NoticeMsg::Open));until(context,||main.model().notifications.request.is_none()&&main.model().notifications.view.is_some()&&main.model().notifications.marks.is_empty());let w=main.model().notifications.view.as_ref().unwrap().window.clone();
     let authors=crate::ui::chat::actions::tests::descendants(w.upcast_ref());
@@ -221,4 +244,98 @@ pub(crate) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::Mai
 #[cfg(test)]
 pub(crate) fn exercise_denied(main:&Controller<MainWindowModel>,context:&gtk::glib::MainContext){
     use crate::ui::chat::actions::tests::{descendants,pump};pump(context);let w=main.model().notifications.view.as_ref().unwrap().window.clone();assert!(!descendants(w.upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::Label>()).any(|l|l.text().contains("notification preview")||l.text().contains("ephemeral preview")));assert_eq!(main.model().notifications.inbox.unread(&main.model().notification_channels()),0);
+}
+
+#[cfg(test)]pub(crate) fn exercise_tabs(context:&gtk::glib::MainContext){
+    use adw::prelude::*;
+    use crate::ui::chat::actions::tests::{mock,pump,until,descendants};
+    let(api,backend,server)=tokio::runtime::Handle::current().block_on(mock());
+    let dm:Uuid="12345678-1234-4234-8234-123456789ac3".parse().unwrap();let peer:Uuid="12345678-1234-4234-8234-123456789ac0".parse().unwrap();
+    backend.lock().unwrap().dms=vec![serde_json::json!({"id":dm,"user":{"id":peer,"username":"bob","created_at":"2026-10-03T00:00:00Z"},"created_at":"2026-10-03T00:00:00Z","unread_count":2})];
+    let current_user=serde_json::from_value(backend.lock().unwrap().profile.clone()).unwrap();
+    let main=MainWindowModel::builder().launch(MainWindowInit{current_user,api_client:api}).detach();
+    let host=adw::Window::builder().default_width(1100).default_height(740).content(main.widget()).build();host.present();
+    until(context,||main.model().direct.items.len()==1&&main.model().access_request.is_none()&&!main.model().channels.is_empty());
+    let badge=descendants(main.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Label>().ok().filter(|w|w.widget_name()=="direct-unread-indicator")).unwrap();
+    until(context,||badge.is_visible()&&badge.text()=="2");crate::ui::main_window::layout::tests::preview(&host,"dm-unread-badge",context);
+    let message:Message=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"channel_id":dm,"author_id":peer,"content":"DM incoming","created_at":"2026-10-10T00:00:00Z"})).unwrap();
+    main.emit(MainWindowMsg::WsReceived(WsEvent::NewMessage(message.clone())));until(context,||badge.text()=="3");
+    main.emit(MainWindowMsg::WsReceived(WsEvent::NewMessage(message.clone())));pump(context);assert_eq!(badge.text(),"3","duplicate messages cannot inflate the badge");
+    main.emit(MainWindowMsg::HistoryObserved{channel_id:dm,messages:vec![message.clone()],latest:true});pump(context);assert_eq!(badge.text(),"3","fetching messages is not a read acknowledgement");
+    let request=main.state().get_mut().model.notifications.reads.begin(&message).unwrap();
+    main.emit(MainWindowMsg::ChannelRead{request,message,result:Ok(())});until(context,||!badge.is_visible());
+    main.emit(MainWindowMsg::Notification(NoticeMsg::Open));until(context,||main.model().notifications.request.is_none()&&main.model().notifications.marks.is_empty()&&main.model().notifications.view.is_some());
+    let server_notice=Uuid::new_v4();let direct_notice=Uuid::new_v4();let channel=main.model().channels[0].id;
+    let rows=[(server_notice,channel),(direct_notice,dm)].into_iter().map(|(id,channel)|serde_json::from_value(serde_json::json!({"id":id,"message_id":Uuid::new_v4(),"channel_id":channel,"author_id":peer,"message_content":"tab preview","read":false,"created_at":"2026-10-01T00:00:00Z"})).unwrap()).collect();
+    main.state().get_mut().model.notifications.inbox.merge(rows);
+    let baseline=backend.lock().unwrap().requests.len();main.emit(MainWindowMsg::Notification(NoticeMsg::TabChanged));
+    until(context,||main.model().notifications.marks.is_empty()&&main.model().notifications.inbox.rows[&server_notice].read);
+    assert!(!main.model().notifications.inbox.rows[&direct_notice].read,"opening the server tab must not read personal notices");
+    let(tabs,server_rows,personal_rows,window)={let model=main.model();let v=model.notifications.view.as_ref().unwrap();(v.tabs.clone(),v.rows.clone(),v.personal_rows.clone(),v.window.clone())};
+    let contains=|rows:&gtk::Box,id:Uuid|descendants(rows.upcast_ref()).iter().any(|w|w.widget_name()==format!("notification-{id}"));
+    assert!(contains(&server_rows,server_notice)&&!contains(&server_rows,direct_notice));assert!(contains(&personal_rows,direct_notice)&&!contains(&personal_rows,server_notice));
+    crate::ui::main_window::layout::tests::preview(&window,"notification-server-tab",context);
+    tabs.set_visible_child_name("personal");until(context,||main.model().notifications.marks.is_empty()&&main.model().notifications.inbox.rows[&direct_notice].read);
+    crate::ui::main_window::layout::tests::preview(&window,"notification-dm-tab",context);
+    let requests=backend.lock().unwrap().requests[baseline..].to_vec();assert!(!requests.iter().any(|(m,p,_)|m=="GET"&&p.contains("/notifications")),"changing tabs must not refetch notifications");
+    let writes:Vec<_>=requests.iter().filter(|(m,p,_)|m=="PUT"&&p.ends_with("/read_notification")).collect();assert_eq!(writes.len(),2);assert_eq!(writes[0].2["notification_ids"],serde_json::json!([server_notice]));assert_eq!(writes[1].2["notification_ids"],serde_json::json!([direct_notice]));
+    main.emit(MainWindowMsg::Direct(super::direct::DirectMsg::Hide(dm)));until(context,||main.model().direct.items.is_empty());main.emit(MainWindowMsg::Notification(NoticeMsg::TabChanged));pump(context);assert!(contains(&personal_rows,direct_notice)&&!contains(&server_rows,direct_notice),"hidden DMs must not migrate into the server tab");
+    window.close();host.set_content(None::<&gtk::Widget>);host.close();drop(main);server.abort();pump(context);
+}
+
+#[cfg(test)]pub(crate) fn exercise_backend_update(context:&gtk::glib::MainContext){
+    use adw::prelude::*;
+    use crate::ui::chat::actions::tests::{mock,pump,until};
+    let (api,backend,server)=tokio::runtime::Handle::current().block_on(mock());
+    let current_user=serde_json::from_value(backend.lock().unwrap().profile.clone()).unwrap();
+    let main=MainWindowModel::builder().launch(MainWindowInit{current_user,api_client:api}).detach();
+    until(context,||main.model().background_started&&main.model().access_request.is_none()&&!main.model().channels.is_empty()&&main.model().notifications.request.is_none());
+    let channel=main.model().channels[0].id;
+    assert!(main.model().channels[0].has_unread(),"message fetching leaves the channel unread");
+    let read_count=||backend.lock().unwrap().requests.iter().filter(|(method,path,_)|method=="PUT"&&path==&format!("/channels/{channel}/read")).count();
+    assert_eq!(read_count(),0,"an unmapped chat is not acknowledged");
+    let host=adw::Window::builder().title("Papo backend update test").default_width(1100).default_height(740).content(main.widget()).build();host.present();
+    crate::ui::chat::performance::settle(context);
+    if gtk::prelude::WidgetExt::display(&host).type_().name()=="GdkX11Display"{
+        // Bare virtual displays have no window manager to grant keyboard focus.
+        assert!(std::process::Command::new("python3").arg(concat!(env!("CARGO_MANIFEST_DIR"),"/tests/helpers/input_keys.py")).arg("Papo backend update test").status().unwrap().success());
+        until(context,||host.is_active());
+    }
+    assert!(host.is_active(),"the private test host must have desktop focus");
+    until(context,||main.model().chat.model().read_candidate().is_some());
+    main.emit(MainWindowMsg::TickCleanup);until(context,||!main.model().channels[0].has_unread());assert_eq!(read_count(),1);
+    let baseline=backend.lock().unwrap().requests.iter().filter(|(m,p,_)|m=="GET"&&p.contains("/messages?")).count();
+    for _ in 0..4{main.emit(MainWindowMsg::TickCleanup);}pump(context);assert_eq!(read_count(),1,"idle ticks must not repeat the read write");
+    assert_eq!(backend.lock().unwrap().requests.iter().filter(|(m,p,_)|m=="GET"&&p.contains("/messages?")).count(),baseline,"read acknowledgements do not refetch messages");
+    // Keep a newer live message unread when its write fails, and back off.
+    let message:Message=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"channel_id":channel,"author_id":main.model().current_user.id,"content":"Live unread","created_at":"2026-10-12T12:00:00Z"})).unwrap();
+    backend.lock().unwrap().fail_channel_read=true;
+    main.emit(MainWindowMsg::WsReceived(WsEvent::NewMessage(message.clone())));
+    until(context,||main.model().chat.model().read_candidate().is_some_and(|m|m.id==message.id));
+    main.emit(MainWindowMsg::TickCleanup);until(context,||read_count()==2&&main.model().notifications.reads.idle());
+    assert!(main.model().channels[0].has_unread());for _ in 0..4{main.emit(MainWindowMsg::TickCleanup);}pump(context);assert_eq!(read_count(),2,"failed read writes respect the cooldown");
+    main.state().get_mut().model.notifications.reads.retry_now(channel);
+    main.emit(MainWindowMsg::TickCleanup);until(context,||!main.model().channels[0].has_unread());assert_eq!(read_count(),3);
+    let notice=Uuid::new_v4();main.emit(MainWindowMsg::WsReceived(WsEvent::NewNotification(NotificationEvent{id:notice,message_id:message.id,user_id:message.author_id,message_content:"Already read".into()})));pump(context);
+    assert!(main.model().notifications.inbox.rows[&notice].read,"late events cannot restore an acknowledged message's unread status");
+    let recovery_api=main.model().api_client.clone();crate::ui::login::recovery::exercise(&recovery_api,context);
+    super::moderation::exercise(&main,context,&backend);
+    // manage_server still permits moderation/audit, but cannot reset another account.
+    {let mut state=main.state().get_mut();state.model.server.as_mut().unwrap().owner_id=Some(Uuid::new_v4());state.model.sync_moderation_access();}
+    super::moderation::exercise_recovery_denied(&main,context,&backend);
+    let dm:Uuid="12345678-1234-4234-8234-123456789ac3".parse().unwrap();let peer:Uuid="12345678-1234-4234-8234-123456789ac0".parse().unwrap();
+    let dm_message=Uuid::new_v4();
+    {let mut b=backend.lock().unwrap();
+        b.dm_messages=vec![serde_json::json!({"id":dm_message,"channel_id":dm,"author_id":peer,"content":"Unread DM","created_at":"2026-10-12T12:00:00Z"})];
+        b.dms=vec![serde_json::json!({"id":dm,"user":{"id":peer,"username":"bob","created_at":"2026-10-03T00:00:00Z"},"created_at":"2026-10-03T00:00:00Z","unread_count":2,"last_message":{"id":dm_message,"created_at":"2026-10-12T12:00:00Z"}})];
+    }
+    main.emit(MainWindowMsg::Direct(super::direct::DirectMsg::Open(peer)));
+    until(context,||main.model().active_channel_id==Some(dm)&&main.model().chat.model().read_candidate().is_some());
+    if gtk::prelude::WidgetExt::display(&host).type_().name()=="GdkX11Display"{
+        assert!(std::process::Command::new("python3").arg(concat!(env!("CARGO_MANIFEST_DIR"),"/tests/helpers/input_keys.py")).arg("Papo backend update test").status().unwrap().success());until(context,||host.is_active());
+    }
+    main.emit(MainWindowMsg::TickCleanup);until(context,||main.model().direct.items.iter().any(|d|d.id==dm&&d.unread_count==0));
+    let writes:Vec<_>=backend.lock().unwrap().requests.iter().filter(|(m,p,_)|m=="PUT"&&p==&format!("/channels/{dm}/read")).cloned().collect();
+    assert_eq!(writes.len(),1);assert_eq!(writes[0].2["message_id"],dm_message.to_string(),"DMs use the same explicit message cursor acknowledgement");
+    host.set_content(None::<&gtk::Widget>);host.close();drop(main);server.abort();pump(context);
 }

@@ -5,6 +5,8 @@ use crate::models::*;
 use crate::ui::chat::actions::window;
 #[derive(Debug)]
 pub enum AccountMsg {
+    ChangeStatus(Option<UserStatus>),
+    StatusSaved { token:Uuid, status:Option<UserStatus>, result:anyhow::Result<()> },
     EmojisChanged, DescriptionChanged(Uuid), FitProfile(Uuid),
     Profile(Uuid), RefreshProfile(Uuid), ProfileRefreshReady{token:Uuid,id:Uuid}, Preferences, ChannelPreferences, ProfileLoaded {
         token: Uuid, result: anyhow::Result<(UserProfile, Option<Vec<u8>>)>
@@ -115,6 +117,47 @@ impl MainWindowModel {
     pub(super) fn account_event(&mut self, msg: AccountMsg, sender: &ComponentSender<Self>, root: &gtk::Box) {
         self.account.jobs.retain(|j|!j.is_finished());
         match msg {
+            AccountMsg::ChangeStatus(status)=>{
+                if self.account.mutation.is_some()||status==self.current_user.status {
+                    self.user_list.emit(UserListMsg::StatusPending(self.account.mutation.is_some()));
+                    return;
+                }
+                let token=Uuid::new_v4();self.account.mutation=Some(token);
+                self.user_list.emit(UserListMsg::StatusPending(true));
+                if let Some(v)=self.account.profile.as_ref().filter(|v|v.fields.is_some()){
+                    v.body.set_sensitive(false);if let Some(save)=&v.save{save.set_sensitive(false);}
+                }
+                let api=self.api_client.clone();let id=self.current_user.id;let s=sender.clone();
+                self.account.jobs.push(tokio::spawn(async move {
+                    let result=api.update_status(id,status.clone()).await;
+                    s.input(MainWindowMsg::Account(AccountMsg::StatusSaved{token,status,result}));
+                }));
+            }
+            AccountMsg::StatusSaved{token,status,result}=>{
+                if self.account.mutation!=Some(token){return;}
+                self.account.mutation=None;
+                self.user_list.emit(UserListMsg::StatusPending(false));
+                if let Some(v)=self.account.profile.as_ref().filter(|v|v.fields.is_some()){
+                    v.body.set_sensitive(true);if let Some(save)=&v.save{save.set_sensitive(true);}
+                }
+                match result {
+                    Ok(())=>{
+                        // A successful status-only write needs no profile or channel reload.
+                        self.current_user.status=status.clone();
+                        self.members.invalidate(self.current_user.id);
+                        if let Some(user)=self.users.iter_mut().find(|u|u.id==self.current_user.id){user.status=status.clone();}
+                        if let Some(fields)=self.account.profile.as_ref().and_then(|v|v.fields.as_ref()){
+                            fields.manual.set_selected(match status{Some(UserStatus::Away)=>1,Some(UserStatus::Busy)=>2,None=>0});
+                        }
+                        self.publish_users();
+                        self.sidebar.emit(SidebarMsg::SetCurrentUser(self.current_user.clone()));
+                    }
+                    Err(e)=>{
+                        self.user_list.emit(UserListMsg::StatusError(format!("Não foi possível alterar o status: {e}")));
+                        sender.input(MainWindowMsg::OperationFailed(e));
+                    }
+                }
+            }
             AccountMsg::EmojisChanged=>self.refresh_profile_text(sender),
             AccountMsg::DescriptionChanged(token)=>{
                 let Some(v)=self.account.profile.as_mut().filter(|v|v.token==token&&v.window.is_visible())else{return;};
@@ -212,7 +255,7 @@ impl MainWindowModel {
                         sender.input(MainWindowMsg::ActionError(e));
                     }, Ok((p, banner, image)) => {
                         v.error.set_text("");
-                        if let Some(save)=&v.save{save.set_sensitive(true);}
+                        if let Some(save)=&v.save{save.set_sensitive(self.account.mutation.is_none());v.body.set_sensitive(self.account.mutation.is_none());}
                         if let Some(t) = banner.as_deref().and_then(crate::media::bounded_texture) {
                             let picture = gtk::Picture::for_paintable(&t);
                             picture.set_height_request(140);
@@ -255,7 +298,8 @@ impl MainWindowModel {
                             let input=sender.input_sender().clone();description.connect_changed(move |_|{let _=input.send(MainWindowMsg::Account(AccountMsg::DescriptionChanged(token)));});
                             let presence=adw::PreferencesGroup::new();presence.set_title("Presença");v.body.append(&presence);
                             let typing=profile_entry(&presence,"Texto ao digitar",p.typing.as_deref().unwrap_or(""),"Até 64 caracteres");
-                            let manual=gtk::DropDown::from_strings(&["Automática","Ausente","Ocupado"]);manual.set_selected(match p.status{Some(UserStatus::Away)=>1,Some(UserStatus::Busy)=>2,_=>0});manual.set_valign(gtk::Align::Center);
+                            // A status-only write can finish while this profile read is in flight.
+                            let manual=gtk::DropDown::from_strings(&["Automática","Ausente","Ocupado"]);manual.set_selected(match self.current_user.status{Some(UserStatus::Away)=>1,Some(UserStatus::Busy)=>2,_=>0});manual.set_valign(gtk::Align::Center);
                             let row=adw::ActionRow::builder().title("Disponibilidade").subtitle("A presença automática acompanha sua atividade").build();row.add_suffix(&manual);row.set_activatable_widget(Some(&manual));presence.add(&row);
                             if let Some((id, draft, presence)) = self.account.restore_fields.take() {
                                 if id==p.id {
@@ -307,6 +351,7 @@ impl MainWindowModel {
                 v.pending = true;
                 v.image_write = false;
                 self.account.mutation = Some(token);
+                self.user_list.emit(UserListMsg::StatusPending(true));
                 v.body.set_sensitive(false);if let Some(save)=&v.save{save.set_sensitive(false);}
                 v.error.set_text("Salvando…");
                 let id = v.id;
@@ -372,6 +417,7 @@ impl MainWindowModel {
                         v.pending = true;
                         v.image_write = true;
                         self.account.mutation = Some(token);
+                        self.user_list.emit(UserListMsg::StatusPending(true));
                         v.body.set_sensitive(false);if let Some(save)=&v.save{save.set_sensitive(false);}
                         v.error.set_text("Salvando imagem…");
                         let id = v.id;
@@ -394,6 +440,7 @@ impl MainWindowModel {
             } => {
                 if self.account.mutation==Some(token) {
                     self.account.mutation = None;
+                    self.user_list.emit(UserListMsg::StatusPending(false));
                 }
                 let Some(v) = self.account.profile.as_mut().filter(|v|v.token==token)else {
                     return;
@@ -440,6 +487,7 @@ impl MainWindowModel {
                         self.publish_users();
                         self.publish_avatars();
                         self.sidebar.emit(SidebarMsg::SetCurrentUser(self.current_user.clone()));
+                        self.user_list.emit(UserListMsg::SetStatus(self.current_user.status.clone()));
                         self.refresh_channels(sender.clone());
                     }, Err(e) => sender.input(MainWindowMsg::OperationFailed(e))
                 }
@@ -639,6 +687,63 @@ fn fit_profile(view:&ProfileView){
 }
 fn profile_entry(group:&adw::PreferencesGroup,title:&str,value:&str,help:&str)->adw::EntryRow{
     let row=adw::EntryRow::new();row.set_title(title);row.set_text(value);row.set_tooltip_text(Some(help));group.add(&row);row
+}
+
+#[cfg(test)]
+pub(crate) fn exercise_presence_selector(context:&gtk::glib::MainContext){
+    use crate::ui::chat::actions::tests::{mock,descendants,find_button,pump,until};
+    let (api,backend,server)=tokio::runtime::Handle::current().block_on(mock());
+    backend.lock().unwrap().profile["status"]=serde_json::json!("busy");
+    let current_user=serde_json::from_value(backend.lock().unwrap().profile.clone()).unwrap();
+    let main=MainWindowModel::builder().launch(MainWindowInit{current_user,api_client:api}).detach();
+    let host=adw::Window::builder().default_width(1280).default_height(740).content(main.widget()).build();host.present();
+    until(context,||main.model().background_started&&main.model().access_request.is_none());
+    let selector=descendants(main.model().user_list.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::MenuButton>().ok()).unwrap();
+    let caption=||descendants(&selector.child().unwrap()).into_iter().find_map(|w|w.downcast::<gtk::Label>().ok()).unwrap().text().to_string();
+    until(context,||selector.is_mapped()&&caption()=="Ocupado");
+    let popover=selector.popover().unwrap();let choices=popover.child().unwrap();
+    for label in ["Online","Ocupado","Ausente"] {
+        let option=find_button(&choices,label);
+        let icon=descendants(option.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Image>().ok()).unwrap();
+        assert!(icon.paintable().is_some(),"{label} must have a colored resource icon");
+    }
+    let heading=descendants(main.model().user_list.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Label>().ok().filter(|l|l.text().starts_with("Membros ·"))).unwrap();
+    assert!(selector.compute_bounds(&host).unwrap().y()<heading.compute_bounds(&host).unwrap().y(),"selector belongs above the member list");
+    selector.popup();pump(context);crate::ui::main_window::layout::tests::preview(&host,"presence-selector",context);
+    let count=||backend.lock().unwrap().requests.iter().filter(|(m,p,_)|m=="PUT"&&p.ends_with("/status")).count();
+    find_button(&choices,"Ocupado").emit_clicked();pump(context);assert_eq!(count(),0,"selecting the saved status is a no-op");
+    let id=main.model().current_user.id;
+    main.emit(MainWindowMsg::Account(AccountMsg::Profile(id)));
+    until(context,||main.model().account.profile.as_ref().is_some_and(|v|v.fields.is_some()));
+    main.model().account.profile.as_ref().unwrap().fields.as_ref().unwrap().nickname.set_text("Unsaved draft");
+    backend.lock().unwrap().fail_status=true;
+    let away=find_button(&choices,"Ausente");away.emit_clicked();away.emit_clicked();
+    until(context,||count()==1&&main.model().account.mutation.is_none()&&selector.is_sensitive());
+    assert_eq!(caption(),"Ocupado","failed writes retain the accepted status");
+    assert_eq!(main.model().current_user.status,Some(UserStatus::Busy));
+    assert!(descendants(main.model().user_list.widget().upcast_ref()).iter().any(|w|w.downcast_ref::<gtk::Label>().is_some_and(|l|l.text().contains("Status failed"))));
+    for (label,status,value,expected) in [("Ausente",Some(UserStatus::Away),serde_json::json!("away"),2),("Online",None,serde_json::Value::Null,3)] {
+        find_button(&choices,label).emit_clicked();
+        until(context,||count()==expected&&main.model().account.mutation.is_none()&&caption()==label&&selector.is_sensitive());
+        assert_eq!(main.model().current_user.status,status);
+        assert_eq!(backend.lock().unwrap().profile["status"],value);
+        let m=main.model();let fields=m.account.profile.as_ref().unwrap().fields.as_ref().unwrap();
+        assert_eq!(fields.nickname.text(),"Unsaved draft","status-only writes retain profile drafts");
+        assert_eq!(fields.manual.selected(),if status.is_some(){1}else{0});
+    }
+    {
+        let b=backend.lock().unwrap();let writes:Vec<_>=b.requests.iter().filter(|(m,_,_)|m=="PUT").collect();
+        assert_eq!(writes.len(),3,"changing presence must only write the status endpoint");
+        assert!(writes.iter().all(|(_,p,_)|p==&format!("/users/{id}/status")));
+    }
+    // Saving presence through the existing editor must update the quick selector too.
+    backend.lock().unwrap().fail_profile=false;
+    main.model().account.profile.as_ref().unwrap().fields.as_ref().unwrap().manual.set_selected(2);
+    let token=main.model().account.profile.as_ref().unwrap().token;
+    main.emit(MainWindowMsg::Account(AccountMsg::SaveProfile(token)));
+    until(context,||caption()=="Ocupado"&&selector.is_sensitive()&&main.model().account.profile.as_ref().is_some_and(|v|v.token!=token&&v.fields.is_some()));
+    assert_eq!(count(),4);
+    host.set_content(None::<&gtk::Widget>);host.close();drop(main);server.abort();pump(context);
 }
 
 #[cfg(test)]

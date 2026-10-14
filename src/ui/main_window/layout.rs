@@ -6,22 +6,31 @@ pub(super) struct Layout {
     pub widget:adw::BreakpointBin,
     pub navigation:adw::OverlaySplitView,
     pub members:adw::OverlaySplitView,
+    header_settings:gtk::Settings,
+    header_scale_handler:Option<gtk::glib::SignalHandlerId>,
 }
 impl Layout {
-    pub fn new(sidebar:&gtk::Box,chat:&gtk::Box,members:&gtk::Box,s:&ComponentSender<MainWindowModel>)->Self {
+    pub fn new(sidebar:&gtk::Box,chat:&Controller<ChatModel>,members:&gtk::Box,s:&ComponentSender<MainWindowModel>)->Self {
         let center=gtk::Box::new(gtk::Orientation::Vertical,0);
-        center.append(chat);
+        center.append(chat.widget());
         let utility=adw::OverlaySplitView::new();utility.set_content(Some(&center));utility.set_sidebar(Some(members));utility.set_sidebar_position(gtk::PackType::End);utility.set_min_sidebar_width(224.0);utility.set_max_sidebar_width(224.0);utility.set_sidebar_width_unit(adw::LengthUnit::Sp);utility.set_show_sidebar(true);
-        let navigation=adw::OverlaySplitView::new();navigation.set_sidebar(Some(sidebar));navigation.set_content(Some(&utility));navigation.set_min_sidebar_width(320.0);navigation.set_max_sidebar_width(320.0);navigation.set_sidebar_width_unit(adw::LengthUnit::Sp);navigation.set_show_sidebar(true);
+        let header=ChatModel::take_header(chat);
+        let content=adw::ToolbarView::new();content.add_top_bar(&header);content.set_content(Some(&utility));
+        let adaptive_content=adw::BreakpointBin::new();adaptive_content.set_size_request(320,240);adaptive_content.set_child(Some(&content));let (header_settings,header_scale_handler)=ChatModel::adapt_header(chat,&adaptive_content,&utility);
+        let navigation=adw::OverlaySplitView::new();navigation.set_sidebar(Some(sidebar));navigation.set_content(Some(&adaptive_content));navigation.set_min_sidebar_width(320.0);navigation.set_max_sidebar_width(320.0);navigation.set_sidebar_width_unit(adw::LengthUnit::Sp);navigation.set_show_sidebar(true);
         let widget=adw::BreakpointBin::new();widget.set_child(Some(&navigation));widget.set_size_request(360,320);
         let medium=adw::Breakpoint::new(adw::BreakpointCondition::new_length(adw::BreakpointConditionLengthType::MaxWidth,1100.0,adw::LengthUnit::Sp));
         medium.add_setters(&[(&utility,"collapsed",true),(&utility,"show-sidebar",false)]);widget.add_breakpoint(medium);
         let narrow=adw::Breakpoint::new(adw::BreakpointCondition::new_length(adw::BreakpointConditionLengthType::MaxWidth,760.0,adw::LengthUnit::Sp));
         narrow.add_setters(&[(&navigation,"collapsed",true),(&navigation,"show-sidebar",false),(&utility,"collapsed",true),(&utility,"show-sidebar",false)]);widget.add_breakpoint(narrow);
         let s=s.clone();utility.connect_show_sidebar_notify(move |view|s.input(MainWindowMsg::MembersVisible(view.shows_sidebar())));
-        Self{widget,navigation,members:utility}
+        Self{widget,navigation,members:utility,header_settings,header_scale_handler:Some(header_scale_handler)}
     }
     pub fn dismiss_navigation(&self){if self.navigation.is_collapsed(){self.navigation.set_show_sidebar(false);}}
+}
+
+impl Drop for Layout {
+    fn drop(&mut self){if let Some(handler)=self.header_scale_handler.take(){self.header_settings.disconnect(handler);}}
 }
 
 pub(super) fn shortcuts(root:&gtk::Box,s:&ComponentSender<MainWindowModel>){
@@ -57,6 +66,80 @@ pub(crate) mod tests {
     }
     fn settle(context:&gtk::glib::MainContext){for _ in 0..120{pump(context);std::thread::sleep(Duration::from_millis(5));}}
     pub(crate) fn preview(window:&impl IsA<gtk::Window>,name:&str,context:&gtk::glib::MainContext){if std::env::var_os("PAPO_DESIGN_PREVIEW").is_some(){settle(context);snapshot(window,name,context);}}
+
+    fn assert_chat_center(main:&Controller<MainWindowModel>,title:&adw::WindowTitle,header:&adw::HeaderBar){
+        let title=title.compute_bounds(header).unwrap();let chat=main.model().chat.widget().compute_bounds(header).unwrap();
+        let offset=title.x()+title.width()/2.0-chat.x()-chat.width()/2.0;
+        assert!(offset.abs()<=1.0,"title must follow the chat center, offset {offset}px");
+    }
+
+    pub(crate) fn exercise_header(main:&Controller<MainWindowModel>,window:&adw::ApplicationWindow,context:&gtk::glib::MainContext){
+        until(context,||main.model().active_channel_id.is_some()&&main.model().background_started);
+        let header=descendants(main.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<adw::HeaderBar>().ok()).unwrap();
+        let title=descendants(header.upcast_ref()).into_iter().find_map(|w|w.downcast::<adw::WindowTitle>().ok()).unwrap();
+        assert!(header.shows_end_title_buttons());
+        assert!(!descendants(main.model().chat.widget().upcast_ref()).iter().any(|w|w.is::<adw::HeaderBar>()),"the conversation has no duplicate content toolbar");
+        let channel=main.model().channels.iter().find(|c|Some(c.id)==main.model().active_channel_id).unwrap().clone();
+        assert_eq!(title.title(),format!("# {}",channel.name));
+        let mut edited=channel.clone();edited.name="Canal de teste".into();edited.topic=Some("Um tópico longo para conferir que o cabeçalho permanece compacto. ".repeat(12));
+        main.model().chat.emit(ChatMsg::UpdateChannel(edited.clone()));until(context,||title.title()=="# Canal de teste");
+        assert_eq!(title.subtitle(),edited.topic.as_deref().unwrap());
+        for width in [1280,900,540,360]{
+            window.set_default_size(width,760);settle(context);
+            preview(window,&format!("gnome-{width}"),context);
+            assert!(window.width()<=width+2,"requested {width}, actual {}, header minimum {:?}, app minimum {:?}",window.width(),header.measure(gtk::Orientation::Horizontal,-1),main.widget().measure(gtk::Orientation::Horizontal,-1));
+            // Topic length must not move the channel title toward either
+            // toolbar group. Check actual allocations, including compact mode.
+            let mut previous_center:Option<f32>=None;
+            for topic in [None,Some("Curto".to_owned()),edited.topic.clone()]{
+                let mut updated=edited.clone();updated.topic=topic;
+                main.model().chat.emit(ChatMsg::UpdateChannel(updated));settle(context);
+                let bounds=title.compute_bounds(&header).unwrap();
+                let center=bounds.x()+bounds.width()/2.0;
+                assert!(bounds.width()>0.0,"the channel name remains visible");
+                let chat=main.model().chat.widget().compute_bounds(&header).unwrap();
+                let offset=center-(chat.x()+chat.width()/2.0);
+                assert!(offset.abs()<=1.0,"title shifted {offset}px at width {width}, topic {:?}",title.subtitle());
+                if let Some(previous)=previous_center{assert!((center-previous).abs()<=1.0,"topic length moved the title at width {width}");}
+                previous_center=Some(center);
+            }
+            let model=main.model();
+            let bounds=|w:&gtk::Widget|w.compute_bounds(window).unwrap();
+            let pane=bounds(main.widget().upcast_ref());let bar=bounds(header.upcast_ref());let chat=bounds(model.chat.widget().upcast_ref());
+            assert!((bar.y()-pane.y()).abs()<=1.0,"header starts at the top of the application");
+            assert!(chat.y()>=bar.y()+bar.height()-1.0);
+            assert!((bar.x()+bar.width()-pane.x()-pane.width()).abs()<=1.0,"header spans the member pane to the window controls");
+            for tooltip in ["Fixadas","Buscar mensagens (Ctrl+K)","Notificações","Lista de Membros"]{
+                let button=find_button(header.upcast_ref(),tooltip);
+                let limit=720.0+if !model.layout.members.is_collapsed()&&model.layout.members.shows_sidebar(){224.0}else{0.0};
+                assert_eq!(button.is_mapped(),header.width() as f64>limit||tooltip=="Notificações");
+                if !button.is_mapped(){continue;}
+                let button=bounds(button.upcast_ref());assert!(button.x()>=bar.x()&&button.x()+button.width()<=bar.x()+bar.width()+1.0);
+            }
+            if width>760{
+                let sidebar=bounds(model.sidebar.widget().upcast_ref());assert!((sidebar.y()-pane.y()).abs()<=1.0);assert!((sidebar.height()-pane.height()).abs()<=1.0);
+            }else{assert!(model.layout.navigation.is_collapsed());assert!(!model.layout.navigation.shows_sidebar());}
+            assert_eq!(model.layout.members.is_collapsed(),width<=1100);
+            drop(model);
+        }
+        let menu=descendants(header.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::MenuButton>().ok()).unwrap();menu.popup();settle(context);
+        for label in ["Mensagens fixadas","Pesquisar mensagens","Lista de membros"]{assert!(find_button(header.upcast_ref(),label).is_mapped());}
+        find_button(header.upcast_ref(),"Lista de membros").emit_clicked();pump(context);assert!(main.model().layout.members.shows_sidebar());settle(context);assert_chat_center(main,&title,&header);main.model().layout.members.set_show_sidebar(false);pump(context);menu.popdown();
+        find_button(header.upcast_ref(),"Canais e conversas (F9)").emit_clicked();pump(context);assert!(main.model().layout.navigation.shows_sidebar());
+        main.model().layout.dismiss_navigation();pump(context);
+        window.set_default_size(1280,760);settle(context);
+        let members=main.model().layout.members.shows_sidebar();find_button(header.upcast_ref(),"Lista de Membros").emit_clicked();pump(context);assert_eq!(main.model().layout.members.shows_sidebar(),!members);
+        settle(context);assert_chat_center(main,&title,&header);
+        find_button(header.upcast_ref(),"Lista de Membros").emit_clicked();pump(context);settle(context);assert_chat_center(main,&title,&header);
+        for visible in [false,true]{
+            main.model().layout.navigation.set_show_sidebar(visible);settle(context);assert_chat_center(main,&title,&header);
+        }
+        for (tooltip,name) in [("Buscar mensagens (Ctrl+K)","Pesquisar mensagens"),("Notificações","Notificações")]{
+            find_button(header.upcast_ref(),tooltip).emit_clicked();pump(context);
+            let popup=gtk::Window::list_toplevels().into_iter().find_map(|w|w.downcast::<gtk::Window>().ok().filter(|w|w.title().as_deref()==Some(name))).unwrap();assert!(popup.is_visible());popup.close();pump(context);
+        }
+        main.model().chat.emit(ChatMsg::UpdateChannel(channel));pump(context);
+    }
 
     pub(crate) fn exercise_refresh_budget(main:&Controller<MainWindowModel>,context:&gtk::glib::MainContext,backend:&std::sync::Arc<std::sync::Mutex<crate::ui::chat::actions::tests::Backend>>){
         until(context,||main.model().access_request.is_none());

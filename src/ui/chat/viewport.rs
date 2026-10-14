@@ -21,6 +21,7 @@ impl Default for Viewport {fn default()->Self{Self{following:Rc::new(Cell::new(t
 impl Drop for Viewport{fn drop(&mut self){self.idle_media.set(false);self.media_layout.set(false);self.reflow.borrow_mut().take();stop_wheel(&self.wheel);self.last_motion.set(None);}}
 impl Viewport {
     pub fn following(&self)->bool{self.following.get()}
+    pub fn read_ready(&self)->bool{self.following.get()&&!self.opening.get()&&self.pending.borrow().is_none()}
     pub fn opening_flag(&self)->Rc<Cell<bool>>{self.opening.clone()}
     pub fn input_epoch_flag(&self)->Rc<Cell<u64>>{self.input_epoch.clone()}
     pub fn input_epoch(&self)->u64{self.input_epoch.get()}

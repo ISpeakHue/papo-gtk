@@ -11,12 +11,17 @@ const OLDER: &str = "12345678-1234-4234-8234-123456789abf";
 const EMOJI: &str = "12345678-1234-4234-8234-123456789ac0";
 const DATE: &str = "2026-10-03T12:00:00Z";
 pub(crate) struct Backend {
+    pub(crate) fail_status:bool,
+    pub(crate) attachment_thumbnails:std::collections::HashMap<String,Vec<u8>>,
+    pub(crate) fail_channel_read:bool,
+    pub(crate) channel_messages:std::collections::HashMap<String,Vec<Value>>,
+    pub(crate) embed_values:std::collections::HashMap<String,Value>,
     pub(crate) peer_profile:Option<Value>,
     pub(crate) peer_banned:bool,pub(crate) fail_moderation:bool,pub(crate) fail_audit:bool,
-    pub(crate) server_missing:bool, pub(crate) server_value:Value, pub(crate) admin_roles:Vec<Value>, pub(crate) admin_channels:Vec<Value>, pub(crate) dms:Vec<Value>, dm_messages:Vec<Value>, pub(crate) blocks:Vec<Value>, pub(crate) fail_role:bool, pub(crate) deny_dm:bool, pub(crate) fail_server:bool,
+    pub(crate) server_missing:bool, pub(crate) server_value:Value, pub(crate) admin_roles:Vec<Value>, pub(crate) admin_channels:Vec<Value>, pub(crate) dms:Vec<Value>, pub(crate) dm_messages:Vec<Value>, pub(crate) blocks:Vec<Value>, pub(crate) fail_role:bool, pub(crate) deny_dm:bool, pub(crate) fail_server:bool,
     message: Value, old: Value, groups: Vec<Value>, pub(crate) emojis: Vec<Value>, pinned: bool,
-    pub(crate) profile:Value, config:Value, channel_setting:Value, fail_profile:bool, fail_settings:bool, fail_upload:bool,
-    fail_password:bool, fail_recovery:bool, fail_search:bool, fail_read:bool, revoked:bool, dropped:Vec<String>, read_notices:Vec<Value>,
+    pub(crate) profile:Value, config:Value, channel_setting:Value, pub(crate) fail_profile:bool, fail_settings:bool, fail_upload:bool,
+    fail_password:bool, fail_recovery:bool, fail_search:bool, pub(crate) fail_read:bool, revoked:bool, dropped:Vec<String>, pub(crate) read_notices:Vec<Value>,
     fail_edit: bool, deny_edit: bool, fail_emoji: bool, pub(crate) requests: Vec<(String, String, Value)>, restricted: bool,
 }
 pub(crate) fn descendants(w: &gtk::Widget) -> Vec<gtk::Widget> {
@@ -37,6 +42,9 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let api = ApiClient::new(&format!("http://{}", listener.local_addr().unwrap())).unwrap();
     let state = Arc::new(Mutex::new(Backend {
+        attachment_thumbnails:Default::default(),
+        fail_status:false,fail_channel_read:false,channel_messages:Default::default(),
+        embed_values:Default::default(),
         peer_banned:false,fail_moderation:true,fail_audit:false,
         server_missing:false,server_value:json!({"id":CHANNEL,"name":"Test","owner_id":USER,"public":true,"created_at":DATE}),admin_roles:vec![],admin_channels:vec![json!({"id":CHANNEL,"name":"general","type":"text","position":1,"created_at":DATE}),json!({"id":"12345678-1234-4234-8234-123456789ac2","name":"other","type":"text","position":2,"created_at":DATE})],dms:vec![],dm_messages:vec![],blocks:vec![],fail_role:true,deny_dm:false,fail_server:true,
         message: json!({"id":MESSAGE,"channel_id":CHANNEL,"author_id":USER,"content":"Original","created_at":DATE,"user_reactions":[],"reactions":[]}),
@@ -110,6 +118,9 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
                         (200,json!({"notifications":[{"id":id,"message_id":OLDER,"channel_id":CHANNEL,"author_id":USER,"message_content":"notification preview","read":b.read_notices.contains(&json!(id)),"created_at":if id==EMOJI{DATE}else{"2026-10-02T00:00:00Z"}}],"has_more":id==EMOJI}))
                     } else if route == format!("/users/{USER}/read_notification") {
                         if b.fail_read{b.fail_read=false;(500,json!({"detail":"Read failed"}))}else{b.read_notices.extend(body["notification_ids"].as_array().unwrap().clone());(200,json!({"updated":body["notification_ids"].as_array().unwrap().len()}))}
+                    } else if route.starts_with("/channels/")&&route.ends_with("/read")&&method=="PUT"{
+                        if b.fail_channel_read{b.fail_channel_read=false;(500,json!({"detail":"Channel read failed"}))}
+                        else{(204,Value::Null)}
                     } else if route == "/messages" && method=="POST" {
                         if b.fail_upload{b.fail_upload=false;(500,json!({"detail":"Upload failed"}))}else{let mut message=b.message.clone();message["id"]=json!("12345678-1234-4234-8234-123456789ac1");if body.as_str().is_some_and(|s|s.contains("12345678-1234-4234-8234-123456789ac3")){message["channel_id"]=json!("12345678-1234-4234-8234-123456789ac3");message["content"]=json!("DM test");b.dm_messages.push(message.clone());}(201,message)}
                     } else if route == "/users/settings" && method=="PUT" {
@@ -117,11 +128,15 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
                     } else if route == format!("/users/{USER}/profile") {(200,b.profile.clone())}
                     else if route == format!("/users/{USER}") && method=="PUT" {
                         if b.fail_profile{b.fail_profile=false;(500,json!({"detail":"Profile failed"}))}else{for key in ["nickname","description","typing"]{b.profile[key]=body[key].clone();}b.profile["status_message"]=body["status"].clone();(200,json!({"response":"saved"}))}
-                    } else if route == format!("/users/{USER}/status") {b.profile["status"]=body["status"].clone();(200,json!({"response":"saved"}))}
+                    } else if route == format!("/users/{USER}/status") {
+                        if b.fail_status{b.fail_status=false;(500,json!({"detail":"Status failed"}))}
+                        else{b.profile["status"]=body["status"].clone();(200,json!({"response":"saved"}))}
+                    }
                     else if route == format!("/users/{USER}/avatar") {b.profile["avatar_blob"]=Value::Null;(200,json!({"response":"saved"}))}
                     else if route == format!("/users/{USER}/banner") {b.profile["banner_media"]=Value::Null;(200,json!({"response":"saved"}))}
                     else if route.ends_with("/settings") && method=="POST" {b.channel_setting=body["notification_settings"].clone();(200,json!({"response":"saved"}))}
                     else if route.starts_with("/attachments/")&&route.split('/').count()==3{(200,Value::Null)}
+                    else if let Some(value)=route.strip_prefix("/embeds/").and_then(|id|b.embed_values.get(id)) {(200,value.clone())}
                     else if route.starts_with("/embeds/") {(200,json!({"id":EMOJI,"source_type":"link","fetch_method":"opengraph","url":"https://example.test/","created_at":"2026-10-03T00:00:00Z","fetched_at":"2026-10-03T00:00:00Z","thumbnail":{"mime_type":"image/png"},"image_data":tiny_png_base64(),"video":{"url":"https://example.test/video.mp4","mime_type":"video/mp4"},"provider":"X","title":"g1 (@g1)","description":"Elefante-marinho boceja e coça a cabeça durante soneca em praia de SC"}))}
                     else if route == format!("/messages/{MESSAGE}") && method == "PUT" {
                         if b.deny_edit { (403,json!({"type":"https://test/forbidden","detail":"Editing denied"})) }
@@ -145,6 +160,10 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
                     else if route=="/channels/12345678-1234-4234-8234-123456789ac3/messages" {
                         if b.deny_dm||!b.blocks.is_empty(){(403,json!({"type":"https://test/dm-blocked","detail":"DM blocked"}))}else{(200,json!({"channel_id":"12345678-1234-4234-8234-123456789ac3","messages":b.dm_messages,"has_more":false}))}
                     }
+                    else if b.attachment_thumbnails.contains_key(route){(200,Value::Null)}
+                    else if route.ends_with("/messages")&&b.channel_messages.contains_key(route.split('/').nth(2).unwrap_or("")){
+                        let id=route.split('/').nth(2).unwrap();(200,json!({"channel_id":id,"messages":b.channel_messages[id],"has_more":false}))
+                    }
                     else if route.ends_with("/messages") {
                         (200,json!({"channel_id":CHANNEL,"messages":if path.contains("last_id") {vec![b.old.clone()]} else {vec![b.message.clone()]},"has_more":!path.contains("last_id")}))
                     } else if route == "/auth/whoami" && b.revoked {(401,json!({"type":"https://test/unauthorized","detail":"session ended"}))}
@@ -159,8 +178,10 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
                     else { (404,json!({"detail":"No such endpoint"})) }
                 };
                 let binary=path.ends_with("/video")||(path.starts_with("/attachments/")&&path.split('/').count()==3);
-                let data=if binary{include_bytes!("../../../../tests/fixtures/chat-video.webm").to_vec()}else if status==204{Vec::new()}else{response.to_string().into_bytes()};
-                let content_type=if binary{"video/webm"}else{"application/json"};let header=format!("HTTP/1.1 {status} Test\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",data.len());let mut response=header.into_bytes();response.extend_from_slice(&data);
+                let thumbnail=shared.lock().unwrap().attachment_thumbnails.get(path.split('?').next().unwrap()).cloned();
+                let content_type=if thumbnail.is_some(){"image/png"}else if binary{"video/webm"}else{"application/json"};
+                let data=if let Some(bytes)=thumbnail{bytes}else if binary{include_bytes!("../../../../tests/fixtures/chat-video.webm").to_vec()}else if status==204{Vec::new()}else{response.to_string().into_bytes()};
+                let header=format!("HTTP/1.1 {status} Test\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",data.len());let mut response=header.into_bytes();response.extend_from_slice(&data);
                 let _ = stream.write_all(&response).await;
             });
         }
@@ -362,7 +383,7 @@ pub(crate) fn exercise(context: &gtk::glib::MainContext) {
     backend.lock().unwrap().restricted = true;
     main.emit(MainWindowMsg::WsReceived(crate::ws::WsEvent::RoleRemove { user_id:user,role_id:EMOJI.parse().unwrap() }));
     until(context,|| main.model().channels.is_empty() && main.model().active_channel_id.is_none());
-    assert!(descendants(main.widget().upcast_ref()).iter().filter_map(|w| w.downcast_ref::<gtk::Entry>()).all(|e| !e.is_sensitive()));
+    assert!(!composer::field(main.widget().upcast_ref()).is_sensitive());
     main.emit(MainWindowMsg::WsReceived(crate::ws::WsEvent::Error { message:"Unknown server failure".into(),code:Some("future-code".into()) })); pump(context);
     assert!(descendants(main.widget().upcast_ref()).iter().filter_map(|w| w.downcast_ref::<gtk::Label>()).any(|l| l.text().contains("future-code")));
     crate::ui::main_window::notifications::exercise_denied(&main,context);
@@ -380,4 +401,4 @@ pub(crate) fn exercise(context: &gtk::glib::MainContext) {
     crate::ui::main_window::administration::exercise_setup_and_password(context);
 }
 
-fn tiny_png_base64()->String{use base64::Engine;let mut bytes=std::io::Cursor::new(Vec::new());image::DynamicImage::new_rgba8(1,1).write_to(&mut bytes,image::ImageFormat::Png).unwrap();base64::engine::general_purpose::STANDARD.encode(bytes.into_inner())}
+pub(crate) fn tiny_png_base64()->String{use base64::Engine;let mut bytes=std::io::Cursor::new(Vec::new());image::DynamicImage::new_rgba8(1,1).write_to(&mut bytes,image::ImageFormat::Png).unwrap();base64::engine::general_purpose::STANDARD.encode(bytes.into_inner())}

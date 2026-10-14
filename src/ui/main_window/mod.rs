@@ -13,6 +13,7 @@ pub(crate) mod administration;
 use administration::{Administration,AdminMsg};
 pub(crate) mod account;
 #[cfg(test)]pub(crate) mod bugs7;
+#[cfg(test)]pub(crate) mod bugs8;
 use account::{Account, AccountMsg};
 pub(crate) mod search;
 use search::{Search,SearchMsg};
@@ -21,6 +22,7 @@ use notifications::{Notifications,NoticeMsg};
 pub(crate) mod security;
 use security::{Security, SecurityMsg};
 use gtk::prelude::*;
+#[cfg(test)]use crate::ui::chat::InputExt;
 use relm4::prelude::*;
 use uuid::Uuid;
 
@@ -32,7 +34,7 @@ use std::collections::HashMap;
 use std::time::{Instant, Duration};
 use crate::ui::chat::{ChatInit, ChatModel, ChatMsg, ChatOutput};
 use crate::ui::sidebar::{SidebarInit, SidebarModel, SidebarMsg, SidebarOutput};
-use crate::ui::user_list::{UserListInit, UserListModel, UserListMsg};
+use crate::ui::user_list::{UserListInit, UserListModel, UserListMsg, UserListOutput};
 use crate::ws::{self, WsEvent};
 
 #[derive(Debug, Clone)]
@@ -106,7 +108,10 @@ pub enum MainWindowMsg {
     Search(SearchMsg),
     Notification(NoticeMsg),
     HistoryObserved{channel_id:Uuid,messages:Vec<crate::models::Message>,latest:bool},
-    LiveRead{request:Uuid,channel_id:Uuid,result:anyhow::Result<crate::models::MessageListResponse>},
+    AuthorMetadata{channel:Uuid,ids:Vec<Uuid>},
+    ChannelRead{request:Uuid,message:crate::models::Message,result:anyhow::Result<()>},
+    MarkChannelRead(Uuid),
+    ManualRead{request:Uuid,channel:Uuid,result:anyhow::Result<Option<crate::models::Message>>},
     // Initial fetch results
     AccessLoaded { request_id: Uuid, result: anyhow::Result<AccessSnapshot> },
     FlushMembers,
@@ -166,6 +171,7 @@ impl Component for MainWindowModel {
             })
             .forward(sender.input_sender(), |output| match output {
                 SidebarOutput::ChannelSelected(ch) => MainWindowMsg::ChannelSelected(ch),
+                SidebarOutput::MarkChannelRead(id)=>MainWindowMsg::MarkChannelRead(id),
                 SidebarOutput::DirectSelect(id)=>MainWindowMsg::Direct(DirectMsg::Select(id,None)),
                 SidebarOutput::HideDirect(id)=>MainWindowMsg::Direct(DirectMsg::Hide(id)),
                 SidebarOutput::Blocks=>MainWindowMsg::Direct(DirectMsg::Blocks),
@@ -175,7 +181,6 @@ impl Component for MainWindowModel {
                 SidebarOutput::Administration=>MainWindowMsg::Administration(AdminMsg::Open),
                 SidebarOutput::Logout => MainWindowMsg::Logout,
                 SidebarOutput::Profile(id) => MainWindowMsg::Account(AccountMsg::Profile(id)),
-                SidebarOutput::Search => MainWindowMsg::Search(SearchMsg::Open),
                 SidebarOutput::Notifications => MainWindowMsg::Notification(NoticeMsg::Open),
                 SidebarOutput::Security => MainWindowMsg::Security(SecurityMsg::Open),
                 SidebarOutput::Preferences => MainWindowMsg::Account(AccountMsg::Preferences),
@@ -189,6 +194,7 @@ impl Component for MainWindowModel {
                 ChatOutput::Search=>MainWindowMsg::Search(SearchMsg::Open),
                 ChatOutput::Notifications=>MainWindowMsg::Notification(NoticeMsg::Open),
                 ChatOutput::HistoryObserved{channel_id,messages,latest}=>MainWindowMsg::HistoryObserved{channel_id,messages,latest},
+                ChatOutput::AuthorMetadata{channel,ids}=>MainWindowMsg::AuthorMetadata{channel,ids},
                 ChatOutput::UserTyping(channel_id) => MainWindowMsg::SendTyping(channel_id),
                 ChatOutput::LoadMoreMessages { channel_id, cursor } =>
                     MainWindowMsg::LoadMoreMessages { channel_id, cursor },
@@ -201,12 +207,16 @@ impl Component for MainWindowModel {
                 ChatOutput::ChannelPreferences => MainWindowMsg::Account(AccountMsg::ChannelPreferences),
             });
 
-        let user_list = UserListModel::builder().launch(UserListInit::default()).forward(sender.input_sender(), |id| MainWindowMsg::Account(AccountMsg::Profile(id)));
+        let user_list = UserListModel::builder().launch(UserListInit::default()).forward(sender.input_sender(), |output| MainWindowMsg::Account(match output {
+            UserListOutput::OpenProfile(id)=>AccountMsg::Profile(id),
+            UserListOutput::ChangeStatus(status)=>AccountMsg::ChangeStatus(status),
+        }));
+        user_list.emit(UserListMsg::SetStatus(init.current_user.status.clone()));
         let (mut ws_rx, ws_tx) = ws::spawn(init.api_client.clone());
         let avatars = AvatarCache::default();
         let voice=Voice::new(&sender);
         sidebar.emit(SidebarMsg::VoiceDock(voice.panel.clone()));
-        let layout=Layout::new(sidebar.widget(),chat.widget(),user_list.widget(),&sender);
+        let layout=Layout::new(sidebar.widget(),&chat,user_list.widget(),&sender);
         let mut model = MainWindowModel {
             current_user: init.current_user,
             api_client: init.api_client.clone(),
@@ -325,10 +335,16 @@ impl Component for MainWindowModel {
             MainWindowMsg::Search(msg)=>self.search_event(msg,root,sender),
             MainWindowMsg::Notification(msg)=>self.notification_event(msg,root,sender),
             MainWindowMsg::HistoryObserved{channel_id,messages,latest}=>{self.load_avatars(messages.iter().filter_map(|m|m.author_id).collect(),false,sender.clone());self.history_observed(channel_id,messages,latest,&sender);},
-            MainWindowMsg::LiveRead{request,channel_id,result}=>{
-                if self.notifications.read_request!=Some(request){return;}self.notifications.read_request=None;
-                match result {Ok(page)=>{self.history_observed(channel_id,page.messages.clone(),true,&sender);if self.active_channel_id==Some(channel_id){self.chat.emit(ChatMsg::SnapshotLoaded{request,messages:Some(page.messages)});}},Err(e)=>{self.chat.emit(ChatMsg::SnapshotLoaded{request,messages:None});self.notifications.read_pending=true;sender.input(MainWindowMsg::OperationFailed(e));}}
-            }
+            MainWindowMsg::AuthorMetadata{channel,ids}=>{
+                if self.can_read_target(channel){
+                    let missing:std::collections::HashSet<_>=ids.iter().copied().filter(|id|!self.users.iter().any(|u|u.id==*id)&&!self.members.is_pending(*id)).collect();
+                    for batch in missing.into_iter().collect::<Vec<_>>().chunks(50){self.fetch_members(batch.to_vec(),sender.clone());}
+                    self.load_avatars(ids,false,sender);
+                }
+            },
+            MainWindowMsg::ChannelRead{request,message,result}=>self.channel_read_finished(request,message,result,&sender),
+            MainWindowMsg::MarkChannelRead(id)=>self.mark_channel_read_action(id,&sender),
+            MainWindowMsg::ManualRead{request,channel,result}=>self.manual_read_finished(request,channel,result,&sender),
             MainWindowMsg::Security(msg) => self.security_event(msg,&sender,root),
             MainWindowMsg::Account(msg) => {self.account_event(msg,&sender,root);self.deliver_notices(sender.clone());self.render_inbox(&sender);},
             MainWindowMsg::AccessLoaded { request_id, result } => {
@@ -345,12 +361,14 @@ impl Component for MainWindowModel {
                         user.connection_violation=Some(user.connection_violation.unwrap_or(false)||self.current_user.connection_violation.unwrap_or(false));
                         self.current_user = user;
                         self.sidebar.emit(SidebarMsg::SetCurrentUser(self.current_user.clone()));
+                        self.user_list.emit(UserListMsg::SetStatus(self.current_user.status.clone()));
                         self.roles=roles;self.managed_channels=channels.clone();self.server_access=server_access.clone();self.setup=server.is_none();
                         self.sidebar.emit(SidebarMsg::SetManagement{access:server_access.clone(),setup:self.setup});
+                        self.server=server.clone();
                         self.sync_admin_access();self.sync_moderation_access();
                         if self.administration.reopen{self.administration.reopen=false;sender.input(MainWindowMsg::Administration(AdminMsg::Open));}
                         let Some(server)=server else{sender.input(MainWindowMsg::StartBackground);self.server=None;if !self.admin_visible(){sender.input(MainWindowMsg::Administration(AdminMsg::Open));}return;};
-                        self.server = Some(server.clone());
+                        self.chat.emit(ChatMsg::ServerName(server.name.clone()));
                         self.sidebar.emit(SidebarMsg::SetServer(server));
                         self.access = access;
                         self.channels = channels.into_iter().filter(|c| self.access.get(&c.id).is_some_and(|a| a.read)).collect();
@@ -412,7 +430,7 @@ impl Component for MainWindowModel {
                     Err(error) => {
                         self.avatars.fail(request_id, &ids);
                         if crate::api::is_session_error(&error) { sender.input(MainWindowMsg::OperationFailed(error)); }
-                        else { tracing::warn!("Failed to load member avatars: {error}"); }
+                        else { tracing::warn!(reason = %crate::logging::error_summary(&error), "Failed to load member avatars"); }
                     }
                 }
             }
@@ -459,13 +477,7 @@ impl Component for MainWindowModel {
                 self.chat.emit(ChatMsg::ClearStaleTyping);
                 if self.background_started { self.tick_direct(sender.clone()); }
                 if self.startup_started && self.last_access_refresh.map_or(true,|t|t.elapsed()>=Duration::from_secs(30))&&self.access_request.is_none(){self.refresh_channels(sender.clone());}
-                if self.notifications.read_pending&&self.notifications.read_request.is_none()&&root.root().and_downcast::<gtk::Window>().is_some_and(|w|w.is_active()){
-                    if let Some(channel_id)=self.active_channel_id.filter(|id|self.can_read_target(*id)){
-                        let request=Uuid::new_v4();self.notifications.read_request=Some(request);self.notifications.read_pending=false;
-                        self.chat.emit(ChatMsg::BeginSnapshot(request));
-                        let api=self.api_client.clone();self.notifications.jobs.push(tokio::spawn(async move{let result=api.list_messages(channel_id,None).await;sender.input(MainWindowMsg::LiveRead{request,channel_id,result});}));
-                    }
-                }
+                self.tick_channel_read(root,&sender);
             },
             MainWindowMsg::PreviewLoaded { channel_id, message_id, preview_id, request_id, result } => {
                 if self.active_channel_id == Some(channel_id) && self.preview_requests.get(&(message_id, preview_id)) == Some(&request_id) {
@@ -514,7 +526,7 @@ impl Component for MainWindowModel {
                         self.publish_voice_channels();
                         self.deliver_notices(sender.clone());self.render_inbox(&sender);
                         if Some(message.channel_id) != self.active_channel_id { self.chat.emit(ChatMsg::CacheChange(Change::Upsert(message.clone()))); }
-                        if Some(message.channel_id) == self.active_channel_id {if let Some(id)=message.author_id{self.load_avatars(vec![id],false,sender.clone());}self.notifications.read_pending=true;self.chat.emit(ChatMsg::AddMessage(message));}
+                        if Some(message.channel_id) == self.active_channel_id {if let Some(id)=message.author_id{self.load_avatars(vec![id],false,sender.clone());}self.chat.emit(ChatMsg::AddMessage(message));}
                     } else {self.notifications.inbox.observe(message);self.refresh_direct(sender);}
                 }
                 WsEvent::MessageEdit { id, content, channel_id, edited_at } => {
@@ -614,6 +626,7 @@ impl MainWindowModel {
         for dm in &mut self.direct.items {if let Some(u)=self.users.iter().find(|u|u.id==dm.user.id){dm.user=u.clone();}}self.publish_direct();
         self.chat.emit(ChatMsg::SetUsers(self.users.clone()));
         self.user_list.emit(UserListMsg::SetUsers(self.users.clone()));
+        self.user_list.emit(UserListMsg::SetStatus(self.current_user.status.clone()));
         self.admin_member_summary();self.render_voice();
     }
 
@@ -633,7 +646,6 @@ impl MainWindowModel {
         self.direct_cancel_selection();
         self.active_channel_id = Some(channel_id);
         self.sidebar.emit(SidebarMsg::SetSelection(channel_id));
-        self.notifications.read_pending=false;
         self.preview_requests.clear();
         self.chat.emit(ChatMsg::SelectTarget { target:crate::models::ConversationTarget::Channel(channel),user_id:self.current_user.id,access });
         self.load_history(channel_id, None, sender.clone());

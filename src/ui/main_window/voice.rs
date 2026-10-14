@@ -6,14 +6,14 @@ use std::collections::{HashMap,HashSet};
 pub(super) mod video;
 use video::{VideoControls,VideoMsg};
 #[derive(Debug)]
-pub enum VoiceMsg {#[cfg(test)]TestEngine,Video(VideoMsg),Select(Uuid),Join,Leave,Close,Settings,Mute,Device,ReloadDevices,
+pub enum VoiceMsg {#[cfg(test)]TestEngine,Video(VideoMsg),Select(Uuid),Join,Leave,Close,Settings,Mute,Gain,ApplyGain,Device,ReloadDevices,
     Devices{request:Uuid,result:anyhow::Result<Vec<Device>>},Ice{call:Uuid,result:anyhow::Result<IceConfig>},Engine{call:Uuid,event:EngineEvent}}
 #[derive(Debug,Clone,Copy,PartialEq,Eq)]
 enum Phase {Ice,Joining,Negotiating,Connected}
 struct Call {id:Uuid,channel:Uuid,connection:Uuid,phase:Phase,started:Instant,ice:Option<IceConfig>,engine:Option<Engine>,muted:bool}
 pub(super) struct Voice {
     pub panel:gtk::Box,status:gtk::Label,title:gtk::Label,join:gtk::Button,leave:gtk::Button,mute:gtk::ToggleButton,settings:gtk::Window,settings_button:gtk::Button,
-    devices:gtk::DropDown,device_list:Vec<Device>,device:Option<String>,device_request:Option<Uuid>,
+    gain:gtk::Scale,gain_pending:bool,devices:gtk::DropDown,device_list:Vec<Device>,device:Option<String>,device_request:Option<Uuid>,
     pub(super) connection:Option<Uuid>,selected:Option<Uuid>,call:Option<Call>,pending_leave:Option<(Uuid,Uuid,Instant)>,
     members:HashMap<Uuid,HashMap<Uuid,VoiceMember>>,speakers:HashMap<Uuid,HashSet<Uuid>>,pub(super) presence:HashMap<Uuid,Vec<Uuid>>,routes:HashMap<String,Uuid>,
     jobs:Vec<tokio::task::JoinHandle<()>>,
@@ -39,8 +39,10 @@ impl Voice {
         let settings=gtk::Window::builder().title("Configurar chamada").default_width(480).default_height(480).hide_on_close(true).build();let body=gtk::Box::new(gtk::Orientation::Vertical,12);body.set_margin_top(16);body.set_margin_bottom(16);body.set_margin_start(16);body.set_margin_end(16);settings.set_child(Some(&gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).child(&body).build()));
         let info=gtk::Label::new(Some("O microfone começa silenciado. Trocar o dispositivo encerra a chamada para liberar o microfone anterior."));info.set_wrap(true);info.set_xalign(0.0);body.append(&info);let label=gtk::Label::new(Some("Microfone"));label.set_xalign(0.0);body.append(&label);
         let devices=gtk::DropDown::from_strings(&["Microfone padrão do sistema"]);let s2=s.clone();devices.connect_selected_notify(move |_|s2.input(MainWindowMsg::Voice(VoiceMsg::Device)));body.append(&devices);body.append(&button("","Atualizar microfones",s,||VoiceMsg::ReloadDevices));
+        let label=gtk::Label::new(Some("Volume do microfone"));label.set_xalign(0.0);body.append(&label);
+        let gain=gtk::Scale::with_range(gtk::Orientation::Horizontal,0.0,300.0,5.0);gain.set_widget_name("microphone-gain");gain.set_value(150.0);gain.set_draw_value(true);gain.set_value_pos(gtk::PositionType::Right);gain.set_format_value_func(|_,value|format!("{value:.0}%"));gain.set_tooltip_text(Some("Ajuste a amplificação do microfone. 100% mantém o nível original."));let s2=s.clone();gain.connect_value_changed(move |_|s2.input(MainWindowMsg::Voice(VoiceMsg::Gain)));body.append(&gain);
         let video=VideoControls::new(&body,&controls,s);
-        Self{local_speaking:false,cue:Default::default(),video,panel,title,status,join,leave,mute,settings,settings_button,devices,device_list:vec![],device:None,device_request:None,connection:None,selected:None,call:None,pending_leave:None,members:Default::default(),speakers:Default::default(),presence:Default::default(),routes:Default::default(),jobs:vec![],#[cfg(test)]test_engine:false}
+        Self{local_speaking:false,cue:Default::default(),video,panel,title,status,join,leave,mute,settings,settings_button,gain,gain_pending:false,devices,device_list:vec![],device:None,device_request:None,connection:None,selected:None,call:None,pending_leave:None,members:Default::default(),speakers:Default::default(),presence:Default::default(),routes:Default::default(),jobs:vec![],#[cfg(test)]test_engine:false}
 
     }
 }
@@ -128,6 +130,15 @@ impl MainWindowModel {
             }
             VoiceMsg::Leave=>self.stop_voice(true,"Você saiu da voz."),
             VoiceMsg::Close=>{self.stop_voice(true,"Você saiu da voz.");self.voice.selected=None;self.voice.panel.set_visible(false);},
+            VoiceMsg::Gain=>{
+                if !self.voice.gain_pending{self.voice.gain_pending=true;let input=s.input_sender().clone();gtk::glib::timeout_add_local_once(Duration::from_millis(50),move||{let _=input.send(MainWindowMsg::Voice(VoiceMsg::ApplyGain));});}
+            },
+            VoiceMsg::ApplyGain=>{
+                self.voice.gain_pending=false;
+                if let Some(engine)=self.voice.call.as_ref().and_then(|c|c.engine.as_ref()){
+                    if !engine.send(serde_json::json!({"type":"microphone_gain","gain":self.voice.gain.value()/100.0})){self.voice.status.set_text("Não foi possível ajustar o microfone.");}
+                }
+            },
             VoiceMsg::Mute=>{
                 let Some(c)=self.voice.call.as_ref().filter(|c|matches!(c.phase,Phase::Negotiating|Phase::Connected))else{return;};let muted=self.voice.mute.is_active();if muted==c.muted{return;}
                 if !self.voice_frame(c.connection,serde_json::json!({"type":"voice_mute","channel_id":c.channel,"muted":muted})){self.stop_voice(true,"Sem conexão para alterar o microfone.");return;}
@@ -135,7 +146,7 @@ impl MainWindowModel {
             }
             VoiceMsg::Engine{call,event}=>{
                 let Some(c)=self.voice.call.as_ref().filter(|c|c.id==call)else{return;};let channel=c.channel;let connection=c.connection;
-                let frame=match event{EngineEvent::Speaking{active}=>{self.voice.local_speaking=active&&self.voice.call.as_ref().is_some_and(|c|!c.muted);self.render_voice();None},EngineEvent::Offer{sdp}=>Some(serde_json::json!({"type":"voice_offer","channel_id":channel,"sdp":sdp})),EngineEvent::Answer{sdp}=>Some(serde_json::json!({"type":"voice_answer","channel_id":channel,"sdp":sdp})),EngineEvent::Candidate{candidate,sdp_mid,sdp_mline_index}=>Some(serde_json::json!({"type":"voice_ice_candidate","channel_id":channel,"candidate":candidate,"sdp_mid":sdp_mid,"sdp_mline_index":sdp_mline_index})),EngineEvent::Connection{state}=>{if state=="connected"{self.voice.call.as_mut().unwrap().phase=Phase::Connected;self.voice.status.set_text("Voz conectada.");self.render_voice();}None},EngineEvent::Track{..}|EngineEvent::Started{..}=>None,event @ (EngineEvent::Negotiated|EngineEvent::MediaIntent{..}|EngineEvent::MediaState{..}|EngineEvent::MediaError{..}|EngineEvent::VideoFrame{..}|EngineEvent::VideoReset{..})=>{self.video_engine(event);None},EngineEvent::Error{message}=>{self.stop_voice(true,&message);None}};
+                let frame=match event{EngineEvent::Speaking{active}=>{self.voice.local_speaking=active&&self.voice.call.as_ref().is_some_and(|c|!c.muted);self.render_voice();None},EngineEvent::Offer{sdp}=>Some(serde_json::json!({"type":"voice_offer","channel_id":channel,"sdp":sdp})),EngineEvent::Answer{sdp}=>Some(serde_json::json!({"type":"voice_answer","channel_id":channel,"sdp":sdp})),EngineEvent::Candidate{candidate,sdp_mid,sdp_mline_index}=>Some(serde_json::json!({"type":"voice_ice_candidate","channel_id":channel,"candidate":candidate,"sdp_mid":sdp_mid,"sdp_mline_index":sdp_mline_index})),EngineEvent::Connection{state}=>{if state=="connected"{self.voice.call.as_mut().unwrap().phase=Phase::Connected;self.voice.status.set_text("Voz conectada.");self.render_voice();}None},EngineEvent::Track{..}|EngineEvent::Started{..}|EngineEvent::MicrophoneGain{..}=>None,event @ (EngineEvent::Negotiated|EngineEvent::MediaIntent{..}|EngineEvent::MediaState{..}|EngineEvent::MediaError{..}|EngineEvent::VideoFrame{..}|EngineEvent::VideoReset{..})=>{self.video_engine(event);None},EngineEvent::Error{message}=>{self.stop_voice(true,&message);None}};
                 if let Some(frame)=frame{if !self.voice_frame(connection,frame){self.stop_voice(true,"Não foi possível enviar a sinalização de voz.");}}
             }
         }
@@ -147,7 +158,7 @@ impl MainWindowModel {
             VoiceEvent::Joined{members,active_speakers,..}=>{
                 if !self.voice.call.as_ref().is_some_and(|c|c.channel==channel&&c.phase==Phase::Joining){return;}
                 self.voice.members.insert(channel,members.into_iter().map(|m|(m.user_id,m)).collect());self.voice.speakers.insert(channel,active_speakers.into_iter().collect());
-                let c=self.voice.call.as_mut().unwrap();c.phase=Phase::Negotiating;let call=c.id;let ice=c.ice.take().unwrap();let config=serde_json::json!({"type":"start","ice_servers":ice.ice_servers,"device":self.voice.device,"muted":true});
+                let c=self.voice.call.as_mut().unwrap();c.phase=Phase::Negotiating;let call=c.id;let ice=c.ice.take().unwrap();let config=serde_json::json!({"type":"start","ice_servers":ice.ice_servers,"device":self.voice.device,"muted":true,"microphone_gain":self.voice.gain.value()/100.0});
                 #[cfg(test)]let start=!self.voice.test_engine;#[cfg(not(test))]let start=true;
                 if start{c.engine=Some(Engine::start(config,move|event|s.input(MainWindowMsg::Voice(VoiceMsg::Engine{call,event}))));}
                 let enabled=self.account.config.notifications.as_ref().and_then(|n|n.sound).unwrap_or(true);

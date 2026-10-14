@@ -4,14 +4,31 @@ The main window uses Discord's familiar navigation structure with GTK 4 and
 libadwaita controls, system colors and GNOME window behavior.
 
 - A compact rail switches between direct messages and the connected server.
-- Channel navigation has a server menu, search, category headings, unread
+- Channel navigation has a server menu, category headings, unread
   indicators and an account footer. Server administration, moderation and blocks
-  live in the server menu; account preferences, security and logout live in the
-  footer's settings menu. The rail ends above the account footer, which spans
+  live in the server menu; account preferences and security live in the
+  footer's settings menu. A red disconnect icon sits beside the settings gear
+  and opens a confirmation dialog. Cancel or Escape keeps the session active;
+  the red Desconectar action ends it.
+  The rail ends above the account footer, which spans
   the full navigation width. Existing permission checks still govern the actions.
-- The conversation toolbar shows the channel and topic, pins, notifications with
-  an unread badge, members and an
-  overflow menu for emojis and channel preferences.
+- The navigation rail and channel list reach the top of the window. A native
+  conversation header spans the chat and member pane, showing the channel name
+  and topic. Pins, search, notifications with an unread badge, members and the
+  conversation menu sit beside the native window controls. There is no second
+  app header above the navigation. Login retains its own native header. Channel
+  topics truncate to fit, with the complete text available in a tooltip. The
+  channel name and topic stay centered above the chat, excluding the docked
+  member list and navigation, regardless of topic length. When space is limited,
+  pins, search and members move into the conversation menu. Notifications and the menu sit beside navigation in
+  that compact layout, leaving room for the centered title and window controls.
+- A status menu above the right member list offers Online (green), Ocupado
+  (red) and Ausente (yellow), using the same presence icons as member rows.
+  It persists each change with one status request and stays synchronized with
+  the profile editor. Online clears the manual status so automatic presence
+  can resume. Failed writes retain the previous status and show an inline error.
+  The member list groups Online, Ocupados, Ausentes and Offline separately,
+  updating counts and row positions on presence changes and hiding empty groups.
 - Messages show author avatars, local dates and times, replies, attachments,
   previews and reaction pills. Consecutive messages by the same author within
   five minutes share a heading. Replies, edited messages and pinned messages

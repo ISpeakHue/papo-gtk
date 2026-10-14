@@ -2,6 +2,7 @@
 
 use gtk::pango;
 use gtk::prelude::*;
+use adw::prelude::*;
 use relm4::prelude::*;
 use uuid::Uuid;
 
@@ -39,8 +40,9 @@ pub struct SidebarModel {
     pub presence: std::collections::HashMap<Uuid,crate::ws::PresenceStatus>,
     icon_request:Option<Uuid>,
     icon_job:Option<tokio::task::JoinHandle<()>>,
+    logout_dialog:Option<adw::AlertDialog>,
 }
-impl Drop for SidebarModel{fn drop(&mut self){if let Some(job)=self.icon_job.take(){job.abort();}}}
+impl Drop for SidebarModel{fn drop(&mut self){if let Some(job)=self.icon_job.take(){job.abort();}if let Some(dialog)=self.logout_dialog.take(){dialog.force_close();}}}
 
 #[derive(Debug)]
 pub enum SidebarMsg {
@@ -55,14 +57,16 @@ pub enum SidebarMsg {
     Presence(std::collections::HashMap<Uuid,crate::ws::PresenceStatus>),
     SetCurrentUser(WhoamiResponse),
     SetConfig(crate::models::UserConfig),
-    Profile, Preferences, Security, Search, Notifications,
+    Profile, Preferences, Security, Notifications,
     UnreadNotifications{count:usize,more:bool},
     SetAvatar(Option<gtk::gdk::Texture>),
     SetChannels(Vec<Channel>),
     SelectChannel(Uuid),
+    MarkChannelRead(Uuid),
     VoiceSelect(Uuid),
     SetSelection(Uuid),
     LogoutClicked,
+    LogoutResponse(bool),
 }
 
 #[derive(Debug)]
@@ -70,9 +74,10 @@ pub enum SidebarOutput {
     WatchVoice{user:Uuid,kind:&'static str},
     DirectSelect(Uuid), HideDirect(Uuid), Blocks, Administration, Moderation,
     ChannelSelected(Channel),
+    MarkChannelRead(Uuid),
     VoiceSelect(Uuid),
     Logout,
-    Profile(Uuid), Preferences, Security, Search, Notifications,
+    Profile(Uuid), Preferences, Security, Notifications,
 }
 
 #[relm4::component(pub)]
@@ -95,10 +100,21 @@ impl Component for SidebarModel {
                 set_width_request: 64,
                 add_css_class: "papo-rail",
                 gtk::ToggleButton {
-                    set_icon_name: "chat-message-new-symbolic",
-                    set_tooltip_text: Some("Mensagens diretas (Alt+2)"),
+                    set_widget_name: "direct-navigation",
+                    #[watch] set_tooltip_text: Some(if model.unread_direct()>0{"Mensagens diretas não lidas (Alt+2)"}else{"Mensagens diretas (Alt+2)"}),
                     #[watch] set_active: model.direct_mode,
                     connect_clicked => SidebarMsg::ShowDirect,
+                    gtk::Overlay {
+                        gtk::Image {set_icon_name:Some("chat-message-new-symbolic"),set_pixel_size:24},
+                        add_overlay = &gtk::Label {
+                            set_widget_name:"direct-unread-indicator",
+                            add_css_class:"papo-direct-indicator",
+                            set_halign:gtk::Align::End,set_valign:gtk::Align::Start,
+                            set_can_target:false,
+                            #[watch] set_visible:model.unread_direct()>0,
+                            #[watch] set_label:&if model.unread_direct()>99{"99+".into()}else{model.unread_direct().to_string()},
+                        },
+                    },
                 },
                 gtk::Separator {},
                 gtk::ToggleButton {
@@ -143,11 +159,6 @@ impl Component for SidebarModel {
                             gtk::Button {set_label:"Usuários bloqueados",add_css_class:"flat",connect_clicked => SidebarMsg::Blocks},
                         },
                     },
-                },
-                gtk::Button {
-                    set_label:"Pesquisar",set_tooltip_text:Some("Pesquisar mensagens (Ctrl+K)"),
-                    add_css_class:"flat",add_css_class:"papo-navigation-search",
-                    connect_clicked => SidebarMsg::Search,
                 },
                 gtk::Label {
                     #[watch] set_text:if model.direct_mode{"MENSAGENS DIRETAS"}else{"CANAIS"},
@@ -220,10 +231,15 @@ impl Component for SidebarModel {
                                 gtk::Button {set_label:"Meu perfil",add_css_class:"flat",connect_clicked => SidebarMsg::Profile},
                                 gtk::Button {set_label:"Preferências",add_css_class:"flat",connect_clicked => SidebarMsg::Preferences},
                                 gtk::Button {set_label:"Segurança",add_css_class:"flat",connect_clicked => SidebarMsg::Security},
-                                gtk::Separator {},
-                                gtk::Button {set_label:"Desconectar",add_css_class:"flat",connect_clicked => SidebarMsg::LogoutClicked},
                             },
                         },
+                    },
+                    gtk::Button {
+                        set_icon_name:"system-log-out-symbolic",
+                        set_tooltip_text:Some("Desconectar"),
+                        set_valign:gtk::Align::Center,
+                        add_css_class:"destructive-action",
+                        connect_clicked => SidebarMsg::LogoutClicked,
                     },
                 },
         }
@@ -240,7 +256,7 @@ impl Component for SidebarModel {
             unread_notifications: 0,
             more_notifications:false,
             direct:Vec::new(), access:Access::default(),setup:false,show_avatars:true,direct_mode:false,avatars:Default::default(),presence:Default::default(),
-            icon_request:None,icon_job:None,
+            icon_request:None,icon_job:None,logout_dialog:None,
         };
 
         let widgets = view_output!();
@@ -286,7 +302,6 @@ impl Component for SidebarModel {
             SidebarMsg::SetConfig(config) => {self.show_avatars=config.display.as_ref().and_then(|d|d.show_avatars).unwrap_or(true);widgets.avatar_widget.set_visible(self.show_avatars);self.rebuild_direct(&widgets.direct_list,&sender);rebuild_channel_list(&widgets.channels_list,&self.channels,self.selected_channel_id,&self.voice_rooms,&self.avatars,self.show_avatars,&mut self.channel_rows,&sender);},
             SidebarMsg::Profile => {let _=sender.output(SidebarOutput::Profile(self.current_user.id));}
             SidebarMsg::UnreadNotifications{count,more}=>{self.unread_notifications=count;self.more_notifications=more;},
-            SidebarMsg::Search => {let _=sender.output(SidebarOutput::Search);}
             SidebarMsg::Notifications => {let _=sender.output(SidebarOutput::Notifications);}
             SidebarMsg::Security => {let _=sender.output(SidebarOutput::Security);}
             SidebarMsg::Preferences => {let _=sender.output(SidebarOutput::Preferences);}
@@ -315,8 +330,26 @@ impl Component for SidebarModel {
                 rebuild_channel_list(&widgets.channels_list, &self.channels, self.selected_channel_id, &self.voice_rooms,&self.avatars,self.show_avatars,&mut self.channel_rows,&sender);
                 self.rebuild_direct(&widgets.direct_list,&sender);
             }
+            SidebarMsg::MarkChannelRead(id)=>{if self.channels.iter().any(|c|c.id==id&&!matches!(c.channel_type,Some(ChannelType::Category|ChannelType::Voice))){let _=sender.output(SidebarOutput::MarkChannelRead(id));}},
             SidebarMsg::LogoutClicked => {
-                let _ = sender.output(SidebarOutput::Logout);
+                if let Some(dialog)=&self.logout_dialog {
+                    dialog.present(Some(_root));
+                } else {
+                    let dialog=adw::AlertDialog::new(Some("Desconectar da sessão?"),Some("Você quer encerrar sua sessão neste servidor?"));
+                    dialog.add_responses(&[("cancel","Cancelar"),("disconnect","Desconectar")]);
+                    dialog.set_default_response(Some("cancel"));
+                    dialog.set_close_response("cancel");
+                    dialog.set_response_appearance("disconnect",adw::ResponseAppearance::Destructive);
+                    let input=sender.input_sender().clone();
+                    dialog.connect_response(None,move |_,response|{let _=input.send(SidebarMsg::LogoutResponse(response=="disconnect"));});
+                    dialog.present(Some(_root));
+                    self.logout_dialog=Some(dialog);
+                }
+            }
+            SidebarMsg::LogoutResponse(confirmed)=>{
+                if self.logout_dialog.take().is_some()&&confirmed {
+                    let _=sender.output(SidebarOutput::Logout);
+                }
             }
         }
         self.update_view(widgets, sender);
@@ -396,6 +429,16 @@ fn rebuild_channel_list(
 
         row.set_child(Some(&box_row));
 
+        if !is_category&&!is_voice{
+            let click=gtk::GestureClick::new();click.set_button(3);let weak=row.downgrade();let input=sender.input_sender().clone();let id=channel.id;
+            click.connect_pressed(move |gesture,_,x,y|{
+                let Some(row)=weak.upgrade()else{return;};gesture.set_state(gtk::EventSequenceState::Claimed);
+                let popover=gtk::Popover::new();popover.set_parent(&row);popover.set_pointing_to(Some(&gtk::gdk::Rectangle::new(x as i32,y as i32,1,1)));
+                let mark=gtk::Button::with_label("Marcar canal como lido");let s=input.clone();let weak=popover.downgrade();mark.connect_clicked(move |_|{let _=s.send(SidebarMsg::MarkChannelRead(id));if let Some(p)=weak.upgrade(){p.popdown();}});popover.set_child(Some(&mark));
+                popover.connect_closed(|p|p.unparent());let weak=popover.downgrade();row.connect_destroy(move |_|{if let Some(p)=weak.upgrade(){if p.parent().is_some(){p.unparent();}}});popover.popup();
+            });row.add_controller(click);
+        }
+
         desired.push((signature,row));
         }
         if is_voice{if let Some(room)=rooms.iter().find(|r|r.id==channel.id){for member in &room.members{
@@ -436,6 +479,7 @@ fn update_voice_speaker(widget:&gtk::Widget,speaking:bool,show_avatars:bool){
 }
 
 impl SidebarModel {
+    fn unread_direct(&self)->u64{self.direct.iter().map(|d|u64::from(d.unread_count)).sum()}
     fn load_icon(&mut self,sender:&ComponentSender<Self>){
         if let Some(job)=self.icon_job.take(){job.abort();}self.icon_request=None;
         let Some(blob)=self.server.as_ref().and_then(|s|s.icon_blob.clone()).filter(|b|!b.is_empty()) else{return;};

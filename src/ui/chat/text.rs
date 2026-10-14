@@ -39,7 +39,7 @@ pub(super) fn widget(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions
 pub(super) fn with_profiles(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions,open:impl Fn(Uuid)+'static)->gtk::TextView{
     build(text,users,actions,Some(std::rc::Rc::new(open)))
 }
-#[derive(Clone)]enum Target {Link(String),Profile(Uuid)}
+#[derive(Clone)]enum Target {Link(String),Profile(Uuid),Spoiler{tag:gtk::TextTag,shown:std::rc::Rc<std::cell::Cell<bool>>,images:std::rc::Rc<std::cell::RefCell<Vec<(i32,gtk::gdk::Paintable,Option<crate::media::animation::Animation>)>>>}}
 fn build(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions,open:Option<std::rc::Rc<dyn Fn(Uuid)>>)->gtk::TextView{
     let view=gtk::TextView::new();view.set_editable(false);view.set_cursor_visible(false);view.set_accepts_tab(false);
     view.set_wrap_mode(gtk::WrapMode::WordChar);view.set_vexpand(false);
@@ -58,16 +58,71 @@ fn build(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions,open:Option
     let buffer=view.buffer();let mut iter=buffer.start_iter();let mut targets=vec![];
     let tag=gtk::TextTag::builder().foreground("#3584e4").underline(pango::Underline::Single).build();buffer.tag_table().add(&tag);
     let mention=gtk::TextTag::builder().name("papo-mention").background("#3584e4").foreground("#ffffff").build();buffer.tag_table().add(&mention);
-    for part in parts_index(text,&actions.emoji_names){match part{
-        Part::Text(text)=>{let displayed=mentions::DisplayText::read(&text,users);let text=&displayed.text;let offset=iter.offset();buffer.insert(&mut iter,text);for span in displayed.spans{let start=offset+text[..span.start].chars().count() as i32;let end=offset+text[..span.end].chars().count() as i32;buffer.apply_tag(&mention,&buffer.iter_at_offset(start),&buffer.iter_at_offset(end));if let Some(id)=span.id.filter(|_|open.is_some()){targets.push((start,end,Target::Profile(id)));}}for(start,end,url) in links(text){let start=offset+start;let end=offset+end;buffer.apply_tag(&tag,&buffer.iter_at_offset(start),&buffer.iter_at_offset(end));targets.push((start,end,Target::Link(url)));}},
-        Part::Emoji(id,name)=>{if let Some(texture)=actions.textures.get(&id){buffer.insert_paintable(&mut iter,texture);}else{buffer.insert(&mut iter,&format!(":{name}:"));}},
-    }}
+    let mut spoilers=HashMap::<usize,Target>::new();
+    let mut tags=HashMap::<markdown::Style,gtk::TextTag>::new();let mut registered=std::collections::HashSet::new();
+    let shade=if adw::StyleManager::default().is_dark(){"#29292d"}else{"#dddde1"};
+    for run in markdown::parse(text){
+        let begin=iter.offset();let mut hidden_images=Vec::new();
+        let parts=if run.style.code{vec![Part::Text(run.text.clone())]}else{parts_index(&run.text,&actions.emoji_names)};
+        for part in parts{match part{
+            Part::Text(value)=>{
+                let displayed=if run.style.code{mentions::DisplayText{text:value,spans:vec![]}}else{mentions::DisplayText::read(&value,users)};
+                let value=&displayed.text;let offset=iter.offset();buffer.insert(&mut iter,value);
+                for span in displayed.spans{
+                    let start=offset+value[..span.start].chars().count() as i32;let end=offset+value[..span.end].chars().count() as i32;
+                    buffer.apply_tag(&mention,&buffer.iter_at_offset(start),&buffer.iter_at_offset(end));
+                    if let Some(id)=span.id.filter(|_|open.is_some()){targets.push((start,end,Target::Profile(id)));}
+                }
+                if !run.style.code&&run.style.link.is_none(){for(start,end,url) in links(value){let start=offset+start;let end=offset+end;buffer.apply_tag(&tag,&buffer.iter_at_offset(start),&buffer.iter_at_offset(end));targets.push((start,end,Target::Link(url)));}}
+            },
+            Part::Emoji(id,name)=>{
+                if let Some(paintable)=actions.emoji_paintable(id){
+                    let offset=iter.offset();let animation=actions.animations.get(&id);
+                    if run.style.spoiler{
+                        let(w,h)=(paintable.intrinsic_width().clamp(1,128),paintable.intrinsic_height().clamp(1,128));let color=gtk::gdk::RGBA::parse(shade).unwrap();
+                        let mut pixels=Vec::with_capacity((w*h*4) as usize);for _ in 0..w*h{pixels.extend_from_slice(&[(color.red()*255.0) as u8,(color.green()*255.0) as u8,(color.blue()*255.0) as u8,255]);}
+                        let mask=gtk::gdk::MemoryTexture::new(w,h,gtk::gdk::MemoryFormat::R8g8b8a8,&gtk::glib::Bytes::from_owned(pixels),w as usize*4);
+                        buffer.insert_paintable(&mut iter,&mask);hidden_images.push((offset,paintable,animation.cloned()));
+                    }else{buffer.insert_paintable(&mut iter,&paintable);if let Some(animation)=animation{animation.watch(&view,Some(offset));}}
+                }else{buffer.insert(&mut iter,&format!(":{name}:"));}
+            },
+        }}
+        let end=iter.offset();
+        if let Some(url)=&run.style.link{buffer.apply_tag(&tag,&buffer.iter_at_offset(begin),&buffer.iter_at_offset(end));targets.push((begin,end,Target::Link(url.clone())));}
+        let mut style=run.style.clone();style.spoiler=false;style.spoiler_group=0;
+        let style_tag=tags.entry(style.clone()).or_insert_with(||markdown_tag(&style,shade)).clone();
+        if registered.insert(style_tag.as_ptr()){buffer.tag_table().add(&style_tag);}
+        buffer.apply_tag(&style_tag,&buffer.iter_at_offset(begin),&buffer.iter_at_offset(end));
+        if run.style.spoiler{
+            let spoiler=spoilers.entry(run.style.spoiler_group).or_insert_with(||{
+                let tag=markdown_tag(&markdown::Style{spoiler:true,..Default::default()},shade);buffer.tag_table().add(&tag);
+                Target::Spoiler{tag,shown:Default::default(),images:Default::default()}
+            });
+            if let Target::Spoiler{tag,images,..}=spoiler{tag.set_priority(buffer.tag_table().size()-1);buffer.apply_tag(tag,&buffer.iter_at_offset(begin),&buffer.iter_at_offset(end));images.borrow_mut().extend(hidden_images);}
+            targets.push((begin,end,spoiler.clone()));
+        }
+    }
     install_targets(&view,targets,move |view,target|match target{
+        Target::Spoiler{tag,shown,images}=>{
+            shown.set(true);let buffer=view.buffer();buffer.remove_tag(tag,&buffer.start_iter(),&buffer.end_iter());
+            for (offset,paintable,animation) in images.borrow().iter(){let mut start=buffer.iter_at_offset(*offset);let mut end=start;end.forward_char();buffer.delete(&mut start,&mut end);buffer.insert_paintable(&mut start,paintable);if let Some(animation)=animation{animation.watch(view,Some(*offset));}}
+            size_to_content(view);
+        },
         Target::Profile(id)=>{if let Some(open)=&open{open(*id);}},
-        Target::Link(url)=>{let launcher=gtk::UriLauncher::new(url);let parent=view.root().and_downcast::<gtk::Window>();launcher.launch(parent.as_ref(),None::<&gtk::gio::Cancellable>,|result|{if let Err(error)=result{tracing::warn!("Could not open chat link: {error}");}});},
+        Target::Link(url)=>{let launcher=gtk::UriLauncher::new(url);let parent=view.root().and_downcast::<gtk::Window>();launcher.launch(parent.as_ref(),None::<&gtk::gio::Cancellable>,|result|{if let Err(error)=result{tracing::warn!(kind = ?error.kind::<gtk::gio::IOErrorEnum>(), "Could not open chat link");}});},
     });
     // Keep a textual description available even when a custom image is displayed.
-    view.set_tooltip_text(Some(&mentions::render(text,users)));view
+    if spoilers.is_empty(){view.set_tooltip_text(Some(&mentions::render(text,users)));}view
+}
+
+fn markdown_tag(style:&markdown::Style,shade:&str)->gtk::TextTag{
+    let tag=gtk::TextTag::new(None);
+    if style.bold{tag.set_weight(700);}if style.italic{tag.set_style(pango::Style::Italic);}if style.underline{tag.set_underline(pango::Underline::Single);}if style.strike{tag.set_strikethrough(true);}
+    if style.heading>0{tag.set_scale(match style.heading{1=>1.8,2=>1.6,3=>1.4,_=>1.15});}
+    if style.code||style.table{tag.set_family(Some("monospace"));}if style.code{tag.set_background(Some(shade));}
+    if style.quote>0{tag.set_left_margin((style.quote.min(16)*12) as i32);tag.set_style(pango::Style::Italic);}
+    if style.spoiler{tag.set_foreground(Some(shade));tag.set_background(Some(shade));tag.set_underline(pango::Underline::None);tag.set_strikethrough(false);}
+    tag
 }
 
 fn size_to_content(view:&gtk::TextView){
@@ -119,7 +174,9 @@ pub(super) fn links(text:&str)->Vec<(i32,i32,String)>{
 fn target_at(view:&gtk::TextView,targets:&[(i32,i32,Target)],x:f64,y:f64)->Option<Target>{
     let(x,y)=view.window_to_buffer_coords(gtk::TextWindowType::Widget,x as i32,y as i32);let iter=view.iter_at_location(x,y)?;let rect=view.iter_location(&iter);
     if x<rect.x()||x>rect.x()+rect.width().max(1)||y<rect.y()||y>rect.y()+rect.height(){return None;}
-    targets.iter().find(|(start,end,_)|iter.offset()>=*start&&iter.offset()<*end).map(|(_,_,url)|url.clone())
+    let hit=|(start,end,_):&&(i32,i32,Target)|iter.offset()>=*start&&iter.offset()<*end;
+    targets.iter().filter(hit).find(|(_,_,target)|matches!(target,Target::Spoiler{shown,..} if !shown.get()))
+        .or_else(||targets.iter().filter(hit).find(|(_,_,target)|!matches!(target,Target::Spoiler{..}))).map(|(_,_,target)|target.clone())
 }
 pub(super) fn excerpt(text:&str)->String{
     let mut text=text.split_whitespace().collect::<Vec<_>>().join(" ");

@@ -27,12 +27,26 @@ jobs:
       CARGO_TERM_COLOR: always
     steps:
       - name: Install Rust and native build dependencies
-        run: dnf install -y git gcc rust cargo pkgconf-pkg-config glib2-devel openssl-devel gtk4-devel libadwaita-devel python3-gobject python3-gstreamer1 gstreamer1-plugins-base gstreamer1-plugins-good gstreamer1-plugins-bad-free libnice-gstreamer1 xorg-x11-server-Xvfb xorg-x11-xauth dbus-daemon
+        run: dnf install -y git gcc rust cargo pkgconf-pkg-config glib2-devel openssl-devel gtk4-devel libadwaita-devel python3-gobject python3-gstreamer1 gstreamer1-plugins-base gstreamer1-plugins-good gstreamer1-plugins-bad-free libnice-gstreamer1 xorg-x11-server-Xvfb xorg-x11-xauth setxkbmap libXtst dbus-daemon
       - uses: actions/checkout@v4
+      - name: Check AppImage media plugin and host driver boundaries
+        run: python3 -m unittest discover -s tests -p 'appimage_packaging_test.py'
       - name: Compile application and run unit and integration tests
         run: cargo test --locked
       - name: Check login, chat workflows and adaptive layouts under a virtual display
         run: dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+      - name: Check multiline composer, wrapping and dead-key input
+        run: PAPO_UI_CASE=multiline PAPO_NATIVE_INPUT_TEST=1 GTK_IM_MODULE=simple dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+      - name: Check dead-key input after full application startup
+        run: PAPO_UI_CASE=full-app-input PAPO_NATIVE_INPUT_TEST=1 GTK_IM_MODULE=simple dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+      - name: Check dead-key input across login-to-chat focus handoff
+        run: PAPO_UI_CASE=login-input PAPO_NATIVE_INPUT_TEST=1 GTK_IM_MODULE=simple dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+      - name: Check explicit channel reads and owner-only account recovery
+        run: PAPO_UI_CASE=backend-update dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+      - name: Check rich cards and quoted Twitter/X embeds
+        run: PAPO_UI_CASE=embeds dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+      - name: Check member groups, Markdown, emoji tabs and channel actions
+        run: PAPO_UI_CASE=report8 dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
       - name: Check private screen portal permissions and cleanup
         run: dbus-run-session -- python3 tests/portal_probe.py
       - name: Check native audio worker cleanup using synthetic capture

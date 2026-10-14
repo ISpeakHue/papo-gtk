@@ -51,6 +51,8 @@ impl MainWindowModel {
                 let status=gtk::Label::new(Some("Digite um termo ou escolha filtros para pesquisar."));status.set_wrap(true);status.set_xalign(0.0);status.add_css_class("dim-label");body.append(&status);
                 let results=gtk::Box::new(gtk::Orientation::Vertical,8);let scroll=gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).child(&results).build();body.append(&scroll);
                 let more=gtk::Button::with_label("Mais resultados");more.set_visible(false);let input=sender.input_sender().clone();more.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Search(SearchMsg::More));});body.append(&more);
+                let keys=gtk::EventControllerKey::new();keys.set_propagation_phase(gtk::PropagationPhase::Capture);let weak=window.downgrade();
+                keys.connect_key_pressed(move |_,key,_,_|{if key==gtk::gdk::Key::Escape{if let Some(window)=weak.upgrade(){window.close();}gtk::glib::Propagation::Stop}else{gtk::glib::Propagation::Proceed}});window.add_controller(keys);
                 let input=sender.input_sender().clone();window.connect_close_request(move |_|{let _=input.send(MainWindowMsg::Search(SearchMsg::Cancel(view_token)));gtk::glib::Propagation::Proceed});window.present();fields[0].grab_focus();
                 self.search.view=Some(SearchView{token:view_token,window,fields,author,channel,mention,links,files,order,results,status,more});self.search.rows.clear();self.search.cursor=None;self.search.more=false;
             }
@@ -119,6 +121,6 @@ pub(crate) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::Mai
     // Mention insertion uses the real composer and permission gate.
     let id=main.model().current_user.id;main.model().chat.emit(ChatMsg::InputChanged("Olá @al".into()));pump(context);
     // Set editable text, since this synthetic input is also used for state testing.
-    let composer=crate::ui::chat::actions::tests::descendants(main.model().chat.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Entry>().ok()).unwrap();composer.set_text("Olá @al");composer.set_position(-1);pump(context);main.model().chat.emit(ChatMsg::MentionSelected(Some(id)));pump(context);assert_eq!(composer.text(),format!("Olá @mention(<@{id}>) "));
+    let composer=crate::ui::chat::composer::field(main.model().chat.widget().upcast_ref());composer.set_text("Olá @al");composer.set_position(-1);pump(context);main.model().chat.emit(ChatMsg::MentionSelected(Some(id)));pump(context);assert_eq!(composer.text(),format!("Olá @{} ",main.model().current_user.display_name()));
     main.model().chat.emit(ChatMsg::MentionSelected(None));pump(context);assert!(composer.text().contains("@everyone"));
 }

@@ -1,7 +1,7 @@
 //! State transitions kept independent of GTK so races can be tested headlessly.
 
 use uuid::Uuid;
-use std::collections::{HashSet,HashMap};
+use std::collections::{HashSet,HashMap,VecDeque};
 
 use crate::models::{Message, Embed, MessageReactionSummary};
 
@@ -28,6 +28,7 @@ pub struct History {
     snapshots: HashMap<Uuid, Vec<Change>>,
     dirty:HashSet<Uuid>,
     media_revision:u64,
+    early_moderation:VecDeque<(Uuid,Uuid,String)>,
 }
 
 impl History {
@@ -45,7 +46,7 @@ impl History {
         if trimmed { self.messages.drain(..self.messages.len() - limit); }
         // Encoded images live in the separately bounded media cache. Metadata
         // still lets an evicted thumbnail be fetched on a later visit.
-        for embed in self.messages.iter_mut().flat_map(|m| m.embeds.iter_mut().flatten()) { embed.image_data = None; }
+        for embed in self.messages.iter_mut().flat_map(|m| m.embeds.iter_mut().flatten()) { embed.image_data = None; embed.author_image_data = None; }
         self.messages.shrink_to_fit();
         trimmed
     }
@@ -54,11 +55,12 @@ impl History {
         // GTK thread when the user switches channels.
         let string=|s:&Option<String>|s.as_ref().map_or(0,String::capacity);
         let media=|m:&Option<crate::models::EmbedMedia>|m.as_ref().map_or(0,|m|string(&m.url)+string(&m.mime_type));
+        self.early_moderation.capacity()*std::mem::size_of::<(Uuid,Uuid,String)>()+self.early_moderation.iter().map(|(_,_,status)|status.capacity()).sum::<usize>()+
         self.deleted.capacity()*std::mem::size_of::<Uuid>() + self.messages.capacity()*std::mem::size_of::<Message>() + self.messages.iter().map(|m| {
             string(&m.content)
                 + m.attachments.as_ref().map_or(0,|items|items.capacity()*std::mem::size_of::<crate::models::Attachment>() + items.iter().map(|a|a.mime_type.capacity()+a.original_file_name.capacity()+string(&a.moderation_status)).sum::<usize>())
                 + m.embeds.as_ref().map_or(0,|items|items.capacity()*std::mem::size_of::<Embed>() + items.iter().map(|e| {
-                    e.source_type.capacity()+e.fetch_method.capacity()+string(&e.provider)+string(&e.site_name)+string(&e.url)+string(&e.title)+string(&e.description)+string(&e.color)+string(&e.embed_url)+string(&e.image_data)
+                    e.source_type.capacity()+e.fetch_method.capacity()+string(&e.provider)+string(&e.site_name)+string(&e.url)+string(&e.title)+string(&e.description)+string(&e.color)+string(&e.embed_url)+string(&e.image_data)+string(&e.author_image_data)
                         + media(&e.thumbnail)+media(&e.image)+media(&e.video)
                         + e.author.as_ref().map_or(0,|a|string(&a.name)+string(&a.url)+media(&a.media))
                         + e.footer.as_ref().map_or(0,|f|string(&f.text)+media(&f.icon))
@@ -96,13 +98,16 @@ impl History {
         self.media_revision=self.media_revision.wrapping_add(1);
         let changes = std::mem::take(&mut self.changes);
         let current = if append { std::mem::take(&mut self.messages) } else { Vec::new() };
+        let previous:HashMap<_,_>=self.messages.iter().map(|m|(m.id,m)).collect();
         let mut merged:HashMap<Uuid,Message>=HashMap::with_capacity(messages.len()+current.len());
-        for message in current.into_iter().chain(messages.into_iter().map(snapshot_message)){
+        for mut message in current.into_iter().chain(messages.into_iter().map(snapshot_message)){
             if Some(message.channel_id)!=self.channel_id||self.deleted.contains(&message.id){continue;}
+            if let Some(previous)=previous.get(&message.id){preserve_moderation(previous,&mut message);}
             if let Some(existing)=merged.get_mut(&message.id){merge_message(existing,message);}else{merged.insert(message.id,message);}
         }
         self.dirty.extend(merged.keys().copied());
         self.messages=merged.into_values().collect();self.messages.sort_by_key(|m|(m.created_at,m.id));
+        self.replay_early_moderation();
         for change in changes {
             self.apply(change);
         }
@@ -112,6 +117,28 @@ impl History {
     /// Independent journals let a read receipt coexist with history pagination.
     pub fn begin_snapshot(&mut self, request: Uuid) { self.snapshots.insert(request, Vec::new()); }
     pub fn fail_snapshot(&mut self, request: Uuid) { self.snapshots.remove(&request); }
+    /// Polling supplies only attachment states, never stale message content.
+    /// Events received during the request take precedence over its response.
+    pub(super) fn finish_moderation(&mut self,request:Uuid,messages:Vec<Message>)->Vec<Change>{
+        let Some(events)=self.snapshots.remove(&request) else{return Vec::new();};
+        let mut changes=Vec::new();
+        for fetched in messages.into_iter().filter(|m|Some(m.channel_id)==self.channel_id){
+            let Some(current)=self.messages.iter().find(|m|m.id==fetched.id)else{continue;};
+            for attachment in current.attachments.iter().flatten().filter(|a|matches!(a.moderation_status.as_deref(),Some("pending"|"processing"))){
+                if events.iter().any(|e|matches!(e,Change::Moderation(id,key,_) if *id==current.id&&*key==attachment.id)||matches!(e,Change::Delete(id) if *id==current.id)){continue;}
+                if let Some(fresh)=fetched.attachments.iter().flatten().find(|a|a.id==attachment.id){
+                    // Some backend versions omit this column from history's
+                    // attachment join. Treat the result exactly as reopening
+                    // that history would, without claiming it is a clean verdict.
+                    let status=fresh.moderation_status.as_deref().unwrap_or("");
+                    if matches!(status,""|"clean"|"sensitive"|"blocked"|"failed"){
+                        changes.push(Change::Moderation(current.id,attachment.id,status.into()));
+                    }
+                }
+            }
+        }
+        changes
+    }
     pub fn finish_snapshot(&mut self, request: Uuid, messages: Vec<Message>) -> bool {
         let Some(changes) = self.snapshots.remove(&request) else { return false; };
         for message in messages { self.upsert(snapshot_message(message)); }
@@ -167,15 +194,30 @@ impl History {
     }
 
     fn merge_upsert(&mut self,message:Message)->bool {
-        if let Some(index)=self.messages.iter().position(|m|m.id==message.id){
+        let changed=if let Some(index)=self.messages.iter().position(|m|m.id==message.id){
             let previous=self.messages[index].created_at;
             let changed=merge_message(&mut self.messages[index],message);
             if self.messages[index].created_at!=previous{let updated=self.messages.remove(index);let at=self.messages.binary_search_by_key(&(updated.created_at,updated.id),|m|(m.created_at,m.id)).unwrap_or_else(|at|at);self.messages.insert(at,updated);}
             changed
-        }else{let at=self.messages.binary_search_by_key(&(message.created_at,message.id),|m|(m.created_at,m.id)).unwrap_or_else(|at|at);self.messages.insert(at,message);true}
+        }else{let at=self.messages.binary_search_by_key(&(message.created_at,message.id),|m|(m.created_at,m.id)).unwrap_or_else(|at|at);self.messages.insert(at,message);true};
+        self.replay_early_moderation()||changed
+    }
+
+    fn replay_early_moderation(&mut self)->bool{
+        if self.early_moderation.is_empty(){return false;}
+        let mut changed=false;
+        for (message,key,status) in std::mem::take(&mut self.early_moderation){
+            if self.messages.iter().any(|m|m.id==message&&m.attachments.iter().flatten().any(|a|a.id==key)){
+                self.apply(Change::Moderation(message,key,status));changed=true;
+            }else if !self.deleted.contains(&message){self.early_moderation.push_back((message,key,status));}
+        }
+        changed
     }
 
     pub fn apply(&mut self, change: Change) {
+        if let Change::Moderation(id,key,status)=&change{
+            if self.deleted.contains(id)||(status!="blocked"&&self.messages.iter().find(|m|m.id==*id).and_then(|m|m.attachments.as_ref()).and_then(|a|a.iter().find(|a|a.id==*key)).is_some_and(|a|a.moderation_status.as_deref()==Some(status.as_str()))){return;}
+        }
         if let Change::Upsert(message) = &change {
             if Some(message.channel_id) != self.channel_id || self.deleted.contains(&message.id) {
                 return;
@@ -237,6 +279,11 @@ impl History {
                 if let Some(attachment) = self.messages.iter_mut().find(|m| m.id == id)
                     .and_then(|m| m.attachments.as_mut()).and_then(|items| items.iter_mut().find(|item| item.id == attachment_id)) {
                     attachment.moderation_status = Some(status);
+                }else{
+                    // Completion can beat both the WS message and POST echo.
+                    self.early_moderation.retain(|(m,a,_)|(*m,*a)!=(id,attachment_id));
+                    self.early_moderation.push_back((id,attachment_id,status));
+                    while self.early_moderation.len()>256{self.early_moderation.pop_front();}
                 }
             }
             Change::Delete(id) => {
@@ -256,7 +303,18 @@ fn snapshot_message(mut message:Message)->Message{
     message
 }
 
+fn preserve_moderation(existing:&Message,message:&mut Message){
+    // The POST/WS echo can have been serialized before moderation completed.
+    // Legacy history's empty status must not erase an explicit live verdict.
+    for incoming in message.attachments.iter_mut().flatten(){
+        if matches!(incoming.moderation_status.as_deref(),None|Some(""|"pending"|"processing")){
+            if let Some(previous)=existing.attachments.iter().flatten().find(|a|a.id==incoming.id&&matches!(a.moderation_status.as_deref(),Some(""|"clean"|"sensitive"|"failed"))){incoming.moderation_status=previous.moderation_status.clone();}
+        }
+    }
+}
 fn merge_message(existing:&mut Message,mut message:Message)->bool {
+    if message.attachments.is_none(){message.attachments=existing.attachments.clone();}
+    preserve_moderation(existing,&mut message);
     if message.embeds.is_none(){message.embeds=existing.embeds.clone();}
     if message.reactions.is_none(){message.reactions=existing.reactions.clone();}
     if message.user_reactions.is_none(){message.user_reactions=existing.user_reactions.clone();}
@@ -308,6 +366,64 @@ impl Draft {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn with_attachment(channel:Uuid,status:&str)->Message{
+        let mut m=message(channel,1);m.attachments=Some(vec![serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"mime_type":"image/png","original_file_name":"test.png","size_bytes":1,"created_at":m.created_at,"moderation_status":status})).unwrap()]);m
+    }
+    #[test]fn completed_moderation_survives_delayed_send_echo(){
+        for status in ["","clean","sensitive","failed"]{
+            let channel=Uuid::new_v4();let mut h=History::default();h.select(channel);let m=with_attachment(channel,"pending");h.upsert(m.clone());
+            h.apply(Change::Moderation(m.id,m.attachments.as_ref().unwrap()[0].id,status.into()));
+            assert!(!h.upsert(m));assert_eq!(h.messages[0].attachments.as_ref().unwrap()[0].moderation_status.as_deref(),Some(status));
+        }
+    }
+    #[test]fn early_moderation_events_survive_message_and_post_arrival(){
+        for snapshot in [false,true]{for status in ["clean","sensitive","failed"]{
+            let channel=Uuid::new_v4();let mut h=History::default();h.select(channel);let m=with_attachment(channel,"pending");let key=m.attachments.as_ref().unwrap()[0].id;
+            h.apply(Change::Moderation(m.id,key,status.into()));
+            if snapshot{let request=Uuid::new_v4();h.begin(request);h.finish(request,vec![m.clone()],false);}else{h.upsert(m.clone());}
+            assert_eq!(h.messages[0].attachments.as_ref().unwrap()[0].moderation_status.as_deref(),Some(status));assert!(!h.upsert(m));assert!(h.early_moderation.is_empty());
+        }}
+    }
+    #[test]fn legacy_history_cannot_erase_a_known_sensitive_event(){
+        for status in [None,Some("")]{for full in [false,true]{
+            let channel=Uuid::new_v4();let mut h=History::default();h.select(channel);let sensitive=with_attachment(channel,"sensitive");h.upsert(sensitive.clone());let mut legacy=sensitive;legacy.attachments.as_mut().unwrap()[0].moderation_status=status.map(str::to_string);
+            if full{let request=Uuid::new_v4();h.begin(request);assert!(h.finish(request,vec![legacy],false));}else{assert!(!h.upsert(legacy));}
+            assert_eq!(h.messages[0].attachments.as_ref().unwrap()[0].moderation_status.as_deref(),Some("sensitive"));
+        }}
+    }
+    #[test]fn duplicate_moderation_is_a_noop_and_early_queue_is_bounded(){
+        let channel=Uuid::new_v4();let mut h=History::default();h.select(channel);let m=with_attachment(channel,"clean");let key=m.attachments.as_ref().unwrap()[0].id;h.upsert(m.clone());h.take_dirty();let rev=h.media_revision();
+        for _ in 0..50{h.apply(Change::Moderation(m.id,key,"clean".into()));}
+        assert!(h.take_dirty().is_empty());assert_eq!(h.media_revision(),rev);
+        let blocked=with_attachment(channel,"blocked");let blocked_id=blocked.id;let blocked_key=blocked.attachments.as_ref().unwrap()[0].id;h.upsert(blocked);h.apply(Change::Moderation(blocked_id,blocked_key,"blocked".into()));assert!(h.is_deleted(blocked_id));assert!(!h.messages.iter().any(|m|m.id==blocked_id));
+        for _ in 0..1000{h.apply(Change::Moderation(Uuid::new_v4(),Uuid::new_v4(),"clean".into()));}assert_eq!(h.early_moderation.len(),256);
+    }
+    #[test]fn moderation_refresh_accepts_legacy_history_without_overriding_explicit_verdicts(){
+        for status in [None,Some(""),Some("pending"),Some("processing"),Some("unknown")]{
+            let channel=Uuid::new_v4();let mut h=History::default();h.select(channel);let pending=with_attachment(channel,"pending");h.upsert(pending.clone());
+            let mut fetched=pending.clone();fetched.attachments.as_mut().unwrap()[0].moderation_status=status.map(str::to_string);
+            let request=Uuid::new_v4();h.begin_snapshot(request);let changes=h.finish_moderation(request,vec![fetched.clone()]);
+            if matches!(status,None|Some("")){
+                assert_eq!(changes.len(),1);for change in changes{h.apply(change);}
+                assert_eq!(h.messages[0].attachments.as_ref().unwrap()[0].moderation_status.as_deref(),Some(""));
+                assert!(!h.upsert(pending.clone()),"late upload echoes must preserve the history's available state");
+            }else{assert!(changes.is_empty(),"unresolved or unknown verdicts stay pending");}
+            h.apply(Change::Moderation(pending.id,pending.attachments.as_ref().unwrap()[0].id,"sensitive".into()));
+            let request=Uuid::new_v4();h.begin_snapshot(request);assert!(h.finish_moderation(request,vec![fetched.clone()]).is_empty());
+            h.apply(Change::Delete(pending.id));let request=Uuid::new_v4();h.begin_snapshot(request);assert!(h.finish_moderation(request,vec![fetched]).is_empty());assert!(h.messages.is_empty());
+        }
+    }
+    #[test]fn moderation_poll_updates_only_pending_matching_attachments_and_yields_to_events(){
+        let channel=Uuid::new_v4();let mut h=History::default();h.select(channel);let m=with_attachment(channel,"pending");h.upsert(m.clone());
+        let mut fetched=m.clone();fetched.content=Some("stale content".into());fetched.attachments.as_mut().unwrap()[0].moderation_status=Some("clean".into());
+        let req=Uuid::new_v4();h.begin_snapshot(req);h.apply(Change::Edit(m.id,"edited live".into(),None));
+        for change in h.finish_moderation(req,vec![fetched.clone()]){h.apply(change);}
+        assert_eq!(h.messages[0].content.as_deref(),Some("edited live"));assert_eq!(h.messages[0].attachments.as_ref().unwrap()[0].moderation_status.as_deref(),Some("clean"));
+        h.apply(Change::Moderation(m.id,m.attachments.as_ref().unwrap()[0].id,"pending".into()));let req=Uuid::new_v4();h.begin_snapshot(req);h.apply(Change::Moderation(m.id,m.attachments.as_ref().unwrap()[0].id,"sensitive".into()));
+        assert!(h.finish_moderation(req,vec![fetched.clone()]).is_empty());
+        let req=Uuid::new_v4();h.begin_snapshot(req);h.apply(Change::Delete(m.id));assert!(h.finish_moderation(req,vec![fetched.clone()]).is_empty());assert!(h.messages.is_empty());
+        h.upsert(with_attachment(channel,"pending"));let req=Uuid::new_v4();h.begin_snapshot(req);fetched.channel_id=Uuid::new_v4();assert!(h.finish_moderation(req,vec![fetched]).is_empty());
+    }
     #[test]
     fn returning_to_recent_history_releases_old_pages_and_rejects_late_pagination(){
         let channel=Uuid::new_v4();let mut history=History::default();history.select(channel);

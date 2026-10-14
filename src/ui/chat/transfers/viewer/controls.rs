@@ -94,7 +94,10 @@ pub(in crate::ui::chat::transfers) fn install(window:&gtk::Window,picture:&gtk::
 }
 
 pub(in crate::ui::chat::transfers) fn picture(window:&gtk::Window)->Option<gtk::Picture>{
-    let root=window.child()?;let scroll=root.last_child()?.downcast::<gtk::ScrolledWindow>().ok()?;
+    let root=window.child()?;let mut child=root.first_child();
+    let scroll=loop{let widget=child?;child=widget.next_sibling();
+        if widget.widget_name()=="image-viewer-scroll"{break widget.downcast::<gtk::ScrolledWindow>().ok()?;}
+    };
     let child=scroll.child()?;child.clone().downcast::<gtk::Picture>().ok().or_else(||child.first_child()?.downcast::<gtk::Picture>().ok())
 }
 

@@ -1691,6 +1691,28 @@ downloads after sensitive moderation or permission loss. Revealing sensitive
 media restores its menu action. Unit tests cover 300-frame thumbnails and
 resolution reduction without dropping frames or timing.
 
+## Video posters and compressed media reuse
+
+Run the native smoke test with `PAPO_UI_CASE=media-cache` in a private display.
+It generates WebM and H.264/MP4 posters from the existing local fixtures, including
+an MP4 padded to move its metadata past the preview prefix. It verifies prefix
+and tail Range requests, supplied-thumbnail preference, embedded video posters,
+and the absence of background players or retained original video files.
+Unsupported media produces an explanatory placeholder and is not repeatedly
+fetched by viewport updates.
+
+The same check switches channels three times and verifies no additional requests
+for cached media. Weak references prove that old textures and GIF animations are
+released while compressed bytes survive. Permission loss clears those bytes.
+Unit checks cover the 32 MiB/256-entry LRU, deletion/moderation/revocation,
+strict HTTP-range limits, sparse-file offsets and cleanup, servers ignoring Range,
+malformed responses and bounded poster encoding. No real account is used.
+
+Decoded image buffers still need memory when revisiting media, but compressed
+cache reuse removes network waits and repeated poster extraction. RSS may remain
+above the live buffer total because the allocator or graphics driver retains
+released storage for reuse; the weak-reference checks measure live ownership.
+
 ## AppImage hardware video plugins
 
 ```sh
@@ -1708,3 +1730,78 @@ It also retains the existing Opus/VP8, font/input-client and image-loader checks
 On a tester's machine, the same runtime check reports the registered hardware
 video decoders; it does not require them to exist or claim that a particular
 chat video selected one. See [APPIMAGE.md](APPIMAGE.md#hardware-video-decoding).
+
+## Bug fixes 9
+
+Run with the native GTK dependencies and a private X11 display:
+
+```sh
+cargo test --locked
+PAPO_UI_CASE=report9 PAPO_NATIVE_INPUT_TEST=1 GTK_IM_MODULE=simple \
+  dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+```
+
+The `report9` case verifies arrow/Tab completion for mentions and emojis,
+post-navigation type-to-focus including dead-key accents, preserved input in
+another editable field, single-line toolbar alignment, compact message editing,
+Enter-save/failure/retry, timed download feedback, and inline Klipy/Giphy video
+renditions. It also checks small images, absence of competing still-thumbnail
+requests/background GTK players, release of animation paintables and reuse of
+compressed GIF renditions after a channel switch. All HTTP endpoints are local
+mock servers; no real account is used. CI runs the same case.
+
+Related native cases are `image-geometry`, `media-cache`, `smooth-updates`,
+`retention`, `multiline` and `full-app-input`. The last two retain real dead-key
+keyboard checks when `PAPO_NATIVE_INPUT_TEST=1` is set.
+
+## Clickable emoji details
+
+```sh
+PAPO_UI_CASE=emoji-details PAPO_NATIVE_INPUT_TEST=1 \
+  dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+```
+
+This case clicks static/animated custom emojis and Unicode emojis in a real
+TextView, checks the popover's preview/name/server caption and compact size,
+and verifies Escape dismissal, Unicode offsets, spoiler precedence, selection,
+dragging and destruction when the source unmaps. Weak references check that
+closed previews are released. No server or real account is used. CI runs this
+case; `embeds`, `profile-emojis` and `report8` cover the shared text renderers.
+
+## Bare GIF embeds
+
+```sh
+PAPO_UI_CASE=gif-embeds dbus-run-session -- xvfb-run -a \
+  cargo test --locked ui_smoke -- --ignored --test-threads=1
+```
+
+This is the GIF subset of `report9`. It uses custom/manual Klipy and Giphy cards
+with domain metadata, static thumbnails and local video renditions; a separate
+embedded GIF verifies the base64 payload path. It checks bare animations without
+video controls or duplicate source text, preserved bridge attribution, metadata
+only in the opened viewer, no HTTP request when opening, compressed cache reuse
+on channel switches, and information/retry UI for a failed rendition. All API
+requests use a local mock server. Pasted Klipy links additionally use the public
+website lookup covered by the opt-in checks below.
+
+## Pasted Klipy links (public integration)
+
+Offline parser/transport regressions run with `cargo test`. To check the real
+public lookup and animated GIF data for the three supplied URLs:
+
+```sh
+cargo test --locked public_share_links_return_decodable_animations -- --ignored --nocapture
+```
+
+To check a pasted link in the native chat UI, with a local mock Papo server and
+no account/session, explicitly enable access to the public Klipy endpoint:
+
+```sh
+PAPO_UI_CASE=klipy-live PAPO_KLIPY_LIVE_TEST=1 \
+  dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+```
+
+This verifies animation with no backend embed, hidden inline source text, no
+video controls and cache reuse across channel switches. These live cases are
+opt-in because they require internet access and the provider's availability;
+CI's `report9` case continues to check bot renditions using a local fixture.

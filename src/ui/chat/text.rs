@@ -39,7 +39,7 @@ pub(super) fn widget(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions
 pub(super) fn with_profiles(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions,open:impl Fn(Uuid)+'static)->gtk::TextView{
     build(text,users,actions,Some(std::rc::Rc::new(open)))
 }
-#[derive(Clone)]enum Target {Link(String),Profile(Uuid),Spoiler{tag:gtk::TextTag,shown:std::rc::Rc<std::cell::Cell<bool>>,images:std::rc::Rc<std::cell::RefCell<Vec<(i32,gtk::gdk::Paintable,Option<crate::media::animation::Animation>)>>>}}
+#[derive(Clone)]enum Target {Link(String),Profile(Uuid),Emoji{offset:i32,details:emoji_details::Details},Spoiler{tag:gtk::TextTag,shown:std::rc::Rc<std::cell::Cell<bool>>,images:std::rc::Rc<std::cell::RefCell<Vec<(i32,gtk::gdk::Paintable,Option<crate::media::animation::Animation>)>>>}}
 fn build(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions,open:Option<std::rc::Rc<dyn Fn(Uuid)>>)->gtk::TextView{
     let view=gtk::TextView::new();view.set_editable(false);view.set_cursor_visible(false);view.set_accepts_tab(false);
     view.set_wrap_mode(gtk::WrapMode::WordChar);view.set_vexpand(false);
@@ -73,9 +73,13 @@ fn build(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions,open:Option
                     buffer.apply_tag(&mention,&buffer.iter_at_offset(start),&buffer.iter_at_offset(end));
                     if let Some(id)=span.id.filter(|_|open.is_some()){targets.push((start,end,Target::Profile(id)));}
                 }
-                if !run.style.code&&run.style.link.is_none(){for(start,end,url) in links(value){let start=offset+start;let end=offset+end;buffer.apply_tag(&tag,&buffer.iter_at_offset(start),&buffer.iter_at_offset(end));targets.push((start,end,Target::Link(url)));}}
+                if !run.style.code&&run.style.link.is_none(){
+                    for(start,end,url) in links(value){let start=offset+start;let end=offset+end;buffer.apply_tag(&tag,&buffer.iter_at_offset(start),&buffer.iter_at_offset(end));targets.push((start,end,Target::Link(url)));}
+                    for(start,end,details) in emoji_details::unicode(value){targets.push((offset+start,offset+end,Target::Emoji{offset:offset+start,details}));}
+                }
             },
             Part::Emoji(id,name)=>{
+                let start=iter.offset();let details=emoji_details::Details::custom(id,name.clone(),actions);
                 if let Some(paintable)=actions.emoji_paintable(id){
                     let offset=iter.offset();let animation=actions.animations.get(&id);
                     if run.style.spoiler{
@@ -85,6 +89,7 @@ fn build(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions,open:Option
                         buffer.insert_paintable(&mut iter,&mask);hidden_images.push((offset,paintable,animation.cloned()));
                     }else{buffer.insert_paintable(&mut iter,&paintable);if let Some(animation)=animation{animation.watch(&view,Some(offset));}}
                 }else{buffer.insert(&mut iter,&format!(":{name}:"));}
+                if run.style.link.is_none(){targets.push((start,iter.offset(),Target::Emoji{offset:start,details}));}
             },
         }}
         let end=iter.offset();
@@ -102,7 +107,9 @@ fn build(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions,open:Option
             targets.push((begin,end,spoiler.clone()));
         }
     }
+    let emoji_popup=emoji_details::connect(&view);
     install_targets(&view,targets,move |view,target|match target{
+        Target::Emoji{offset,details}=>emoji_details::show(view,*offset,details,&emoji_popup),
         Target::Spoiler{tag,shown,images}=>{
             shown.set(true);let buffer=view.buffer();buffer.remove_tag(tag,&buffer.start_iter(),&buffer.end_iter());
             for (offset,paintable,animation) in images.borrow().iter(){let mut start=buffer.iter_at_offset(*offset);let mut end=start;end.forward_char();buffer.delete(&mut start,&mut end);buffer.insert_paintable(&mut start,paintable);if let Some(animation)=animation{animation.watch(view,Some(*offset));}}

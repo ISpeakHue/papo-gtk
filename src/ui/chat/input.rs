@@ -1,6 +1,7 @@
 //! Small editing helpers keep composer offsets in GTK character coordinates.
 use super::*;
 mod diagnostics;
+pub(super) mod shortcuts;
 /// Choose one input transport before any login/chat editable is constructed.
 /// Mixing a protocol-backed login field with a Compose-only composer can leave
 /// the compositor handling dead keys for the old field during view changes.
@@ -88,7 +89,7 @@ pub(super) fn connect_size(view:&gtk::TextView,scroll:&gtk::ScrolledWindow){
             let content=y+height+view.top_margin()+view.bottom_margin();
             let policy=if content>160{gtk::PolicyType::Automatic}else{gtk::PolicyType::External};
             if scroll.vscrollbar_policy()!=policy{scroll.set_vscrollbar_policy(policy);}
-            let height=content.clamp(36,160);
+            let height=content.clamp(40,160);
             if scroll.height_request()!=height{scroll.set_height_request(height);}
         });
     });

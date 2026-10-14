@@ -22,12 +22,15 @@ mod markdown;
 mod moderation;
 #[cfg(test)]pub(crate) use moderation::exercise as exercise_moderation;
 mod emoji;
+mod emoji_details;
+#[cfg(test)]pub(crate) use emoji_details::exercise as exercise_emoji_details;
 use viewport::{Viewport,Position};
 #[cfg(test)]pub(crate) mod bugs;
 #[cfg(test)]pub(crate) mod bugs5;
 #[cfg(test)]pub(crate) mod bugs6;
 #[cfg(test)]pub(crate) mod bugs7;
 #[cfg(test)]pub(crate) mod bugs8;
+#[cfg(test)]pub(crate) mod bugs9;
 #[cfg(test)]pub(crate) mod performance;
 #[cfg(test)]mod display_frames;
 use transfers::{Transfers, TransferMsg};
@@ -367,6 +370,12 @@ impl Component for ChatModel {
                 add_css_class: "error",
             },
 
+            gtk::Label {
+                #[watch] set_visible:model.transfers.notice.is_some(),
+                #[watch] set_text:model.transfers.notice.as_ref().map_or("",|(_,text)|text.as_str()),
+                add_css_class:"dim-label",set_wrap:true,
+            },
+
             #[name = "selected_files"]
             gtk::Box { set_orientation: gtk::Orientation::Vertical, set_spacing: 4 },
             gtk::Label {
@@ -451,7 +460,7 @@ impl Component for ChatModel {
                     #[name="composer_scroll"]
                     gtk::ScrolledWindow {
                         set_hexpand:true,set_vexpand:false,
-                        set_height_request:36,
+                        set_height_request:40,
                         set_hscrollbar_policy:gtk::PolicyType::Never,
                         set_vscrollbar_policy:gtk::PolicyType::External,
                         #[name="message_entry"]
@@ -460,7 +469,7 @@ impl Component for ChatModel {
                             add_css_class:"papo-composer-text",
                             set_wrap_mode:gtk::WrapMode::WordChar,
                             set_accepts_tab:false,
-                            set_top_margin:8,set_bottom_margin:8,set_left_margin:4,set_right_margin:4,
+                            set_top_margin:10,set_bottom_margin:10,set_left_margin:4,set_right_margin:4,
                             set_input_purpose:gtk::InputPurpose::FreeForm,
                             set_input_hints:gtk::InputHints::NONE,
                             #[watch] set_sensitive:model.active_channel.is_some()&&model.access.send,
@@ -469,7 +478,7 @@ impl Component for ChatModel {
                     },
                     add_overlay = composer_placeholder = &gtk::Label {
                         set_can_target:false,set_halign:gtk::Align::Fill,set_valign:gtk::Align::Start,
-                        set_xalign:0.0,set_margin_start:4,set_margin_end:4,set_margin_top:8,
+                        set_xalign:0.0,set_margin_start:4,set_margin_end:4,set_margin_top:10,
                         set_ellipsize:pango::EllipsizeMode::End,
                         add_css_class:"dim-label",
                         #[watch] set_visible:model.draft.text.is_empty()&&!model.composer.is_composing(),
@@ -539,6 +548,7 @@ impl Component for ChatModel {
 
         model.composer.connect(&widgets.message_entry,&sender);
         input::configure_im(&widgets.message_entry);
+        input::shortcuts::type_to_focus(&widgets.message_entry);
         let placeholder=widgets.composer_placeholder.downgrade();let composing=model.composer.clone();
         widgets.message_entry.connect_preedit_changed(move |view,text|{
             if let Some(placeholder)=placeholder.upgrade(){placeholder.set_visible(text.is_empty()&&!composing.is_composing()&&view.buffer().char_count()==0);}
@@ -596,6 +606,8 @@ impl Component for ChatModel {
             let focus=gtk::EventControllerFocus::new();let entry=widgets.message_entry.downgrade();let panel=widgets.emoji_panel.downgrade();let button=widgets.emoji_button.downgrade();let input=sender.input_sender().clone();
             focus.connect_leave(move |_|{let entry=entry.clone();let panel=panel.clone();let button=button.clone();let input=input.clone();gtk::glib::idle_add_local_once(move ||{let within=|w:&gtk::Widget|w.state_flags().contains(gtk::StateFlags::FOCUS_WITHIN);if entry.upgrade().is_some_and(|w|within(w.upcast_ref()))||panel.upgrade().is_some_and(|w|within(w.upcast_ref()))||button.upgrade().is_some_and(|w|within(w.upcast_ref())){return;}let _=input.send(ChatMsg::CloseEmojis);});});target.add_controller(focus);
         }
+        input::shortcuts::completion(&widgets.mention_panel,&widgets.message_entry);
+        input::shortcuts::completion(&widgets.emoji_panel,&widgets.message_entry);
         widgets.message_entry.buffer().set_enable_undo(true);
         model.viewport.connect(&widgets.scrolled_window,&widgets.messages_list,&widgets.history_cover,&sender);
         let initial_position=if model.history_ready{model.initial_read.take().map_or(Position::Bottom,|boundary|boundary.position(&model.history.messages))}else{Position::Bottom};
@@ -634,17 +646,17 @@ impl Component for ChatModel {
         let following=self.viewport.following();let mut position=None;let mut render_history=false;let mut restore_avatars=false;
         // Keep inactive snapshots current without rebuilding the active chat.
         match &message {
-            ChatMsg::ApplyChange(change) => self.conversations.apply(change),
-            ChatMsg::DeleteMessage(id) => self.conversations.apply(&Change::Delete(*id)),
+            ChatMsg::ApplyChange(change) => {self.conversations.apply(change);self.transfers.encoded.apply(change);},
+            ChatMsg::DeleteMessage(id) => {self.conversations.apply(&Change::Delete(*id));self.transfers.encoded.apply(&Change::Delete(*id));},
             _ => {},
         }
         match message {
             ChatMsg::CheckModeration(token)=>{if root.is_mapped(){self.check_moderation(token,&sender);}else{self.schedule_moderation(&sender,false);}},
             ChatMsg::ModerationChecked{request,result}=>{render_history=self.moderation_checked(request,result);},
-            ChatMsg::RetainConversations(allowed) => {self.conversations.retain(&allowed);self.surfaces.retain(&allowed);},
-            ChatMsg::ClearConversations => {self.conversations.clear();self.surfaces.clear();},
-            ChatMsg::InvalidateConversation(id) => {self.conversations.invalidate_channel(id);self.surfaces.invalidate(id);},
-            ChatMsg::CacheChange(change) => self.conversations.apply(&change),
+            ChatMsg::RetainConversations(allowed) => {self.conversations.retain(&allowed);self.surfaces.retain(&allowed);self.transfers.encoded.retain_channels(&allowed);},
+            ChatMsg::ClearConversations => {self.conversations.clear();self.surfaces.clear();self.transfers.encoded.clear();},
+            ChatMsg::InvalidateConversation(id) => {self.conversations.invalidate_channel(id);self.surfaces.invalidate(id);self.transfers.encoded.invalidate_channel(id);},
+            ChatMsg::CacheChange(change) => {self.conversations.apply(&change);self.transfers.encoded.apply(&change);},
             ChatMsg::RequestHistory { channel_id, cursor } => {
                 if !self.access.read || self.active_channel.as_ref().map(|c|c.id()) != Some(channel_id) { return; }
                 if cursor.is_none() && self.history_ready { sender.input(ChatMsg::Resync); }
@@ -745,7 +757,7 @@ impl Component for ChatModel {
                 if self.media_render_pending==Some(token){if self.viewport.scrolling(){self.viewport.media_when_idle(&sender);}else{self.media_render_pending=None;render_history=true;}}
             },
             ChatMsg::Transfer(msg) => {
-                let background=matches!(&msg,TransferMsg::ImageReady{..}|TransferMsg::AnimationReady{..}|TransferMsg::AuthorReady{..}|TransferMsg::Preview{..});
+                let background=matches!(&msg,TransferMsg::Bytes{..}|TransferMsg::Decoded{..}|TransferMsg::ImageReady{..}|TransferMsg::AnimationReady{..}|TransferMsg::AuthorReady{..}|TransferMsg::Preview{..});
                 render_history=matches!(&msg,TransferMsg::AttachmentVideo{..}|TransferMsg::File{..}|TransferMsg::Video{..}|TransferMsg::CloseVideo{..}|TransferMsg::Reveal{..}|TransferMsg::RetryImage(_));
                 let revision=self.transfers.revision;
                 self.handle_transfer(msg,&sender,root);
@@ -983,7 +995,7 @@ impl Component for ChatModel {
                 crate::media::update_member_avatars(widgets.messages_list.upcast_ref(),&self.avatars,&avatars);
                 crate::media::update_member_avatars(widgets.mention_choices.upcast_ref(),&self.avatars,&avatars);self.avatars=avatars;self.render_pins(&sender);
             }
-            ChatMsg::ServerName(name)=>{self.server_name=name;self.render_picker(&sender);},
+            ChatMsg::ServerName(name)=>{*self.actions.emoji_source.borrow_mut()=name.clone();self.server_name=name;self.render_picker(&sender);},
             ChatMsg::SetUsers(users) => {
                 let users:HashMap<_,_>=users.into_iter().map(|u| (u.id, u)).collect();render_history=self.users_map.len()!=users.len()||users.iter().any(|(id,u)|self.users_map.get(id).is_none_or(|old|old.display_name()!=u.display_name()||old.roles!=u.roles));self.users_map=users;self.refresh_reaction_hints();self.render_pins(&sender);
                 self.composer.refresh_names(&widgets.message_entry,&self.users_map);
@@ -1181,6 +1193,7 @@ impl ChatModel {
             .max_by_key(|m|(m.created_at,m.id)).cloned()
     }
     pub(crate) fn profile_text(&self,value:&str)->gtk::TextView{text::widget(value,&self.users_map,&self.actions)}
+    // The editable profile already shows Unicode glyphs; its extra preview is only for custom images.
     pub(crate) fn has_profile_emoji(&self,value:&str)->bool{text::parts_index(value,&self.actions.emoji_names).iter().any(|p|matches!(p,text::Part::Emoji(..)))}
 }
 
@@ -1398,7 +1411,7 @@ fn rebuild_messages_view(
             reply_button.connect_clicked(move |_|{let _=s.output(ChatOutput::Navigate{channel_id,message_id:reply});});content_box.append(&reply_button);
         }
 
-        if let Some(raw)=&msg.content{let input=sender.input_sender().clone();content_box.append(&text::with_profiles(raw,users_map,actions,move |id|{let _=input.send(ChatMsg::OpenProfile(id));}));}
+        if msg.content.is_some(){let raw=transfers::gifs::display_text(msg);if !raw.is_empty(){let input=sender.input_sender().clone();content_box.append(&text::with_profiles(&raw,users_map,actions,move |id|{let _=input.send(ChatMsg::OpenProfile(id));}));}}
 
         let media_box=gtk::Box::new(gtk::Orientation::Vertical,4);media_box.set_widget_name("message-media");
         transfers::update_media_box(&media_box,msg,media,users_map,actions,sender);content_box.append(&media_box);

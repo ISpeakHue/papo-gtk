@@ -1,4 +1,4 @@
-//! Give thumbnails a larger presentation size without allocating enlarged pixels.
+//! Present thumbnail pixels at native size; the media frame controls layout.
 use gtk::{gdk,glib};
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -24,8 +24,7 @@ mod imp {
 }
 glib::wrapper!{pub struct Preview(ObjectSubclass<imp::Preview>) @implements gdk::Paintable;}
 pub fn picture(texture:&gdk::Texture)->gtk::Picture {
-    let preview:Preview=glib::Object::new();let ratio=f64::from(texture.width())/f64::from(texture.height());
-    let width=720.0f64.min(480.0*ratio);let height=width/ratio;
-    preview.imp().size.set((width.round().max(1.0) as i32,height.round().max(1.0) as i32));let _=preview.imp().texture.set(texture.clone());
+    let preview:Preview=glib::Object::new();
+    preview.imp().size.set((texture.width(),texture.height()));let _=preview.imp().texture.set(texture.clone());
     let picture=gtk::Picture::for_paintable(&preview);picture.set_can_shrink(true);picture.set_content_fit(gtk::ContentFit::Contain);picture
 }

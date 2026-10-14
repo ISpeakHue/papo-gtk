@@ -194,11 +194,23 @@ colon completion stays inline. Notification authors use the existing member and
 avatar caches. Reply context has an accent surface and the author's role color.
 
 Chat media is cached for the session within fixed texture, animation, metadata
-and temporary-video-file budgets. Selecting a channel cancels its obsolete work
-and releases players while retaining reusable assets. Current server metadata,
+and temporary-video-file budgets. A separate LRU retains up to 256 compressed
+images/GIFs/posters within 32 MiB across channel switches. Selecting a channel
+cancels obsolete work and releases decoded images, GIF frames and players;
+returning to recent media decodes cached bytes without another download.
+The cache is cleared on logout, session replacement and permission loss, and
+invalidated by deletion, concealed moderation and changed embed metadata.
+Current server metadata,
 moderation and permissions still decide whether an asset may be displayed.
 Media-only updates reconcile individual media slots instead of replacing the
 message's text, avatar and controls. Known geometry survives thumbnail eviction.
+
+Video previews prefer server thumbnails. If none is supplied, the client obtains
+up to a 2 MiB prefix and 256 KiB tail through authenticated Range requests and
+extracts one silent poster frame (up to 320 × 180) in a separate GStreamer
+worker. This also handles MP4 metadata at the file's end without downloading the
+whole video. Poster extraction is serialized and cancellable; unsupported files
+keep their play action and show that the preview is unavailable.
 
 At startup the sidebar uses the same background avatar cache as the rest of the
 application, avoiding a second full-size decode on GTK's UI thread. Server icons
@@ -271,3 +283,33 @@ Inline playback forces its initial volume through the native audio backend,
 then repeats this once after preparation if the user has not changed mute or
 volume. GTK's cached default properties alone do not guarantee an audio update.
 There is no recurring timer or reset on later play/pause actions.
+
+GIFs have a bare, left-aligned chat surface; links and metadata appear only
+when opened. Provider recognition includes manual bridge embeds and domain names.
+Matching URLs are masked before hydration while prose and sender identity remain.
+GIF provider cards prefer an available authenticated backend video rendition,
+decoded as a bounded silent animation outside GTK's player lifecycle. Still
+thumbnails cannot replace those animations. Small compressed renditions share
+the session's 32 MiB media cache with image bytes and posters. Public GIF fetches
+and image decoding have independent bounded queues so network waits do not block
+cached image decoding. Media frames preserve known source dimensions instead of
+resizing when decoded thumbnails or reduced animation frames arrive; presentation
+never enlarges small source images. Pasted Klipy links resolve an exact slug via
+Klipy's public website lookup, with bounded metadata and validated CDN renditions,
+so a blocked HTML share page does not require a backend embed or a partner key.
+The provider lookup uses the same session-free client and compressed media cache;
+returning to a cached GIF requires no new lookup.
+
+Keyboard routing preserves GTK input-method events. Typing after navigation
+focuses the composer only when another text field, selection or popup does not
+own the input. Completion panels capture Tab/Enter on the focused suggestion.
+Short edits use a compact dialog and Enter-to-save with Shift+Enter for newlines.
+Successful downloads use a session/token-scoped transient notice, independently
+of persistent composer errors.
+
+Inline emoji targets open a small anchored GTK popover with the cached preview,
+name and server origin (or Unicode catalog name). The same text renderer serves
+messages, rich cards and profile descriptions. The popover shares existing emoji
+paintables and closes on source unmap; no extra image request or decoded cache
+is introduced. Unrevealed spoilers take precedence over emoji targets, and text
+selection, code literals, mentions and links retain their existing interactions.

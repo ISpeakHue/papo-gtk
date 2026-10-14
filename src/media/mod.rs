@@ -15,6 +15,7 @@ pub mod animation;
 pub mod emoji;
 pub mod giphy;
 pub mod gif_links;
+pub mod poster;
 
 /// Bound encoded input, dimensions and decoded cache size before creating a texture.
 pub fn bounded_texture(bytes: &[u8]) -> Option<Texture> {

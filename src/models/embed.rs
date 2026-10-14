@@ -76,6 +76,15 @@ pub struct EmbedField {#[serde(default)] pub position:i32,pub name:String,pub va
 impl Embed {
     pub fn version(&self)->DateTime<Utc>{self.fetched_at.unwrap_or(self.created_at)}
     pub fn has_video(&self)->bool{self.video.as_ref().and_then(|v|v.url.as_ref()).is_some()}
+    pub fn animated_link(&self)->bool{
+        let provider=self.url.as_deref().is_some_and(crate::media::gif_links::is_provider)
+            ||self.provider.iter().chain(self.site_name.iter()).any(|name|crate::media::gif_links::provider_name(name));
+        let gif=|m:&EmbedMedia|m.mime_type.as_deref().is_some_and(|mime|mime.split(';').next().unwrap_or("").trim().eq_ignore_ascii_case("image/gif"));
+        // A movie can have an animated thumbnail without becoming a GIF.
+        let gif_image=self.image.as_ref().is_some_and(gif)||(!self.has_video()&&self.thumbnail.as_ref().is_some_and(gif));
+        let cdn=[self.video.as_ref(),self.image.as_ref(),self.thumbnail.as_ref()].into_iter().flatten().filter_map(|m|m.url.as_deref()).any(crate::media::gif_links::is_provider);
+        gif_image||((provider||cdn)&&(self.source_type=="link"||self.has_video()||self.thumbnail.is_some()||self.image.is_some()))
+    }
     pub fn metadata(&self)->Self{
         Self{id:self.id,source_type:self.source_type.clone(),fetch_method:self.fetch_method.clone(),provider:self.provider.clone(),site_name:self.site_name.clone(),url:self.url.clone(),title:self.title.clone(),description:self.description.clone(),color:self.color.clone(),author:self.author.clone(),thumbnail:self.thumbnail.clone(),image:self.image.clone(),video:self.video.clone(),footer:self.footer.clone(),fields:self.fields.clone(),embed_url:self.embed_url.clone(),created_at:self.created_at,fetched_at:self.fetched_at,image_data:None,author_image_data:None}
     }
@@ -139,6 +148,22 @@ impl EmbedInput {
 
 #[cfg(test)]mod tests{
     use super::*;
+    #[test]fn animated_link_detection_accepts_provider_metadata_without_reclassifying_other_videos(){
+        let mut e:Embed=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"url":"https://klipy.com/gifs/happycadogt-bang"})).unwrap();assert!(e.animated_link());
+        e.url=Some("https://example.test/video".into());assert!(!e.animated_link());
+        for provider in ["Klipy","GIPHY","Tenor"]{e.provider=Some(provider.into());assert!(e.animated_link());}
+        e.source_type="custom".into();assert!(!e.animated_link());e.source_type="link".into();e.provider=Some("X".into());assert!(!e.animated_link());
+    }
+    #[test]fn bot_gif_cards_accept_domain_metadata_and_gif_mime_without_affecting_attribution(){
+        for provider in ["klipy.com","www.giphy.com"," TENOR.COM "]{
+            let mut embed:Embed=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"source_type":"custom","fetch_method":"manual","site_name":provider,"thumbnail":{"mime_type":"image/webp"},"video":{"url":"https://images-ext-1.discordapp.net/rendition.mp4","mime_type":"video/mp4"}})).unwrap();
+            assert!(embed.animated_link());embed.video=None;embed.thumbnail=None;
+            assert!(!embed.animated_link(),"a text-only attribution is not a media card");
+        }
+        let mut embed:Embed=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"source_type":"custom","image":{"mime_type":"IMAGE/GIF; charset=binary"}})).unwrap();assert!(embed.animated_link());
+        embed.image.as_mut().unwrap().mime_type=Some("image/png".into());assert!(!embed.animated_link());
+        embed.video=Some(EmbedMedia{url:Some("https://example.test/movie.mp4".into()),..Default::default()});embed.thumbnail=Some(EmbedMedia{mime_type:Some("image/gif".into()),..Default::default()});assert!(!embed.animated_link(),"an animated thumbnail must not silence a genuine movie");
+    }
     #[test]fn custom_metadata_has_no_required_url_or_fetch_timestamp(){
         let e:Embed=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"source_type":"custom","fetch_method":"manual","title":"Rich card","color":"#123ABC","created_at":"2026-10-09T12:00:00Z","author":{"name":"Author"},"thumbnail":{"mime_type":"image/png","width":120,"height":80},"image":{"mime_type":"image/webp"},"footer":{"text":"Footer"},"fields":[{"position":2,"name":"Second","value":"B","inline":true},{"position":1,"name":"First","value":"A","inline":false}]})).unwrap();
         assert!(e.url.is_none()&&e.fetched_at.is_none());assert_eq!(e.version(),e.created_at);let input=EmbedInput::from_embed(&e);assert_eq!(input.fields[0].name,"First");assert!(validate_embeds(&[input]).is_err(),"missing original image URLs cannot be silently resubmitted");

@@ -58,18 +58,21 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     // Media completion must retain the message/text widget, replacing only its media slot.
     let key=format!("message-{}",messages.last().unwrap().id);let row=chat.model().rendered[&key].1.clone();let text=descendants(row.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::TextView>().ok()).unwrap();
     let height=row.height();
-    let epoch=chat.model().transfers.epoch;let token=Uuid::new_v4();chat.state().get_mut().model.transfers.image_tokens.insert(image,token);
-    chat.emit(ChatMsg::Transfer(TransferMsg::ImageReady{epoch,message:messages.last().unwrap().id,key:image,token,result:Some(crate::media::PreparedImage{width:80,height:40,pixels:vec![100;80*40*4]})}));settle(context);
-    assert!((row.height()-height).abs()<=2,"initial image completion keeps the painted row height: {} vs {height}",row.height());
+    let epoch=chat.model().transfers.epoch;
+    let mut data=std::io::Cursor::new(Vec::new());image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(80,40,image::Rgba([100,100,100,255]))).write_to(&mut data,image::ImageFormat::Png).unwrap();
+    chat.emit(ChatMsg::Transfer(TransferMsg::Bytes{epoch,message:messages.last().unwrap().id,key:image,token:None,preview:false,result:Ok(data.into_inner())}));
+    until(context,||chat.model().transfers.textures.contains_key(&image)&&chat.model().media_render_pending.is_none());settle(context);
+    let frame=descendants(row.upcast_ref()).into_iter().find_map(|w|w.downcast::<crate::media::frame::Frame>().ok()).unwrap();
+    assert_eq!((frame.width(),frame.height()),(80,40),"a cold decode replaces guessed geometry with the small image's actual size");
+    assert!(row.height()<height,"a small image must release the placeholder's blank space");let fitted=row.height();settle(context);assert_eq!(row.height(),fitted,"the fitted row must settle after its initial anchored resize");
     assert_eq!(chat.model().rendered[&key].1,row);assert!(text.parent().is_some(),"decoding must not unmap the message text");
-    let texture=chat.model().transfers.textures[&image].clone();
     let open=find_button(row.upcast_ref(),"Abrir imagem");open.emit_clicked();pump(context);
     let viewer=gtk::Window::list_toplevels().into_iter().find_map(|w|w.downcast::<gtk::Window>().ok().filter(|w|w.title().as_deref()==Some("Imagem")&&w.is_visible())).unwrap();
     // Parent capture happens on press before the thumbnail's clicked signal.
     let controllers=window.observe_controllers();for i in 0..controllers.n_items(){if let Some(click)=controllers.item(i).and_downcast::<gtk::GestureClick>().filter(|c|c.propagation_phase()==gtk::PropagationPhase::Capture){click.emit_by_name::<()>("pressed",&[&1i32,&10.0f64,&10.0f64]);}}
     pump(context);open.emit_clicked();pump(context);assert!(!viewer.is_visible());assert!(!gtk::Window::list_toplevels().iter().filter_map(|w|w.downcast_ref::<gtk::Window>()).any(|w|w.title().as_deref()==Some("Imagem")&&w.is_visible()),"same-thumbnail click closes rather than reopens the viewer");
-    // Session cache survives A -> B -> A, but revocation clears it.
-    let mut other=target.clone();other.id=Uuid::new_v4();chat.emit(ChatMsg::SetChannel(other));pump(context);chat.emit(ChatMsg::SetChannel(target));let request=Uuid::new_v4();chat.emit(ChatMsg::BeginHistory{request_id:request,cursor:None});chat.emit(ChatMsg::HistoryLoaded{request_id:request,append:false,result:Ok(MessageListResponse{channel_id:channel,messages:messages.clone(),has_more:false})});settle(context);assert_eq!(chat.model().transfers.textures[&image],texture);
+    // Compressed cache survives A -> B -> A while decoded pixels are disposable.
+    let mut other=target.clone();other.id=Uuid::new_v4();chat.emit(ChatMsg::SetChannel(other));pump(context);chat.emit(ChatMsg::SetChannel(target));let request=Uuid::new_v4();chat.emit(ChatMsg::BeginHistory{request_id:request,cursor:None});chat.emit(ChatMsg::HistoryLoaded{request_id:request,append:false,result:Ok(MessageListResponse{channel_id:channel,messages:messages.clone(),has_more:false})});settle(context);assert!(!chat.model().transfers.textures.contains_key(&image));assert!(chat.model().transfers.encoded.contains(image),"compressed media survives switching without retaining a texture");
     let widgets=descendants(chat.widget().upcast_ref());let list=widgets.iter().find_map(|w|w.downcast_ref::<gtk::ListBox>().filter(|l|l.has_css_class("papo-chat-history"))).unwrap();let scroll=widgets.iter().find_map(|w|w.downcast_ref::<gtk::ScrolledWindow>()).unwrap();
     // Independent sends must paint without another message, pointer or scroll event.
     for i in 0..3{
@@ -88,6 +91,6 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let last=chat.model().history.messages.last().unwrap().id;let row=chat.model().rendered[&format!("message-{last}")].1.clone();let text=descendants(row.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::TextView>().ok()).unwrap();
     let end=text.iter_location(&text.buffer().end_iter());assert!(end.y()+end.height()<=text.height()+2,"narrow resizing must show every wrapped line");
     window.set_default_size(850,680);until(context,||window.width()>=800);settle(context);let end=text.iter_location(&text.buffer().end_iter());assert!(end.y()+end.height()<=text.height()+2,"wide resizing preserves complete text");
-    let mut denied=chat.model().access.clone();denied.read=false;chat.emit(ChatMsg::SetAccess{user_id:user,access:denied});pump(context);assert!(chat.model().transfers.textures.is_empty());
+    let mut denied=chat.model().access.clone();denied.read=false;chat.emit(ChatMsg::SetAccess{user_id:user,access:denied});pump(context);assert!(chat.model().transfers.textures.is_empty());assert!(!chat.model().transfers.encoded.contains(image),"revocation must also clear compressed media");
     window.set_content(None::<&gtk::Widget>);window.close();
 }

@@ -11,6 +11,8 @@ const OLDER: &str = "12345678-1234-4234-8234-123456789abf";
 const EMOJI: &str = "12345678-1234-4234-8234-123456789ac0";
 const DATE: &str = "2026-10-03T12:00:00Z";
 pub(crate) struct Backend {
+    pub(crate) range_media:bool,
+    pub(crate) media_ranges:Vec<(String,String)>,
     pub(crate) fail_status:bool,
     pub(crate) attachment_thumbnails:std::collections::HashMap<String,Vec<u8>>,
     pub(crate) fail_channel_read:bool,
@@ -42,7 +44,7 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let api = ApiClient::new(&format!("http://{}", listener.local_addr().unwrap())).unwrap();
     let state = Arc::new(Mutex::new(Backend {
-        attachment_thumbnails:Default::default(),
+        range_media:false,media_ranges:vec![],attachment_thumbnails:Default::default(),
         fail_status:false,fail_channel_read:false,channel_messages:Default::default(),
         embed_values:Default::default(),
         peer_banned:false,fail_moderation:true,fail_audit:false,
@@ -58,7 +60,7 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
             let Ok((mut stream,_)) = listener.accept().await else { break; };
             let shared = shared.clone(); tokio::spawn(async move {
                 let mut bytes = Vec::new(); let mut chunk = [0;4096];
-                let (method,path,body) = loop {
+                let (method,path,body,range) = loop {
                     let Ok(size) = stream.read(&mut chunk).await else { return; }; if size == 0 { return; } bytes.extend_from_slice(&chunk[..size]);
                     if let Some(end) = bytes.windows(4).position(|v| v == b"\r\n\r\n") {
                         let headers = String::from_utf8_lossy(&bytes[..end]);
@@ -67,12 +69,14 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
                         if bytes.len() >= end+4+length {
                             let mut line = headers.lines().next().unwrap().split_whitespace();
                             let method = line.next().unwrap().to_owned(); let path = line.next().unwrap().to_owned();
-                            let body = serde_json::from_slice(&bytes[end+4..end+4+length]).unwrap_or_else(|_|json!(String::from_utf8_lossy(&bytes[end+4..end+4+length]))); break (method,path,body);
+                            let range=headers.lines().filter_map(|l|l.split_once(':')).find(|(k,_)|k.eq_ignore_ascii_case("range")).map(|(_,v)|v.trim().to_string());
+                            let body = serde_json::from_slice(&bytes[end+4..end+4+length]).unwrap_or_else(|_|json!(String::from_utf8_lossy(&bytes[end+4..end+4+length]))); break (method,path,body,range);
                         }
                     }
                 };
-                let (status,response) = {
+                let (mut status,response) = {
                     let mut b = shared.lock().unwrap(); b.requests.push((method.clone(),path.clone(),body.clone()));
+                    if let Some(range)=&range{b.media_ranges.push((path.clone(),range.clone()));}
                     let route = path.split('?').next().unwrap();
                     let mut peer=json!({"id":EMOJI,"username":"bob","nickname":"Bob","avatar_blob":tiny_png_base64(),"created_at":DATE});peer["banned"]=json!(b.peer_banned);
                     if route=="/voice/ice-servers"{(200,json!({"ice_servers":[]}))}
@@ -180,8 +184,16 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
                 let binary=path.ends_with("/video")||(path.starts_with("/attachments/")&&path.split('/').count()==3);
                 let thumbnail=shared.lock().unwrap().attachment_thumbnails.get(path.split('?').next().unwrap()).cloned();
                 let content_type=if thumbnail.is_some(){"image/png"}else if binary{"video/webm"}else{"application/json"};
-                let data=if let Some(bytes)=thumbnail{bytes}else if binary{include_bytes!("../../../../tests/fixtures/chat-video.webm").to_vec()}else if status==204{Vec::new()}else{response.to_string().into_bytes()};
-                let header=format!("HTTP/1.1 {status} Test\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",data.len());let mut response=header.into_bytes();response.extend_from_slice(&data);
+                let mut data=if let Some(bytes)=thumbnail{bytes}else if binary{include_bytes!("../../../../tests/fixtures/chat-video.webm").to_vec()}else if status==204{Vec::new()}else{response.to_string().into_bytes()};
+                let mut extra=String::new();
+                if binary&&status==200&&shared.lock().unwrap().range_media {
+                    if let Some((start,end))=range.as_deref().and_then(|r|r.strip_prefix("bytes=")).and_then(|r|r.split_once('-')).and_then(|(s,e)|Some((s.parse::<usize>().ok()?,e.parse::<usize>().ok()?))){
+                        let total=data.len();let end=end.min(total-1);
+                        if start<=end{data=data[start..=end].to_vec();status=206;extra=format!("Content-Range: bytes {start}-{end}/{total}\r\n");}
+                        else{status=416;data.clear();}
+                    }
+                }
+                let header=format!("HTTP/1.1 {status} Test\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\n{extra}Connection: close\r\n\r\n",data.len());let mut response=header.into_bytes();response.extend_from_slice(&data);
                 let _ = stream.write_all(&response).await;
             });
         }

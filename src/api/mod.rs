@@ -20,6 +20,7 @@ mod administration;
 mod moderation;
 mod voice;
 mod requests;
+mod poster;
 use requests::{PacedRequest, RequestScheduler};
 
 /// Preserve status and RFC 7807 problem codes so expired sessions reach the login view.

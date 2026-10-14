@@ -91,18 +91,23 @@ mod tests {
             exercise_login_input(&controller,&context);window.close();return;
         }
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("mention-background"){crate::ui::chat::mention_background::exercise(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("emoji-details"){crate::ui::chat::exercise_emoji_details(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("emoji-notifications"){crate::media::animation::exercise(&context);crate::ui::chat::exercise_animated_emojis(&context);crate::ui::main_window::notifications::exercise_tabs(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("account-notices"){crate::ui::main_window::bugs7::exercise(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("backend-update"){
             crate::ui::chat::exercise_read_candidate(&context);
             crate::ui::main_window::notifications::exercise_backend_update(&context);window.close();return;
         }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("klipy-live"){crate::ui::chat::transfers::exercise_klipy(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("gif-embeds"){crate::ui::chat::transfers::exercise9(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("report9"){crate::ui::chat::bugs9::exercise(&context);crate::ui::chat::transfers::exercise9(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("report8"){
             crate::ui::user_list::exercise_corrections(&context);crate::ui::chat::bugs8::exercise(&context);crate::ui::chat::exercise_moderation(&context);crate::ui::main_window::bugs8::exercise(&context);window.close();return;
         }
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("profile-emojis"){crate::ui::main_window::account::exercise_profile_emojis(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("status-viewer"){crate::ui::status::exercise(&context);crate::ui::user_list::exercise_corrections(&context);crate::ui::chat::transfers::exercise_viewer(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("attachment-media"){crate::ui::chat::transfers::exercise_attachments(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("media-cache"){crate::ui::chat::transfers::exercise_cache(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("clipboard"){crate::ui::chat::clipboard::exercise(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("retention"){crate::ui::chat::transfers::exercise_retention(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("mentions"){crate::ui::chat::composer::exercise(&context);crate::ui::chat::clipboard::exercise(&context);crate::ui::chat::bugs::exercise(&context);window.close();return;}

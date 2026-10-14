@@ -1,9 +1,15 @@
 //! Streaming transfers and bounded media textures owned by the chat session.
 use super::*;
 mod viewer;
+pub(super) mod gifs;
 mod author;
+mod encoded;
 #[cfg(test)]mod attachments;
+#[cfg(test)]mod cache_checks;
+#[cfg(test)]pub(crate) use cache_checks::exercise as exercise_cache;
 #[cfg(test)]pub(crate) use attachments::exercise as exercise_attachments;
+#[cfg(test)]mod fixes9;
+#[cfg(test)]pub(crate) use fixes9::{exercise as exercise9,exercise_klipy};
 #[cfg(test)]mod geometry;
 #[cfg(test)]pub(crate) use geometry::exercise as exercise_geometry;
 #[cfg(test)]pub(crate) use author::exercise as author_exercise;
@@ -19,13 +25,15 @@ use std:: {
 };
 #[derive(Debug)]
 pub enum TransferMsg {
+    DismissNotice{epoch:Uuid,token:Uuid},
+    Decoded{epoch:Uuid,message:Uuid,key:Uuid,token:Uuid,bytes:std::sync::Arc<[u8]>,dimensions:Option<(u32,u32)>,image:Option<crate::media::PreparedImage>,animation:Option<crate::media::animation::PreparedAnimation>},
     AuthorReady{epoch:Uuid,key:Uuid,token:Uuid,result:Option<crate::media::PreparedImage>},
     ViewerReady{epoch:Uuid,message:Uuid,key:Uuid,token:Uuid,result:anyhow::Result<crate::media::PreparedImage>},
     ViewerClosed{epoch:Uuid,token:Uuid},
     PasteImage(u64),
     ClipboardTexture{epoch:Uuid,channel:Uuid,request:Uuid,result:anyhow::Result<gtk::gdk::Texture>},
     PasteReady{epoch:Uuid,channel:Uuid,request:Uuid,result:anyhow::Result<Vec<UploadFile>>},
-    AnimationReady{epoch:Uuid,message:Uuid,key:Uuid,token:Uuid,from_video:bool,result:Option<crate::media::animation::PreparedAnimation>},
+    AnimationReady{epoch:Uuid,message:Uuid,key:Uuid,token:Uuid,from_video:bool,encoded:Option<std::sync::Arc<[u8]>>,result:Option<crate::media::animation::PreparedAnimation>},
     ImageReady{epoch:Uuid,message:Uuid,key:Uuid,token:Uuid,result:Option<crate::media::PreparedImage>},
     DismissImages,
     CloseVideo{message:Uuid,key:Uuid},AttachmentVideo{message:Uuid,attachment:Uuid},
@@ -51,6 +59,12 @@ pub enum TransferMsg {
     },
 }
 pub(super) struct Transfers {
+    pub notice:Option<(Uuid,String)>,
+    pub(super) encoded:encoded::Cache,
+    poster_limiter:std::sync::Arc<tokio::sync::Semaphore>,
+    decode_limiter:std::sync::Arc<tokio::sync::Semaphore>,
+    provider_limiter:std::sync::Arc<tokio::sync::Semaphore>,
+    poster_attempted:HashSet<Uuid>,
     pub(super) sent_attachments:HashSet<Uuid>,
     authors:author::Authors,
     viewer_jobs:HashMap<Uuid,tokio::task::JoinHandle<()>>,
@@ -124,6 +138,9 @@ fn dismiss_image(window:&gtk::Window,picture:&gtk::Picture){
 impl Default for Transfers {
     fn default() -> Self {
         Self {
+            notice:None,encoded:Default::default(),
+            decode_limiter:std::sync::Arc::new(tokio::sync::Semaphore::new(2)),provider_limiter:std::sync::Arc::new(tokio::sync::Semaphore::new(2)),
+            poster_limiter:std::sync::Arc::new(tokio::sync::Semaphore::new(1)),poster_attempted:Default::default(),
             sent_attachments:Default::default(),
             authors:Default::default(),
             viewer_jobs:Default::default(),viewer_limiter:std::sync::Arc::new(tokio::sync::Semaphore::new(1)),
@@ -163,6 +180,8 @@ impl Transfers {
         self.video_requests.retain(|(id,_),_|*id!=message);for p in self.videos.iter().filter(|p|p.message==message){self.video_files.remove(&p.key);self.video_order.retain(|key|*key!=p.key);}self.videos.retain(|p|p.message!=message);
     }
     pub fn invalidate(&mut self, id: Uuid) {
+        self.encoded.remove(id);
+        self.poster_attempted.remove(&id);
         self.authors.invalidate(id);
         self.images.retain(|(_,key,w)|{if *key==id{w.close();false}else{true}});
         self.video_requests.retain(|(_,key),_|*key!=id);self.videos.retain(|p|p.key!=id);
@@ -173,11 +192,13 @@ impl Transfers {
         self.requested.remove(&id);self.preview_tokens.remove(&id);self.image_tokens.remove(&id);
     }
     pub fn switch_channel(&mut self){
-        // Retain lightweight geometry/metadata, releasing decoded pixels and GIF frames.
+        // Reuse compressed media without retaining decoded pixels or GIF frames.
+        let encoded=std::mem::take(&mut self.encoded);
+        let providers=std::mem::take(&mut self.giphy).into_iter().filter(|(_,key)|encoded.contains(*key)).collect();
         let sizes=std::mem::take(&mut self.sizes);let previews=std::mem::take(&mut self.embeds);let resolved=std::mem::take(&mut self.resolved);
         let mut authors=std::mem::take(&mut self.authors);authors.pause();
         self.reset();
-        self.sizes=sizes;self.embeds=previews;self.resolved=resolved;self.authors=authors;
+        self.sizes=sizes;self.embeds=previews;self.resolved=resolved;self.authors=authors;self.encoded=encoded;self.giphy=providers;
     }
     pub(super) fn release_distant(&mut self,messages:&[Message])->bool {
         self.images.retain(|(_,_,window)|window.is_visible());
@@ -208,6 +229,8 @@ impl Transfers {
         self.giphy.retain(|url,_|urls.contains(url));
     }
     pub fn reset(&mut self) {
+        self.notice=None;self.encoded.clear();
+        self.poster_attempted.clear();
         self.sent_attachments.clear();
         self.authors=Default::default();
         for (_,job) in self.viewer_jobs.drain(){job.abort();}
@@ -238,16 +261,19 @@ impl Transfers {
     fn request_embed(&mut self,key:Uuid,author_needed:bool)->bool{
         self.wanted.insert(key);
         if self.textures.contains_key(&key){self.order.retain(|id|*id!=key);self.order.push_back(key);if !author_needed{return false;}}
-        if self.requested.len()>=8||(!author_needed&&self.resolved.contains(&key))||self.failed.get(&key).is_some_and(|(attempt,at)|*attempt>=3||*at>std::time::Instant::now()){return false;}
+        // Decoding a cached item adds no HTTP request and must not wait behind
+        // slow downloads. The decode semaphore and candidate cap bound its work.
+        if (self.requested.len()>=8&&(author_needed||!self.encoded.contains(key)))||(!author_needed&&self.resolved.contains(&key))||self.failed.get(&key).is_some_and(|(attempt,at)|*attempt>=3||*at>std::time::Instant::now()){return false;}
         self.requested.insert(key)
     }
     fn request_gif(&mut self,key:Uuid)->bool{
         if self.gif_resolved.contains(&key)||self.animations.get(&key).is_some_and(|(a,_)|a.animated()){return false;}
-        if self.requested.len()>=8||self.image_tokens.contains_key(&key)||self.video_requests.keys().any(|(_,id)|*id==key)||self.failed.get(&key).is_some_and(|(attempt,at)|*attempt>=3||*at>std::time::Instant::now()){return false;}
+        if self.gif_requested.len()>=2||self.requested.len()>=8||self.image_tokens.contains_key(&key)||self.video_requests.keys().any(|(_,id)|*id==key)||self.failed.get(&key).is_some_and(|(attempt,at)|*attempt>=3||*at>std::time::Instant::now()){return false;}
         if self.requested.insert(key){self.gif_requested.insert(key);true}else{false}
     }
     fn gif_ready(&mut self,key:Uuid,ready:bool){if self.gif_requested.remove(&key)&&ready{self.gif_resolved.insert(key);}}
     fn failed(&mut self,key:Uuid){
+        self.dirty.insert(key);self.revision=self.revision.wrapping_add(1);
         self.requested.remove(&key);let attempt=self.failed.get(&key).map_or(1,|(n,_)|n+1);
         self.failed.insert(key,(attempt,std::time::Instant::now()+std::time::Duration::from_secs(2u64.pow(attempt.min(5)))));
     }
@@ -282,7 +308,7 @@ impl Transfers {
         preview.image_data=None;
         preview.author_image_data=None;
         if !self.sizes.contains_key(&preview.id){
-            if let Some((width,height))=preview.thumbnail.as_ref().and_then(|m|m.width.zip(m.height)).filter(|(w,h)|*w>0&&*h>0){self.remember_size(preview.id,width,height);}
+            if let Some((width,height))=[preview.video.as_ref().filter(|_|preview.has_video()),preview.thumbnail.as_ref(),preview.image.as_ref()].into_iter().flatten().find_map(|m|m.width.zip(m.height).filter(|(w,h)|*w>0&&*h>0)){self.remember_size(preview.id,width,height);}
         }
         if self.embeds.len()>=128&&!self.embeds.contains_key(&preview.id){if let Some(old)=self.embeds.keys().copied().find(|id|!self.wanted.contains(id)){self.embeds.remove(&old);self.resolved.remove(&old);}}
         self.embeds.insert(preview.id,preview);
@@ -298,7 +324,7 @@ impl Transfers {
             self.dirty.insert(id);
             self.requested.remove(&id);self.failed.remove(&id);
             self.revision=self.revision.wrapping_add(1);
-            let texture=image.texture();self.remember_size(id,texture.width(),texture.height());
+            let texture=image.texture();if !self.sizes.contains_key(&id){self.remember_size(id,texture.width(),texture.height());}
             self.animations.remove(&id);self.textures.insert(id, texture);
             self.order.retain(|key| *key != id);
             self.order.push_back(id);
@@ -355,9 +381,7 @@ impl Transfers{
         let known=self.sizes.get(&key).copied().or_else(||self.textures.get(&key).map(|t|(t.width(),t.height())));
         let (width,height)=frames.get(&(key,embedded)).filter(|_|known.is_none()&&!self.opening.get()).copied().unwrap_or_else(|| {
             let (w,h)=known.unwrap_or((640,360));
-            let ratio=f64::from(w.max(1))/f64::from(h.max(1));
-            let width=if embedded{420.0f64.min(300.0*ratio)}else{640.0f64.min(480.0*ratio)};
-            (width.round().max(1.0) as i32,(width/ratio).round().max(1.0) as i32)
+            crate::media::frame::fit_size(w,h,embedded)
         });
         drop(frames);
         let frame=crate::media::frame::frame(child,width,height);
@@ -381,7 +405,7 @@ impl Transfers{
         self.dirty.insert(key);
         self.requested.remove(&key);self.failed.remove(&key);
         self.revision=self.revision.wrapping_add(1);
-        let bytes=prepared.bytes();let animation=prepared.paintable();let first=animation.first();self.remember_size(key,first.width(),first.height());
+        let bytes=prepared.bytes();let animation=prepared.paintable();let first=animation.first();if !self.sizes.contains_key(&key){self.remember_size(key,first.width(),first.height());}
         self.textures.insert(key,first);self.animations.insert(key,(animation,bytes));self.order.retain(|id|*id!=key);self.order.push_back(key);
         self.prune_textures();
         // Keep a static first frame when several GIFs exhaust the animation
@@ -393,19 +417,57 @@ impl Transfers{
     }
 }
 
-enum ImageInput{Bytes(Vec<u8>),Base64(String)}
+enum ImageInput{Bytes(Vec<u8>),Shared(std::sync::Arc<[u8]>),Base64(String)}
+#[cfg(test)]mod scheduling_tests{
+    use super::*;
+    #[test]fn gif_network_waits_leave_room_for_images_and_cached_decodes(){
+        let mut transfers=Transfers::default();
+        assert!(transfers.request_gif(Uuid::new_v4()));assert!(transfers.request_gif(Uuid::new_v4()));assert!(!transfers.request_gif(Uuid::new_v4()));
+        for _ in 0..6{assert!(transfers.request(Uuid::new_v4()));}assert!(!transfers.request(Uuid::new_v4()));
+        let cached=Uuid::new_v4();transfers.encoded.insert(cached,Uuid::new_v4(),Uuid::new_v4(),std::sync::Arc::from([1u8]));
+        assert!(transfers.request(cached),"cached pixels must decode even while all HTTP slots wait");
+        assert!(!transfers.request(cached),"duplicate decodes must still coalesce");
+        assert!(!transfers.request_embed(Uuid::new_v4(),true),"metadata requests retain the HTTP limit");
+    }
+}
 fn queue_image(transfers:&mut Transfers,sender:&ComponentSender<ChatModel>,message:Uuid,key:Uuid,input:ImageInput){
-    let token=Uuid::new_v4();transfers.image_tokens.insert(key,token);let epoch=transfers.epoch;let limiter=transfers.limiter.clone();let output=sender.input_sender().clone();
+    let gif=transfers.gif_requested.contains(&key);let token=Uuid::new_v4();transfers.image_tokens.insert(key,token);let epoch=transfers.epoch;let limiter=transfers.decode_limiter.clone();let output=sender.input_sender().clone();
     transfers.media_job(key,tokio::spawn(async move{
         let Ok(_permit)=limiter.acquire_owned().await else{return;};
-        let result=tokio::task::spawn_blocking(move ||{let _permit=_permit;let bytes=match input{ImageInput::Bytes(bytes)=>bytes,ImageInput::Base64(data)=>{use base64::Engine;if data.len()>6<<20{return (None,None);}let Ok(bytes)=base64::engine::general_purpose::STANDARD.decode(data)else{return (None,None);};bytes}};
+        let result=tokio::task::spawn_blocking(move ||{let bytes:std::sync::Arc<[u8]>=match input{ImageInput::Shared(bytes)=>bytes,ImageInput::Bytes(bytes)=>bytes.into(),ImageInput::Base64(data)=>{use base64::Engine;if data.len()>6<<20{return (None,None,std::sync::Arc::default(),None);}let Ok(bytes)=base64::engine::general_purpose::STANDARD.decode(data)else{return (None,None,std::sync::Arc::default(),None);};bytes.into()}};
+            let dimensions=image::ImageReader::new(std::io::Cursor::new(bytes.as_ref())).with_guessed_format().ok().and_then(|reader|reader.into_dimensions().ok()).filter(|(w,h)|*w>0&&*h>0&&*w<=4096&&*h<=4096);
             if bytes.starts_with(b"GIF8"){
-                if let Some(animation)=crate::media::animation::PreparedAnimation::decode(&bytes){return (None,Some(animation));}
+                if let Some(animation)=crate::media::animation::PreparedAnimation::decode(&bytes){return (None,Some(animation),bytes,dimensions);}
             }
-            (crate::media::PreparedImage::decode_thumbnail(&bytes,680,460),None)
+            (crate::media::PreparedImage::decode_thumbnail(&bytes,680,460),None,bytes,dimensions)
         }).await.unwrap_or_default();
-        let msg=if let Some(animation)=result.1{TransferMsg::AnimationReady{epoch,message,key,token,from_video:false,result:Some(animation)}}else{TransferMsg::ImageReady{epoch,message,key,token,result:result.0}};
+        if gif&&result.0.is_none()&&result.1.is_none()&&crate::media::gif_links::is_video(&result.2){
+            let bytes=result.2;let result=async{let file=gif_file(bytes.clone()).await?;crate::media::animation::PreparedAnimation::video(&file.0).await}.await.ok();
+            let _=output.send(ChatMsg::Transfer(TransferMsg::AnimationReady{epoch,message,key,token,from_video:true,encoded:Some(bytes),result}));return;
+        }
+        let msg=TransferMsg::Decoded{epoch,message,key,token,image:result.0,animation:result.1,bytes:result.2,dimensions:result.3};
         let _=output.send(ChatMsg::Transfer(msg));
+    }));
+}
+fn queue_poster(transfers:&mut Transfers,api:crate::api::ApiClient,sender:&ComponentSender<ChatModel>,message:Uuid,key:Uuid,embedded:bool,thumbnail:bool){
+    transfers.poster_attempted.insert(key);
+    let token=Uuid::new_v4();transfers.image_tokens.insert(key,token);let epoch=transfers.epoch;
+    let limit=transfers.poster_limiter.clone();let work=transfers.limiter.clone();let output=sender.input_sender().clone();
+    transfers.media_job(key,tokio::spawn(async move{
+        let result=async {
+            let _poster=limit.acquire_owned().await?;let _work=work.acquire_owned().await?;
+            if thumbnail&&!embedded {
+                match api.media_bytes(&format!("/attachments/{key}/thumbnail"),4<<20).await {
+                    Ok(bytes)=>return Ok(bytes),
+                    Err(error) if error.downcast_ref::<crate::api::ApiError>().is_some_and(|e|e.status==reqwest::StatusCode::NOT_FOUND)=>{},
+                    Err(error)=>return Err(error),
+                }
+            }
+            let endpoint=if embedded{format!("/embeds/{key}/video")}else{format!("/attachments/{key}")};
+            let file=api.video_preview_file(&endpoint).await?;
+            crate::media::poster::extract(&file.0).await
+        }.await;
+        let _=output.send(ChatMsg::Transfer(TransferMsg::Bytes{epoch,message,key,token:Some(token),preview:embedded,result}));
     }));
 }
 impl ChatModel {
@@ -467,7 +529,7 @@ impl ChatModel {
                 if cached.version()>=p.version(){if p.image_data.is_none()&&p.author_image_data.is_none(){*p=cached.clone();}}
                 else{self.transfers.invalidate(p.id);}
             }
-            let data=p.image_data.take();
+            let data=p.image_data.take().filter(|_|!gifs::separate_animation(p));
             let author_data=p.author_image_data.take();
             let score=|p:&Embed|usize::from(p.title.is_some())+usize::from(p.description.is_some())+usize::from(p.thumbnail.is_some())+usize::from(p.author.is_some())+usize::from(p.has_video());
             let same_version=known.get(&p.id).is_some_and(|old|p.version()==old.version());
@@ -482,26 +544,39 @@ impl ChatModel {
         for (key,(data,author_data)) in images{if let Some(preview)=known.get(&key){if let Some(data)=data{self.transfers.payload(key,preview.version(),data);}if let Some(data)=author_data{self.transfers.authors.payload(key,data);}}}
         self.transfers.normalized_revision=Some(revision);
         }
-        let scope=self.transfers.scope.clone();let mut candidates=0;
+        let scope=self.transfers.scope.clone();let mut candidates=0;let mut gif_videos=vec![];
         // Candidate discovery is limited to materialized rows. Scrolling must
         // not rescan every cached page or clone unchanged embed metadata.
         #[cfg(test)]{self.transfers.candidate_visits+=self.render_window.range.len();}
         let mut messages:Vec<_>=self.history.messages.iter_mut().skip(self.render_window.range.start).take(self.render_window.range.len()).filter(|m|scope.contains(&m.id)).collect();
         messages.sort_by_key(|m|self.transfers.priority.get(&m.id).copied().unwrap_or(u64::MAX));
         for m in messages {
-            for id in crate::media::gif_links::links(m.content.as_deref().unwrap_or("")){
+            let mut links=crate::media::gif_links::links(m.content.as_deref().unwrap_or(""));
+            for p in m.embeds.iter().flatten().filter(|p|p.animated_link()){for id in gifs::keys(p){if !links.contains(&id){links.push(id);}}}
+            for id in links {
                 if candidates>=24{break;}candidates+=1;
-                let embed=m.embeds.iter().flatten().find(|p|p.url.as_deref().is_some_and(|url|crate::media::gif_links::links(url).contains(&id)));
+                let embed=m.embeds.iter().flatten().find(|p|p.animated_link()&&gifs::keys(p).contains(&id));
                 let hint=embed.and_then(|p|p.image.as_ref().and_then(|m|m.url.as_ref()).or_else(||p.thumbnail.as_ref().and_then(|m|m.url.as_ref()))).cloned();
-                let key=*self.transfers.giphy.entry(id.clone()).or_insert_with(||embed.map_or_else(Uuid::new_v4,|p|p.id));
-                if self.transfers.request_gif(key){let token=Uuid::new_v4();self.transfers.image_tokens.insert(key,token);let s=sender.clone();let message=m.id;let limiter=self.transfers.limiter.clone();
+                let key=if let Some(embed)=embed{self.transfers.giphy.insert(id.clone(),embed.id);embed.id}else{*self.transfers.giphy.entry(id.clone()).or_insert_with(Uuid::new_v4)};
+                if embed.is_some_and(|p|p.has_video()){
+                    self.transfers.wanted.insert(key);
+                    if gif_videos.len()+self.transfers.video_requests.len()<2&&self.transfers.request_gif(key){gif_videos.push((m.id,key));}
+                    continue;
+                }
+                if embed.is_some_and(|p|p.fetch_method.is_empty())&&!self.transfers.resolved.contains(&key){continue;}
+                if self.transfers.request_gif(key){
+                    if let Some(bytes)=self.transfers.encoded.get(key).or_else(||self.transfers.encoded.get_video(key)){queue_image(&mut self.transfers,sender,m.id,key,ImageInput::Shared(bytes));continue;}
+                    let token=Uuid::new_v4();self.transfers.image_tokens.insert(key,token);let s=sender.clone();let message=m.id;let limiter=self.transfers.provider_limiter.clone();
                     self.transfers.media_job(key,tokio::spawn(async move{let Ok(_permit)=limiter.acquire_owned().await else{return;};let result=crate::media::gif_links::fetch(&id,hint.as_deref()).await;s.input(ChatMsg::Transfer(TransferMsg::Bytes{epoch,message,key,token:Some(token),preview:true,result}));}));
                 }
             }
             for a in m.attachments.iter().flatten() {
-                if candidates>=24{break;}if a.mime_type.starts_with("image/"){candidates+=1;}
-                if a.mime_type.starts_with("image/") && self.transfers.visible(a)
+                let video=a.mime_type.starts_with("video/");
+                if candidates>=24{break;}if a.mime_type.starts_with("image/")||video{candidates+=1;}
+                if (a.mime_type.starts_with("image/")||video) && self.transfers.visible(a)
                 && self.transfers.request(a.id) {
+                    if let Some(bytes)=self.transfers.encoded.get(a.id){queue_image(&mut self.transfers,sender,m.id,a.id,ImageInput::Shared(bytes));continue;}
+                    if video{queue_poster(&mut self.transfers,api.clone(),sender,m.id,a.id,false,a.thumbnail_id.is_some());continue;}
                     let api = api.clone();
                     let s = sender.clone();
                     let key = a.id;let token=Uuid::new_v4();self.transfers.image_tokens.insert(key,token);
@@ -527,14 +602,31 @@ impl ChatModel {
                 // New history/WS payloads already carry complete rich metadata.
                 // Only thumbnails need an authorized GET for their bytes.
                 let author_needed=self.transfers.authors.needs(p);
-                if !p.fetch_method.is_empty()&&p.thumbnail.is_none()&&!author_needed{continue;}
+                if p.animated_link(){
+                    // One owner for an animated link: a backend rendition beats
+                    // a blocked provider page and a static thumbnail cannot race it.
+                    self.transfers.wanted.insert(p.id);
+                    if p.has_video()&&gif_videos.len()+self.transfers.video_requests.len()<2&&self.transfers.request_gif(p.id){gif_videos.push((m.id,p.id));}
+                    if !author_needed&&gifs::separate_animation(p)&&(p.has_video()||!p.fetch_method.is_empty()||self.transfers.resolved.contains(&p.id)){continue;}
+                }
+                if p.has_video()&&p.thumbnail.is_none()&&!p.fetch_method.is_empty()&&!author_needed&&!p.animated_link(){
+                    if candidates>=24{break;}candidates+=1;
+                    if self.transfers.request(p.id){
+                        if let Some(bytes)=self.transfers.encoded.get(p.id){queue_image(&mut self.transfers,sender,m.id,p.id,ImageInput::Shared(bytes));}
+                        else{queue_poster(&mut self.transfers,api.clone(),sender,m.id,p.id,true,false);}
+                    }
+                    if !author_needed{continue;}
+                }
+                if !p.fetch_method.is_empty()&&p.thumbnail.is_none()&&p.image.is_none()&&!self.transfers.payloads.contains_key(&p.id)&&!author_needed{continue;}
                 if candidates>=24{break;}candidates+=1;
                 if let Some(full)=known.get(&p.id).or_else(||self.transfers.embeds.get(&p.id)){if full.version()>=p.version()&&full!=p{*p=full.clone();}}
-                if self.transfers.payloads.contains_key(&p.id){
+                if !gifs::separate_animation(p)&&self.transfers.payloads.contains_key(&p.id){
                     if self.transfers.request(p.id){
                         let (_,data)=self.transfers.payloads.remove(&p.id).unwrap();self.transfers.payload_order.retain(|key|*key!=p.id);
                         queue_image(&mut self.transfers,sender,m.id,p.id,ImageInput::Base64(data));
                     }
+                }else if !author_needed&&!self.transfers.textures.contains_key(&p.id)&&self.transfers.encoded.contains(p.id){
+                    if self.transfers.request(p.id){if let Some(bytes)=self.transfers.encoded.get(p.id){queue_image(&mut self.transfers,sender,m.id,p.id,ImageInput::Shared(bytes));}}
                 }else if self.transfers.request_embed(p.id,author_needed){
                     let api = api.clone();
                     let s = sender.clone();
@@ -552,9 +644,18 @@ impl ChatModel {
                 }
             }
         }
+        for(message,key) in gif_videos{self.start_download(message,key,None,true,sender);}
     }
     pub(super) fn handle_transfer(&mut self, msg: TransferMsg, sender: &ComponentSender<Self>, root: &gtk::Box) {
         match msg {
+            TransferMsg::DismissNotice{epoch,token}=>{if epoch==self.transfers.epoch&&self.transfers.notice.as_ref().is_some_and(|(id,_)|*id==token){self.transfers.notice=None;}},
+            TransferMsg::Decoded{epoch,message,key,token,bytes,dimensions,image,animation}=>{
+                if epoch!=self.transfers.epoch||!self.access.read||self.transfers.image_tokens.get(&key)!=Some(&token)||!self.transfers.authorized(&self.history.messages,key){return;}
+                if image.is_some()||animation.is_some(){if let Some(m)=self.history.messages.iter().find(|m|m.id==message){self.transfers.encoded.insert(key,m.channel_id,message,bytes);}}
+                if (image.is_some()||animation.is_some())&&!self.transfers.sizes.contains_key(&key){if let Some((w,h))=dimensions{self.transfers.remember_size(key,w as i32,h as i32);}}
+                let ready=if animation.is_some(){TransferMsg::AnimationReady{epoch,message,key,token,from_video:false,encoded:None,result:animation}}else{TransferMsg::ImageReady{epoch,message,key,token,result:image}};
+                self.handle_transfer(ready,sender,root);
+            },
             TransferMsg::AuthorReady{epoch,key,token,result}=>{
                 if self.access.read{self.transfers.author_ready(epoch,key,token,result,&self.history.messages);}
             },
@@ -565,9 +666,13 @@ impl ChatModel {
                 sender.input(ChatMsg::MediaViewport);
             },
             TransferMsg::ViewerReady{epoch,message,key,token,result}=>self.viewer_ready(epoch,message,key,token,result,sender),
-            TransferMsg::AnimationReady{epoch,message:_,key,token,from_video,result}=>{
+            TransferMsg::AnimationReady{epoch,message,key,token,from_video,encoded,result}=>{
                 if epoch!=self.transfers.epoch||!self.access.read||self.transfers.image_tokens.get(&key)!=Some(&token){return;}
                 let valid=self.transfers.authorized(&self.history.messages,key);
+                if valid&&result.is_some(){if let Some(bytes)=encoded{if let Some(m)=self.history.messages.iter().find(|m|m.id==message){self.transfers.encoded.insert_video(key,m.channel_id,message,bytes);}}}
+                if valid&&result.is_none()&&from_video{
+                    self.transfers.video_files.remove(&key);self.transfers.video_order.retain(|id|*id!=key);self.transfers.encoded.remove(key);
+                }
                 let fallback=valid&&result.is_none()&&!from_video&&self.transfers.gif_requested.contains(&key);
                 self.transfers.image_tokens.remove(&key);self.transfers.requested.remove(&key);self.transfers.gif_ready(key,valid&&result.is_some());if valid{if let Some(animation)=result{self.transfers.cache_animation(key,animation);}else{self.transfers.failed(key);}}
                 if fallback{self.gif_fallback(key,sender);}
@@ -589,7 +694,11 @@ impl ChatModel {
                     Ok(mut preview) if preview.id==key=>{
                         self.transfers.revision=self.transfers.revision.wrapping_add(1);
                         let author_data=preview.author_image_data.take();self.transfers.queue_author(sender,&preview,author_data);
-                        if let Some(data)=preview.image_data.take(){queue_image(&mut self.transfers,sender,message,key,ImageInput::Base64(data));}else{self.transfers.requested.remove(&key);self.transfers.resolved.insert(key);}
+                        let image_data=preview.image_data.take();
+                        if gifs::separate_animation(&preview){self.transfers.requested.remove(&key);self.transfers.resolved.insert(key);}
+                        else if let Some(data)=image_data{queue_image(&mut self.transfers,sender,message,key,ImageInput::Base64(data));}
+                        else if preview.has_video()&&!preview.animated_link(){if let Some(api)=self.actions.api.clone(){queue_poster(&mut self.transfers,api,sender,message,key,true,false);}}
+                        else{self.transfers.requested.remove(&key);self.transfers.resolved.insert(key);}
                         self.transfers.remember_preview(preview.clone());
                         let ids:Vec<_>=self.history.messages.iter().filter(|m|m.embeds.iter().flatten().any(|p|p.id==key)).map(|m|m.id).collect();
                         for id in ids{self.history.apply(Change::Preview(id,preview.clone()));}
@@ -610,6 +719,8 @@ impl ChatModel {
                 let window=gtk::Window::builder().title("Imagem").default_width(900).default_height(680).build();if let Some(parent)=root.root().and_downcast::<gtk::Window>(){window.set_transient_for(Some(&parent));window.set_application(parent.application().as_ref());}
                 let token=Uuid::new_v4();let epoch=self.transfers.epoch;window.set_widget_name(&format!("viewer-{token}"));
                 let picture=self.transfers.animations.get(&key).map(|(animation,_)|animation.picture()).unwrap_or_else(||gtk::Picture::for_paintable(texture));viewer::install(&window,&picture);dismiss_image(&window,&picture);
+                let embed=self.history.messages.iter().find(|m|m.id==message).and_then(|m|m.embeds.iter().flatten().find(|p|p.id==key));
+                if embed.is_some_and(Embed::animated_link)||self.transfers.giphy.values().any(|id|*id==key){let source=gifs::source(&self.transfers,message,key,&self.history.messages);gifs::viewer(&window,embed,source.as_deref());}
                 if let Some(attachment)=self.history.messages.iter().find(|m|m.id==message).and_then(|m|m.attachments.iter().flatten().find(|a|a.id==key)) {
                     if let Some(header)=window.child().and_then(|root|root.first_child()).and_downcast::<adw::HeaderBar>() {
                         let save=gtk::Button::from_icon_name("folder-download-symbolic");save.set_tooltip_text(Some("Baixar arquivo"));
@@ -679,7 +790,7 @@ impl ChatModel {
                 }
             }
             TransferMsg::RetryImage(id) => {
-                if !self.transfers.requested.contains(&id){self.transfers.failed.remove(&id);self.transfers.resolved.remove(&id);self.transfers.gif_resolved.remove(&id);}
+                if !self.transfers.requested.contains(&id){self.transfers.failed.remove(&id);self.transfers.resolved.remove(&id);self.transfers.gif_resolved.remove(&id);self.transfers.dirty.insert(id);}
             }
             TransferMsg::Remove(index) => {
                 if !self.draft.is_sending()&&index<self.draft.files.len() {
@@ -721,6 +832,7 @@ impl ChatModel {
                     match result {
                         Ok(bytes) => queue_image(&mut self.transfers,sender,message,key,ImageInput::Bytes(bytes)), Err(e) => {
                             self.transfers.gif_requested.remove(&key);self.transfers.failed(key);self.gif_fallback(key,sender);
+                            if self.transfers.poster_attempted.contains(&key){self.transfers.failed.insert(key,(3,std::time::Instant::now()));self.transfers.dirty.insert(key);self.transfers.revision=self.transfers.revision.wrapping_add(1);}
                             if crate::api::is_session_error(&e) {
                                 let _ = sender.output(ChatOutput::ActionError(e));
                             }
@@ -777,7 +889,7 @@ impl ChatModel {
                 if let Some(token)=token{if self.transfers.video_requests.get(&(message,key))!=Some(&token){return;}self.transfers.video_requests.remove(&(message,key));}
                 match result {
                     Ok(file) => {
-                        self.draft.error = None;
+                        if self.draft.error.as_deref().is_some_and(|text|matches!(text,"Carregando vídeo…"|"Baixando arquivo…")){self.draft.error=None;}
                         if let Some(destination) = destination {
                             self.transfers.saving+=1;
                             let s = sender.clone();
@@ -793,8 +905,10 @@ impl ChatModel {
                             if self.gif_preview(key).is_some(){self.queue_gif_video(message,key,file,sender);}else{self.play_video(message,key,file,sender);}
                         }
                     }, Err(e) => {
-                        self.draft.error = Some(e.to_string());
-                        let _ = sender.output(ChatOutput::ActionError(e));
+                        if self.gif_preview(key).is_some(){
+                            self.transfers.gif_requested.remove(&key);self.transfers.failed(key);
+                            if crate::api::is_session_error(&e){let _=sender.output(ChatOutput::ActionError(e));}
+                        }else{self.draft.error=Some(e.to_string());let _=sender.output(ChatOutput::ActionError(e));}
                     }
                 }
             }
@@ -805,14 +919,15 @@ impl ChatModel {
                 if epoch!=self.transfers.epoch||!self.history.messages.iter().any(|m|m.id==message) {
                     return;
                 }
-                self.draft.error = Some(match result {
-                    Ok(()) => "Arquivo salvo.".into(), Err(e) => format!("Falha ao salvar: {e}")
-                });
+                match result {
+                    Ok(())=>{let token=Uuid::new_v4();self.transfers.notice=Some((token,"Arquivo salvo.".into()));let output=sender.input_sender().clone();gtk::glib::timeout_add_local_once(std::time::Duration::from_secs(3),move ||{let _=output.send(ChatMsg::Transfer(TransferMsg::DismissNotice{epoch,token}));});},
+                    Err(e)=>{self.transfers.notice=None;self.draft.error=Some(format!("Falha ao salvar: {e}"));}
+                }
             }
         }
     }
     fn gif_preview(&self,key:Uuid)->Option<Uuid>{
-        self.history.messages.iter().find(|m|m.embeds.iter().flatten().any(|p|p.id==key&&p.source_type=="link"&&p.has_video()&&p.url.as_deref().is_some_and(crate::media::gif_links::is_provider))).map(|m|m.id)
+        self.history.messages.iter().find(|m|m.embeds.iter().flatten().any(|p|p.id==key&&p.animated_link()&&p.has_video())).map(|m|m.id)
     }
     fn gif_fallback(&mut self,key:Uuid,sender:&ComponentSender<Self>){
         // Bound automatic video downloads; decoding uses the shared limiter
@@ -821,11 +936,12 @@ impl ChatModel {
         if let Some(message)=self.gif_preview(key){self.start_download(message,key,None,true,sender);}
     }
     fn queue_gif_video(&mut self,message:Uuid,key:Uuid,file:std::sync::Arc<TemporaryFile>,sender:&ComponentSender<Self>){
-        let token=Uuid::new_v4();self.transfers.image_tokens.insert(key,token);self.transfers.gif_requested.insert(key);self.transfers.requested.insert(key);let epoch=self.transfers.epoch;let path=file.0.clone();let limiter=self.transfers.limiter.clone();let output=sender.input_sender().clone();
+        let token=Uuid::new_v4();self.transfers.image_tokens.insert(key,token);self.transfers.gif_requested.insert(key);self.transfers.requested.insert(key);let epoch=self.transfers.epoch;let path=file.0.clone();let limiter=self.transfers.decode_limiter.clone();let output=sender.input_sender().clone();
         self.transfers.media_job(key,tokio::spawn(async move{
             let Ok(_permit)=limiter.acquire_owned().await else{return;};
-            let result=crate::media::animation::PreparedAnimation::video(&path).await.ok();drop(file);
-            let _=output.send(ChatMsg::Transfer(TransferMsg::AnimationReady{epoch,message,key,token,from_video:true,result}));
+            let result=crate::media::animation::PreparedAnimation::video(&path).await.ok();
+            let encoded=if result.is_some()&&tokio::fs::metadata(&path).await.is_ok_and(|m|m.len()<=4<<20){tokio::fs::read(&path).await.ok().map(std::sync::Arc::from)}else{None};drop(file);
+            let _=output.send(ChatMsg::Transfer(TransferMsg::AnimationReady{epoch,message,key,token,from_video:true,encoded,result}));
         }));
     }
     fn videos_retain(&mut self,message:Uuid,key:Uuid){self.transfers.videos.retain(|p|p.message!=message||p.key!=key);}
@@ -848,7 +964,7 @@ impl ChatModel {
         let token=if inline{let token=Uuid::new_v4();self.transfers.video_requests.insert((message,key),token);Some(token)}else{None};
         let s = sender.clone();
         let epoch = self.transfers.epoch;let gif=self.gif_preview(key).is_some();
-        if !gif{self.draft.error=Some(if video{"Carregando vídeo…"}else{"Baixando arquivo…"}.into());}
+        if !gif&&inline{self.draft.error=Some(if video{"Carregando vídeo…"}else{"Baixando arquivo…"}.into());}
         let endpoint = if video {
             format!("/embeds/{key}/video")
         }
@@ -856,19 +972,24 @@ impl ChatModel {
             format!("/attachments/{key}")
         };
         if !inline{self.transfers.saving+=1;}
+        let cached=if gif&&inline{self.transfers.encoded.get_video(key)}else{None};
         let job=tokio::spawn(async move {
-            let result = api.download_temporary(&endpoint, if video {
-                if gif{8<<20}else{256<<20}
-            }
-            else {
-                MAX_FILE
-            }).await;
+            let result=if let Some(bytes)=cached{gif_file(bytes).await}else{api.download_temporary(&endpoint,if video{if gif{8<<20}else{256<<20}}else{MAX_FILE}).await};
             s.input(ChatMsg::Transfer(TransferMsg::File {
                 epoch, message, key,token,destination, result
             }));
         });
         if inline{self.transfers.media_job(key,job);}else{self.transfers.jobs.push(job);}
     }
+}
+// The same isolated video decoder consumes cached compressed renditions. No
+// decoded frames or cross-channel playback pipelines are retained in the cache.
+async fn gif_file(bytes:std::sync::Arc<[u8]>)->anyhow::Result<TemporaryFile>{
+    use tokio::io::AsyncWriteExt;
+    let path=std::env::temp_dir().join(format!("papo-gif-{}",Uuid::new_v4()));
+    let mut options=tokio::fs::OpenOptions::new();options.write(true).create_new(true);
+    #[cfg(unix)] options.mode(0o600);
+    let mut file=options.open(&path).await?;let temporary=TemporaryFile(path);file.write_all(&bytes).await?;file.flush().await?;drop(file);Ok(temporary)
 }
 pub(super) fn attachment_context(row:&gtk::Widget,message:Uuid,x:f64,y:f64,messages:&[Message],media:&Transfers,sender:&ComponentSender<ChatModel>)->bool {
     let mut picked=row.pick(x,y,gtk::PickFlags::DEFAULT);
@@ -892,7 +1013,7 @@ pub(super) fn attachment_widget(a: &Attachment, message: Uuid, media: &Transfers
     card.set_halign(gtk::Align::Start);let visual=a.mime_type.starts_with("image/")||a.mime_type.starts_with("video/");if !visual{card.add_css_class("card");}
     if media.visible(a) {
         if a.mime_type.starts_with("video/"){append_video(&card,media,message,a.id,false,sender);}
-        if media.textures.contains_key(&a.id) {
+        if a.mime_type.starts_with("image/")&&media.textures.contains_key(&a.id) {
             let image = media.picture(a.id).unwrap();
             image.set_can_shrink(true);
             let open=gtk::Button::new();open.set_has_frame(false);open.set_halign(gtk::Align::Start);open.add_css_class("papo-inline-image");open.set_tooltip_text(Some("Abrir imagem"));open.set_child(Some(&media.image_frame(a.id,&image,false)));let s=sender.clone();let key=a.id;open.connect_clicked(move |_|s.input(ChatMsg::Transfer(TransferMsg::OpenImage{message,key})));card.append(&open);
@@ -933,24 +1054,30 @@ fn append_video(card:&gtk::Box,media:&Transfers,message:Uuid,key:Uuid,preview:bo
     }else{
         let overlay=gtk::Overlay::new();
         if let Some(texture)=media.textures.get(&key){overlay.set_child(Some(&crate::media::preview::picture(texture)));}
-        else{overlay.set_child(Some(&gtk::Box::new(gtk::Orientation::Vertical,0)));}
+        else{
+            let placeholder=gtk::Box::new(gtk::Orientation::Vertical,6);placeholder.set_halign(gtk::Align::Center);placeholder.set_valign(gtk::Align::End);placeholder.set_margin_bottom(16);
+            let icon=gtk::Image::from_icon_name("video-x-generic-symbolic");icon.set_pixel_size(32);icon.add_css_class("dim-label");placeholder.append(&icon);
+            if media.failed.contains_key(&key){let label=gtk::Label::new(Some("Prévia indisponível"));label.add_css_class("dim-label");placeholder.append(&label);}
+            overlay.set_child(Some(&placeholder));
+        }
         let button=gtk::Button::from_icon_name("media-playback-start-symbolic");button.set_tooltip_text(Some("Reproduzir vídeo"));button.update_property(&[gtk::accessible::Property::Label("Reproduzir vídeo")]);button.add_css_class("papo-media-play");button.set_halign(gtk::Align::Center);button.set_valign(gtk::Align::Center);
         button.set_sensitive(!media.video_requests.contains_key(&(message,key)));let input=sender.input_sender().clone();button.connect_clicked(move |_|{let _=input.send(ChatMsg::Transfer(if preview{TransferMsg::Video{message,preview:key}}else{TransferMsg::AttachmentVideo{message,attachment:key}}));});overlay.add_overlay(&button);
-        card.append(&crate::media::frame::frame(&overlay,640,360));
+        let dimensions=media.embeds.get(&key).and_then(|p|[p.video.as_ref(),p.thumbnail.as_ref()].into_iter().flatten().find_map(|m|m.width.zip(m.height).filter(|(w,h)|*w>0&&*h>0)));
+        let(width,height)=dimensions.map_or((640,360),|(w,h)|crate::media::frame::fit_size(w,h,false));
+        card.append(&crate::media::frame::frame(&overlay,width,height));
     }
 }
 
 pub(super) fn preview_widget(p: &Embed, message: Uuid, media: &Transfers, users:&HashMap<Uuid,UserSummary>, actions:&Actions, sender: &ComponentSender<ChatModel>)->gtk::Box {
+    if p.animated_link(){return gifs::widget(Some(p),p.url.as_deref(),message,p.id,media,sender);}
     let card=super::rich::body(p,media.authors.textures.get(&p.id),users,actions,sender);
-    let gif_provider=p.source_type=="link"&&p.url.as_deref().is_some_and(crate::media::gif_links::is_provider);
-    let animated_gif=gif_provider&&media.animations.contains_key(&p.id);
-    if !p.has_video()||gif_provider{if media.textures.contains_key(&p.id) {
+    if !p.has_video(){if media.textures.contains_key(&p.id) {
         let image = media.picture(p.id).unwrap();
         image.set_can_shrink(true);
         let open=gtk::Button::new();open.set_has_frame(false);open.set_halign(gtk::Align::Start);open.add_css_class("papo-inline-image");open.set_tooltip_text(Some("Abrir imagem"));open.set_child(Some(&media.image_frame(p.id,&image,true)));let s=sender.clone();let key=p.id;open.connect_clicked(move |_|s.input(ChatMsg::Transfer(TransferMsg::OpenImage{message,key})));card.append(&open);
     }
-    else if p.thumbnail.is_some()||p.url.as_deref().is_some_and(crate::media::gif_links::is_provider) {
-        let button = gtk::Button::with_label(if gif_provider{"Carregar GIF"}else{"Carregar miniatura"});
+    else if p.thumbnail.is_some() {
+        let button = gtk::Button::with_label("Carregar miniatura");
         let key = p.id;
         let s = sender.clone();
         button.connect_clicked(move |_|s.input(ChatMsg::Transfer(TransferMsg::RetryImage(key))));
@@ -962,8 +1089,8 @@ pub(super) fn preview_widget(p: &Embed, message: Uuid, media: &Transfers, users:
         if p.fetch_method.is_empty(){let retry=gtk::Button::with_label("Atualizar prévia");let s=sender.clone();let key=p.id;retry.connect_clicked(move |_|s.input(ChatMsg::Transfer(TransferMsg::RetryImage(key))));card.append(&retry);}
     }
     if let Some(url)=p.embed_url.as_deref().and_then(super::rich::youtube_url){card.append(&gtk::LinkButton::with_label(url.as_str(),"Abrir no YouTube"));}
-    if p.has_video()&&!gif_provider{append_video(&card,media,message,p.id,true,sender);}
-    super::rich::footer(&card,p,animated_gif,users,actions,sender);
+    if p.has_video(){append_video(&card,media,message,p.id,true,sender);}
+    super::rich::footer(&card,p,false,users,actions,sender);
 
     // Keep the existing 640-pixel video surface while bounding text-only cards.
     // A clamp centers its child when tightening. Make its natural width equal
@@ -1126,7 +1253,7 @@ pub(crate) fn exercise(api: &crate::api::ApiClient, context: &gtk::glib::MainCon
     pump(context);
     assert!(chat.model().transfers.textures.is_empty());
     test_window.set_content(None::<&gtk::Widget>);test_window.close();
-    // Inline pictures use their aspect ratio, grow beyond thumbnail sizes, and revoke an open viewer.
+    // Original source geometry survives a smaller decoded thumbnail and viewer revocation.
     let picture_id=Uuid::new_v4();let message_id=Uuid::new_v4();
     let image_message=serde_json::from_value(json!({"id":message_id,"channel_id":channel,"author_id":user,"created_at":"2026-10-03T12:00:00Z","attachments":[{"id":picture_id,"mime_type":"image/png","original_file_name":"example.png","size_bytes":2048,"created_at":"2026-10-03T12:00:00Z"}]})).unwrap();
     let photo=ChatModel::builder().launch(ChatInit{active_channel:Some(serde_json::from_value(json!({"id":channel,"name":"images","type":"text","created_at":"2026-10-03T12:00:00Z"})).unwrap()),messages:vec![image_message],user_id:Some(user),..Default::default()}).detach();photo.emit(ChatMsg::SetAccess{user_id:user,access:crate::models::Access{read:true,..Default::default()}});pump(context);
@@ -1140,10 +1267,10 @@ pub(crate) fn exercise(api: &crate::api::ApiClient, context: &gtk::glib::MainCon
     photo.emit(ChatMsg::Transfer(TransferMsg::Bytes{token:None,epoch,message:message_id,key:picture_id,preview:false,result:Ok(tiny.into_inner())}));
     until(context,||photo.model().transfers.textures[&picture_id].width()==32);
     for _ in 0..80{pump(context);std::thread::sleep(std::time::Duration::from_millis(5));}
-    let small=descendants(find_button(photo.widget().upcast_ref(),"Abrir imagem").upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Picture>().ok()).unwrap();assert!(small.width()>=470&&small.height()>=470,"a small texture must still be presented as media: {}x{}",small.width(),small.height());
+    let small=descendants(find_button(photo.widget().upcast_ref(),"Abrir imagem").upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Picture>().ok()).unwrap();assert!((620..=640).contains(&small.width())&&(150..=165).contains(&small.height()),"a replacement thumbnail must keep the known original aspect ratio: {}x{}",small.width(),small.height());
     window.set_default_size(400,650);for _ in 0..80{pump(context);std::thread::sleep(std::time::Duration::from_millis(5));}
-    assert!(small.width()<400&&small.width()>150,"media must shrink within a narrow chat: {}",small.width());assert!((small.width()-small.height()).abs()<=1);crate::ui::main_window::layout::tests::preview(&window,"inline-image-narrow",context);assert!((small.width()-small.height()).abs()<=1,"media aspect ratio remains stable after resize settles: {}x{}",small.width(),small.height());
-    let limiter=photo.model().transfers.limiter.clone();let permit=tokio::runtime::Handle::current().block_on(limiter.acquire_many_owned(4)).unwrap();
+    assert!(small.width()<400&&small.width()>150,"media must shrink within a narrow chat: {}",small.width());assert!((small.width()-4*small.height()).abs()<=4);crate::ui::main_window::layout::tests::preview(&window,"inline-image-narrow",context);assert!((small.width()-4*small.height()).abs()<=4,"media aspect ratio remains stable after resize settles: {}x{}",small.width(),small.height());
+    let limiter=photo.model().transfers.decode_limiter.clone();let permit=tokio::runtime::Handle::current().block_on(limiter.acquire_many_owned(2)).unwrap();
     let mut encoded=std::io::Cursor::new(Vec::new());image::DynamicImage::new_rgba8(32,32).write_to(&mut encoded,image::ImageFormat::Png).unwrap();photo.emit(ChatMsg::Transfer(TransferMsg::Bytes{token:None,epoch,message:message_id,key:picture_id,preview:false,result:Ok(encoded.into_inner())}));pump(context);assert!(photo.model().transfers.image_tokens.contains_key(&picture_id));
     let ticks=std::rc::Rc::new(std::cell::Cell::new(0));let count=ticks.clone();let timer=gtk::glib::timeout_add_local(std::time::Duration::from_millis(5),move ||{count.set(count.get()+1);gtk::glib::ControlFlow::Continue});for _ in 0..20{pump(context);std::thread::sleep(std::time::Duration::from_millis(5));}timer.remove();assert!(ticks.get()>5,"GTK remains responsive while image work waits off-thread");
     photo.emit(ChatMsg::ApplyChange(Change::Moderation(message_id,picture_id,"blocked".into())));pump(context);assert!(!viewer.is_visible());assert!(photo.model().transfers.images.is_empty());drop(permit);until(context,||photo.model().transfers.jobs.iter().all(|job|job.is_finished()));pump(context);assert!(!photo.model().transfers.textures.contains_key(&picture_id),"delayed decoding cannot restore blocked media");window.close();
@@ -1153,10 +1280,8 @@ pub(super) fn giphy_widgets(message:&Message,media:&Transfers,sender:&ComponentS
     crate::media::gif_links::links(message.content.as_deref().unwrap_or("")).iter().filter_map(|id|{
         let key=*media.giphy.get(id)?;
         if message.embeds.iter().flatten().any(|p|p.id==key){return None;}
-        let button=gtk::Button::new();button.set_halign(gtk::Align::Start);button.set_has_frame(false);button.add_css_class("papo-inline-image");
-        if let Some(picture)=media.picture(key){button.set_child(Some(&media.image_frame(key,&picture,true)));button.set_tooltip_text(Some("Abrir GIF"));let input=sender.input_sender().clone();let message=message.id;button.connect_clicked(move |_|{let _=input.send(ChatMsg::Transfer(TransferMsg::OpenImage{message,key}));});}
-        else{button.set_label("Carregar GIF");let input=sender.input_sender().clone();button.connect_clicked(move |_|{let _=input.send(ChatMsg::Transfer(TransferMsg::RetryImage(key)));});}
-        Some(if media.textures.contains_key(&key){button.upcast()}else{media.placeholder(key,&button,true).upcast()})
+        let source=gifs::source(media,message.id,key,std::slice::from_ref(message));
+        Some(gifs::widget(None,source.as_deref(),message.id,key,media,sender).upcast())
     }).collect()
 }
 
@@ -1179,7 +1304,7 @@ pub(super) fn giphy_widgets(message:&Message,media:&Transfers,sender:&ComponentS
     for index in (0..160).step_by(4){chat.emit(ChatMsg::Action(ActionMsg::Navigate(messages[index].id)));until(context,||chat.model().transfers.textures.contains_key(&keys[index]));super::performance::settle(context);}
     assert!(requests.lock().unwrap().len()>64,"scrolling must exercise actual cache eviction");assert!(chat.model().transfers.textures.len()<=64);
     let before=requests.lock().unwrap().get(&keys[0]).copied().unwrap();assert!(!chat.model().transfers.textures.contains_key(&keys[0]));
-    chat.emit(ChatMsg::Action(ActionMsg::Navigate(messages[0].id)));until(context,||chat.model().transfers.textures.contains_key(&keys[0]));assert!(requests.lock().unwrap()[&keys[0]]>before,"returning to an evicted visible image reloads it automatically");
+    chat.emit(ChatMsg::Action(ActionMsg::Navigate(messages[0].id)));until(context,||chat.model().transfers.textures.contains_key(&keys[0]));assert_eq!(requests.lock().unwrap()[&keys[0]],before,"returning to an evicted texture restores compressed cache data without another download");
     // Thin decoded images expose more neighboring placeholders than their
     // initial geometry did. A momentarily empty request set between layout and
     // the next prefetch batch is not quiescence. Require the complete pipeline
@@ -1196,13 +1321,13 @@ pub(super) fn giphy_widgets(message:&Message,media:&Transfers,sender:&ComponentS
 
 pub(super) fn update_media_box(container:&gtk::Box,message:&Message,media:&Transfers,users:&HashMap<Uuid,UserSummary>,actions:&Actions,sender:&ComponentSender<ChatModel>){
     let mut existing=HashMap::new();let mut child=container.first_child();while let Some(w)=child{child=w.next_sibling();existing.insert(w.widget_name().to_string(),w);}
-    let state=|key:Uuid|format!("{}-{}-{}-{}",key,media.textures.get(&key).map_or(0,|t|t.as_ptr() as usize),media.animations.get(&key).map_or(0,|(a,_)|a.as_ptr() as usize),media.videos.iter().find(|p|p.message==message.id&&p.key==key).map_or(0,|p|p.view.as_ptr() as usize));
+    let state=|key:Uuid|format!("{}-{}-{}-{}-{}-{}",key,media.textures.get(&key).map_or(0,|t|t.as_ptr() as usize),media.animations.get(&key).map_or(0,|(a,_)|a.as_ptr() as usize),media.videos.iter().find(|p|p.message==message.id&&p.key==key).map_or(0,|p|p.view.as_ptr() as usize),media.failed.contains_key(&key),media.requested.contains(&key));
     let mut ordered=vec![];
     for attachment in message.attachments.iter().flatten(){let name=format!("attachment-{}-{}-{}",state(attachment.id),media.visible(attachment),media.video_requests.contains_key(&(message.id,attachment.id)));let widget=existing.remove(&name).unwrap_or_else(||attachment_widget(attachment,message.id,media,sender).upcast());widget.set_widget_name(&name);ordered.push(widget);}
     for id in crate::media::gif_links::links(message.content.as_deref().unwrap_or("")){
         if let Some(key)=media.giphy.get(&id).filter(|key|!message.embeds.iter().flatten().any(|p|p.id==**key)){let name=format!("giphy-{}",state(*key));let widget=existing.remove(&name).unwrap_or_else(||{let mut single=message.clone();single.content=Some(crate::media::gif_links::content(&id));giphy_widgets(&single,media,sender).remove(0)});widget.set_widget_name(&name);ordered.push(widget);}
     }
-    for preview in message.embeds.iter().flatten(){let name=format!("preview-{}-{}-{}-{}",state(preview.id),media.authors.textures.get(&preview.id).map_or(0,|t|t.as_ptr() as usize),media.video_requests.contains_key(&(message.id,preview.id)),super::rich::display_signature(preview,users,actions));let widget=existing.remove(&name).unwrap_or_else(||preview_widget(preview,message.id,media,users,actions,sender).upcast());widget.set_widget_name(&name);ordered.push(widget);}
+    for preview in message.embeds.iter().flatten(){let name=format!("preview-{}-{}-{}-{}",state(preview.id),media.authors.textures.get(&preview.id).map_or(0,|t|t.as_ptr() as usize),media.video_requests.contains_key(&(message.id,preview.id)),super::rich::display_signature(preview,users,actions));let widget=existing.remove(&name).unwrap_or_else(||preview_widget(&gifs::attribution(preview,message),message.id,media,users,actions,sender).upcast());widget.set_widget_name(&name);ordered.push(widget);}
     for widget in existing.into_values(){container.remove(&widget);}
     let mut previous=None;for widget in ordered{if widget.parent().is_none(){container.insert_child_after(&widget,previous.as_ref());}else if widget.prev_sibling()!=previous{container.reorder_child_after(&widget,previous.as_ref());}previous=Some(widget);}
 }

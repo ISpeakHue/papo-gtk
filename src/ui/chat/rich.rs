@@ -17,7 +17,7 @@ fn linked(text:&str,url:Option<&str>)->gtk::Widget{
     else{label(text).upcast()}
 }
 fn content(value:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions,sender:&ComponentSender<ChatModel>)->gtk::Widget{
-    if !value.contains('@')&&!value.contains(['*','_','`','~','#','>','[','|','\\','\n'])&&!text::parts_index(value,&actions.emoji_names).iter().any(|part|matches!(part,text::Part::Emoji(..))){return label(value).upcast();}
+    if !emoji_details::has_unicode(value)&&!value.contains('@')&&!value.contains(['*','_','`','~','#','>','[','|','\\','\n'])&&!text::parts_index(value,&actions.emoji_names).iter().any(|part|matches!(part,text::Part::Emoji(..))){return label(value).upcast();}
     let input=sender.input_sender().clone();
     let view=text::with_profiles(value,users,actions,move |id|{let _=input.send(ChatMsg::OpenProfile(id));});
     flow::wrap(&view).upcast()
@@ -102,7 +102,8 @@ pub(super) fn footer(card:&gtk::Box,p:&Embed,image_available:bool,users:&HashMap
     chat.emit(ChatMsg::ApplyChange(Change::Embeds(message.id,vec![quote])));settle(context);
     let all=descendants(chat.widget().upcast_ref());
     for value in ["Author (@author)","Comment on the quoted post","Quoted author (@quoted)","The quoted text 🌎"]{
-        assert!(all.iter().filter_map(|w|w.downcast_ref::<gtk::Label>()).any(|l|l.text()==value),"link fields must render quoted tweet metadata: {value}");
+        assert!(all.iter().any(|w|w.downcast_ref::<gtk::Label>().is_some_and(|l|l.text()==value)
+            ||w.downcast_ref::<gtk::TextView>().is_some_and(|view|{let buffer=view.buffer();buffer.text(&buffer.start_iter(),&buffer.end_iter(),false)==value})),"link fields must render quoted tweet metadata: {value}");
     }
     // A complete list clears cards; no stale single-preview union remains.
     chat.emit(ChatMsg::ApplyChange(Change::Embeds(message.id,vec![])));settle(context);assert!(!descendants(chat.widget().upcast_ref()).iter().any(|w|w.has_css_class("papo-link-preview")));
@@ -139,8 +140,10 @@ pub(super) fn footer(card:&gtk::Box,p:&Embed,image_available:bool,users:&HashMap
 #[cfg(test)]fn exercise_text_width(context:&gtk::glib::MainContext){
     use adw::prelude::*;use actions::tests::{descendants,pump};use performance::settle;
     let peer=Uuid::new_v4();let now=chrono::Utc::now();let users=HashMap::from([(peer,serde_json::from_value(serde_json::json!({"id":peer,"username":"bob","nickname":"Bob","created_at":now})).unwrap())]);
-    let source=format!("Uma **mensagem** para @mention(<@{peer}>) sem quebra.");
-    let expected="Uma mensagem para @Bob sem quebra.";
+    // The sentence must fit the wide card but exceed the toolbar-constrained
+    // minimum window width; a shorter fixture can still fit after resizing.
+    let source=format!("Uma **mensagem** para @mention(<@{peer}>) sem quebra inesperada na frase.");
+    let expected="Uma mensagem para @Bob sem quebra inesperada na frase.";
     let channel=Uuid::new_v4();let user=Uuid::new_v4();
     let target=serde_json::from_value(serde_json::json!({"id":channel,"name":"Bot text width","created_at":now})).unwrap();
     let embed:Embed=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"source_type":"custom","fetch_method":"manual","author":{"name":"a"},"description":source,"created_at":now})).unwrap();
@@ -152,7 +155,7 @@ pub(super) fn footer(card:&gtk::Box,p:&Embed,image_available:bool,users:&HashMap
     assert_eq!(buffer.text(&buffer.start_iter(),&buffer.end_iter(),false),expected);
     assert_eq!(view.iter_location(&buffer.start_iter()).y(),view.iter_location(&buffer.end_iter()).y(),"a fitting bot sentence must not wrap in a wide chat: card={}, text={}",card.width(),view.width());
     window.set_default_size(260,600);settle(context);
-    assert!(view.width()<=chat.widget().width());assert!(view.iter_location(&buffer.end_iter()).y()>view.iter_location(&buffer.start_iter()).y(),"narrow cards still wrap");
+    assert!(view.width()<=chat.widget().width());assert!(view.iter_location(&buffer.end_iter()).y()>view.iter_location(&buffer.start_iter()).y(),"narrow cards still wrap: window={}, chat={}, text={}",window.width(),chat.widget().width(),view.width());
     window.set_content(None::<&gtk::Widget>);window.close();drop(chat);pump(context);
 }
 

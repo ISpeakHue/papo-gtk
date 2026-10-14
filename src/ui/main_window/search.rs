@@ -102,7 +102,7 @@ impl MainWindowModel {
 #[cfg(test)]
 pub(crate) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::MainContext){
     use crate::ui::chat::actions::tests::{find_button,pump,until};
-    find_button(main.widget().upcast_ref(),"Pesquisar").emit_clicked();pump(context);let w=main.model().search.view.as_ref().unwrap().window.clone();
+    find_button(main.widget().upcast_ref(),"Buscar mensagens (Ctrl+K)").emit_clicked();pump(context);let w=main.model().search.view.as_ref().unwrap().window.clone();
     find_button(w.upcast_ref(),"Pesquisar").emit_clicked();pump(context);assert!(main.model().search.view.as_ref().unwrap().status.text().contains("filtro"));
     main.model().search.view.as_ref().unwrap().fields[0].set_text("hello");find_button(w.upcast_ref(),"Pesquisar").emit_clicked();until(context,||main.model().search.token.is_none()&&main.model().search.view.as_ref().unwrap().status.text().contains("Search failed"));assert_eq!(main.model().search.view.as_ref().unwrap().fields[0].text(),"hello");
     find_button(w.upcast_ref(),"Pesquisar").emit_clicked();until(context,||main.model().search.token.is_none()&&main.model().search.rows.len()==1);

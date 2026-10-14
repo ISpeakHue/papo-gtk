@@ -17,6 +17,7 @@ pub(super) struct Actions {
     pins_window: Option<(gtk::Window, gtk::Box)>,
     pub emojis: Vec<Emoji>,
     pub emoji_names:HashMap<String,Uuid>,
+    pub emoji_source:std::rc::Rc<std::cell::RefCell<String>>,
     pub textures: HashMap<Uuid, gtk::gdk::Texture>,
     pub animations:HashMap<Uuid,crate::media::animation::Animation>,
     emoji_bytes:HashMap<Uuid,usize>,
@@ -214,15 +215,31 @@ impl ChatModel {
                 let token = Uuid::new_v4(); let (w, outer) = window(root, "Editar mensagem");
                 let text = gtk::TextView::new(); text.set_wrap_mode(gtk::WrapMode::WordChar);
                 text.buffer().set_text(message.content.as_deref().unwrap_or(""));
-                w.set_default_size(500,650);let form=gtk::Box::new(gtk::Orientation::Vertical,8);
-                form.append(&gtk::ScrolledWindow::builder().min_content_height(100).child(&text).build());
-                let embeds=super::embed_editor::Editors::new(message.embeds.iter().flatten().filter(|e|e.source_type=="custom").map(crate::models::EmbedInput::from_embed).collect());form.append(&embeds.root);
-                let scroll = gtk::ScrolledWindow::new(); scroll.set_vexpand(true); scroll.set_child(Some(&form)); outer.append(&scroll);
-                let error = label(""); error.add_css_class("error"); outer.append(&error);
-                let save = button("Salvar edição", sender, move || ActionMsg::SaveEdit(token)); save.add_css_class("suggested-action"); outer.append(&save);
-                outer.append(&button("Cancelar edição", sender, move || ActionMsg::CancelEdit(token)));
+                w.set_default_size(440,240);let form=gtk::Box::new(gtk::Orientation::Vertical,8);
+                text.set_top_margin(8);text.set_bottom_margin(8);text.set_left_margin(8);text.set_right_margin(8);
+                super::input::configure_im(&text);
+                form.append(&gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).min_content_height(72).max_content_height(160).propagate_natural_height(true).child(&text).build());
+                let custom:Vec<_>=message.embeds.iter().flatten().filter(|e|e.source_type=="custom").map(crate::models::EmbedInput::from_embed).collect();
+                let has_embeds=!custom.is_empty();let embeds=super::embed_editor::Editors::new(custom);
+                let advanced=gtk::Expander::new(Some("Embeds personalizados"));advanced.set_expanded(has_embeds);advanced.set_child(Some(&embeds.root));form.append(&advanced);
+                let scroll=gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).max_content_height(420).propagate_natural_height(true).child(&form).build();outer.append(&scroll);
+                let error = label(""); error.add_css_class("error");error.set_visible(false);outer.append(&error);
+                error.connect_notify_local(Some("label"),move |label,_|label.set_visible(!label.text().is_empty()));
+                let controls=gtk::Box::new(gtk::Orientation::Horizontal,8);controls.set_halign(gtk::Align::End);
+                controls.append(&button("Cancelar edição",sender,move ||ActionMsg::CancelEdit(token)));
+                let save=button("Salvar edição",sender,move ||ActionMsg::SaveEdit(token));save.add_css_class("suggested-action");controls.append(&save);outer.append(&controls);
+                let composing=std::rc::Rc::new(std::cell::Cell::new(false));let active=composing.clone();text.connect_preedit_changed(move |_,value|active.set(!value.is_empty()));
+                let keys=gtk::EventControllerKey::new();keys.set_propagation_phase(gtk::PropagationPhase::Capture);let weak=text.downgrade();let output=sender.input_sender().clone();
+                keys.connect_key_pressed(move |controller,key,_,mods|{
+                    if composing.get(){return gtk::glib::Propagation::Proceed;}
+                    if matches!(key,gtk::gdk::Key::Return|gtk::gdk::Key::KP_Enter)&&!mods.intersects(gtk::gdk::ModifierType::SHIFT_MASK|gtk::gdk::ModifierType::CONTROL_MASK|gtk::gdk::ModifierType::ALT_MASK|gtk::gdk::ModifierType::SUPER_MASK){
+                        if let(Some(text),Some(event))=(weak.upgrade(),controller.current_event()){if text.im_context_filter_keypress(&event){return gtk::glib::Propagation::Stop;}}
+                        let _=output.send(ChatMsg::Action(ActionMsg::SaveEdit(token)));return gtk::glib::Propagation::Stop;
+                    }gtk::glib::Propagation::Proceed
+                });text.add_controller(keys);
+                let keys=gtk::EventControllerKey::new();let output=sender.input_sender().clone();keys.connect_key_pressed(move |_,key,_,_|{if key==gtk::gdk::Key::Escape{let _=output.send(ChatMsg::Action(ActionMsg::CancelEdit(token)));gtk::glib::Propagation::Stop}else{gtk::glib::Propagation::Proceed}});w.add_controller(keys);
                 self.actions.edit = Some(EditView { token, message, window: w.clone(), buffer: text.buffer(), save, error, text, pending: false,embeds });
-                w.present();
+                w.present();if let Some(edit)=self.actions.edit.as_ref(){edit.text.grab_focus();edit.text.buffer().place_cursor(&edit.text.buffer().end_iter());}
             }
             ActionMsg::CancelEdit(token) => {
                 if self.actions.edit.as_ref().is_some_and(|e| e.token == token) { self.actions.edit.take().unwrap().window.close(); }

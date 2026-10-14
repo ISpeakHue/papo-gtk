@@ -5,8 +5,10 @@ built with Rust, GTK 4, libadwaita and Relm4.
 
 The application supports server and account authentication, channels and direct
 messages, attachments and rich link/custom embeds, reactions and mentions, member profiles,
-notifications, moderation, voice calls, cameras and screen sharing. The interface
+notifications, moderation, webhook management, voice calls, cameras and screen sharing. The interface
 uses an adaptive server/channel sidebar and native GNOME controls.
+
+Webhook integration and permissions are described in [WEBHOOKS.md](WEBHOOKS.md).
 
 ## Diagnostics
 

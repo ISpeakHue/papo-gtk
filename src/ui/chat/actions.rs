@@ -44,7 +44,6 @@ pub(super) struct Actions {
 struct EditView {
     token: Uuid, message: Message, window: gtk::Window, buffer: gtk::TextBuffer,
     save: gtk::Button, error: gtk::Label, text: gtk::TextView, pending: bool,
-    embeds:super::embed_editor::Editors,
 }
 struct EmojiManager {
     token: Uuid, window: gtk::Window, list: gtk::Box, name: gtk::Entry,
@@ -215,14 +214,10 @@ impl ChatModel {
                 let token = Uuid::new_v4(); let (w, outer) = window(root, "Editar mensagem");
                 let text = gtk::TextView::new(); text.set_wrap_mode(gtk::WrapMode::WordChar);
                 text.buffer().set_text(message.content.as_deref().unwrap_or(""));
-                w.set_default_size(440,240);let form=gtk::Box::new(gtk::Orientation::Vertical,8);
+                w.set_default_size(440,-1);
                 text.set_top_margin(8);text.set_bottom_margin(8);text.set_left_margin(8);text.set_right_margin(8);
                 super::input::configure_im(&text);
-                form.append(&gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).min_content_height(72).max_content_height(160).propagate_natural_height(true).child(&text).build());
-                let custom:Vec<_>=message.embeds.iter().flatten().filter(|e|e.source_type=="custom").map(crate::models::EmbedInput::from_embed).collect();
-                let has_embeds=!custom.is_empty();let embeds=super::embed_editor::Editors::new(custom);
-                let advanced=gtk::Expander::new(Some("Embeds personalizados"));advanced.set_expanded(has_embeds);advanced.set_child(Some(&embeds.root));form.append(&advanced);
-                let scroll=gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).max_content_height(420).propagate_natural_height(true).child(&form).build();outer.append(&scroll);
+                outer.append(&gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).min_content_height(72).max_content_height(160).propagate_natural_height(true).vexpand(true).child(&text).build());
                 let error = label(""); error.add_css_class("error");error.set_visible(false);outer.append(&error);
                 error.connect_notify_local(Some("label"),move |label,_|label.set_visible(!label.text().is_empty()));
                 let controls=gtk::Box::new(gtk::Orientation::Horizontal,8);controls.set_halign(gtk::Align::End);
@@ -238,7 +233,7 @@ impl ChatModel {
                     }gtk::glib::Propagation::Proceed
                 });text.add_controller(keys);
                 let keys=gtk::EventControllerKey::new();let output=sender.input_sender().clone();keys.connect_key_pressed(move |_,key,_,_|{if key==gtk::gdk::Key::Escape{let _=output.send(ChatMsg::Action(ActionMsg::CancelEdit(token)));gtk::glib::Propagation::Stop}else{gtk::glib::Propagation::Proceed}});w.add_controller(keys);
-                self.actions.edit = Some(EditView { token, message, window: w.clone(), buffer: text.buffer(), save, error, text, pending: false,embeds });
+                self.actions.edit = Some(EditView { token, message, window: w.clone(), buffer: text.buffer(), save, error, text, pending: false });
                 w.present();if let Some(edit)=self.actions.edit.as_ref(){edit.text.grab_focus();edit.text.buffer().place_cursor(&edit.text.buffer().end_iter());}
             }
             ActionMsg::CancelEdit(token) => {
@@ -250,11 +245,9 @@ impl ChatModel {
                 if !self.access.can_edit(user, edit.message.author_id) { edit.error.set_text("Sem permissão para editar esta mensagem."); return; }
                 let text = edit.buffer.text(&edit.buffer.start_iter(), &edit.buffer.end_iter(), false).to_string();
                 if text.chars().count() > 8192 { edit.error.set_text("Use até 8192 caracteres."); return; }
-                let embeds=match edit.embeds.read(){Ok(embeds)=>embeds,Err(e)=>{edit.error.set_text(&e.to_string());return;}};
                 edit.pending = true; edit.text.set_sensitive(false); edit.save.set_sensitive(false); edit.error.set_text("Salvando…");
-                edit.embeds.root.set_sensitive(false);
                 let id = edit.message.id; let epoch = self.actions.epoch; let sender = sender.clone();
-                tokio::spawn(async move { let result = api.edit_message_embeds(id, &text,&embeds).await;
+                tokio::spawn(async move { let result = api.edit_message(id, &text).await;
                     sender.input(ChatMsg::Action(ActionMsg::EditFinished { epoch, token, result })); });
             }
             ActionMsg::EditFinished { epoch, token, result } => {
@@ -273,7 +266,7 @@ impl ChatModel {
                     }
                     Err(error) => {
                         if current { if let Some(edit) = self.actions.edit.as_mut().filter(|e| e.token == token) {
-                            edit.pending = false; edit.text.set_sensitive(true);edit.embeds.root.set_sensitive(true); edit.save.set_sensitive(true); edit.error.set_text(&error.to_string());
+                            edit.pending = false; edit.text.set_sensitive(true); edit.save.set_sensitive(true); edit.error.set_text(&error.to_string());
                         } }
                         self.action_error(error, sender, current);
                     }
@@ -339,7 +332,9 @@ impl ChatModel {
                 if current { self.actions.pins_request = None; }
                 match result {
                     Ok(pinned) if current => {
-                        self.actions.pinned=pinned.into_iter().filter(|m|!self.history.is_deleted(m.id)).collect();self.actions.pins_ready=true;self.render_pins(sender);
+                        self.actions.pinned=pinned.into_iter().filter(|m|!self.history.is_deleted(m.id)).collect();self.actions.pins_ready=true;
+                        if self.actions.pins_window.as_ref().is_some_and(|(window,_)|window.is_visible()){if let Some(api)=&self.actions.api{for m in &self.actions.pinned{self.transfers.external.request(m,api,sender);}}}
+                        self.render_pins(sender);
                         if self.actions.pins_window.as_ref().is_some_and(|(window,_)|window.is_visible()){if let Some(channel)=self.active_channel.as_ref(){let _=sender.output(ChatOutput::AuthorMetadata{channel:channel.id(),ids:self.actions.pinned.iter().filter_map(|m|m.author_id).collect()});}}
                     }
                     Err(error) => { if current { self.actions.pins_ready = false; if let Some((_, list)) = &self.actions.pins_window { clear(list); list.append(&label(&format!("Não foi possível carregar: {error}"))); } } self.action_error(error, sender, current); }
@@ -534,8 +529,8 @@ impl ChatModel {
         else if self.actions.pinned.is_empty() { list.append(&label("Nenhuma mensagem fixada.")); }
         for m in &self.actions.pinned {
             let id=m.id;let open=button("",sender,move||ActionMsg::Navigate(id));open.set_tooltip_text(Some("Abrir mensagem no histórico"));
-            let row=gtk::Box::new(gtk::Orientation::Horizontal,10);let user=m.author_id.and_then(|id|self.users_map.get(&id));let name=user.map(|u|u.display_name()).unwrap_or("Membro indisponível");
-            let avatar=crate::media::avatar_image(m.author_id.and_then(|id|self.avatars.get(&id)),36);avatar.set_text(Some(name));avatar.set_valign(gtk::Align::Start);row.append(&avatar);
+            let row=gtk::Box::new(gtk::Orientation::Horizontal,10);let user=m.author_id.and_then(|id|self.users_map.get(&id));let name=m.sender_name(&self.users_map);
+            let avatar=crate::media::avatar_image(m.author_id.and_then(|id|self.avatars.get(&id)).or_else(||self.transfers.external.texture(m)),36);avatar.set_text(Some(name));avatar.set_valign(gtk::Align::Start);row.append(&avatar);
             let column=gtk::Box::new(gtk::Orientation::Vertical,4);column.set_hexpand(true);let heading=label(name);heading.add_css_class("heading");if let Some(roles)=user.and_then(|u|u.roles.as_deref()){crate::ui::style::role_color(&heading,roles);}column.append(&heading);
             column.append(&label(&mentions::render(&markdown::plain(m.content.as_deref().unwrap_or("Mensagem com anexos")),&self.users_map)));row.append(&column);open.set_child(Some(&row));list.append(&open);
         }

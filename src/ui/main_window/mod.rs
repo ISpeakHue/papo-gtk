@@ -9,6 +9,8 @@ pub(crate) mod moderation;
 use moderation::{Moderation,ModerationMsg};
 pub(crate) mod direct;
 use direct::{Direct,DirectMsg};
+pub(crate) mod webhooks;
+use webhooks::{Webhooks,WebhookMsg};
 pub(crate) mod administration;
 use administration::{Administration,AdminMsg};
 pub(crate) mod account;
@@ -75,6 +77,7 @@ pub struct MainWindowModel {
     account: Account,
     direct: Direct,
     administration: Administration,
+    webhooks:Webhooks,
     moderation: Moderation,
     voice: Voice,
     server_access: crate::models::Access,
@@ -103,6 +106,7 @@ pub enum MainWindowMsg {
     Moderation(ModerationMsg),
     Direct(DirectMsg),
     Administration(AdminMsg),
+    Webhook(WebhookMsg),
     Account(AccountMsg),
     Security(SecurityMsg),
     Search(SearchMsg),
@@ -178,6 +182,7 @@ impl Component for MainWindowModel {
                 SidebarOutput::WatchVoice{user,kind}=>MainWindowMsg::Voice(VoiceMsg::Video(voice::video::VideoMsg::Watch{user,kind})),
                 SidebarOutput::VoiceSelect(id)=>MainWindowMsg::Voice(VoiceMsg::Select(id)),
                 SidebarOutput::Moderation=>MainWindowMsg::Moderation(ModerationMsg::Open),
+                SidebarOutput::Webhooks=>MainWindowMsg::Webhook(WebhookMsg::Open),
                 SidebarOutput::Administration=>MainWindowMsg::Administration(AdminMsg::Open),
                 SidebarOutput::Logout => MainWindowMsg::Logout,
                 SidebarOutput::Profile(id) => MainWindowMsg::Account(AccountMsg::Profile(id)),
@@ -232,7 +237,7 @@ impl Component for MainWindowModel {
             preview_requests: HashMap::new(),
             avatars,members:Default::default(),
             account: Account::default(),
-            direct:Direct::default(),administration:Administration::default(),moderation:Moderation::default(),voice,
+            direct:Direct::default(),webhooks:Webhooks::default(),administration:Administration::default(),moderation:Moderation::default(),voice,
             server_access:Default::default(),roles:Vec::new(),managed_channels:Vec::new(),setup:false,
             security: Security::default(),
             search: Search::default(),
@@ -331,6 +336,7 @@ impl Component for MainWindowModel {
             MainWindowMsg::Voice(msg)=>self.voice_event(msg,sender),
             MainWindowMsg::Moderation(msg)=>self.moderation_event(msg,sender,root),
             MainWindowMsg::Direct(msg)=>self.direct_event(msg,sender,root),
+            MainWindowMsg::Webhook(msg)=>self.webhook_event(msg,sender,root),
             MainWindowMsg::Administration(msg)=>self.admin_event(msg,sender,root),
             MainWindowMsg::Search(msg)=>self.search_event(msg,root,sender),
             MainWindowMsg::Notification(msg)=>self.notification_event(msg,root,sender),
@@ -365,7 +371,7 @@ impl Component for MainWindowModel {
                         self.roles=roles;self.managed_channels=channels.clone();self.server_access=server_access.clone();self.setup=server.is_none();
                         self.sidebar.emit(SidebarMsg::SetManagement{access:server_access.clone(),setup:self.setup});
                         self.server=server.clone();
-                        self.sync_admin_access();self.sync_moderation_access();
+                        self.sync_admin_access();self.sync_webhook_access();self.sync_moderation_access();
                         if self.administration.reopen{self.administration.reopen=false;sender.input(MainWindowMsg::Administration(AdminMsg::Open));}
                         let Some(server)=server else{sender.input(MainWindowMsg::StartBackground);self.server=None;if !self.admin_visible(){sender.input(MainWindowMsg::Administration(AdminMsg::Open));}return;};
                         self.chat.emit(ChatMsg::ServerName(server.name.clone()));
@@ -398,7 +404,7 @@ impl Component for MainWindowModel {
                         if self.active_channel_id.is_none() { sender.input(MainWindowMsg::StartBackground); }
                     }
                     Err(error) => {
-                        self.access.clear();self.server_access=Default::default();self.sync_admin_access();self.sync_moderation_access();self.sync_voice_access();self.sidebar.emit(SidebarMsg::SetManagement{access:Default::default(),setup:false});
+                        self.access.clear();self.server_access=Default::default();self.sync_admin_access();self.sync_webhook_access();self.sync_moderation_access();self.sync_voice_access();self.sidebar.emit(SidebarMsg::SetManagement{access:Default::default(),setup:false});
                         self.deliver_notices(sender.clone());self.render_inbox(&sender);self.render_search(&sender);
                         self.chat.emit(ChatMsg::SetAccess { user_id: self.current_user.id, access: Default::default() });
                         if crate::api::is_session_error(&error) { self.voice_disconnected();let _ = sender.output(MainWindowOutput::SessionExpired); }
@@ -571,7 +577,7 @@ impl Component for MainWindowModel {
                 WsEvent::RoleAdd { user_id, .. } | WsEvent::RoleRemove { user_id, .. } => {
                     sender.input(MainWindowMsg::Account(AccountMsg::RefreshProfile(user_id)));
                     if user_id == self.current_user.id {
-                        self.access.clear();self.server_access=Default::default();self.sync_admin_access();self.sync_moderation_access();self.sync_voice_access();self.sidebar.emit(SidebarMsg::SetManagement{access:Default::default(),setup:false});
+                        self.access.clear();self.server_access=Default::default();self.sync_admin_access();self.sync_webhook_access();self.sync_moderation_access();self.sync_voice_access();self.sidebar.emit(SidebarMsg::SetManagement{access:Default::default(),setup:false});
                         self.chat.emit(ChatMsg::SetAccess { user_id, access: Default::default() });
                         self.deliver_notices(sender.clone());self.render_inbox(&sender);self.render_search(&sender);
                     }

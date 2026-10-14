@@ -45,15 +45,21 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     // The toolbar and the single-line input have a common vertical centre.
     entry.set_text("one line");performance::settle(context);let mention=find_button(chat.widget().upcast_ref(),"Mencionar membro (digite @ para filtrar)");
     let a=entry.compute_bounds(chat.widget()).unwrap();let b=mention.compute_bounds(chat.widget()).unwrap();assert!((a.y()+a.height()/2.0-b.y()-b.height()/2.0).abs()<=2.0,"composer and toolbar centres differ: {a:?} / {b:?}");
-    let message:Message=serde_json::from_value(serde_json::json!({"id":"12345678-1234-4234-8234-123456789abe","channel_id":channel_id,"author_id":own,"content":"before","created_at":"2026-10-03T12:00:00Z"})).unwrap();
+    let stored=serde_json::json!({"id":Uuid::new_v4(),"source_type":"custom","fetch_method":"manual","title":"Keep this card","thumbnail":{"mime_type":"image/png"},"created_at":"2026-10-03T12:00:00Z"});
+    backend.lock().unwrap().message["embeds"]=serde_json::json!([stored.clone()]);
+    let message:Message=serde_json::from_value(serde_json::json!({"id":"12345678-1234-4234-8234-123456789abe","channel_id":channel_id,"author_id":own,"content":"before","created_at":"2026-10-03T12:00:00Z","embeds":[stored.clone()]})).unwrap();
     chat.emit(ChatMsg::AddMessage(message.clone()));pump(context);chat.emit(ChatMsg::Action(ActionMsg::OpenEdit(message.clone())));pump(context);
     let editor=gtk::Window::list_toplevels().into_iter().find_map(|w|w.downcast::<gtk::Window>().ok().filter(|w|w.title().as_deref()==Some("Editar mensagem"))).unwrap();
-    performance::settle(context);assert!(editor.height()<350,"a short edit must remain compact: {}",editor.height());
+    assert!(!descendants(editor.upcast_ref()).iter().any(|w|w.is::<gtk::Expander>()||w.downcast_ref::<gtk::Button>().is_some_and(|b|b.label().as_deref()==Some("Adicionar embed"))),"editing must offer text controls only");
+    performance::settle(context);assert!(editor.height()<240,"a short edit must fit its contents: {}",editor.height());
+    let body=editor.child().unwrap();let save=find_button(editor.upcast_ref(),"Salvar edição");let bounds=save.compute_bounds(&body).unwrap();
+    assert!(body.height() as f32-bounds.y()-bounds.height()<=20.0,"the edit dialog must not leave unused space below its buttons");
     let text=descendants(editor.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::TextView>().ok()).unwrap();text.buffer().set_text("after");
     assert!(!key(text.upcast_ref()).emit_by_name::<bool>("key-pressed",&[&gtk::gdk::Key::Return,&0u32,&gtk::gdk::ModifierType::SHIFT_MASK]));
     assert!(press(text.upcast_ref(),gtk::gdk::Key::Return));until(context,||backend.lock().unwrap().requests.iter().any(|(m,p,_)|m=="PUT"&&p.ends_with("/12345678-1234-4234-8234-123456789abe"))&&find_button(editor.upcast_ref(),"Salvar edição").is_sensitive()); // first mock PUT fails, retain edit
     assert!(editor.is_visible());assert!(press(text.upcast_ref(),gtk::gdk::Key::Return));until(context,||!editor.is_visible());
-    let edits:Vec<_>=backend.lock().unwrap().requests.iter().filter(|(m,p,_)|m=="PUT"&&p.ends_with("/12345678-1234-4234-8234-123456789abe")).cloned().collect();assert_eq!(edits.len(),2);assert!(edits.iter().all(|(_,_,body)|body["content"]=="after"));
+    let edits:Vec<_>=backend.lock().unwrap().requests.iter().filter(|(m,p,_)|m=="PUT"&&p.ends_with("/12345678-1234-4234-8234-123456789abe")).cloned().collect();assert_eq!(edits.len(),2);assert!(edits.iter().all(|(_,_,body)|body["content"]=="after"&&body.get("embeds").is_none()));
+    assert_eq!(chat.model().history.messages.iter().find(|m|m.id==message.id).unwrap().embeds.as_ref().unwrap()[0].title.as_deref(),Some("Keep this card"));
     // Expiry clears only the corresponding notice, never a newer notice/error.
     let epoch=chat.model().transfers.epoch;
     chat.emit(ChatMsg::Transfer(TransferMsg::Saved{epoch,message:message.id,result:Ok(())}));pump(context);let old=chat.model().transfers.notice.as_ref().unwrap().0;

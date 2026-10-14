@@ -1805,3 +1805,23 @@ This verifies animation with no backend embed, hidden inline source text, no
 video controls and cache reuse across channel switches. These live cases are
 opt-in because they require internet access and the provider's availability;
 CI's `report9` case continues to check bot renditions using a local fixture.
+
+## Webhooks (local fixtures)
+
+`cargo test --locked` covers management routes and payloads, independent
+`manage_webhooks` permissions, optional external identities, live message/event
+decoding, one-time token redaction, and public avatar transport. Avatar tests
+check cookie isolation, API base paths, redirects and oversized responses.
+
+The default native smoke suite also runs a webhook workflow. To run it alone:
+
+```sh
+PAPO_UI_CASE=webhooks dbus-run-session -- xvfb-run -a \
+  cargo test --locked ui_smoke -- --ignored --test-threads=1
+```
+
+This uses a local mock backend and synthetic tokens. It checks on-demand loading,
+management errors/retry, duplicate-submit protection, creation, nickname/avatar
+updates, sender labels and decoded avatars, live edits, cache reuse across
+messages/channel changes, revocation cancellation/confirmation, and permission
+loss. It neither reads a saved account nor contacts a real webhook integration.

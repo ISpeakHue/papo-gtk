@@ -52,7 +52,7 @@ pub enum SidebarMsg {
     ShowChannels, ShowDirect,
     SetManagement { access: Access, setup: bool },
     SetDirect(Vec<DirectConversation>),
-    DirectSelect(Uuid), HideDirect(Uuid), Blocks, Administration, Moderation,
+    DirectSelect(Uuid), HideDirect(Uuid), Blocks, Administration, Webhooks, Moderation,
     PeerAvatars(std::collections::HashMap<Uuid,gtk::gdk::Texture>),
     Presence(std::collections::HashMap<Uuid,crate::ws::PresenceStatus>),
     SetCurrentUser(WhoamiResponse),
@@ -72,7 +72,7 @@ pub enum SidebarMsg {
 #[derive(Debug)]
 pub enum SidebarOutput {
     WatchVoice{user:Uuid,kind:&'static str},
-    DirectSelect(Uuid), HideDirect(Uuid), Blocks, Administration, Moderation,
+    DirectSelect(Uuid), HideDirect(Uuid), Blocks, Administration, Webhooks, Moderation,
     ChannelSelected(Channel),
     MarkChannelRead(Uuid),
     VoiceSelect(Uuid),
@@ -155,6 +155,7 @@ impl Component for SidebarModel {
                                 #[watch] set_visible:model.setup||model.access.manage_server||model.access.manage_roles||model.access.manage_channels,
                                 connect_clicked => SidebarMsg::Administration,
                             },
+                            gtk::Button {set_label:"Webhooks",add_css_class:"flat",#[watch] set_visible:model.access.manage_webhooks,connect_clicked => SidebarMsg::Webhooks},
                             gtk::Button {set_label:"Moderação e auditoria",add_css_class:"flat",#[watch] set_visible:model.access.manage_server,connect_clicked => SidebarMsg::Moderation},
                             gtk::Button {set_label:"Usuários bloqueados",add_css_class:"flat",connect_clicked => SidebarMsg::Blocks},
                         },
@@ -291,6 +292,7 @@ impl Component for SidebarModel {
             SidebarMsg::ShowDirect=>self.direct_mode=true,
             SidebarMsg::SetManagement{access,setup}=>{self.access=access;self.setup=setup;},
             SidebarMsg::Moderation=>{if self.access.manage_server{let _=sender.output(SidebarOutput::Moderation);}},
+            SidebarMsg::Webhooks=>{if self.access.manage_webhooks{let _=sender.output(SidebarOutput::Webhooks);}},
             SidebarMsg::Administration=>{let _=sender.output(SidebarOutput::Administration);},
             SidebarMsg::Blocks=>{let _=sender.output(SidebarOutput::Blocks);},
             SidebarMsg::DirectSelect(id)=>{self.direct_mode=true;let _=sender.output(SidebarOutput::DirectSelect(id));},

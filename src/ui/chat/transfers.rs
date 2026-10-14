@@ -3,6 +3,7 @@ use super::*;
 mod viewer;
 pub(super) mod gifs;
 mod author;
+mod external;
 mod encoded;
 #[cfg(test)]mod attachments;
 #[cfg(test)]mod cache_checks;
@@ -25,6 +26,8 @@ use std:: {
 };
 #[derive(Debug)]
 pub enum TransferMsg {
+    InvalidateWebhookAvatar(Uuid),
+    ExternalAvatar{url:String,token:Uuid,image:Option<crate::media::PreparedImage>},
     DismissNotice{epoch:Uuid,token:Uuid},
     Decoded{epoch:Uuid,message:Uuid,key:Uuid,token:Uuid,bytes:std::sync::Arc<[u8]>,dimensions:Option<(u32,u32)>,image:Option<crate::media::PreparedImage>,animation:Option<crate::media::animation::PreparedAnimation>},
     AuthorReady{epoch:Uuid,key:Uuid,token:Uuid,result:Option<crate::media::PreparedImage>},
@@ -67,6 +70,7 @@ pub(super) struct Transfers {
     poster_attempted:HashSet<Uuid>,
     pub(super) sent_attachments:HashSet<Uuid>,
     authors:author::Authors,
+    pub(super) external:external::Avatars,
     viewer_jobs:HashMap<Uuid,tokio::task::JoinHandle<()>>,
     viewer_limiter:std::sync::Arc<tokio::sync::Semaphore>,
     pub(super) clipboard_request: Option<Uuid>,
@@ -142,7 +146,7 @@ impl Default for Transfers {
             decode_limiter:std::sync::Arc::new(tokio::sync::Semaphore::new(2)),provider_limiter:std::sync::Arc::new(tokio::sync::Semaphore::new(2)),
             poster_limiter:std::sync::Arc::new(tokio::sync::Semaphore::new(1)),poster_attempted:Default::default(),
             sent_attachments:Default::default(),
-            authors:Default::default(),
+            authors:Default::default(),external:Default::default(),
             viewer_jobs:Default::default(),viewer_limiter:std::sync::Arc::new(tokio::sync::Semaphore::new(1)),
             clipboard_request: None,
             media_jobs:Default::default(),saving:0,
@@ -197,8 +201,9 @@ impl Transfers {
         let providers=std::mem::take(&mut self.giphy).into_iter().filter(|(_,key)|encoded.contains(*key)).collect();
         let sizes=std::mem::take(&mut self.sizes);let previews=std::mem::take(&mut self.embeds);let resolved=std::mem::take(&mut self.resolved);
         let mut authors=std::mem::take(&mut self.authors);authors.pause();
+        let mut external=std::mem::take(&mut self.external);external.pause();
         self.reset();
-        self.sizes=sizes;self.embeds=previews;self.resolved=resolved;self.authors=authors;self.encoded=encoded;self.giphy=providers;
+        self.external=external;self.sizes=sizes;self.embeds=previews;self.resolved=resolved;self.authors=authors;self.encoded=encoded;self.giphy=providers;
     }
     pub(super) fn release_distant(&mut self,messages:&[Message])->bool {
         self.images.retain(|(_,_,window)|window.is_visible());
@@ -232,7 +237,7 @@ impl Transfers {
         self.notice=None;self.encoded.clear();
         self.poster_attempted.clear();
         self.sent_attachments.clear();
-        self.authors=Default::default();
+        self.authors=Default::default();self.external=Default::default();
         for (_,job) in self.viewer_jobs.drain(){job.abort();}
         self.clipboard_request=None;
         self.media_jobs.clear();self.saving=0;
@@ -551,6 +556,7 @@ impl ChatModel {
         let mut messages:Vec<_>=self.history.messages.iter_mut().skip(self.render_window.range.start).take(self.render_window.range.len()).filter(|m|scope.contains(&m.id)).collect();
         messages.sort_by_key(|m|self.transfers.priority.get(&m.id).copied().unwrap_or(u64::MAX));
         for m in messages {
+            self.transfers.external.request(m,&api,sender);
             let mut links=crate::media::gif_links::links(m.content.as_deref().unwrap_or(""));
             for p in m.embeds.iter().flatten().filter(|p|p.animated_link()){for id in gifs::keys(p){if !links.contains(&id){links.push(id);}}}
             for id in links {
@@ -648,6 +654,17 @@ impl ChatModel {
     }
     pub(super) fn handle_transfer(&mut self, msg: TransferMsg, sender: &ComponentSender<Self>, root: &gtk::Box) {
         match msg {
+            TransferMsg::InvalidateWebhookAvatar(id)=>{
+                self.transfers.external.invalidate(id);
+                let ids:Vec<_>=self.history.messages.iter().filter(|m|m.webhook_id==Some(id)).map(|m|m.id).collect();for id in ids{self.history.mark_dirty(id);}
+                self.transfers.revision=self.transfers.revision.wrapping_add(1);
+            },
+            TransferMsg::ExternalAvatar{url,token,image}=>{
+                if self.access.read&&self.transfers.external.finish(url.clone(),token,image){
+                    let ids:Vec<_>=self.history.messages.iter().filter(|m|m.external().is_some_and(|a|a.avatar_url==url)).map(|m|m.id).collect();for id in ids{self.history.mark_dirty(id);}
+                    self.transfers.revision=self.transfers.revision.wrapping_add(1);self.render_pins(sender);
+                }
+            },
             TransferMsg::DismissNotice{epoch,token}=>{if epoch==self.transfers.epoch&&self.transfers.notice.as_ref().is_some_and(|(id,_)|*id==token){self.transfers.notice=None;}},
             TransferMsg::Decoded{epoch,message,key,token,bytes,dimensions,image,animation}=>{
                 if epoch!=self.transfers.epoch||!self.access.read||self.transfers.image_tokens.get(&key)!=Some(&token)||!self.transfers.authorized(&self.history.messages,key){return;}

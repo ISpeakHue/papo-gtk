@@ -91,7 +91,7 @@ impl MainWindowModel {
                 if self.moderation.request!=Some(request){return;}self.moderation.request=None;let Some(v)=self.moderation.view.as_ref().filter(|v|v.token==view&&v.window.is_visible())else{return;};
                 match result{Ok(page)=>{if !append{while let Some(c)=v.logs.first_child(){v.logs.remove(&c);}}
                     self.moderation.cursor=page.logs.last().map(|e|e.id).or(if append{self.moderation.cursor}else{None});
-                    for e in page.logs{let label=gtk::Label::new(Some(&format!("{} · {} · {} · {}\nAlvo: {}",e.created_at.to_rfc3339(),e.actor_username,e.action,e.entity_type,e.target_user_id.map(|id|id.to_string()).unwrap_or_else(||"—".into()))));label.set_wrap(true);label.set_xalign(0.0);label.set_selectable(true);v.logs.append(&label);}v.more.set_sensitive(page.has_more);v.status.set_text(if page.has_more{"Há mais registros."}else{"Todos os registros carregados."});},Err(e)=>{v.more.set_sensitive(append&&self.moderation.cursor.is_some());v.status.set_text(&e.to_string());s.input(MainWindowMsg::ActionError(e));}}
+                    for e in page.logs{let label=gtk::Label::new(Some(&format!("{} · {} · {} · {}\nAlvo: {}",e.created_at.to_rfc3339(),e.actor_label(),e.action,e.entity_type,e.target_user_id.map(|id|id.to_string()).unwrap_or_else(||"—".into()))));label.set_wrap(true);label.set_xalign(0.0);label.set_selectable(true);v.logs.append(&label);}v.more.set_sensitive(page.has_more);v.status.set_text(if page.has_more{"Há mais registros."}else{"Todos os registros carregados."});},Err(e)=>{v.more.set_sensitive(append&&self.moderation.cursor.is_some());v.status.set_text(&e.to_string());s.input(MainWindowMsg::ActionError(e));}}
             }
             ModerationMsg::Close=>{}
         }

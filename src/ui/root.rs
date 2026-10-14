@@ -94,6 +94,7 @@ mod tests {
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("emoji-details"){crate::ui::chat::exercise_emoji_details(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("emoji-notifications"){crate::media::animation::exercise(&context);crate::ui::chat::exercise_animated_emojis(&context);crate::ui::main_window::notifications::exercise_tabs(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("account-notices"){crate::ui::main_window::bugs7::exercise(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("webhooks"){crate::ui::main_window::webhooks::exercise(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("backend-update"){
             crate::ui::chat::exercise_read_candidate(&context);
             crate::ui::main_window::notifications::exercise_backend_update(&context);window.close();return;
@@ -331,6 +332,7 @@ mod tests {
         crate::ui::chat::mention_background::exercise(&context);
         crate::ui::chat::exercise_animated_emojis(&context);
         crate::ui::main_window::notifications::exercise_tabs(&context);
+        crate::ui::main_window::webhooks::exercise(&context);
         crate::media::sound::exercise(&context);
 
         // Authenticating must actually switch the watched stack to the main view.

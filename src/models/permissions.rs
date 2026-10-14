@@ -13,6 +13,7 @@ pub struct Access {
     pub manage_server: bool,
     pub manage_channels: bool,
     pub manage_roles: bool,
+    pub manage_webhooks: bool,
     pub ban: bool,
     pub everyone: bool,
 }
@@ -37,6 +38,7 @@ impl Access {
             manage_server: server(|p| p.manage_server),
             manage_channels: server(|p| p.manage_channels),
             manage_roles: server(|p| p.manage_roles),
+            manage_webhooks: server(|p| p.manage_webhooks),
             ban: server(|p| p.manage_server), // Actual ban-route guard, not ban_members.
             everyone: server(|p| p.everyone_message),
         }
@@ -44,7 +46,7 @@ impl Access {
 
     pub fn without_channel(&self) -> Self {
         Self { manage_server: self.manage_server, manage_channels: self.manage_channels,
-            manage_roles: self.manage_roles, ban: self.ban, everyone: self.everyone,
+            manage_roles: self.manage_roles, manage_webhooks:self.manage_webhooks, ban: self.ban, everyone: self.everyone,
             ..Self::default() }
     }
 

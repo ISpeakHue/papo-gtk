@@ -57,7 +57,7 @@ impl History {
         let media=|m:&Option<crate::models::EmbedMedia>|m.as_ref().map_or(0,|m|string(&m.url)+string(&m.mime_type));
         self.early_moderation.capacity()*std::mem::size_of::<(Uuid,Uuid,String)>()+self.early_moderation.iter().map(|(_,_,status)|status.capacity()).sum::<usize>()+
         self.deleted.capacity()*std::mem::size_of::<Uuid>() + self.messages.capacity()*std::mem::size_of::<Message>() + self.messages.iter().map(|m| {
-            string(&m.content)
+            m.external_author.as_ref().map_or(0,|a|a.source.capacity()+a.id.capacity()+a.name.capacity()+a.avatar_url.capacity()+a.profile_url.capacity()) + string(&m.content)
                 + m.attachments.as_ref().map_or(0,|items|items.capacity()*std::mem::size_of::<crate::models::Attachment>() + items.iter().map(|a|a.mime_type.capacity()+a.original_file_name.capacity()+string(&a.moderation_status)).sum::<usize>())
                 + m.embeds.as_ref().map_or(0,|items|items.capacity()*std::mem::size_of::<Embed>() + items.iter().map(|e| {
                     e.source_type.capacity()+e.fetch_method.capacity()+string(&e.provider)+string(&e.site_name)+string(&e.url)+string(&e.title)+string(&e.description)+string(&e.color)+string(&e.embed_url)+string(&e.image_data)+string(&e.author_image_data)
@@ -439,7 +439,7 @@ mod tests {
 
     fn message(channel_id: Uuid, second: i64) -> Message {
         Message {
-            id: Uuid::new_v4(), channel_id, author_id: Some(Uuid::new_v4()),
+            id: Uuid::new_v4(), channel_id, author_id: Some(Uuid::new_v4()),webhook_id:None,external_author:None,
             content: Some("original".into()),
             created_at: chrono::DateTime::from_timestamp(second, 0).unwrap(),
             edited_at: None, reply_to: None, attachments: None,

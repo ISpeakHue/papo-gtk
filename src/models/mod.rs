@@ -34,3 +34,6 @@ pub use moderation::*;
 
 pub mod voice;
 pub use voice::*;
+
+pub mod webhook;
+pub use webhook::*;

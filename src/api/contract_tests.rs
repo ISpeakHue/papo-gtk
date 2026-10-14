@@ -291,7 +291,7 @@ async fn edit_delete_pin_unpin_and_pinned_list_follow_backend_routes() {
     assert!(client.pinned_messages(channel).await.is_err());
     let r = server.await.unwrap();
     assert_eq!(r[0].method,"PUT"); assert_eq!(r[0].url.path(),format!("/messages/{ID}"));
-    assert_eq!(serde_json::from_str::<Value>(&r[0].body).unwrap(),json!({"content":"edited 🌎","embeds":[]}));
+    assert_eq!(serde_json::from_str::<Value>(&r[0].body).unwrap(),json!({"content":"edited 🌎"}));
     assert_eq!(r[1].method,"DELETE"); assert_eq!(r[2].method,"POST"); assert_eq!(r[3].method,"DELETE");
     assert_eq!(r[2].url.path(),format!("/channels/{CHANNEL}/messages/{ID}/pin"));
     assert_eq!(r[2].url.path(),r[3].url.path());
@@ -606,4 +606,61 @@ async fn verbose_authentication_logs_hide_secrets_but_send_real_credentials() {
     let handshake=client.websocket_request().unwrap();assert!(handshake.headers()["Cookie"].is_sensitive());assert!(!format!("{handshake:?}").contains("AUTH_SECRET"));
     let error=client.health().await.unwrap_err();let transport=error.downcast_ref::<reqwest::Error>().unwrap();
     assert!(transport.is_connect());assert!(transport.url().is_none(),"request errors must not retain URLs");
+}
+
+#[tokio::test]
+async fn webhook_management_matches_backend_and_never_reuses_the_machine_token() {
+    let hook=json!({"id":ID,"channel_id":CHANNEL,"name":"Bridge","created_by":ID,"created_at":DATE});
+    let mut created=hook.clone();created["token"]=json!("MACHINE_SECRET");
+    let mut updated=hook.clone();updated["display_name"]=json!("Discord sender");
+    let (api,server)=mock(vec![(200,json!({"webhooks":[hook]})),(201,created),(200,updated),(204,Value::Null)]).await;
+    api.cookies.add_cookie_str("Auth=SESSION_SECRET; Path=/",&api.base);
+    assert_eq!(api.list_webhooks().await.unwrap().len(),1);
+    let created=api.create_webhook(CHANNEL.parse().unwrap()," Bridge ").await.unwrap();
+    assert_eq!(created.token,"MACHINE_SECRET");assert!(!format!("{created:?}").contains("MACHINE_SECRET"));
+    assert!(api.webhook_endpoint(created.webhook.id).ends_with(&format!("/webhooks/{ID}/messages")));
+    let update=WebhookIdentity{display_name:Some("Discord sender".into()),..Default::default()};
+    assert_eq!(api.update_webhook(created.webhook.id,&update).await.unwrap().display_name.as_deref(),Some("Discord sender"));
+    api.revoke_webhook(created.webhook.id).await.unwrap();
+    let requests=server.await.unwrap();
+    assert_eq!(requests.iter().map(|r|r.method.as_str()).collect::<Vec<_>>(),["GET","POST","PATCH","DELETE"]);
+    assert_eq!(requests[0].url.path(),"/webhooks");assert_eq!(requests[1].url.path(),"/webhooks");
+    assert_eq!(serde_json::from_str::<Value>(&requests[1].body).unwrap(),json!({"channel_id":CHANNEL,"name":"Bridge"}));
+    assert_eq!(serde_json::from_str::<Value>(&requests[2].body).unwrap(),json!({"display_name":"Discord sender"}));
+    assert!(requests.iter().all(|r|r.headers.contains("Auth=SESSION_SECRET")&&!r.headers.contains("MACHINE_SECRET")&&!r.body.contains("MACHINE_SECRET")));
+    assert_eq!(serde_json::to_value(WebhookIdentity{avatar:Some(String::new()),display_name:Some(String::new()),..Default::default()}).unwrap(),json!({"avatar":"","display_name":""}));
+}
+
+#[tokio::test]
+async fn external_avatar_fetches_are_public_bounded_and_do_not_follow_redirects() {
+    let listener=TcpListener::bind("127.0.0.1:0").await.unwrap();let addr=listener.local_addr().unwrap();
+    let api=ApiClient::new(&format!("http://{addr}/api/")).unwrap();
+    api.cookies.add_cookie_str("Auth=SECRET; Path=/",&api.base);
+    let server=tokio::spawn(async move{
+        let mut headers=Vec::new();
+        for response in ["HTTP/1.1 200 OK\r\nContent-Length: 3\r\nConnection: close\r\n\r\npng".to_owned(),format!("HTTP/1.1 302 Found\r\nLocation: http://{addr}/forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"),"HTTP/1.1 200 OK\r\nContent-Length: 3000000\r\nConnection: close\r\n\r\n".to_owned()]{
+            let(mut stream,_)=timeout(Duration::from_secs(3),listener.accept()).await.unwrap().unwrap();let mut data=vec![0;8192];let n=stream.read(&mut data).await.unwrap();headers.push(String::from_utf8(data[..n].to_vec()).unwrap());stream.write_all(response.as_bytes()).await.unwrap();
+        }headers
+    });
+    let path=format!("/webhooks/{ID}/avatar");assert_eq!(api.external_avatar(&path).await.unwrap(),b"png");
+    assert!(api.external_avatar(&path).await.is_err());assert!(api.external_avatar(&path).await.is_err());
+    let requests=server.await.unwrap();assert!(requests.iter().all(|r|r.starts_with(&format!("GET /api/webhooks/{ID}/avatar "))&&!r.to_ascii_lowercase().contains("cookie:")&&!r.to_ascii_lowercase().contains("authorization:")));
+    for value in ["//attacker.test/a","/users/x/avatar","/webhooks/invalid/avatar","file:///etc/passwd","https://user:pass@cdn.example/a","https://127.0.0.1/a","http://cdn.example/a","https://localhost/a"]{assert!(api.external_avatar_url(value).is_none(),"{value}");}
+    assert!(api.external_avatar_url("https://cdn.discordapp.com/avatars/1/a.png").is_some());
+    assert!(api.create_webhook(Uuid::nil()," ").await.is_err());assert!(api.create_webhook(Uuid::nil(),&"x".repeat(81)).await.is_err());
+}
+
+
+#[tokio::test]
+async fn text_edits_preserve_stored_embeds_and_explicit_empty_lists_remain_distinct(){
+    let embed=json!({"id":CHANNEL,"source_type":"custom","fetch_method":"manual","title":"Stored card","thumbnail":{"mime_type":"image/png"},"created_at":DATE});
+    let mut preserved=message();preserved["embeds"]=json!([embed]);
+    let mut cleared=message();cleared["embeds"]=json!([]);
+    let (client,server)=mock(vec![(200,preserved),(200,cleared)]).await;
+    let id=ID.parse().unwrap();let edited=client.edit_message(id,"Edited text").await.unwrap();
+    assert_eq!(edited.embeds.unwrap()[0].title.as_deref(),Some("Stored card"));
+    client.edit_message_embeds(id,"Edited text",&[]).await.unwrap();
+    let requests=server.await.unwrap();
+    assert_eq!(serde_json::from_str::<Value>(&requests[0].body).unwrap(),json!({"content":"Edited text"}));
+    assert_eq!(serde_json::from_str::<Value>(&requests[1].body).unwrap(),json!({"content":"Edited text","embeds":[]}));
 }

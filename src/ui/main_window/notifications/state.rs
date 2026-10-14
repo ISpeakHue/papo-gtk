@@ -82,7 +82,7 @@ impl ReadJournal {
     pub fn message(&mut self,m:&Message,channels:&mut [Channel]){
         let Some(c)=channels.iter_mut().find(|c|c.id==m.channel_id) else{return;};
         if c.last_message.as_ref().is_some_and(|old|(old.created_at,old.id)>=(m.created_at,m.id)){return;}
-        self.version+=1;let last=ChannelLastMessage{id:m.id,content:m.content.clone(),author_id:m.author_id,author_username:None,created_at:m.created_at};c.last_message=Some(last.clone());self.last.insert(c.id,(self.version,last));
+        self.version+=1;let last=ChannelLastMessage{id:m.id,content:m.content.clone(),author_id:m.author_id,author_username:m.external().map(|a|a.name.clone()),created_at:m.created_at};c.last_message=Some(last.clone());self.last.insert(c.id,(self.version,last));
     }
     pub fn observed_read(&mut self,channel:Uuid,messages:&[Message],channels:&mut [Channel]){
         let Some(newest)=messages.iter().filter(|m|m.channel_id==channel).max_by_key(|m|(m.created_at,m.id)) else{return;};

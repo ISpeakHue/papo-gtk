@@ -166,7 +166,7 @@ impl MainWindowModel {
             let content=gtk::Box::new(gtk::Orientation::Horizontal,10);let details=gtk::Box::new(gtk::Orientation::Vertical,4);
             if channel.is_some(){
                 let author=n.author_id.and_then(|id|self.users.iter().find(|u|u.id==id)).or_else(||n.author_id.and_then(|id|self.direct.items.iter().map(|d|&d.user).find(|u|u.id==id)));
-                let name=author.map(|u|u.display_name()).unwrap_or("Membro indisponível");
+                let name=author.map(|u|u.display_name()).or_else(||self.notifications.inbox.messages.get(&n.message_id).and_then(|m|m.external()).map(|a|a.name.as_str())).unwrap_or("Membro indisponível");
                 let avatar=crate::media::avatar_image(n.author_id.and_then(|id|self.avatars.textures.get(&id)),36);avatar.set_text(Some(name));avatar.set_valign(gtk::Align::Start);content.append(&avatar);
                 let heading=gtk::Label::new(Some(name));heading.set_xalign(0.0);heading.add_css_class("heading");if let Some(roles)=author.and_then(|u|u.roles.as_deref()){crate::ui::style::role_color(&heading,roles);}details.append(&heading);
             }

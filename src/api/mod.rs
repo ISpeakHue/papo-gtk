@@ -17,6 +17,7 @@ pub mod features;
 pub mod security;
 mod discovery;
 mod administration;
+mod webhooks;
 mod moderation;
 mod voice;
 mod requests;
@@ -425,13 +426,16 @@ impl ApiClient {
     }
 
     pub async fn edit_message(&self, message_id: Uuid, content: &str) -> Result<Message> {
-        self.edit_message_embeds(message_id,content,&[]).await
+        self.edit_message_request(message_id,content,None).await
     }
     pub async fn edit_message_embeds(&self,message_id:Uuid,content:&str,embeds:&[EmbedInput])->Result<Message>{
-        crate::models::validate_embeds(embeds)?;
+        self.edit_message_request(message_id,content,Some(embeds)).await
+    }
+    async fn edit_message_request(&self,message_id:Uuid,content:&str,embeds:Option<&[EmbedInput]>)->Result<Message>{
+        if let Some(embeds)=embeds{crate::models::validate_embeds(embeds)?;}
         anyhow::ensure!(content.chars().count() <= 8192, "Use até 8192 caracteres.");
         let message: Message = Self::decode(self.inner.put(self.url(&format!("/messages/{message_id}")))
-            .json(&UpdateMessageRequest { content: content.into(),embeds:embeds.to_vec() }).send_paced(&self.requests).await?, "edit message").await?;
+            .json(&UpdateMessageRequest { content: content.into(),embeds:embeds.map(<[EmbedInput]>::to_vec) }).send_paced(&self.requests).await?, "edit message").await?;
         anyhow::ensure!(message.id == message_id, "Edição retornada para outra mensagem.");
         Ok(message)
     }

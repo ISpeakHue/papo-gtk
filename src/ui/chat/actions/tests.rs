@@ -11,6 +11,7 @@ const OLDER: &str = "12345678-1234-4234-8234-123456789abf";
 const EMOJI: &str = "12345678-1234-4234-8234-123456789ac0";
 const DATE: &str = "2026-10-03T12:00:00Z";
 pub(crate) struct Backend {
+    pub(crate) webhooks:Vec<Value>,pub(crate) fail_webhooks:bool,
     pub(crate) range_media:bool,
     pub(crate) media_ranges:Vec<(String,String)>,
     pub(crate) fail_status:bool,
@@ -21,7 +22,7 @@ pub(crate) struct Backend {
     pub(crate) peer_profile:Option<Value>,
     pub(crate) peer_banned:bool,pub(crate) fail_moderation:bool,pub(crate) fail_audit:bool,
     pub(crate) server_missing:bool, pub(crate) server_value:Value, pub(crate) admin_roles:Vec<Value>, pub(crate) admin_channels:Vec<Value>, pub(crate) dms:Vec<Value>, pub(crate) dm_messages:Vec<Value>, pub(crate) blocks:Vec<Value>, pub(crate) fail_role:bool, pub(crate) deny_dm:bool, pub(crate) fail_server:bool,
-    message: Value, old: Value, groups: Vec<Value>, pub(crate) emojis: Vec<Value>, pinned: bool,
+    pub(crate) message: Value, old: Value, groups: Vec<Value>, pub(crate) emojis: Vec<Value>, pinned: bool,
     pub(crate) profile:Value, config:Value, channel_setting:Value, pub(crate) fail_profile:bool, fail_settings:bool, fail_upload:bool,
     fail_password:bool, fail_recovery:bool, fail_search:bool, pub(crate) fail_read:bool, revoked:bool, dropped:Vec<String>, pub(crate) read_notices:Vec<Value>,
     fail_edit: bool, deny_edit: bool, fail_emoji: bool, pub(crate) requests: Vec<(String, String, Value)>, restricted: bool,
@@ -44,7 +45,7 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let api = ApiClient::new(&format!("http://{}", listener.local_addr().unwrap())).unwrap();
     let state = Arc::new(Mutex::new(Backend {
-        range_media:false,media_ranges:vec![],attachment_thumbnails:Default::default(),
+        webhooks:vec![],fail_webhooks:false,range_media:false,media_ranges:vec![],attachment_thumbnails:Default::default(),
         fail_status:false,fail_channel_read:false,channel_messages:Default::default(),
         embed_values:Default::default(),
         peer_banned:false,fail_moderation:true,fail_audit:false,
@@ -173,6 +174,19 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
                     } else if route == "/auth/whoami" && b.revoked {(401,json!({"type":"https://test/unauthorized","detail":"session ended"}))}
                     else if route == "/auth/whoami" {let mut profile=b.profile.clone();profile["settings"]=json!({"version":1,"config":b.config});(200,profile)}
                     else if route == "/server" {if b.server_missing{(404,json!({"detail":"No server"}))}else{let mut server=b.server_value.clone();if b.restricted{server["owner_id"]=Value::Null;}(200,server)}}
+                    else if route == "/webhooks" && b.fail_webhooks {(403,json!({"detail":"Permission denied"}))}
+                    else if route == "/webhooks" && method=="GET" {(200,json!({"webhooks":b.webhooks}))}
+                    else if route == "/webhooks" && method=="POST" {
+                        let hook=json!({"id":Uuid::new_v4(),"channel_id":body["channel_id"],"name":body["name"],"created_by":USER,"created_at":DATE});
+                        b.webhooks.push(hook.clone());let mut created=hook;created["token"]=json!("TEST_WEBHOOK_TOKEN");(201,created)
+                    }
+                    else if route.starts_with("/webhooks/") && route.ends_with("/avatar") {(200,Value::Null)}
+                    else if route.starts_with("/webhooks/") && method=="PATCH" {
+                        let id=route.trim_start_matches("/webhooks/");if let Some(hook)=b.webhooks.iter_mut().find(|h|h["id"]==id){
+                            if let Some(name)=body.get("display_name"){hook["display_name"]=name.clone();}(200,hook.clone())
+                        }else{(404,json!({"detail":"Unknown webhook"}))}
+                    }
+                    else if route.starts_with("/webhooks/") && method=="DELETE" {let id=route.trim_start_matches("/webhooks/");b.webhooks.retain(|h|h["id"]!=id);(204,Value::Null)}
                     else if route == "/roles" { (200,json!({"roles":b.admin_roles})) }
                     else if route == "/channels" {let mut channels=b.admin_channels.clone();for c in &mut channels{if c["id"]==CHANNEL{c["notification_settings"]=b.channel_setting.clone();}if b.restricted{c["permissions"]=json!([{ "role_id":EMOJI,"role_name":"restricted","permissions":{"read_channel":false}}]);}else if c["permissions"].is_null(){c["permissions"]=json!([]);}}(200,json!({"channels":channels}))}
                     else if route.ends_with("/permissions") { (200,json!({"channel_id":route.split('/').nth(2).unwrap(),"permissions":if b.restricted {vec![json!({"role_id":EMOJI,"role_name":"restricted","permissions":{"read_channel":false}})]} else {b.admin_channels.iter().find(|c|c["id"]==route.split('/').nth(2).unwrap()).and_then(|c|c["permissions"].as_array()).cloned().unwrap_or_default()}})) }

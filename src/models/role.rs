@@ -9,6 +9,8 @@ pub struct RolePermissions {
     pub manage_server: Option<bool>,
     pub manage_channels: Option<bool>,
     pub manage_roles: Option<bool>,
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub manage_webhooks: Option<bool>,
     pub ban_members: Option<bool>,
     pub pin_message: Option<bool>,
     pub everyone_message: Option<bool>,

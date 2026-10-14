@@ -365,6 +365,15 @@ mod tests {
     }
 
     #[test]
+    fn webhook_messages_and_notifications_accept_empty_human_author(){
+        let id=Uuid::new_v4();let channel=Uuid::new_v4();let hook=Uuid::new_v4();
+        let event=parse_event(&serde_json::json!({"type":"message","id":id,"channel_id":channel,"author_id":"","webhook_id":hook,"external_author":{"source":"webhook","id":hook.to_string(),"name":"Integration","avatar_url":format!("/webhooks/{hook}/avatar")},"content":"Hello","created_at":"2026-10-14T20:00:00Z"}).to_string()).unwrap();
+        let WsEvent::NewMessage(message)=event else{panic!("not a message")};assert_eq!(message.author_id,None);assert_eq!(message.webhook_id,Some(hook));assert_eq!(message.external().unwrap().name,"Integration");
+        let event=parse_event(&serde_json::json!({"type":"new_notification","id":Uuid::new_v4(),"message_id":id,"user_id":"","message_content":"Hello"}).to_string()).unwrap();
+        let WsEvent::NewNotification(notice)=event else{panic!("not a notification")};assert_eq!(notice.user_id,None);
+    }
+
+    #[test]
     fn test_parse_message_edit_event() {
         let msg_id = Uuid::new_v4();
         let payload = format!(r#"{{"type":"message_edit","id":"{}","content":"hello updated"}}"#, msg_id);

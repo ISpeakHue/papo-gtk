@@ -58,6 +58,8 @@ pub struct Message {
     pub channel_id: Uuid,
     #[serde(default, deserialize_with = "optional_author")]
     pub author_id: Option<Uuid>,
+    pub webhook_id: Option<Uuid>,
+    pub external_author: Option<super::ExternalAuthor>,
     pub content: Option<String>,
     pub created_at: DateTime<Utc>,
     pub edited_at: Option<DateTime<Utc>>,
@@ -90,12 +92,14 @@ pub struct CreateMessageRequest {
 #[derive(Debug, Clone, Serialize)]
 pub struct UpdateMessageRequest {
     pub content: String,
-    pub embeds:Vec<super::EmbedInput>,
+    /// Omitted for text edits; an explicit empty list removes custom embeds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub embeds:Option<Vec<super::EmbedInput>>,
 }
 
 
 // The REST response uses null; realtime messages use an empty string for a deleted author.
-fn optional_author<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<Uuid>, D::Error> {
+pub(crate) fn optional_author<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<Uuid>, D::Error> {
     let value = Option::<String>::deserialize(deserializer)?;
     value.filter(|value| !value.is_empty()).map(|value| value.parse()
         .map_err(serde::de::Error::custom)).transpose()
@@ -110,4 +114,16 @@ pub struct MessageCursor {
 
 impl From<&Message> for MessageCursor {
     fn from(message: &Message) -> Self { Self { created_at: message.created_at, id: message.id } }
+}
+
+impl Message {
+    /// External identities are display metadata and never a Papo account.
+    pub fn external(&self) -> Option<&super::ExternalAuthor> {
+        if self.author_id.is_none() && self.webhook_id.is_some() { self.external_author.as_ref() } else { None }
+    }
+    pub fn sender_name<'a>(&'a self, users: &'a std::collections::HashMap<Uuid, super::UserSummary>) -> &'a str {
+        self.author_id.and_then(|id| users.get(&id)).map(|u| u.display_name())
+            .or_else(|| self.external().map(|a| a.name.as_str())).filter(|n| !n.trim().is_empty())
+            .unwrap_or(if self.webhook_id.is_some() { "Webhook" } else if self.author_id.is_some() { "Usuário" } else { "Usuário removido" })
+    }
 }

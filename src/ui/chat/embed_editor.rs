@@ -1,4 +1,4 @@
-//! Form-based custom embed authoring, shared by drafts and message edits.
+//! Form-based custom embed authoring for message drafts.
 use super::*;
 use crate::models::*;
 use std::{rc::Rc,cell::RefCell};

@@ -129,3 +129,10 @@ mod tests {
     assert_eq!(prepared.as_ref().unwrap().len(),128);assert!(prepared.unwrap().iter().all(|(_,image)|image.as_ref().is_some_and(|i|i.width<=AVATAR_EDGE&&i.height<=AVATAR_EDGE)));
     let idle=std::rc::Rc::new(std::cell::Cell::new(false));let flag=idle.clone();gtk::glib::idle_add_local_once(move ||flag.set(true));until(context,||idle.get());
 }
+
+/// Decode public webhook avatars on the same bounded worker pool as user avatars.
+pub async fn prepare_bytes(bytes:Vec<u8>)->Option<PreparedImage>{
+    if bytes.len()>2<<20{return None;}
+    let permit=DECODERS.clone().acquire_owned().await.ok()?;
+    tokio::task::spawn_blocking(move ||{let _permit=permit;PreparedImage::decode_thumbnail(&bytes,AVATAR_EDGE,AVATAR_EDGE)}).await.ok().flatten()
+}

@@ -45,7 +45,7 @@ fn role_request(f:&RoleForm)->anyhow::Result<CreateRoleRequest>{
     let name=f.name.text().trim().to_owned();valid_name(&name)?;let color=f.color.text().trim().to_owned();
     anyhow::ensure!(color.is_empty()||color.len()==7&&color.starts_with('#')&&color[1..].bytes().all(|c|c.is_ascii_hexdigit()),"Use uma cor #RRGGBB ou deixe vazio.");
     let b:Vec<_>=f.checks.iter().map(|c|Some(c.is_active())).collect();
-    Ok(CreateRoleRequest{name,color:(!color.is_empty()).then_some(color),permissions:Some(RolePermissions{manage_server:b[0],manage_channels:b[1],manage_roles:b[2],ban_members:b[3],pin_message:b[4],everyone_message:b[5],send_attachment:b[6]})})
+    Ok(CreateRoleRequest{name,color:(!color.is_empty()).then_some(color),permissions:Some(RolePermissions{manage_server:b[0],manage_channels:b[1],manage_roles:b[2],ban_members:b[3],pin_message:b[4],everyone_message:b[5],send_attachment:b[6],manage_webhooks:b[7]})})
 }
 fn server_request(f:&ServerForm)->anyhow::Result<ServerWrite>{
     let name=f.name.text().trim().to_owned();valid_name(&name)?;
@@ -134,7 +134,7 @@ impl MainWindowModel {
                 let role=id.and_then(|id|self.administration.roles.iter().find(|r|r.id==id));if id.is_some()&&role.is_none(){return;}
                 let Some(v)=self.administration.view.as_mut()else{return;};clear(&v.role_form);v.stack.set_visible_child_name("Cargos");
                 let name=entry(&v.role_form,"Nome do cargo",role.map(|r|r.name.as_str()).unwrap_or(""));let color=entry(&v.role_form,"Cor #RRGGBB (vazio remove)",role.and_then(|r|r.color.as_deref()).unwrap_or(""));
-                let p=role.map(|r|&r.permissions);let values=[("Gerenciar servidor",p.and_then(|p|p.manage_server)),("Gerenciar canais",p.and_then(|p|p.manage_channels)),("Gerenciar cargos",p.and_then(|p|p.manage_roles)),("Banir membros (o backend exige gerenciar servidor)",p.and_then(|p|p.ban_members)),("Fixar mensagens",p.and_then(|p|p.pin_message)),("Mencionar todos",p.and_then(|p|p.everyone_message)),("Enviar anexos",p.and_then(|p|p.send_attachment))];
+                let p=role.map(|r|&r.permissions);let values=[("Gerenciar servidor",p.and_then(|p|p.manage_server)),("Gerenciar canais",p.and_then(|p|p.manage_channels)),("Gerenciar cargos",p.and_then(|p|p.manage_roles)),("Banir membros (o backend exige gerenciar servidor)",p.and_then(|p|p.ban_members)),("Fixar mensagens",p.and_then(|p|p.pin_message)),("Mencionar todos",p.and_then(|p|p.everyone_message)),("Enviar anexos",p.and_then(|p|p.send_attachment)),("Gerenciar webhooks",p.and_then(|p|p.manage_webhooks))];
                 let checks=checks(&v.role_form,&values.iter().map(|(l,b)|(*l,b.unwrap_or(false))).collect::<Vec<_>>());button(&v.role_form,"Salvar cargo",&sender,||AdminMsg::SaveRole);v.role=Some(RoleForm{id,name,color,checks});
             }
             AdminMsg::SaveRole=>{

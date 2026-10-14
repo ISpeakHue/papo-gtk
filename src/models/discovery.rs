@@ -72,6 +72,7 @@ pub struct NotificationList { pub notifications: Vec<NotificationSummary>, pub h
 pub struct NotificationEvent {
     pub id: Uuid,
     /// Backend field user_id is the AUTHOR, not the recipient.
+    #[serde(default, deserialize_with="super::message::optional_author")]
     pub user_id: Option<Uuid>,
     pub message_id: Uuid,
     pub message_content: String,

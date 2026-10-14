@@ -324,7 +324,7 @@ impl Component for ChatModel {
                 gtk::Label {set_text:"Respondendo a:",add_css_class:"caption"},
                 #[name="reply_author"]
                 gtk::Label {
-                    #[watch] set_text:model.draft.reply.as_ref().and_then(|m|m.author_id.and_then(|id|model.users_map.get(&id))).map(|u|u.display_name()).unwrap_or("Mensagem"),
+                    #[watch] set_text:model.draft.reply.as_ref().map(|m|m.sender_name(&model.users_map)).unwrap_or("Mensagem"),
                     set_hexpand:true,set_xalign:0.0,set_ellipsize:pango::EllipsizeMode::End,add_css_class:"heading",
                 },
 
@@ -757,8 +757,8 @@ impl Component for ChatModel {
                 if self.media_render_pending==Some(token){if self.viewport.scrolling(){self.viewport.media_when_idle(&sender);}else{self.media_render_pending=None;render_history=true;}}
             },
             ChatMsg::Transfer(msg) => {
-                let background=matches!(&msg,TransferMsg::Bytes{..}|TransferMsg::Decoded{..}|TransferMsg::ImageReady{..}|TransferMsg::AnimationReady{..}|TransferMsg::AuthorReady{..}|TransferMsg::Preview{..});
-                render_history=matches!(&msg,TransferMsg::AttachmentVideo{..}|TransferMsg::File{..}|TransferMsg::Video{..}|TransferMsg::CloseVideo{..}|TransferMsg::Reveal{..}|TransferMsg::RetryImage(_));
+                let background=matches!(&msg,TransferMsg::Bytes{..}|TransferMsg::Decoded{..}|TransferMsg::ImageReady{..}|TransferMsg::AnimationReady{..}|TransferMsg::AuthorReady{..}|TransferMsg::ExternalAvatar{..}|TransferMsg::InvalidateWebhookAvatar(_)|TransferMsg::Preview{..});
+                render_history=matches!(&msg,TransferMsg::InvalidateWebhookAvatar(_)|TransferMsg::AttachmentVideo{..}|TransferMsg::File{..}|TransferMsg::Video{..}|TransferMsg::CloseVideo{..}|TransferMsg::Reveal{..}|TransferMsg::RetryImage(_));
                 let revision=self.transfers.revision;
                 self.handle_transfer(msg,&sender,root);
                 // Several decodes may complete together. Reconcile once per
@@ -1222,7 +1222,7 @@ thread_local!{static FORMATTED_ROWS:std::cell::Cell<usize>=const{std::cell::Cell
 /// Cache only data that changes the row's presentation, never encoded media.
 fn message_visual_signature(msg:&Message)->String {
     let embeds:Vec<_>=msg.embeds.iter().flatten().map(Embed::metadata).collect();
-    format!("{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{embeds:?}",msg.author_id,msg.content,msg.created_at,msg.edited_at,msg.reply_to,msg.attachments,msg.reactions,msg.user_reactions)
+    format!("{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{embeds:?}",(msg.author_id,msg.webhook_id,&msg.external_author),msg.content,msg.created_at,msg.edited_at,msg.reply_to,msg.attachments,msg.reactions,msg.user_reactions)
 }
 
 #[cfg(test)]
@@ -1334,8 +1334,8 @@ fn rebuild_messages_view(
         let message_state=message_visual_signature(msg);
         let signature=format!("{message_state}|{grouped}|{access:?}|{user_id:?}|{config:?}|{:?}|{}|{:?}|{}",author.map(|u|(u.display_name(),&u.roles)),pinned.contains(&msg.id),emoji_state,msg.created_at.with_timezone(&chrono::Local).format("%H:%M"));
         let inline=text::parts_index(msg.content.as_deref().unwrap_or(""),&actions.emoji_names);let inline_state:Vec<_>=inline.iter().filter_map(|p|if let text::Part::Emoji(id,name)=p{Some((*id,name,actions.textures.get(id).map_or(0,|t|t.as_ptr() as usize)))}else{None}).collect();
-        let reply_author=msg.reply_to.and_then(|id|by_id.get(&id)).and_then(|m|m.author_id).and_then(|id|users_map.get(&id)).map(|u|u.display_name());
-        let signature=format!("{signature}|{text:?}|{reply_text:?}|{reply_author:?}|{inline_state:?}|{mentioned}");
+        let reply_author=msg.reply_to.and_then(|id|by_id.get(&id)).map(|m|m.sender_name(users_map));
+        let signature=format!("{signature}|{:?}|{text:?}|{reply_text:?}|{reply_author:?}|{inline_state:?}|{mentioned}",media.external.texture(msg).map(|t|t.as_ptr() as usize));
         if let Some((old,row))=rendered.get(&key){if old==&signature{
             refresh_row_actions(row,msg,actions,access);
             if !defer_media{if let Some(container)=find_media_box(row.upcast_ref()){transfers::update_media_box(&container,msg,media,users_map,actions,sender);}}
@@ -1358,9 +1358,9 @@ fn rebuild_messages_view(
 
         // Author user avatar (falling back to generic symbolic icon)
         let author_user = msg.author_id.and_then(|id| users_map.get(&id));
-        let avatar_widget = avatar_image(msg.author_id.and_then(|id| avatars.get(&id)), 36);
+        let avatar_widget = avatar_image(msg.author_id.and_then(|id| avatars.get(&id)).or_else(||media.external.texture(msg)), 36);
         if let Some(id)=msg.author_id{avatar_widget.set_widget_name(&format!("avatar-{id}"));}
-        avatar_widget.set_text(Some(author_user.map(|u|u.display_name()).unwrap_or("Usuário")));
+        avatar_widget.set_text(Some(msg.sender_name(users_map)));
         avatar_widget.set_valign(gtk::Align::Start);
         avatar_widget.set_visible(config.display.as_ref().and_then(|d|d.show_avatars).unwrap_or(true));
         let avatar_button=gtk::Button::new();avatar_button.add_css_class("flat");avatar_button.add_css_class("papo-message-avatar");avatar_button.set_valign(gtk::Align::Start);avatar_button.set_tooltip_text(Some("Abrir perfil"));avatar_button.set_child(Some(&avatar_widget));
@@ -1375,9 +1375,7 @@ fn rebuild_messages_view(
         // Header (author name + time + edited tag)
         let header_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);header_box.add_css_class("papo-message-header");header_box.set_visible(!grouped);
 
-        let author_name = author_user
-            .map(|u| u.display_name())
-            .unwrap_or("Usuário");
+        let author_name = msg.sender_name(users_map);
 
         let name_label = gtk::Label::new(Some(author_name));
         if let Some(roles)=author_user.and_then(|u|u.roles.as_deref()){crate::ui::style::role_color(&name_label,roles);}
@@ -1385,6 +1383,7 @@ fn rebuild_messages_view(
         name_label.add_css_class("heading");
         let name_button=gtk::Button::new();name_button.add_css_class("flat");name_button.add_css_class("papo-author-button");name_button.set_child(Some(&name_label));
         if let Some(id)=msg.author_id{let s=sender.clone();name_button.connect_clicked(move |_|s.input(ChatMsg::OpenProfile(id)));}else{name_button.set_sensitive(false);}header_box.append(&name_button);
+        if let Some(external)=msg.external(){let badge=gtk::Label::new(Some("APP"));badge.add_css_class("caption-heading");badge.add_css_class("accent");badge.set_tooltip_text(Some(&format!("Webhook · {}",external.source)));header_box.append(&badge);}
 
         let time_str = msg.created_at.with_timezone(&chrono::Local).format("%H:%M").to_string();
         let time_label = gtk::Label::new(Some(&time_str));
@@ -1406,7 +1405,7 @@ fn rebuild_messages_view(
             let channel_id = msg.channel_id; let s = sender.clone();
             let reply_button=gtk::Button::new();reply_button.add_css_class("flat");reply_button.add_css_class("papo-reply-reference");reply_button.set_halign(gtk::Align::Fill);reply_button.set_tooltip_text(Some("Ir para a mensagem respondida"));
             let line=gtk::Box::new(gtk::Orientation::Horizontal,6);line.append(&gtk::Image::from_icon_name("mail-reply-sender-symbolic"));
-            let original=by_id.get(&reply);let name=gtk::Label::new(Some(original.and_then(|m|m.author_id).and_then(|id|users_map.get(&id)).map(|u|u.display_name()).unwrap_or("Mensagem")));name.add_css_class("heading");name.add_css_class("caption");name.set_ellipsize(pango::EllipsizeMode::End);name.set_max_width_chars(20);if let Some(roles)=original.and_then(|m|m.author_id).and_then(|id|users_map.get(&id)).and_then(|u|u.roles.as_deref()){crate::ui::style::role_color(&name,roles);}line.append(&name);
+            let original=by_id.get(&reply);let name=gtk::Label::new(Some(original.map(|m|m.sender_name(users_map)).unwrap_or("Mensagem")));name.add_css_class("heading");name.add_css_class("caption");name.set_ellipsize(pango::EllipsizeMode::End);name.set_max_width_chars(20);if let Some(roles)=original.and_then(|m|m.author_id).and_then(|id|users_map.get(&id)).and_then(|u|u.roles.as_deref()){crate::ui::style::role_color(&name,roles);}line.append(&name);
             let snippet=gtk::Label::new(Some(&text::excerpt(reply_text.as_deref().unwrap_or("Abrir mensagem respondida"))));snippet.add_css_class("caption");snippet.add_css_class("dim-label");snippet.set_xalign(0.0);snippet.set_hexpand(true);snippet.set_ellipsize(pango::EllipsizeMode::End);line.append(&snippet);reply_button.set_child(Some(&line));
             reply_button.connect_clicked(move |_|{let _=s.output(ChatOutput::Navigate{channel_id,message_id:reply});});content_box.append(&reply_button);
         }

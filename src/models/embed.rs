@@ -136,6 +136,7 @@ pub fn validate_embeds(embeds:&[EmbedInput])->anyhow::Result<()> {
     ensure!(total<=6000,"O texto total dos embeds deve ter até 6000 caracteres.");Ok(())
 }
 
+#[cfg(test)]
 impl EmbedInput {
     pub fn from_embed(e:&Embed)->Self{
         let media=|m:&Option<EmbedMedia>|m.as_ref().map(|m|EmbedMediaInput{url:m.url.clone().unwrap_or_default(),mime_type:m.mime_type.clone().unwrap_or_default()});

@@ -228,10 +228,10 @@ pub(crate) fn exercise(context: &gtk::glib::MainContext) {
     find_button(chat.widget().upcast_ref(),"Editar").emit_clicked();
     pump(context);
     let token = chat.model().actions.edit.as_ref().unwrap().token;
-    chat.model().actions.edit.as_ref().unwrap().buffer.set_text("Changed 🌎");
+    chat.model().actions.edit.as_ref().unwrap().text.buffer().set_text("Changed 🌎");
     chat.model().actions.edit.as_ref().unwrap().save.emit_clicked();
     until(context,|| chat.model().actions.edit.as_ref().is_some_and(|e| !e.pending && !e.error.text().is_empty()));
-    assert_eq!(chat.model().actions.edit.as_ref().unwrap().buffer.text(&chat.model().actions.edit.as_ref().unwrap().buffer.start_iter(),&chat.model().actions.edit.as_ref().unwrap().buffer.end_iter(),false).as_str(),"Changed 🌎");
+    assert_eq!(chat.model().actions.edit.as_ref().unwrap().text.buffer().text(&chat.model().actions.edit.as_ref().unwrap().text.buffer().start_iter(),&chat.model().actions.edit.as_ref().unwrap().text.buffer().end_iter(),false).as_str(),"Changed 🌎");
     chat.model().actions.edit.as_ref().unwrap().save.emit_clicked();
     until(context,|| chat.model().actions.edit.is_none());
     assert_eq!(chat.model().history.messages[0].content.as_deref(),Some("Changed 🌎"));

@@ -50,10 +50,13 @@ pub struct DropConnectionRequest {
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct RegisterResponse {
     #[serde(default)]
+    #[expect(dead_code, reason = "Retained authentication response contract; validated by serde and contract tests.")]
     pub id: Option<Uuid>,
     #[serde(default)]
+    #[expect(dead_code, reason = "Retained authentication response contract; validated by serde and contract tests.")]
     pub username: Option<String>,
     #[serde(default)]
+    #[expect(dead_code, reason = "Retained authentication response contract; validated by serde and contract tests.")]
     pub created_at: Option<DateTime<Utc>>,
 }
 
@@ -62,6 +65,7 @@ pub struct RegisterResponse {
 /// the body.
 #[derive(Debug, Clone, Deserialize)]
 pub struct LoginResponse {
+    #[cfg_attr(not(test), expect(dead_code, reason = "Retained authentication response contract; validated by serde and contract tests."))]
     pub user: LoginUser,
     /// True if a session-token reuse was detected (all sessions revoked).
     pub connection_violation: Option<bool>,
@@ -69,7 +73,9 @@ pub struct LoginResponse {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct LoginUser {
+    #[cfg_attr(not(test), expect(dead_code, reason = "Retained authentication response contract; validated by serde and contract tests."))]
     pub id: Uuid,
+    #[expect(dead_code, reason = "Retained authentication response contract; validated by serde and contract tests.")]
     pub username: String,
 }
 
@@ -93,6 +99,7 @@ pub struct ConnectedDevicesResponse {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct DropConnectionResponse {
+    #[cfg_attr(not(test), expect(dead_code, reason = "Retained authentication response contract; validated by serde and contract tests."))]
     pub dropped: u32,
 }
 

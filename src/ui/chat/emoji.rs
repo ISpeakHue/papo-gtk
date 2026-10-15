@@ -51,7 +51,6 @@ pub(super) fn choices(builtin:&[Choice],custom:&[crate::models::Emoji],filter:&s
 /// Stable tabs preserve search, loaded cells and scroll position during API updates.
 #[derive(Clone)]
 pub(super) struct Picker {
-    pub root:gtk::Box,
     catalog:std::rc::Rc<std::cell::RefCell<Catalog>>,
     server_page:gtk::StackPage,status:gtk::Label,
     render:std::rc::Rc<dyn Fn()>,
@@ -69,7 +68,7 @@ impl Picker {
         let choose:std::rc::Rc<dyn Fn(Choice)>=std::rc::Rc::new(choose);let mut renders=Vec::<std::rc::Rc<dyn Fn()>>::new();let mut server_page=None;
         for custom in [false,true] {
             let body=gtk::Box::new(gtk::Orientation::Vertical,4);
-            let grid=gtk::FlowBox::new();grid.set_selection_mode(gtk::SelectionMode::None);grid.set_homogeneous(true);grid.set_min_children_per_line(6);grid.set_max_children_per_line(6);grid.set_row_spacing(4);grid.set_column_spacing(4);
+            let grid=gtk::FlowBox::new();grid.set_selection_mode(gtk::SelectionMode::None);grid.set_homogeneous(true);grid.set_min_children_per_line(1);grid.set_max_children_per_line(128);grid.set_valign(gtk::Align::Start);grid.set_row_spacing(4);grid.set_column_spacing(4);
             let scroll=gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).min_content_height(240).child(&grid).build();body.append(&scroll);
             let empty=gtk::Label::new(Some("Nenhum emoji encontrado"));body.append(&empty);
             let page=tabs.add_titled(&body,Some(if custom{"server"}else{"unicode"}),if custom{"Servidor"}else{"Unicode"});if custom{server_page=Some(page);}
@@ -91,13 +90,25 @@ impl Picker {
                 *keys=signatures;
             });
             let update=render.clone();let count=limit.clone();let weak=scroll.downgrade();search.connect_search_changed(move |_|{if let Some(scroll)=weak.upgrade(){scroll.vadjustment().set_value(0.0);}count.set(96);update();});
-            let update=render.clone();let count=limit.clone();let size=total.clone();let weak=scroll.downgrade();scroll.vadjustment().connect_value_changed(move |adj|{
-                if !weak.upgrade().is_some_and(|s|s.is_mapped())||adj.value()<=0.0||adj.upper()-adj.page_size()-adj.value()>160.0||count.get()>=size.get(){return;}
-                count.set(count.get()+96);update();
-            });renders.push(render);
+            let update=render.clone();let count=limit.clone();let size=total.clone();let weak=scroll.downgrade();
+            let pending=std::rc::Rc::new(std::cell::Cell::new(false));
+            let more:std::rc::Rc<dyn Fn()>=std::rc::Rc::new(move ||{
+                if pending.replace(true){return;}
+                let (weak,count,size,update,pending)=(weak.clone(),count.clone(),size.clone(),update.clone(),pending.clone());
+                // Adjustment changes also occur during allocation. Append after
+                // layout, coalescing resize/scroll signals into one page check.
+                gtk::glib::idle_add_local_once(move ||{
+                    pending.set(false);let Some(scroll)=weak.upgrade().filter(|s|s.is_mapped())else{return;};let adj=scroll.vadjustment();
+                    if adj.page_size()<=0.0||adj.upper()-adj.page_size()-adj.value()>160.0||count.get()>=size.get(){return;}
+                    count.set(count.get()+96);update();
+                });
+            });
+            let more_scroll=more.clone();scroll.vadjustment().connect_value_changed(move |_|more_scroll());
+            let more_size=more.clone();scroll.vadjustment().connect_changed(move |_|more_size());
+            scroll.connect_map(move |_|more());renders.push(render);
         }
         tabs.set_visible_child_name("unicode");let render:std::rc::Rc<dyn Fn()>=std::rc::Rc::new(move ||{for render in &renders{render();}});
-        let picker=Self{root:root.clone(),catalog,server_page:server_page.unwrap(),status,render};(picker.render)();picker
+        let picker=Self{catalog,server_page:server_page.unwrap(),status,render};(picker.render)();picker
     }
     pub fn show_error(&self,message:&str){self.status.set_text(message);self.status.set_visible(true);}
     pub fn update(&self,name:&str,custom:&[crate::models::Emoji],textures:&HashMap<Uuid,gtk::gdk::Texture>,animations:&HashMap<Uuid,crate::media::animation::Animation>){
@@ -128,4 +139,41 @@ impl Picker {
     chat.emit(ChatMsg::Action(ActionMsg::ReloadEmojis));until(context,||chat.model().actions.emojis_request.is_none());assert_eq!(chat.model().actions.animations[&id],animation,"catalog refresh reuses decoded frames");
     picker.set_child(None::<&gtk::Widget>);picker.close();backend.lock().unwrap().emojis.clear();chat.emit(ChatMsg::Action(ActionMsg::ReloadEmojis));until(context,||chat.model().actions.animations.is_empty());
     drop(inline);drop(buffer);drop(view);drop(column);scroll.set_child(None::<&gtk::Widget>);drop(list);drop(picker);drop(window);drop(scroll);let weak=animation.downgrade();drop(animation);drop(chat);server.abort();until(context,||weak.upgrade().is_none());
+}
+
+#[cfg(test)]
+pub(crate) fn exercise_resize(context:&gtk::glib::MainContext){
+    use actions::tests::{descendants,pump,until};use adw::prelude::*;
+    let root=gtk::Box::new(gtk::Orientation::Vertical,8);
+    let builtin:Vec<_>=(0..1024).map(|i|Choice{name:format!("unicode_{i:04}"),text:"😀".into(),id:None}).collect();
+    let custom:Vec<crate::models::Emoji>=(0..512).map(|i|serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"name":format!("server_{i:04}"),"format":"PNG","created_at":"2026-10-15T12:00:00Z"})).unwrap()).collect();
+    let chosen=std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));let selected=chosen.clone();
+    let picker=Picker::new(&root,&builtin,move |choice|selected.borrow_mut().push(choice.id));picker.update("Server",&custom,&HashMap::new(),&HashMap::new());
+    let window=adw::Window::builder().default_width(400).default_height(420).content(&root).build();window.present();performance::settle(context);
+    let tabs=descendants(root.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Stack>().ok()).unwrap();
+    let search=descendants(root.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::SearchEntry>().ok()).unwrap();
+    let active=||{let widgets=descendants(&tabs.visible_child().unwrap());(widgets.iter().find_map(|w|w.downcast_ref::<gtk::FlowBox>()).unwrap().clone(),widgets.iter().find_map(|w|w.downcast_ref::<gtk::ScrolledWindow>()).unwrap().clone())};
+    let geometry=|grid:&gtk::FlowBox,scroll:&gtk::ScrolledWindow|{
+        let mut rows=Vec::<i32>::new();let mut first_row=0;let mut visible=0;
+        let mut child=grid.first_child();
+        while let Some(cell)=child{
+            child=cell.next_sibling();let bounds=cell.compute_bounds(grid).unwrap();let y=bounds.y().round() as i32;
+            if rows.last()!=Some(&y){rows.push(y);}if y==rows[0]{first_row+=1;}
+            let bounds=cell.compute_bounds(scroll).unwrap();if bounds.y()>=0.0&&bounds.y()+bounds.height()<=scroll.height() as f32{visible+=1;}
+        }
+        (first_row,rows.get(1).map(|y|y-rows[0]).unwrap_or(0),visible)
+    };
+    let (grid,scroll)=active();let first=grid.first_child().unwrap();let small=geometry(&grid,&scroll);assert!(small.0>1&&small.1>0);
+    window.set_default_size(400,760);performance::settle(context);let tall=geometry(&grid,&scroll);
+    assert_eq!(tall.0,small.0);assert_eq!(tall.1,small.1,"growing vertically must preserve compact row spacing");assert!(tall.2>small.2,"a taller picker must show more emoji rows");
+    window.set_default_size(1000,760);performance::settle(context);let wide=geometry(&grid,&scroll);
+    assert!(wide.0>tall.0,"a wider picker must add columns");assert_eq!(wide.1,small.1);assert!(wide.2>96,"a large viewport must fill beyond the first lazy page");
+    assert!(grid.observe_children().n_items()>96&&grid.observe_children().n_items()<1024,"resize fills the viewport without eagerly mounting the entire catalog");assert_eq!(grid.first_child().unwrap(),first,"resizing preserves existing cells");
+    // Both shared picker tabs use the same responsive layout.
+    tabs.set_visible_child_name("server");performance::settle(context);let (server,server_scroll)=active();let broad=geometry(&server,&server_scroll);assert!(broad.0>small.0&&broad.2>96);
+    window.set_default_size(320,420);performance::settle(context);let narrow=geometry(&server,&server_scroll);assert!(narrow.0<broad.0);assert_eq!(narrow.1,broad.1);assert!(server_scroll.hadjustment().upper()<=server_scroll.hadjustment().page_size()+1.0);
+    window.set_default_size(1000,760);search.set_text("server_0001");until(context,||server.observe_children().n_items()==1);performance::settle(context);
+    let cell=server.first_child().unwrap();assert!(cell.height()<64,"one filtered emoji must not stretch to fill the window");assert!(server.height()<80,"unused height belongs below the grid");
+    cell.downcast::<gtk::FlowBoxChild>().unwrap().child().and_downcast::<gtk::Button>().unwrap().emit_clicked();assert_eq!(*chosen.borrow(),vec![Some(custom[1].id)]);
+    window.set_content(None::<&gtk::Widget>);window.close();drop(picker);pump(context);
 }

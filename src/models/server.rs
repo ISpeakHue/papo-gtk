@@ -11,13 +11,19 @@ pub struct Server {
     pub id: Uuid,
     pub name: String,
     pub icon_blob: Option<String>,
+    #[expect(dead_code, reason = "Retained server response metadata and typed counts for API compatibility.")]
     pub icon_format: Option<String>,
     pub owner_id: Option<Uuid>,
+    #[expect(dead_code, reason = "Retained server response metadata and typed counts for API compatibility.")]
     pub owner_username: Option<String>,
     pub public: Option<bool>,
+    #[expect(dead_code, reason = "Retained server response metadata and typed counts for API compatibility.")]
     pub created_at: DateTime<Utc>,
+    #[expect(dead_code, reason = "Retained server response metadata and typed counts for API compatibility.")]
     pub channel_count: Option<i32>,
+    #[expect(dead_code, reason = "Retained server response metadata and typed counts for API compatibility.")]
     pub member_count: Option<i32>,
+    #[expect(dead_code, reason = "Retained server response metadata and typed counts for API compatibility.")]
     pub role_count: Option<i32>,
 }
 

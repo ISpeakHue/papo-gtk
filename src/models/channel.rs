@@ -35,6 +35,7 @@ pub struct ChannelPermissions {
 #[derive(Debug, Clone, Deserialize)]
 pub struct ChannelPermissionEntry {
     pub role_id: Uuid,
+    #[expect(dead_code, reason = "Retained channel response metadata; required wire types must still be validated.")]
     pub role_name: String,
     pub permissions: ChannelPermissions,
 }
@@ -42,8 +43,11 @@ pub struct ChannelPermissionEntry {
 #[derive(Debug, Clone, Deserialize)]
 pub struct ChannelLastMessage {
     pub id: Uuid,
+    #[expect(dead_code, reason = "Retained channel response metadata; required wire types must still be validated.")]
     pub content: Option<String>,
+    #[expect(dead_code, reason = "Retained channel response metadata; required wire types must still be validated.")]
     pub author_id: Option<Uuid>,
+    #[expect(dead_code, reason = "Retained channel response metadata; required wire types must still be validated.")]
     pub author_username: Option<String>,
     pub created_at: DateTime<Utc>,
 }
@@ -57,6 +61,7 @@ pub struct Channel {
     pub position: Option<i32>,
     pub topic: Option<String>,
     pub permissions: Option<Vec<ChannelPermissionEntry>>,
+    #[expect(dead_code, reason = "Retained channel response metadata; required wire types must still be validated.")]
     pub created_at: DateTime<Utc>,
     pub last_message: Option<ChannelLastMessage>,
     pub last_read_message: Option<Uuid>,
@@ -73,11 +78,6 @@ impl Channel {
             _ => false,
         }
     }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct ChannelListResponse {
-    pub channels: Vec<Channel>,
 }
 
 // ── Requests ─────────────────────────────────────────────────────────────────

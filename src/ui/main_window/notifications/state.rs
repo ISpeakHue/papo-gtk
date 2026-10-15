@@ -131,6 +131,17 @@ impl ReadJournal {
         config.notifications.as_mut().unwrap().enabled=Some(false);assert!(delivery(&inbox.rows[&id],&config,&channels,user,&inbox.messages).is_none());config.notifications.as_mut().unwrap().enabled=Some(true);channels[0].notification_settings=Some(NotificationSettings::Off);assert!(delivery(&inbox.rows[&id],&config,&channels,user,&inbox.messages).is_none());
         channels[0].notification_settings=None;assert!(delivery(&inbox.rows[&id],&config,&channels,user,&inbox.messages).is_none());inbox.rows.get_mut(&id).unwrap().persisted=true;inbox.rows.get_mut(&id).unwrap().content=format!("@mention(<@{user}>)");inbox.messages.clear();assert!(delivery(&inbox.rows[&id],&config,&channels,user,&inbox.messages).is_some());config.notifications.as_mut().unwrap().mentions=Some(false);assert!(delivery(&inbox.rows[&id],&config,&channels,user,&inbox.messages).is_none());
     }
+    #[test] fn replies_to_the_current_user_are_delivered_without_an_explicit_mention(){
+        let channel_id=Uuid::new_v4();let own=Uuid::new_v4();let mut original=message(channel_id,Uuid::new_v4(),1);original.author_id=Some(own);
+        let mut reply=message(channel_id,Uuid::new_v4(),2);reply.reply_to=Some(original.id);
+        let mut inbox=Inbox::default();inbox.observe(original.clone());inbox.observe(reply.clone());let notice=Uuid::new_v4();inbox.event(event(notice,reply.id));
+        let config=UserConfig::default();let mut channels=vec![NoticeChannel::from(channel(channel_id))];channels[0].notification_settings=Some(NotificationSettings::OnlyMentions);
+        assert!(delivery(&inbox.rows[&notice],&config,&channels,own,&inbox.messages).is_some());assert_eq!(inbox.unread(&channels),1);
+        channels[0].notification_settings=Some(NotificationSettings::Off);assert!(delivery(&inbox.rows[&notice],&config,&channels,own,&inbox.messages).is_none());
+        channels[0].notification_settings=Some(NotificationSettings::OnlyMentions);inbox.mark(notice);assert!(delivery(&inbox.rows[&notice],&config,&channels,own,&inbox.messages).is_none());assert_eq!(inbox.unread(&channels),0);
+        // Replying to somebody else is not a personal notification trigger.
+        let mut unseen=Inbox::default();original.author_id=Some(Uuid::new_v4());unseen.observe(original);unseen.observe(reply.clone());unseen.event(event(notice,reply.id));assert!(delivery(&unseen.rows[&notice],&config,&channels,own,&unseen.messages).is_none());
+    }
     #[test] fn older_snapshot_cannot_restore_notifications_after_a_channel_is_muted(){let id=Uuid::new_v4();let mut channels=vec![channel(id)];let mut journal=ReadJournal::default();let snapshot=journal.version;journal.preference(id,NotificationSettings::Off);journal.reconcile(snapshot,&mut channels);assert_eq!(channels[0].notification_settings,Some(NotificationSettings::Off));assert!(channels[0].last_read_message.is_none());}
     #[test] fn live_unread_survives_old_snapshot_and_older_history_cannot_regress_read(){
         let ch=Uuid::new_v4();let mut channels=vec![channel(ch)];let mut journal=ReadJournal::default();let first=message(ch,Uuid::from_u128(1),1);let second=message(ch,Uuid::from_u128(2),1);

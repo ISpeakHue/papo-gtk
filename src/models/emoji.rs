@@ -7,6 +7,7 @@ pub struct Emoji {
     pub id: Uuid,
     pub name: String,
     pub image_blob: Option<String>,
+    #[expect(dead_code, reason = "Retained emoji format from the backend contract; media decoding uses the actual bytes.")]
     pub format: String,
     pub created_by: Option<Uuid>,
     pub created_at: DateTime<Utc>,

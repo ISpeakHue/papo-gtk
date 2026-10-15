@@ -57,7 +57,7 @@ pub enum SidebarMsg {
     Presence(std::collections::HashMap<Uuid,crate::ws::PresenceStatus>),
     SetCurrentUser(WhoamiResponse),
     SetConfig(crate::models::UserConfig),
-    Profile, Preferences, Security, Notifications,
+    Profile, Preferences, Security,
     UnreadNotifications{count:usize,more:bool},
     SetAvatar(Option<gtk::gdk::Texture>),
     SetChannels(Vec<Channel>),
@@ -77,7 +77,7 @@ pub enum SidebarOutput {
     MarkChannelRead(Uuid),
     VoiceSelect(Uuid),
     Logout,
-    Profile(Uuid), Preferences, Security, Notifications,
+    Profile(Uuid), Preferences, Security,
 }
 
 #[relm4::component(pub)]
@@ -304,7 +304,6 @@ impl Component for SidebarModel {
             SidebarMsg::SetConfig(config) => {self.show_avatars=config.display.as_ref().and_then(|d|d.show_avatars).unwrap_or(true);widgets.avatar_widget.set_visible(self.show_avatars);self.rebuild_direct(&widgets.direct_list,&sender);rebuild_channel_list(&widgets.channels_list,&self.channels,self.selected_channel_id,&self.voice_rooms,&self.avatars,self.show_avatars,&mut self.channel_rows,&sender);},
             SidebarMsg::Profile => {let _=sender.output(SidebarOutput::Profile(self.current_user.id));}
             SidebarMsg::UnreadNotifications{count,more}=>{self.unread_notifications=count;self.more_notifications=more;},
-            SidebarMsg::Notifications => {let _=sender.output(SidebarOutput::Notifications);}
             SidebarMsg::Security => {let _=sender.output(SidebarOutput::Security);}
             SidebarMsg::Preferences => {let _=sender.output(SidebarOutput::Preferences);}
             SidebarMsg::SetAvatar(texture) => crate::media::set_avatar(&widgets.avatar_widget, texture.as_ref()),

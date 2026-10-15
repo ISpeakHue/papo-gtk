@@ -37,7 +37,7 @@ pub enum TransferMsg {
     ClipboardTexture{epoch:Uuid,channel:Uuid,request:Uuid,result:anyhow::Result<gtk::gdk::Texture>},
     PasteReady{epoch:Uuid,channel:Uuid,request:Uuid,result:anyhow::Result<Vec<UploadFile>>},
     AnimationReady{epoch:Uuid,message:Uuid,key:Uuid,token:Uuid,from_video:bool,encoded:Option<std::sync::Arc<[u8]>>,result:Option<crate::media::animation::PreparedAnimation>},
-    ImageReady{epoch:Uuid,message:Uuid,key:Uuid,token:Uuid,result:Option<crate::media::PreparedImage>},
+    ImageReady{epoch:Uuid,key:Uuid,token:Uuid,result:Option<crate::media::PreparedImage>},
     DismissImages,
     CloseVideo{message:Uuid,key:Uuid},AttachmentVideo{message:Uuid,attachment:Uuid},
     Preview{epoch:Uuid,message:Uuid,key:Uuid,token:Uuid,result:anyhow::Result<Embed>},
@@ -54,7 +54,7 @@ pub enum TransferMsg {
     }, Video {
         message: Uuid, preview: Uuid
     }, Bytes {
-        epoch: Uuid, message: Uuid, key: Uuid, token:Option<Uuid>, preview: bool, result: anyhow::Result<Vec<u8>>
+        epoch: Uuid, message: Uuid, key: Uuid, token:Option<Uuid>, result: anyhow::Result<Vec<u8>>
     }, File {
         epoch: Uuid, message: Uuid, key: Uuid, token:Option<Uuid>, destination: Option<PathBuf>, result: anyhow::Result<TemporaryFile>
     }, Saved {
@@ -99,7 +99,8 @@ pub(super) struct Transfers {
     giphy:HashMap<String,Uuid>,animations:HashMap<Uuid,(crate::media::animation::Animation,usize)>,
     pub(super) image_tokens:HashMap<Uuid,Uuid>,preview_tokens:HashMap<Uuid,Uuid>, pub(super) epoch: Uuid, limiter: std::sync::Arc<tokio::sync::Semaphore>, pub(super) textures: HashMap<Uuid, gtk::gdk::Texture>, order: VecDeque<Uuid>, requested: HashSet<Uuid>, revealed: HashSet<Uuid>, pub(super) jobs: Vec<tokio::task::JoinHandle<()>>, uploads: HashMap<Uuid, tokio::task::JoinHandle<()>>, pub progress: u64, video_requests:HashMap<(Uuid,Uuid),Uuid>,videos: Vec<Playback>,images:Vec<(Uuid,Uuid,gtk::Window)>,
 }
-struct Playback {message:Uuid,key:Uuid,view:gtk::Box,media:gtk::MediaFile,file:std::sync::Arc<TemporaryFile>,fullscreen:std::rc::Rc<super::video::Fullscreen>}
+// Keep the temporary file alive until the player and fullscreen view are detached.
+struct Playback {message:Uuid,key:Uuid,view:gtk::Box,media:gtk::MediaFile,_file:std::sync::Arc<TemporaryFile>,fullscreen:std::rc::Rc<super::video::Fullscreen>}
 impl Drop for Playback{
     fn drop(&mut self){
         // Detach GTK's controls before closing their source: unrealizing a Video
@@ -353,7 +354,7 @@ pub(super) fn exercise_performance(context:&gtk::glib::MainContext){
     let epoch=chat.model().transfers.epoch;
     for message in &messages{
         let key=message.attachments.as_ref().unwrap()[0].id;let token=Uuid::new_v4();chat.state().get_mut().model.transfers.image_tokens.insert(key,token);
-        chat.emit(ChatMsg::Transfer(TransferMsg::ImageReady{epoch,message:message.id,key,token,result:Some(crate::media::PreparedImage{width:32,height:32,pixels:vec![255;32*32*4]})}));
+        chat.emit(ChatMsg::Transfer(TransferMsg::ImageReady{epoch,key,token,result:Some(crate::media::PreparedImage{width:32,height:32,pixels:vec![255;32*32*4]})}));
     }
     settle(context);
     let model=chat.model();let near:HashSet<_>=messages.iter().filter(|m|model.transfers.scope.contains(&m.id)).flat_map(|m|m.attachments.iter().flatten().map(|a|a.id)).collect();
@@ -362,7 +363,7 @@ pub(super) fn exercise_performance(context:&gtk::glib::MainContext){
     assert!((1..=2).contains(&(model.render_passes-passes)),"coalesce the decode burst and any subsequent viewport eviction");drop(model);
     let passes=chat.model().render_passes;
     for message in &messages{
-        chat.emit(ChatMsg::Transfer(TransferMsg::ImageReady{epoch:Uuid::new_v4(),message:message.id,key:message.attachments.as_ref().unwrap()[0].id,token:Uuid::new_v4(),result:None}));
+        chat.emit(ChatMsg::Transfer(TransferMsg::ImageReady{epoch:Uuid::new_v4(),key:message.attachments.as_ref().unwrap()[0].id,token:Uuid::new_v4(),result:None}));
     }
     settle(context);
     assert_eq!(chat.model().render_passes,passes,"stale completions must not rebuild or move history");
@@ -472,7 +473,7 @@ fn queue_poster(transfers:&mut Transfers,api:crate::api::ApiClient,sender:&Compo
             let file=api.video_preview_file(&endpoint).await?;
             crate::media::poster::extract(&file.0).await
         }.await;
-        let _=output.send(ChatMsg::Transfer(TransferMsg::Bytes{epoch,message,key,token:Some(token),preview:embedded,result}));
+        let _=output.send(ChatMsg::Transfer(TransferMsg::Bytes{epoch,message,key,token:Some(token),result}));
     }));
 }
 impl ChatModel {
@@ -573,7 +574,7 @@ impl ChatModel {
                 if self.transfers.request_gif(key){
                     if let Some(bytes)=self.transfers.encoded.get(key).or_else(||self.transfers.encoded.get_video(key)){queue_image(&mut self.transfers,sender,m.id,key,ImageInput::Shared(bytes));continue;}
                     let token=Uuid::new_v4();self.transfers.image_tokens.insert(key,token);let s=sender.clone();let message=m.id;let limiter=self.transfers.provider_limiter.clone();
-                    self.transfers.media_job(key,tokio::spawn(async move{let Ok(_permit)=limiter.acquire_owned().await else{return;};let result=crate::media::gif_links::fetch(&id,hint.as_deref()).await;s.input(ChatMsg::Transfer(TransferMsg::Bytes{epoch,message,key,token:Some(token),preview:true,result}));}));
+                    self.transfers.media_job(key,tokio::spawn(async move{let Ok(_permit)=limiter.acquire_owned().await else{return;};let result=crate::media::gif_links::fetch(&id,hint.as_deref()).await;s.input(ChatMsg::Transfer(TransferMsg::Bytes{epoch,message,key,token:Some(token),result}));}));
                 }
             }
             for a in m.attachments.iter().flatten() {
@@ -597,7 +598,7 @@ impl ChatModel {
                         };
                         let result = api.media_bytes(&endpoint, 4<<20).await;
                         s.input(ChatMsg::Transfer(TransferMsg::Bytes {
-                            epoch, message, key, token:Some(token), preview: false, result
+                            epoch, message, key, token:Some(token), result
                         }));
                     }));
                 }
@@ -670,7 +671,7 @@ impl ChatModel {
                 if epoch!=self.transfers.epoch||!self.access.read||self.transfers.image_tokens.get(&key)!=Some(&token)||!self.transfers.authorized(&self.history.messages,key){return;}
                 if image.is_some()||animation.is_some(){if let Some(m)=self.history.messages.iter().find(|m|m.id==message){self.transfers.encoded.insert(key,m.channel_id,message,bytes);}}
                 if (image.is_some()||animation.is_some())&&!self.transfers.sizes.contains_key(&key){if let Some((w,h))=dimensions{self.transfers.remember_size(key,w as i32,h as i32);}}
-                let ready=if animation.is_some(){TransferMsg::AnimationReady{epoch,message,key,token,from_video:false,encoded:None,result:animation}}else{TransferMsg::ImageReady{epoch,message,key,token,result:image}};
+                let ready=if animation.is_some(){TransferMsg::AnimationReady{epoch,message,key,token,from_video:false,encoded:None,result:animation}}else{TransferMsg::ImageReady{epoch,key,token,result:image}};
                 self.handle_transfer(ready,sender,root);
             },
             TransferMsg::AuthorReady{epoch,key,token,result}=>{
@@ -694,7 +695,7 @@ impl ChatModel {
                 self.transfers.image_tokens.remove(&key);self.transfers.requested.remove(&key);self.transfers.gif_ready(key,valid&&result.is_some());if valid{if let Some(animation)=result{self.transfers.cache_animation(key,animation);}else{self.transfers.failed(key);}}
                 if fallback{self.gif_fallback(key,sender);}
             },
-            TransferMsg::ImageReady{epoch,message:_,key,token,result}=>{
+            TransferMsg::ImageReady{epoch,key,token,result}=>{
                 if epoch!=self.transfers.epoch||!self.access.read||self.transfers.image_tokens.get(&key)!=Some(&token){return;}
                 let valid=self.transfers.authorized(&self.history.messages,key);
                 let fallback=valid&&result.is_none()&&self.transfers.gif_requested.contains(&key);
@@ -838,7 +839,7 @@ impl ChatModel {
                 }
             }
             TransferMsg::Bytes {
-                epoch, message, key, token, preview:_, result
+                epoch, message, key, token, result
             } => {
                 if epoch!=self.transfers.epoch||!self.access.read||token.is_some_and(|token|self.transfers.image_tokens.get(&key)!=Some(&token)) {
                     return;
@@ -969,7 +970,7 @@ impl ChatModel {
                             let media=gtk::MediaFile::for_filename(&file.0);let video=video_surface(&media);video.set_hexpand(true);let frame=crate::media::frame::frame(&video,640,360);player.append(&frame);let controls=super::video::controls(&video,&media);player.append(&controls);
                             let fullscreen=super::video::Fullscreen::new(&view,&player,&frame,&media,&controls);
                             let error=gtk::Label::new(None);error.set_wrap(true);error.add_css_class("error");player.append(&error);let error_now=error.clone();media.connect_error_notify(move |m|{if let Some(e)=m.error(){error.set_text(&format!("Não foi possível reproduzir: {e}"));}});if let Some(e)=media.error(){error_now.set_text(&format!("Não foi possível reproduzir: {e}"));}
-                            media.play();self.transfers.videos.push(Playback{message,key,view,media,file,fullscreen});
+                            media.play();self.transfers.videos.push(Playback{message,key,view,media,_file:file,fullscreen});
     }
     fn start_download(&mut self, message: Uuid, key: Uuid, destination: Option<PathBuf>, video: bool, sender: &ComponentSender<Self>) {
         let Some(api) = self.actions.api.clone() else {
@@ -1186,7 +1187,7 @@ pub(crate) fn exercise(api: &crate::api::ApiClient, context: &gtk::glib::MainCon
     // exercise control detachment and asynchronous decoder teardown.
     find_button(chat.widget().upcast_ref(), "Reproduzir vídeo").emit_clicked();
     until(context, || !chat.model().transfers.videos.is_empty());
-    assert!(chat.model().transfers.videos[0].file.0.exists());assert!(descendants(chat.widget().upcast_ref()).iter().any(|w|w.is::<gtk::Video>()),"video belongs to the timeline");
+    assert!(chat.model().transfers.videos[0]._file.0.exists());assert!(descendants(chat.widget().upcast_ref()).iter().any(|w|w.is::<gtk::Video>()),"video belongs to the timeline");
     let stream=chat.model().transfers.videos[0].media.clone();assert!(!stream.is_muted()&&stream.volume()>0.0,"user-started video must have audible defaults");until(context,||stream.is_prepared()||stream.error().is_some());assert!(!stream.is_muted()&&stream.volume()>0.0,"audio defaults survive asynchronous preparation");super::video::exercise(chat.widget(),&stream,context);assert!(stream.error().is_none(),"inline video and audio must decode: {:?}",stream.error());assert!(stream.has_video()&&stream.has_audio());
     for _ in 0..30{pump(context);std::thread::sleep(std::time::Duration::from_millis(5));}
     let video=descendants(chat.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Video>().ok()).unwrap();assert!(video.width()>=600&&video.height()>=330,"actual player must be large: {}x{}",video.width(),video.height());crate::ui::main_window::layout::tests::preview(&test_window,"inline-video",context);
@@ -1199,11 +1200,11 @@ pub(crate) fn exercise(api: &crate::api::ApiClient, context: &gtk::glib::MainCon
     chat.state().get_mut().model.transfers.release_offscreen_playback(&HashSet::new());assert_eq!(chat.model().transfers.videos.len(),1,"fullscreen playback survives background timeline eviction");
     chat.emit(ChatMsg::ApplyChange(Change::Edit(message,"Updated while fullscreen".into(),Some(chrono::Utc::now()))));super::performance::settle(context);assert_eq!(video.root().and_downcast::<gtk::Window>().unwrap(),fullscreen,"message reconciliation must not pull the player out of fullscreen");
     find_button(fullscreen.upcast_ref(),"Sair da tela cheia").emit_clicked();super::performance::settle(context);assert!(!fullscreen.is_visible());assert_eq!(video.root().and_downcast::<gtk::Window>().unwrap().upcast::<gtk::Widget>(),test_window.clone().upcast::<gtk::Widget>());assert!(!stream.is_playing()&&stream.is_muted()&&(stream.volume()-0.3).abs()<0.001);
-    let file_path=chat.model().transfers.videos[0].file.0.clone();find_button(chat.widget().upcast_ref(),"Fechar vídeo").emit_clicked();pump(context);assert!(chat.model().transfers.videos.is_empty());assert!(!stream.is_playing()&&stream.file().is_none());assert!(file_path.exists(),"closing playback retains its bounded session cache");
+    let file_path=chat.model().transfers.videos[0]._file.0.clone();find_button(chat.widget().upcast_ref(),"Fechar vídeo").emit_clicked();pump(context);assert!(chat.model().transfers.videos.is_empty());assert!(!stream.is_playing()&&stream.file().is_none());assert!(file_path.exists(),"closing playback retains its bounded session cache");
     for _ in 0..4{
         find_button(chat.widget().upcast_ref(),"Reproduzir vídeo").emit_clicked();until(context,||!chat.model().transfers.videos.is_empty());
         let stream=chat.model().transfers.videos[0].media.clone();stream.set_muted(true);until(context,||stream.is_prepared()||stream.error().is_some());assert!(stream.error().is_none());
-        let video=descendants(chat.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Video>().ok()).unwrap();let path=chat.model().transfers.videos[0].file.0.clone();find_button(chat.widget().upcast_ref(),"Fechar vídeo").emit_clicked();pump(context);
+        let video=descendants(chat.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Video>().ok()).unwrap();let path=chat.model().transfers.videos[0]._file.0.clone();find_button(chat.widget().upcast_ref(),"Fechar vídeo").emit_clicked();pump(context);
         assert!(!stream.is_playing()&&stream.file().is_none()&&video.media_stream().is_none()&&path.exists());
     }
     find_button(chat.widget().upcast_ref(),"Reproduzir vídeo").emit_clicked();until(context,||!chat.model().transfers.videos.is_empty());
@@ -1221,13 +1222,13 @@ pub(crate) fn exercise(api: &crate::api::ApiClient, context: &gtk::glib::MainCon
     image::DynamicImage::new_rgba8(1, 1).write_to(&mut bytes, image::ImageFormat::Png).unwrap();
     let image = bytes.into_inner();
     chat.emit(ChatMsg::Transfer(TransferMsg::Bytes { token:None,
-        epoch, message, key: attachment, preview: false, result: Ok(image.clone())
+        epoch, message, key: attachment, result: Ok(image.clone())
     }));
     pump(context);
     assert!(!chat.model().transfers.textures.contains_key(&attachment));
     let video_message=Uuid::new_v4();let video_attachment=Uuid::new_v4();chat.emit(ChatMsg::AddMessage(serde_json::from_value(json!({"id":video_message,"channel_id":channel,"author_id":user,"created_at":"2026-10-03T12:01:00Z","attachments":[{"id":video_attachment,"mime_type":"video/webm","original_file_name":"clip.webm","size_bytes":8293,"created_at":"2026-10-03T12:01:00Z"}]})).unwrap()));pump(context);
     chat.emit(ChatMsg::Transfer(TransferMsg::AttachmentVideo{message:video_message,attachment:video_attachment}));chat.emit(ChatMsg::Transfer(TransferMsg::CloseVideo{message:video_message,key:video_attachment}));pump(context);until(context,||chat.model().transfers.jobs.iter().all(|job|job.is_finished()));pump(context);assert!(chat.model().transfers.videos.is_empty(),"closing while downloading must reject the delayed file");
-    find_button(chat.widget().upcast_ref(),"Reproduzir vídeo").emit_clicked();until(context,||!chat.model().transfers.videos.is_empty());assert!(descendants(chat.widget().upcast_ref()).iter().any(|w|w.widget_name()==format!("video-{video_message}-{video_attachment}")));let attachment_stream=chat.model().transfers.videos[0].media.clone();attachment_stream.set_muted(true);find_button(chat.widget().upcast_ref(),"Tela cheia").emit_clicked();super::performance::settle(context);let fullscreen=gtk::Window::list_toplevels().into_iter().find_map(|w|w.downcast::<gtk::Window>().ok().filter(|w|w.title().as_deref()==Some("Vídeo em tela cheia")&&w.is_visible())).unwrap();let delete_epoch=chat.model().actions.epoch;let path=chat.model().transfers.videos[0].file.0.clone();chat.emit(ChatMsg::Action(ActionMsg::DeleteFinished{epoch:delete_epoch,id:video_message,result:Ok(())}));pump(context);assert!(!path.exists()&&!fullscreen.is_visible(),"deleting the attachment also closes fullscreen");chat.emit(ChatMsg::DeleteMessage(video_message));pump(context);assert!(chat.model().transfers.videos.is_empty()&&!attachment_stream.is_playing()&&attachment_stream.file().is_none(),"deleting a message stops attachment playback");
+    find_button(chat.widget().upcast_ref(),"Reproduzir vídeo").emit_clicked();until(context,||!chat.model().transfers.videos.is_empty());assert!(descendants(chat.widget().upcast_ref()).iter().any(|w|w.widget_name()==format!("video-{video_message}-{video_attachment}")));let attachment_stream=chat.model().transfers.videos[0].media.clone();attachment_stream.set_muted(true);find_button(chat.widget().upcast_ref(),"Tela cheia").emit_clicked();super::performance::settle(context);let fullscreen=gtk::Window::list_toplevels().into_iter().find_map(|w|w.downcast::<gtk::Window>().ok().filter(|w|w.title().as_deref()==Some("Vídeo em tela cheia")&&w.is_visible())).unwrap();let delete_epoch=chat.model().actions.epoch;let path=chat.model().transfers.videos[0]._file.0.clone();chat.emit(ChatMsg::Action(ActionMsg::DeleteFinished{epoch:delete_epoch,id:video_message,result:Ok(())}));pump(context);assert!(!path.exists()&&!fullscreen.is_visible(),"deleting the attachment also closes fullscreen");chat.emit(ChatMsg::DeleteMessage(video_message));pump(context);assert!(chat.model().transfers.videos.is_empty()&&!attachment_stream.is_playing()&&attachment_stream.file().is_none(),"deleting a message stops attachment playback");
     let gif_message=Uuid::new_v4();let gif_key=Uuid::new_v4();let gif=crate::media::animation::fixture();
     use base64::Engine;
     chat.emit(ChatMsg::AddMessage(serde_json::from_value(json!({"id":gif_message,"channel_id":channel,"content":"Animated fixture","created_at":"2026-10-03T12:02:00Z","previews":[{"id":gif_key,"url":"https://example.test/animated","kind":"og","image_mime_type":"image/gif","image_data":base64::engine::general_purpose::STANDARD.encode(gif),"fetched_at":"2026-10-03T12:02:00Z"}]})).unwrap()));
@@ -1256,7 +1257,7 @@ pub(crate) fn exercise(api: &crate::api::ApiClient, context: &gtk::glib::MainCon
     assert!(chat.model().history.messages.iter().flat_map(|m|m.embeds.iter().flatten()).all(|p|p.image_data.is_none()),"encoded preview images must not be retained or cloned into summaries");
     let references:Vec<_>=chat.model().history.messages.iter().filter(|m|m.embeds.iter().flatten().any(|p|p.id==shared)).map(|m|m.id).collect();
     assert_eq!(references.len(),2);let token=Uuid::new_v4();chat.state().get_mut().model.transfers.image_tokens.insert(shared,token);
-    chat.emit(ChatMsg::DeleteMessage(references[0]));chat.emit(ChatMsg::Transfer(TransferMsg::ImageReady{epoch:chat.model().transfers.epoch,message:references[0],key:shared,token,result:Some(crate::media::PreparedImage{width:3,height:1,pixels:vec![255;12]})}));
+    chat.emit(ChatMsg::DeleteMessage(references[0]));chat.emit(ChatMsg::Transfer(TransferMsg::ImageReady{epoch:chat.model().transfers.epoch,key:shared,token,result:Some(crate::media::PreparedImage{width:3,height:1,pixels:vec![255;12]})}));
     until(context,||chat.model().transfers.textures[&shared].width()==3);
     chat.emit(ChatMsg::Transfer(TransferMsg::OpenImage{message:references[1],key:shared}));pump(context);let viewer=chat.model().transfers.images.last().unwrap().2.clone();
     chat.emit(ChatMsg::Action(ActionMsg::DeleteFinished{epoch:chat.model().actions.epoch,id:references[1],result:Ok(())}));pump(context);assert!(!viewer.is_visible());assert!(chat.model().transfers.images.is_empty());
@@ -1265,7 +1266,7 @@ pub(crate) fn exercise(api: &crate::api::ApiClient, context: &gtk::glib::MainCon
     assert_eq!(bounded.textures.len(), 64);assert!(!bounded.textures.contains_key(&first));assert!(bounded.request(first),"eviction must make visible media eligible again");assert!(!bounded.request(first),"in-flight work must stay deduplicated");bounded.failed(first);assert!(!bounded.request(first),"failures use a retry delay");bounded.failed.remove(&first);assert!(bounded.request(first));
     chat.emit(ChatMsg::ClearChannel);
     chat.emit(ChatMsg::Transfer(TransferMsg::Bytes { token:None,
-        epoch, message, key: preview, preview: true, result: Ok(image)
+        epoch, message, key: preview, result: Ok(image)
     }));
     pump(context);
     assert!(chat.model().transfers.textures.is_empty());
@@ -1275,20 +1276,20 @@ pub(crate) fn exercise(api: &crate::api::ApiClient, context: &gtk::glib::MainCon
     let image_message=serde_json::from_value(json!({"id":message_id,"channel_id":channel,"author_id":user,"created_at":"2026-10-03T12:00:00Z","attachments":[{"id":picture_id,"mime_type":"image/png","original_file_name":"example.png","size_bytes":2048,"created_at":"2026-10-03T12:00:00Z"}]})).unwrap();
     let photo=ChatModel::builder().launch(ChatInit{active_channel:Some(serde_json::from_value(json!({"id":channel,"name":"images","type":"text","created_at":"2026-10-03T12:00:00Z"})).unwrap()),messages:vec![image_message],user_id:Some(user),..Default::default()}).detach();photo.emit(ChatMsg::SetAccess{user_id:user,access:crate::models::Access{read:true,..Default::default()}});pump(context);
     let epoch=photo.model().transfers.epoch;let mut bytes=std::io::Cursor::new(Vec::new());image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(1024,256,image::Rgba([48,120,180,255]))).write_to(&mut bytes,image::ImageFormat::Png).unwrap();
-    photo.emit(ChatMsg::Transfer(TransferMsg::Bytes{token:None,epoch,message:message_id,key:picture_id,preview:false,result:Ok(bytes.into_inner())}));until(context,||photo.model().transfers.textures.contains_key(&picture_id));assert_eq!((photo.model().transfers.textures[&picture_id].width(),photo.model().transfers.textures[&picture_id].height()),(680,170));
+    photo.emit(ChatMsg::Transfer(TransferMsg::Bytes{token:None,epoch,message:message_id,key:picture_id,result:Ok(bytes.into_inner())}));until(context,||photo.model().transfers.textures.contains_key(&picture_id));assert_eq!((photo.model().transfers.textures[&picture_id].width(),photo.model().transfers.textures[&picture_id].height()),(680,170));
     let window=adw::Window::builder().default_width(900).default_height(650).content(photo.widget()).build();window.present();for _ in 0..80{pump(context);std::thread::sleep(std::time::Duration::from_millis(5));}
     let open=find_button(photo.widget().upcast_ref(),"Abrir imagem");let picture=descendants(open.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Picture>().ok()).unwrap();
     assert!((620..=640).contains(&picture.width()),"actual picture width: {}",picture.width());assert!((150..=165).contains(&picture.height()));
     assert!(descendants(photo.widget().upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::Button>()).all(|b|!b.is_mapped()||(b.label().as_deref()!=Some("Baixar arquivo")&&b.icon_name().as_deref()!=Some("folder-download-symbolic"))),"visual attachments expose downloads only in context menus and viewers");crate::ui::main_window::layout::tests::preview(&window,"inline-image",context);open.emit_clicked();pump(context);assert!(photo.model().transfers.images[0].2.is_visible());let viewer=photo.model().transfers.images[0].2.clone();
     let mut tiny=std::io::Cursor::new(Vec::new());image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(32,32,image::Rgba([48,120,180,255]))).write_to(&mut tiny,image::ImageFormat::Png).unwrap();
-    photo.emit(ChatMsg::Transfer(TransferMsg::Bytes{token:None,epoch,message:message_id,key:picture_id,preview:false,result:Ok(tiny.into_inner())}));
+    photo.emit(ChatMsg::Transfer(TransferMsg::Bytes{token:None,epoch,message:message_id,key:picture_id,result:Ok(tiny.into_inner())}));
     until(context,||photo.model().transfers.textures[&picture_id].width()==32);
     for _ in 0..80{pump(context);std::thread::sleep(std::time::Duration::from_millis(5));}
     let small=descendants(find_button(photo.widget().upcast_ref(),"Abrir imagem").upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Picture>().ok()).unwrap();assert!((620..=640).contains(&small.width())&&(150..=165).contains(&small.height()),"a replacement thumbnail must keep the known original aspect ratio: {}x{}",small.width(),small.height());
     window.set_default_size(400,650);for _ in 0..80{pump(context);std::thread::sleep(std::time::Duration::from_millis(5));}
     assert!(small.width()<400&&small.width()>150,"media must shrink within a narrow chat: {}",small.width());assert!((small.width()-4*small.height()).abs()<=4);crate::ui::main_window::layout::tests::preview(&window,"inline-image-narrow",context);assert!((small.width()-4*small.height()).abs()<=4,"media aspect ratio remains stable after resize settles: {}x{}",small.width(),small.height());
     let limiter=photo.model().transfers.decode_limiter.clone();let permit=tokio::runtime::Handle::current().block_on(limiter.acquire_many_owned(2)).unwrap();
-    let mut encoded=std::io::Cursor::new(Vec::new());image::DynamicImage::new_rgba8(32,32).write_to(&mut encoded,image::ImageFormat::Png).unwrap();photo.emit(ChatMsg::Transfer(TransferMsg::Bytes{token:None,epoch,message:message_id,key:picture_id,preview:false,result:Ok(encoded.into_inner())}));pump(context);assert!(photo.model().transfers.image_tokens.contains_key(&picture_id));
+    let mut encoded=std::io::Cursor::new(Vec::new());image::DynamicImage::new_rgba8(32,32).write_to(&mut encoded,image::ImageFormat::Png).unwrap();photo.emit(ChatMsg::Transfer(TransferMsg::Bytes{token:None,epoch,message:message_id,key:picture_id,result:Ok(encoded.into_inner())}));pump(context);assert!(photo.model().transfers.image_tokens.contains_key(&picture_id));
     let ticks=std::rc::Rc::new(std::cell::Cell::new(0));let count=ticks.clone();let timer=gtk::glib::timeout_add_local(std::time::Duration::from_millis(5),move ||{count.set(count.get()+1);gtk::glib::ControlFlow::Continue});for _ in 0..20{pump(context);std::thread::sleep(std::time::Duration::from_millis(5));}timer.remove();assert!(ticks.get()>5,"GTK remains responsive while image work waits off-thread");
     photo.emit(ChatMsg::ApplyChange(Change::Moderation(message_id,picture_id,"blocked".into())));pump(context);assert!(!viewer.is_visible());assert!(photo.model().transfers.images.is_empty());drop(permit);until(context,||photo.model().transfers.jobs.iter().all(|job|job.is_finished()));pump(context);assert!(!photo.model().transfers.textures.contains_key(&picture_id),"delayed decoding cannot restore blocked media");window.close();
 }
@@ -1387,7 +1388,7 @@ pub(crate) fn exercise_retention(context:&gtk::glib::MainContext){
     assert_eq!(chat.model().history.messages[0].id,messages[400].id);assert!(chat.model().has_more);
     assert!(old_texture.upgrade().is_none()&&old_animation.upgrade().is_none(),"GTK pictures and GIF timers must release their paintables too");
     assert!((adjustment.upper()-adjustment.page_size()-adjustment.value()).abs()<2.0);
-    chat.emit(ChatMsg::Transfer(TransferMsg::ImageReady{epoch,message:messages[205].id,key:keys[2],token,result:Some(image())}));pump(context);assert!(!chat.model().transfers.textures.contains_key(&keys[2]),"late decoding must not refill released media");
+    chat.emit(ChatMsg::Transfer(TransferMsg::ImageReady{epoch,key:keys[2],token,result:Some(image())}));pump(context);assert!(!chat.model().transfers.textures.contains_key(&keys[2]),"late decoding must not refill released media");
     // Released pages remain available through normal pagination.
     chat.emit(ChatMsg::Action(ActionMsg::Navigate(messages[400].id)));settle(context);
     let request=Uuid::new_v4();chat.emit(ChatMsg::BeginHistory{request_id:request,cursor:Some(MessageCursor::from(&messages[400]))});
@@ -1429,7 +1430,7 @@ pub(crate) fn exercise_retention(context:&gtk::glib::MainContext){
             state.model.transfers.cache_image(key,crate::media::PreparedImage{width:8,height:8,pixels:vec![255;256]});
             assert!(state.model.transfers.request_gif(key),"a cached static thumbnail must still upgrade to the real GIF");assert!(!state.model.transfers.request_gif(key),"an in-flight GIF upgrade must be deduplicated");
             state.model.transfers.giphy.insert(urls[i].into(),key);state.model.transfers.image_tokens.insert(key,token);}
-        chat.emit(ChatMsg::Transfer(TransferMsg::Bytes{epoch,message:messages[i].id,key,token:Some(token),preview:true,result:Ok(crate::media::animation::fixture())}));
+        chat.emit(ChatMsg::Transfer(TransferMsg::Bytes{epoch,message:messages[i].id,key,token:Some(token),result:Ok(crate::media::animation::fixture())}));
     }
     until(context,||chat.model().transfers.animations.len()==2&&chat.model().media_render_pending.is_none());settle(context);
     let pictures:Vec<_>=descendants(chat.widget().upcast_ref()).into_iter().filter_map(|w|w.downcast::<gtk::Picture>().ok()).filter(|p|p.paintable().is_some_and(|a|a.is::<crate::media::animation::Animation>())).collect();

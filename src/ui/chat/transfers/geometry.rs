@@ -33,7 +33,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
         if animated{image::codecs::gif::GifEncoder::new(&mut bytes).encode_frames((0..2).map(|_|image::Frame::from_parts(rgba.clone(),0,0,image::Delay::from_numer_denom_ms(100,1)))).unwrap();}
         else{image::DynamicImage::ImageRgba8(rgba).write_to(&mut bytes,image::ImageFormat::Png).unwrap();}
         let bytes=bytes.into_inner();let epoch=chat.model().transfers.epoch;
-        chat.emit(ChatMsg::Transfer(TransferMsg::Bytes{epoch,message:message.id,key,token:None,preview:embedded,result:Ok(bytes.clone())}));
+        chat.emit(ChatMsg::Transfer(TransferMsg::Bytes{epoch,message:message.id,key,token:None,result:Ok(bytes.clone())}));
         until(context,||chat.model().transfers.textures.contains_key(&key)&&chat.model().media_render_pending.is_none()&&descendants(chat.widget().upcast_ref()).iter().any(|w|w.is::<gtk::Picture>()));
         performance::settle(context);assert_fitted(chat.widget().upcast_ref());
         if animated{assert!(chat.model().transfers.animations.contains_key(&key));}
@@ -44,7 +44,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
         chat.emit(ChatMsg::SetChannel(target(Uuid::new_v4())));pump(context);chat.emit(ChatMsg::SetChannel(target(channel)));
         until(context,||!chat.model().viewport.opening_flag().get()&&!chat.model().history.messages.is_empty());performance::settle(context);
         assert!(chat.model().transfers.textures.is_empty());let restored=frame(chat.widget().upcast_ref());assert_eq!((restored.width(),restored.height()),geometry,"unloading must retain the corrected frame geometry");
-        chat.emit(ChatMsg::Transfer(TransferMsg::Bytes{epoch:chat.model().transfers.epoch,message:message.id,key,token:None,preview:embedded,result:Ok(bytes)}));
+        chat.emit(ChatMsg::Transfer(TransferMsg::Bytes{epoch:chat.model().transfers.epoch,message:message.id,key,token:None,result:Ok(bytes)}));
         until(context,||chat.model().transfers.textures.contains_key(&key)&&chat.model().media_render_pending.is_none());performance::settle(context);assert_fitted(chat.widget().upcast_ref());
         window.set_content(None::<&gtk::Widget>);window.close();drop(chat);pump(context);
     }

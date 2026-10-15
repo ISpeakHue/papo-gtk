@@ -112,6 +112,10 @@ impl Composer {
         entry.grab_focus_without_selecting();entry.select_region(caret,caret);entry.set_position(caret);
     }
     pub fn connect(&self,entry:&gtk::TextView,sender:&ComponentSender<ChatModel>) {
+        let input=sender.input_sender().clone();
+        self.connect_changed(entry,move |text|{let _=input.send(ChatMsg::InputChanged(text));});
+    }
+    pub fn connect_changed(&self,entry:&gtk::TextView,changed:impl Fn(String)+'static) {
         let buffer=entry.buffer();
         let composer=self.clone();buffer.connect_insert_text(move |_,at,text|{
             if !composer.updating.get(){let mut value=composer.value.borrow_mut();let start=byte(&value.text,at.offset());value.replace(start,start,text);}
@@ -119,11 +123,11 @@ impl Composer {
         let composer=self.clone();buffer.connect_delete_range(move |_,start,end|{
             if !composer.updating.get(){let mut value=composer.value.borrow_mut();let(start,end)=(byte(&value.text,start.offset()),byte(&value.text,end.offset()));value.replace(start,end,"");}
         });
-        let composer=self.clone();let input=sender.input_sender().clone();let weak=entry.downgrade();buffer.connect_changed(move |_|{
+        let composer=self.clone();let weak=entry.downgrade();buffer.connect_changed(move |_|{
             if composer.updating.get(){return;}
             let Some(entry)=weak.upgrade()else{return;};
             if composer.value.borrow().text!=entry.text().as_str(){*composer.value.borrow_mut()=DisplayText{text:entry.text().into(),spans:vec![]};}
-            composer.highlight(&entry);let _=input.send(ChatMsg::InputChanged(composer.wire_text()));
+            composer.highlight(&entry);changed(composer.wire_text());
         });
         // Native composition is transient GTK state, not a draft edit. Avoid
         // rebuilding the component while the input method owns the preedit.
@@ -159,13 +163,25 @@ impl Composer {
         for span in &value.spans {let start=value.text[..span.start].chars().count() as i32;let end=value.text[..span.end].chars().count() as i32;buffer.apply_tag(&tag,&buffer.iter_at_offset(start),&buffer.iter_at_offset(end));}
     }
     pub fn mention(&self,entry:&gtk::TextView,id:Option<Uuid>,users:&HashMap<Uuid,UserSummary>)->i32 {
+        self.mention_in(entry,id,users,None)
+    }
+    /// Full editable mention under the caret, including names with spaces.
+    pub fn mention_span(&self,entry:&gtk::TextView)->Option<(usize,usize)> {
+        let value=self.value.borrow();let at=byte(&value.text,entry.position());
+        value.spans.iter().find(|s|s.start<=at&&at<s.end).map(|s|(s.start,s.end))
+    }
+    pub fn mention_in(&self,entry:&gtk::TextView,id:Option<Uuid>,users:&HashMap<Uuid,UserSummary>,range:Option<(usize,usize)>)->i32 {
         let mut value=self.value.borrow_mut();
-        let(start,end)=mentions::completion(&value.text,entry.position()).map(|(s,e,_)|(s,e)).unwrap_or_else(||{
+        let(start,end)=range.or_else(||mentions::completion(&value.text,entry.position()).map(|(s,e,_)|(s,e))).unwrap_or_else(||{
             let end=value.text.len();let gap=if end==0||value.text.ends_with(char::is_whitespace){""}else{" "};value.replace(end,end,gap);(value.text.len(),value.text.len())
         });
         let label=id.and_then(|id|users.get(&id).map(|u|format!("@{}",u.display_name()))).unwrap_or_else(||"@everyone".into());
-        value.replace(start,end,&format!("{label} "));value.spans.push(Span{start,end:start+label.len(),id});value.spans.sort_by_key(|s|s.start);
-        let caret=value.text[..start+label.len()+1].chars().count() as i32;drop(value);self.refresh(entry);caret
+        let replacing=range.is_some()&&value.spans.iter().any(|s|s.start==start&&s.end==end);
+        let gap=if range.is_some()&&(value.text[end..].starts_with(char::is_whitespace)||replacing&&end<value.text.len()){ "" }else{ " " };
+        let inserted=format!("{label}{gap}");
+        value.replace(start,end,&inserted);value.spans.push(Span{start,end:start+label.len(),id});value.spans.sort_by_key(|s|s.start);
+        let trailing=if gap.is_empty(){value.text[start+inserted.len()..].chars().next().filter(|c|c.is_whitespace()).map_or(0,char::len_utf8)}else{0};
+        let caret=value.text[..start+inserted.len()+trailing].chars().count() as i32;drop(value);self.refresh(entry);caret
     }
     pub fn emoji(&self,entry:&gtk::TextView,value:&str,replace:bool)->i32 {
         let mut text=self.value.borrow_mut();let end=byte(&text.text,entry.position());

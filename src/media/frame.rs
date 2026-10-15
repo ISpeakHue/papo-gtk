@@ -50,10 +50,6 @@ pub fn frame(child:&impl IsA<gtk::Widget>,width:i32,height:i32)->Frame {
     let child=child.as_ref().clone();child.set_parent(&frame);let _=frame.imp().child.set(child);
     frame.set_halign(gtk::Align::Start);frame.set_valign(gtk::Align::Start);frame.set_overflow(gtk::Overflow::Hidden);frame.add_css_class("papo-media-frame");frame
 }
-pub fn image_frame(child:&impl IsA<gtk::Widget>,texture:&gtk::gdk::Texture,embedded:bool)->Frame {
-    let(width,height)=fit_size(texture.width(),texture.height(),embedded);
-    frame(child,width,height)
-}
 /// Bound presentation without enlarging stickers, tiny GIFs or source pixels.
 pub fn fit_size(width:i32,height:i32,embedded:bool)->(i32,i32){
     let(width,height)=(width.max(1),height.max(1));

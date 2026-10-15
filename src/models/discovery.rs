@@ -50,6 +50,7 @@ pub struct SearchResult {
     pub author_id: Option<Uuid>,
     pub author_username: Option<String>,
     pub created_at: DateTime<Utc>,
+    #[expect(dead_code, reason = "Retained search score; result ordering comes from the backend.")]
     pub score: Option<f64>,
 }
 #[derive(Debug, Deserialize)]

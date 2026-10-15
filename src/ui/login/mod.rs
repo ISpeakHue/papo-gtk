@@ -6,7 +6,6 @@ pub(crate) mod recovery;
 pub(crate) mod tests;
 
 use adw::prelude::*;
-use gtk::prelude::*;
 use relm4::prelude::*;
 use tracing::{error, info};
 
@@ -35,6 +34,7 @@ pub struct LoginModel {
 }
 
 pub enum LoginMsg {
+    #[cfg_attr(test, expect(dead_code, reason = "Automatic session resume is disabled in UI fixtures to avoid saved sessions."))]
     Resume, SetRememberSession(bool),
     Resumed{server:String,user:String,result:Result<Option<(WhoamiResponse,ApiClient)>,String>},
     ClearCredentials,

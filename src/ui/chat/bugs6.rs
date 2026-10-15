@@ -60,7 +60,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let height=row.height();
     let epoch=chat.model().transfers.epoch;
     let mut data=std::io::Cursor::new(Vec::new());image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(80,40,image::Rgba([100,100,100,255]))).write_to(&mut data,image::ImageFormat::Png).unwrap();
-    chat.emit(ChatMsg::Transfer(TransferMsg::Bytes{epoch,message:messages.last().unwrap().id,key:image,token:None,preview:false,result:Ok(data.into_inner())}));
+    chat.emit(ChatMsg::Transfer(TransferMsg::Bytes{epoch,message:messages.last().unwrap().id,key:image,token:None,result:Ok(data.into_inner())}));
     until(context,||chat.model().transfers.textures.contains_key(&image)&&chat.model().media_render_pending.is_none());settle(context);
     let frame=descendants(row.upcast_ref()).into_iter().find_map(|w|w.downcast::<crate::media::frame::Frame>().ok()).unwrap();
     assert_eq!((frame.width(),frame.height()),(80,40),"a cold decode replaces guessed geometry with the small image's actual size");

@@ -186,7 +186,6 @@ impl Component for MainWindowModel {
                 SidebarOutput::Administration=>MainWindowMsg::Administration(AdminMsg::Open),
                 SidebarOutput::Logout => MainWindowMsg::Logout,
                 SidebarOutput::Profile(id) => MainWindowMsg::Account(AccountMsg::Profile(id)),
-                SidebarOutput::Notifications => MainWindowMsg::Notification(NoticeMsg::Open),
                 SidebarOutput::Security => MainWindowMsg::Security(SecurityMsg::Open),
                 SidebarOutput::Preferences => MainWindowMsg::Account(AccountMsg::Preferences),
             });

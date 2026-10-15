@@ -36,9 +36,7 @@ pub(super) fn display_signature(p:&Embed,users:&HashMap<Uuid,UserSummary>,action
 pub(super) fn body(p:&Embed,author_texture:Option<&gtk::gdk::Texture>,users:&HashMap<Uuid,UserSummary>,actions:&Actions,sender:&ComponentSender<ChatModel>)->gtk::Box{
     let card=gtk::Box::new(gtk::Orientation::Vertical,6);card.set_widget_name(&format!("embed-{}",p.id));card.set_valign(gtk::Align::Start);card.set_overflow(gtk::Overflow::Hidden);card.set_margin_bottom(8);card.add_css_class("card");card.add_css_class("papo-link-preview");
     if p.source_type=="custom"{card.add_css_class("papo-custom-embed");}
-    if let Some(color)=p.color.as_deref().filter(|s|s.len()==7&&s.starts_with('#')&&s.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit)){
-        let css=gtk::CssProvider::new();css.load_from_string(&format!(".papo-link-preview{{border-left-color:{color};}}"));card.style_context().add_provider(&css,gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
-    }
+    crate::ui::style::embed_accent(&card,p.color.as_deref());
     if let Some(provider)=p.site_name.as_deref().or(p.provider.as_deref()){let l=label(provider);l.add_css_class("caption");l.add_css_class("dim-label");card.append(&l);}
     if let Some(author)=&p.author{
         let header=gtk::Box::new(gtk::Orientation::Horizontal,6);header.set_valign(gtk::Align::Start);
@@ -114,7 +112,7 @@ pub(super) fn footer(card:&gtk::Box,p:&Embed,image_available:bool,users:&HashMap
     chat.emit(ChatMsg::SendFinished{request_id:request,channel_id:channel,result:Ok(sent.clone())});settle(context);assert_eq!(chat.model().history.messages.iter().find(|m|m.id==sent.id).unwrap().embeds.as_ref().unwrap().len(),1,"POST's custom-only list must not erase the complete WS list");assert!(chat.model().draft.embeds.is_empty());
     // Preserve session caches for another authorized message sharing this card.
     let mut shared=embed.clone();shared.thumbnail=Some(crate::models::EmbedMedia{mime_type:Some("image/png".into()),..Default::default()});chat.emit(ChatMsg::ApplyChange(Change::Embeds(message.id,vec![shared.clone()])));chat.emit(ChatMsg::ApplyChange(Change::Embeds(sent.id,vec![shared.clone()])));pump(context);
-    let epoch=chat.model().transfers.epoch;let token=Uuid::new_v4();chat.state().get_mut().model.transfers.image_tokens.insert(embed.id,token);chat.emit(ChatMsg::Transfer(transfers::TransferMsg::ImageReady{epoch,message:message.id,key:embed.id,token,result:Some(crate::media::PreparedImage{width:32,height:32,pixels:vec![128;32*32*4]})}));settle(context);
+    let epoch=chat.model().transfers.epoch;let token=Uuid::new_v4();chat.state().get_mut().model.transfers.image_tokens.insert(embed.id,token);chat.emit(ChatMsg::Transfer(transfers::TransferMsg::ImageReady{epoch,key:embed.id,token,result:Some(crate::media::PreparedImage{width:32,height:32,pixels:vec![128;32*32*4]})}));settle(context);
     chat.emit(ChatMsg::ApplyChange(Change::Embeds(message.id,vec![])));pump(context);assert!(chat.model().transfers.textures.contains_key(&embed.id));chat.emit(ChatMsg::ApplyChange(Change::Embeds(sent.id,vec![])));pump(context);assert!(!chat.model().transfers.textures.contains_key(&embed.id));
     let mut latest=embed.clone();latest.id=Uuid::new_v4();latest.title=Some("Newer custom card".into());
     chat.emit(ChatMsg::ApplyChange(Change::Edit(sent.id,"Newer edit".into(),Some(created+chrono::Duration::seconds(2)))));
@@ -132,6 +130,7 @@ pub(super) fn footer(card:&gtk::Box,p:&Embed,image_available:bool,users:&HashMap
     // Restored custom-media forms must demand replacement URLs instead of
     // dropping their existing stored media when an unrelated field is edited.
     let input=crate::models::EmbedInput{title:"Stored".into(),thumbnail:Some(crate::models::EmbedMediaInput{url:String::new(),mime_type:"image/png".into()}),..Default::default()};let form=embed_editor::Editors::new(vec![input]);assert!(form.read().is_err());find_button(form.root.upcast_ref(),"Remover embed").emit_clicked();assert!(form.read().unwrap().is_empty());
+    exercise_accent_channels(context);
     exercise_text_width(context);
     super::transfers::author_exercise(context);
     exercise_mentions(context);
@@ -196,4 +195,33 @@ pub(super) fn footer(card:&gtk::Box,p:&Embed,image_available:bool,users:&HashMap
         assert!(youtube_url("https://www.youtube.com/embed/dQw4w9WgXcQ").is_some());
         for url in ["javascript:alert(1)","https://www.youtube.com.evil.test/embed/dQw4w9WgXcQ","https://user@www.youtube.com/embed/dQw4w9WgXcQ","http://www.youtube.com/embed/dQw4w9WgXcQ","https://www.youtube.com/embed/invalid"]{assert!(youtube_url(url).is_none());}
     }
+}
+
+#[cfg(test)]
+pub(crate) fn exercise_accent_channels(context:&gtk::glib::MainContext){
+    use actions::tests::{descendants,pump,until};
+    use adw::prelude::*;
+    let user=Uuid::new_v4();let a=Uuid::new_v4();let b=Uuid::new_v4();
+    let channel=|id|serde_json::from_value::<Channel>(serde_json::json!({"id":id,"name":"Palette cache","created_at":chrono::Utc::now()})).unwrap();
+    let first=Uuid::new_v4();let second=Uuid::new_v4();
+    let message=|id,embed,color:&str|serde_json::from_value::<Message>(serde_json::json!({"id":Uuid::new_v4(),"channel_id":id,"author_id":user,"content":"Cached colored card","created_at":chrono::Utc::now(),"embeds":[{"id":embed,"source_type":"custom","fetch_method":"manual","title":"Color","color":color,"created_at":chrono::Utc::now()}]})).unwrap();
+    let chat=ChatModel::builder().launch(ChatInit{active_channel:Some(channel(a)),messages:vec![message(a,first,"#123abc")],user_id:Some(user),..Default::default()}).detach();
+    chat.emit(ChatMsg::SetAccess{user_id:user,access:crate::models::Access::resolve(user,Some(user),&[],&[],&[])});
+    let window=adw::Window::builder().default_width(800).default_height(600).content(chat.widget()).build();window.present();
+    let assert_color=|id,pixel|{
+        let find=||descendants(chat.widget().upcast_ref()).into_iter().find(|w|w.widget_name()==format!("embed-{id}")&&w.width()>0);
+        until(context,||find().is_some());performance::settle(context);
+        assert_eq!(crate::ui::style::sample_accent(&find().unwrap(),window.upcast_ref()),pixel);
+    };
+    assert_color(first,[18,58,188,255]);
+    chat.emit(ChatMsg::SetChannel(channel(b)));pump(context);
+    let request=Uuid::new_v4();
+    chat.emit(ChatMsg::BeginHistory{request_id:request,cursor:None});
+    chat.emit(ChatMsg::HistoryLoaded{request_id:request,append:false,result:Ok(MessageListResponse{channel_id:b,messages:vec![message(b,second,"#d32f2f")],has_more:false})});
+    assert_color(second,[211,47,47,255]);
+    for _ in 0..3{
+        chat.emit(ChatMsg::SetChannel(channel(a)));assert_color(first,[18,58,188,255]);
+        chat.emit(ChatMsg::SetChannel(channel(b)));assert_color(second,[211,47,47,255]);
+    }
+    window.set_content(None::<&gtk::Widget>);window.close();drop(chat);pump(context);
 }

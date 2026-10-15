@@ -24,6 +24,7 @@ pub struct Role {
     pub name: String,
     pub color: Option<String>,
     pub permissions: RolePermissions,
+    #[expect(dead_code, reason = "Retained role response contract; validated even when not displayed.")]
     pub created_at: DateTime<Utc>,
 }
 
@@ -55,8 +56,11 @@ pub fn role_rgb(roles:&[RoleSummary])->Option<(u16,u16,u16)>{
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct UserRole {
+    #[expect(dead_code, reason = "Retained role response contract; validated even when not displayed.")]
     pub user_id: Uuid,
+    #[expect(dead_code, reason = "Retained role response contract; validated even when not displayed.")]
     pub role_id: Uuid,
+    #[expect(dead_code, reason = "Retained role response contract; validated even when not displayed.")]
     pub assigned_at: DateTime<Utc>,
 }
 

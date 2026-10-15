@@ -37,3 +37,6 @@ pub use voice::*;
 
 pub mod webhook;
 pub use webhook::*;
+
+#[cfg(test)]
+mod contract_fields;

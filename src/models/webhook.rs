@@ -17,8 +17,11 @@ pub struct Webhook {
     pub channel_id: Uuid,
     pub name: String,
     pub display_name: Option<String>,
+    #[expect(dead_code, reason = "Retained webhook management metadata; serde validates creator and timestamp types.")]
     pub created_by: Uuid,
+    #[expect(dead_code, reason = "Retained webhook management metadata; serde validates creator and timestamp types.")]
     pub created_at: DateTime<Utc>,
+    #[expect(dead_code, reason = "Retained webhook management metadata; serde validates creator and timestamp types.")]
     pub revoked_at: Option<DateTime<Utc>>,
 }
 #[derive(Deserialize)]

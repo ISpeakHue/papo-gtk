@@ -12,7 +12,8 @@ pub fn id(value:&str)->Option<String>{
     };
     if id.is_empty()||id.len()>128||!id.bytes().all(|c|c.is_ascii_alphanumeric()){None}else{Some(id)}
 }
-pub fn ids(text:&str)->Vec<String>{
+#[cfg(test)]
+fn ids(text:&str)->Vec<String>{
     let mut ids=vec![];let mut i=0;
     while i<text.len(){let rest=&text[i..];
         if rest.starts_with('`'){let count=rest.bytes().take_while(|b|*b==b'`').count();let delimiter=&rest[..count];i+=rest[count..].find(delimiter).map_or(rest.len(),|end|count+end+count);continue;}

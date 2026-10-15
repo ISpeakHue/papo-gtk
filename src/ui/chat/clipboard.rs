@@ -54,7 +54,7 @@ impl ChatModel {
 
 #[cfg(test)]
 pub(crate) fn exercise(context: &gtk::glib::MainContext) {
-    use actions::tests::{descendants,mock,pump,until};
+    use actions::tests::{mock,pump,until};
     use adw::prelude::*;
     let (api,backend,server)=tokio::runtime::Handle::current().block_on(mock());
     let user="12345678-1234-4234-8234-123456789abc".parse().unwrap();

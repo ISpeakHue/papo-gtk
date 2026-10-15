@@ -1,7 +1,6 @@
 //! Root component — manages application views (Login / Main).
 
 use adw::prelude::*;
-use gtk::prelude::*;
 use relm4::prelude::*;
 use tracing::info;
 
@@ -91,6 +90,12 @@ mod tests {
             exercise_login_input(&controller,&context);window.close();return;
         }
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("mention-background"){crate::ui::chat::mention_background::exercise(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("notification-filters"){
+            crate::ui::main_window::notifications::exercise_filters(&context);crate::ui::main_window::notifications::exercise_tabs(&context);window.close();return;
+        }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("emoji-grid"){
+            crate::ui::chat::exercise_animated_emojis(&context);crate::ui::chat::bugs8::exercise(&context);window.close();return;
+        }
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("emoji-details"){crate::ui::chat::exercise_emoji_details(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("emoji-notifications"){crate::media::animation::exercise(&context);crate::ui::chat::exercise_animated_emojis(&context);crate::ui::main_window::notifications::exercise_tabs(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("account-notices"){crate::ui::main_window::bugs7::exercise(&context);window.close();return;}
@@ -142,6 +147,12 @@ mod tests {
             crate::ui::chat::performance::exercise_opening(&context);
             crate::ui::chat::performance::exercise_corrections(&context);window.close();return;
         }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("edit-mentions"){
+            crate::ui::chat::actions::exercise_edit_mentions(&context);
+            crate::ui::chat::composer::exercise(&context);
+            crate::ui::chat::bugs9::exercise(&context);window.close();return;
+        }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("style-palette"){crate::ui::style::exercise_accents(&context);crate::ui::chat::rich::exercise_accent_channels(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("embeds"){
             crate::ui::chat::rich::exercise(&context);window.close();return;
         }
@@ -185,6 +196,7 @@ mod tests {
         let captured = outputs.clone();
         let chat = ChatModel::builder().launch(ChatInit::default())
             .connect_receiver(move |_, output| captured.borrow_mut().push(output));
+        crate::ui::style::exercise_accents(&context);
         let channel_id = Uuid::new_v4();
         let channel: Channel = serde_json::from_value(serde_json::json!({
             "id":channel_id,"name":"general","channel_type":"text","position":0,
@@ -305,6 +317,7 @@ mod tests {
         crate::ui::chat::bugs6::exercise(&context);
         crate::ui::chat::bugs7::exercise(&context);
         crate::ui::chat::clipboard::exercise(&context);
+        crate::ui::chat::actions::exercise_edit_mentions(&context);
         crate::ui::chat::composer::exercise(&context);
         crate::ui::main_window::account::exercise_profile_emojis(&context);
         crate::ui::main_window::account::exercise_presence_selector(&context);
@@ -331,6 +344,7 @@ mod tests {
         crate::ui::chat::multiline::exercise_full_app(&context);
         crate::ui::chat::mention_background::exercise(&context);
         crate::ui::chat::exercise_animated_emojis(&context);
+        crate::ui::main_window::notifications::exercise_filters(&context);
         crate::ui::main_window::notifications::exercise_tabs(&context);
         crate::ui::main_window::webhooks::exercise(&context);
         crate::media::sound::exercise(&context);
@@ -426,7 +440,6 @@ mod tests {
 
 pub struct RootModel {
     view: View,
-    config: AppConfig,
     login_controller: Controller<LoginModel>,
     main_controller: Option<Controller<MainWindowModel>>,
     // Authenticated session state
@@ -506,7 +519,7 @@ impl Component for RootModel {
 
         // Initialize Login child component controller
         let login_controller = LoginModel::builder()
-            .launch(config.clone())
+            .launch(config)
             .forward(sender.input_sender(), |output| match output {
                 LoginOutput::Authenticated {
                     whoami,
@@ -519,7 +532,6 @@ impl Component for RootModel {
 
         let model = RootModel {
             view: View::Login,
-            config,
             login_controller,
             main_controller: None,
             current_user: None,

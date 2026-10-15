@@ -36,7 +36,11 @@ pub enum WsEvent {
     /// A message was edited.
     MessageEdit { id: Uuid, content: String, channel_id: Option<Uuid>, edited_at: Option<chrono::DateTime<chrono::Utc>> },
     /// A message was deleted.
-    MessageDelete { id: Uuid, channel_id: Uuid },
+    MessageDelete {
+        id: Uuid,
+        #[cfg_attr(not(test), expect(dead_code, reason = "Retained event identity; handlers refresh authoritative state instead of trusting partial updates."))]
+        channel_id: Uuid,
+    },
     /// A message was pinned.
     MessagePin { message_id: Uuid, is_pinned: bool },
     /// Reaction counts updated.
@@ -53,8 +57,16 @@ pub enum WsEvent {
     /// Avatar or nickname changed.
     AvatarUpdate { user_id: Uuid },
     /// Role was added to or removed from a user.
-    RoleAdd { user_id: Uuid, role_id: Uuid },
-    RoleRemove { user_id: Uuid, role_id: Uuid },
+    RoleAdd {
+        user_id: Uuid,
+        #[expect(dead_code, reason = "Retained event identity; handlers refresh authoritative state instead of trusting partial updates.")]
+        role_id: Uuid,
+    },
+    RoleRemove {
+        user_id: Uuid,
+        #[expect(dead_code, reason = "Retained event identity; handlers refresh authoritative state instead of trusting partial updates.")]
+        role_id: Uuid,
+    },
     /// A user started typing.
     Typing { user_id: Uuid, channel_id: Uuid, is_typing: bool },
     /// WebSocket disconnected.

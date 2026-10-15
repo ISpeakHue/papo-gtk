@@ -139,6 +139,7 @@ impl History {
         }
         changes
     }
+    #[cfg(test)]
     pub fn finish_snapshot(&mut self, request: Uuid, messages: Vec<Message>) -> bool {
         let Some(changes) = self.snapshots.remove(&request) else { return false; };
         for message in messages { self.upsert(snapshot_message(message)); }

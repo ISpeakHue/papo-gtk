@@ -9,14 +9,20 @@ pub struct Device {pub id:String,pub name:String}
 #[derive(Clone,Deserialize)]
 #[serde(tag="type")]
 pub enum EngineEvent {
-    #[serde(rename="microphone_gain")]MicrophoneGain{gain:f64},
+    #[serde(rename="microphone_gain")]MicrophoneGain{
+        #[cfg_attr(not(test), expect(dead_code, reason = "Retained voice worker protocol metadata; decoding still validates its required type."))]
+        gain:f64},
     #[serde(rename="speaking")]Speaking{active:bool},
-    #[serde(rename="started")]Started{pid:u32},
+    #[serde(rename="started")]Started{
+        #[cfg_attr(not(test), expect(dead_code, reason = "Retained voice worker protocol metadata; decoding still validates its required type."))]
+        pid:u32},
     #[serde(rename="voice_offer")]Offer{sdp:String},
     #[serde(rename="voice_answer")]Answer{sdp:String},
     #[serde(rename="voice_ice_candidate")]Candidate{candidate:String,sdp_mid:Option<String>,sdp_mline_index:u32},
     #[serde(rename="connection")]Connection{state:String},
-    #[serde(rename="track")]Track{track_id:String},
+    #[serde(rename="track")]Track{
+        #[expect(dead_code, reason = "Retained voice worker protocol metadata; decoding still validates its required type.")]
+        track_id:String},
     #[serde(rename="error")]Error{message:String},
     #[serde(rename="negotiated")]Negotiated,
     #[serde(rename="media_intent")]MediaIntent{kind:String,on:bool},

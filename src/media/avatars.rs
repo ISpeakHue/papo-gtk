@@ -2,10 +2,11 @@
 
 use std::collections::{HashMap, HashSet};
 use gtk::gdk::Texture;
+#[cfg(test)]
+use gtk::gdk::prelude::TextureExt;
 use uuid::Uuid;
 
 use super::PreparedImage;
-use gtk::prelude::*;
 use base64::Engine;
 pub const AVATAR_EDGE:u32=72;
 pub const AVATAR_LIMIT:usize=1024;

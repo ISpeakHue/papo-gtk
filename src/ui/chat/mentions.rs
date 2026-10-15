@@ -170,3 +170,16 @@ pub fn completion(text:&str,position:i32)->Option<(usize,usize,&str)> {
         let canonical=format!("@mention(<@{b}>) @Same @one");let read=DisplayText::read(&canonical,&duplicate);assert_eq!(read.spans.len(),2);assert_eq!(read.spans[0].id,Some(b));assert_eq!(read.spans[1].id,Some(a));
     }
 }
+
+/// Shared suggestion row for the composer and message editor.
+pub(super) fn choice(user:&UserSummary,texture:Option<&gtk::gdk::Texture>,show_avatar:bool,selected:impl Fn()+'static)->gtk::Button {
+    use gtk::prelude::*;
+    let button=gtk::Button::new();button.add_css_class("flat");button.set_tooltip_text(Some(&format!("@{}",user.username)));
+    button.update_property(&[gtk::accessible::Property::Label(&format!("{} · @{}",user.display_name(),user.username))]);
+    let line=gtk::Box::new(gtk::Orientation::Horizontal,10);line.set_valign(gtk::Align::Center);
+    let avatar=crate::media::member_avatar(user.id,texture,32);avatar.set_text(Some(user.display_name()));avatar.set_valign(gtk::Align::Center);avatar.set_visible(show_avatar);line.append(&avatar);
+    let name=gtk::Label::new(Some(user.display_name()));name.set_xalign(0.0);name.set_hexpand(true);name.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    if let Some(roles)=user.roles.as_deref(){crate::ui::style::role_color(&name,roles);}line.append(&name);
+    let username=gtk::Label::new(Some(&format!("@{}",user.username)));username.add_css_class("dim-label");username.set_ellipsize(gtk::pango::EllipsizeMode::End);line.append(&username);
+    button.set_child(Some(&line));button.connect_clicked(move |_|selected());button
+}

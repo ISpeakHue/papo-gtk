@@ -56,8 +56,11 @@ pub(crate) trait InputExt {
     fn position(&self)->i32;
     fn set_position(&self,position:i32);
     fn select_region(&self,start:i32,end:i32);
+    #[cfg(test)]
     fn selection_bounds(&self)->Option<(i32,i32)>;
+    #[cfg(test)]
     fn insert_text(&self,text:&str,position:&mut i32);
+    #[cfg(test)]
     fn delete_text(&self,start:i32,end:i32);
     fn grab_focus_without_selecting(&self)->bool;
 }
@@ -68,8 +71,11 @@ impl InputExt for gtk::TextView {
     fn position(&self)->i32{self.buffer().cursor_position()}
     fn set_position(&self,position:i32){let b=self.buffer();b.place_cursor(&iter(&b,position));self.scroll_mark_onscreen(&b.get_insert());}
     fn select_region(&self,start:i32,end:i32){let b=self.buffer();b.select_range(&iter(&b,end),&iter(&b,start));}
+    #[cfg(test)]
     fn selection_bounds(&self)->Option<(i32,i32)>{self.buffer().selection_bounds().map(|(a,b)|(a.offset(),b.offset()))}
+    #[cfg(test)]
     fn insert_text(&self,text:&str,position:&mut i32){let b=self.buffer();let mut at=iter(&b,*position);b.insert(&mut at,text);*position=at.offset();}
+    #[cfg(test)]
     fn delete_text(&self,start:i32,end:i32){let b=self.buffer();b.delete(&mut iter(&b,start),&mut iter(&b,end));}
     fn grab_focus_without_selecting(&self)->bool{self.grab_focus()}
 }

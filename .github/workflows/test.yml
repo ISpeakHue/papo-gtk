@@ -25,6 +25,7 @@ jobs:
     timeout-minutes: 30
     env:
       CARGO_TERM_COLOR: always
+      RUSTFLAGS: "-D warnings"
     steps:
       - name: Install Rust and native build dependencies
         run: dnf install -y git gcc rust cargo pkgconf-pkg-config glib2-devel openssl-devel gtk4-devel libadwaita-devel python3-gobject python3-gstreamer1 gstreamer1-plugins-base gstreamer1-plugins-good gstreamer1-plugins-bad-free libnice-gstreamer1 xorg-x11-server-Xvfb xorg-x11-xauth setxkbmap libXtst dbus-daemon
@@ -45,14 +46,24 @@ jobs:
         run: PAPO_UI_CASE=backend-update dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
       - name: Check rich cards and quoted Twitter/X embeds
         run: PAPO_UI_CASE=embeds dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+      - name: Check bounded embed colors, theme changes and provider cleanup
+        run: PAPO_UI_CASE=style-palette dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
       - name: Check uploaded GIF motion and media download actions
         run: PAPO_UI_CASE=attachment-media dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
       - name: Check video posters and compressed media reuse across channels
         run: PAPO_UI_CASE=media-cache dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
       - name: Check member groups, Markdown, emoji tabs and channel actions
         run: PAPO_UI_CASE=report8 dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+      - name: Check responsive emoji grids, lazy pages and animation cleanup
+        run: PAPO_UI_CASE=emoji-grid dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+      - name: Check collapsed channel and DM notification groups and unread counts
+        run: PAPO_UI_CASE=notification-filters dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+      - name: Check grouped notification read batching, retries and live events
+        run: PAPO_UI_CASE=account-notices dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
       - name: Check GIF link animations, compact editing and autocomplete keyboard routing
         run: PAPO_UI_CASE=report9 PAPO_NATIVE_INPUT_TEST=1 GTK_IM_MODULE=simple dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+      - name: Check readable edit mentions, user replacement and native accented input
+        run: PAPO_UI_CASE=edit-mentions PAPO_NATIVE_INPUT_TEST=1 GTK_IM_MODULE=simple dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
       - name: Check inline emoji details, animation, spoilers and popover cleanup
         run: PAPO_UI_CASE=emoji-details PAPO_NATIVE_INPUT_TEST=1 dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
       - name: Check private screen portal permissions and cleanup

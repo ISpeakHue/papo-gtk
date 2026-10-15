@@ -924,6 +924,19 @@ command above, or focus on embeds with:
 PAPO_UI_CASE=embeds dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
 ```
 
+The shared embed color palette has a focused native regression:
+
+```sh
+PAPO_UI_CASE=style-palette dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+```
+
+It verifies distinct card colors, light/dark themes, styling before the first
+snapshot, cached channel switches, 5,000 repeated mount/disposal operations,
+bounded color capacity and provider cleanup. The regular Rust suite also checks
+that retained, undisplayed response/event fields still reject malformed metadata.
+The main CI test job uses `RUSTFLAGS="-D warnings"`; production and test code must
+both remain warning-free. See [COMPILATION_WARNINGS.md](COMPILATION_WARNINGS.md).
+
 For a manual backend check, send a URL and observe its automatic card. Create
 a custom card with color, author, footer and inline fields, send it without text,
 edit/remove its fields, and verify a second authorized client receives each
@@ -1825,3 +1838,97 @@ management errors/retry, duplicate-submit protection, creation, nickname/avatar
 updates, sender labels and decoded avatars, live edits, cache reuse across
 messages/channel changes, revocation cancellation/confirmation, and permission
 loss. It neither reads a saved account nor contacts a real webhook integration.
+
+## Mentions in message editing
+
+The editor uses the same highlighted name/ID mapping and suggestion rows as the
+chat composer. Click inside an existing mention to choose a replacement, type
+`@` to filter members, or use the editor's `@` button. Arrow keys navigate;
+Enter/Tab accept a suggestion without saving. Shift+Enter inserts a newline.
+Escape dismisses suggestions first, then closes the editor. Display names are
+shown, while saves preserve canonical user IDs, including duplicate nicknames
+and members whose profiles are unavailable.
+
+```sh
+PAPO_UI_CASE=edit-mentions PAPO_NATIVE_INPUT_TEST=1 GTK_IM_MODULE=simple \
+  dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+```
+
+This isolated workflow checks full-name replacement, Unicode offsets, punctuation,
+avatars/role colors, native accented input, failure/retry, unauthorized selections,
+stale dialog callbacks and text-only PUT payloads. It also exercises the existing
+composer and edit shortcuts. Editing must preserve the channel draft and avoid
+rebuilding chat history on each keystroke. No real account is used.
+
+## Emoji picker resizing
+
+```sh
+PAPO_UI_CASE=emoji-grid dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+```
+
+The shared composer/reaction picker adds columns as its window widens and shows
+more compact rows as it grows taller. Both Unicode and server tabs are checked
+at narrow and wide sizes. Resizing must fill a viewport larger than the initial
+96-cell page, preserve existing cells and keep the remaining catalog lazy.
+Filtering to one emoji must leave free space below it rather than stretch its
+row. This workflow also checks selection, incremental pages and animated emoji
+cleanup using local fixtures.
+
+## Reply and mention backgrounds
+
+Incoming replies to your messages use the same persistent colored background and
+side accent as mentions. Your own replies and replies to other members remain
+unhighlighted unless they independently mention you. Identification uses the
+original message in the loaded history, including offscreen messages; an unknown
+reply target is resolved when its history page arrives. No extra HTTP requests
+or expanded media/history retention are introduced. The current backend sends
+only the original message ID in `reply_to`, without its author's ID.
+
+```sh
+PAPO_UI_CASE=mention-background dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+cargo test --locked replies_to_the_current_user_are_delivered_without_an_explicit_mention
+```
+
+The GTK fixture covers replies, webhook senders, missing/late/deleted originals,
+text edits, incremental row reuse, cached channel switches and navigation highlight
+expiry, alongside existing mention cases. The notification regression verifies
+that replies already count as notifications in mentions-only channels and still
+respect muted channels and read acknowledgments.
+
+## Notification channel filters and collapsed channel/sender groups
+
+The server notification tab has an “All channels” dropdown plus each readable
+server channel. Filtering uses already-loaded pages and preserves the selected
+channel by ID through renames and refreshes. “More notifications” keeps the API's
+existing global pagination; switching filters does not issue a new list request.
+Unread badges still count all accessible notifications, including filtered rows.
+
+Server notifications are nested under channel headers with the same compact
+unread badges as DM sender groups. Channels start collapsed; opening the window
+or selecting a channel filter does not mark a collapsed channel read. Expanding
+one acknowledges its notifications in a batch, and the badge clears after a
+successful write. Expansion state survives filters, refreshes and pagination.
+Unread notifications in unavailable channels retain a generic header and never
+expose channel names or message previews.
+
+DM notifications are nested in collapsible groups keyed by sender ID, with cached
+avatars, names and compact numeric unread badges. Equal nicknames remain separate.
+Groups start collapsed when the notification window opens. Opening the DM tab
+keeps their messages unread; expanding one sender marks only that sender's visible
+notifications read. Its badge clears after a successful acknowledgment, while
+new notifications update collapsed senders' badges. Expansion state survives
+pagination and redraws. The Direct Messages tab title shows the total unread DM
+notification count even while the server tab is selected. It updates on reads
+and incoming notifications, disappears at zero, and excludes inaccessible DMs.
+Server channel filters do not affect this total. Restricted/hidden conversations
+retain generic labels without exposing their previews or author metadata.
+
+```sh
+PAPO_UI_CASE=notification-filters dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+```
+
+The fixture checks per-channel filtering/read writes, collapsed channel and DM groups,
+duplicate nicknames, filter preservation during pagination and renames, permission
+loss, nested message navigation and absence of notification refetches during UI
+filter/tab changes. It also reruns the existing server/DM tab and unread-badge
+regression. All API requests use local fixtures.

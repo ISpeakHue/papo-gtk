@@ -1,4 +1,7 @@
 //! App-specific geometry and surfaces; Adwaita supplies theme/accent/contrast.
+mod accents;
+#[cfg(test)] pub(crate) use accents::{exercise as exercise_accents,sample as sample_accent};
+pub(super) use accents::apply as embed_accent;
 use std::cell::Cell;
 thread_local! { static INSTALLED: Cell<bool> = const { Cell::new(false) }; }
 pub fn install() {

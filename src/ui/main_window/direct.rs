@@ -4,7 +4,8 @@ use crate::models::{DirectConversation,Message,MessageCursor};
 use std::collections::{HashMap,HashSet};
 #[derive(Debug)]
 pub enum DirectMsg {
-    Refresh, Open(Uuid), Select(Uuid,Option<Uuid>), Hide(Uuid), Blocks, Block(Uuid,bool),
+    #[cfg(test)] Refresh,
+    Open(Uuid), Select(Uuid,Option<Uuid>), Hide(Uuid), Blocks, Block(Uuid,bool),
     Listed{token:Uuid,version:u64,result:anyhow::Result<Vec<DirectConversation>>},
     Selected{token:Uuid,message:Option<Uuid>,result:anyhow::Result<DirectConversation>},
     Hidden{ id:Uuid,result:anyhow::Result<()> },
@@ -102,6 +103,7 @@ impl MainWindowModel {
     fn refresh_blocks(&mut self,sender:ComponentSender<Self>){let token=Uuid::new_v4();self.direct.blocks_request=Some(token);let api=self.api_client.clone();self.direct.jobs.push(tokio::spawn(async move{let result=api.list_blocks().await;let _=sender.input_sender().send(MainWindowMsg::Direct(DirectMsg::BlocksLoaded{token,result}));}));}
     pub(super) fn direct_event(&mut self,msg:DirectMsg,sender:ComponentSender<Self>,root:&gtk::Box){
         match msg {
+            #[cfg(test)]
             DirectMsg::Refresh=>self.refresh_direct(sender),
             DirectMsg::Open(user)=>{
                 if user==self.current_user.id{self.chat.emit(ChatMsg::OperationError("Não é possível abrir uma DM consigo mesmo.".into()));return;}

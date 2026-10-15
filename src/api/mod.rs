@@ -410,6 +410,7 @@ impl ApiClient {
         Ok(response)
     }
 
+    #[cfg(test)]
     pub async fn send_message(&self, request: &CreateMessageRequest) -> Result<Message> {
         features::validate_message(request.content.as_deref(),&[],&request.embeds)?;
         let mut form = reqwest::multipart::Form::new().text("channel_id", request.channel_id.to_string());
@@ -428,6 +429,7 @@ impl ApiClient {
     pub async fn edit_message(&self, message_id: Uuid, content: &str) -> Result<Message> {
         self.edit_message_request(message_id,content,None).await
     }
+    #[cfg(test)]
     pub async fn edit_message_embeds(&self,message_id:Uuid,content:&str,embeds:&[EmbedInput])->Result<Message>{
         self.edit_message_request(message_id,content,Some(embeds)).await
     }
@@ -510,6 +512,7 @@ impl ApiClient {
         Self::decode(self.inner.get(url).send_paced(&self.requests).await?, "emojis").await
     }
 
+    #[cfg(test)]
     pub async fn all_emojis(&self) -> Result<Vec<Emoji>> {
         let mut emojis: Vec<Emoji> = Vec::new();
         let mut cursor: Option<MessageCursor> = None;
@@ -588,13 +591,8 @@ impl ApiClient {
         Ok(profiles)
     }
 
-    pub async fn get_media(&self, sha_hash: &str) -> Result<Vec<u8>> {
-        let response = Self::check_response(self.inner.get(self.url(&format!("/media/{sha_hash}")))
-            .send_paced(&self.requests).await?, "media").await?;
-        Ok(response.bytes().await?.to_vec())
-    }
-
     /// Returns true if the HTTP status was 401 (unauthorised / session expired).
+    #[cfg(test)]
     pub fn is_unauthorised(status: StatusCode) -> bool {
         status == StatusCode::UNAUTHORIZED
     }

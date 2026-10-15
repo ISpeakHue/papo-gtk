@@ -97,6 +97,7 @@ pub struct UserSettings {
     pub user_id: Uuid,
     pub version: i32,
     pub config: UserConfig,
+    #[expect(dead_code, reason = "Retained profile/settings response contract; validated even when not displayed.")]
     pub updated_at: DateTime<Utc>,
 }
 
@@ -134,6 +135,7 @@ pub struct UserProfile {
     pub nickname: Option<String>,
     /// Avatar as base64-encoded bytes.
     pub avatar_blob: Option<String>,
+    #[cfg_attr(not(test), expect(dead_code, reason = "Retained profile/settings response contract; validated even when not displayed."))]
     pub avatar_format: Option<String>,
     /// SHA-256 reference into /media/:sha_hash.
     pub banner_media: Option<String>,
@@ -141,7 +143,9 @@ pub struct UserProfile {
     pub status: Option<UserStatus>,
     pub status_message: Option<String>,
     pub typing: Option<String>,
+    #[expect(dead_code, reason = "Retained profile/settings response contract; validated even when not displayed.")]
     pub status_updated_at: Option<DateTime<Utc>>,
+    #[expect(dead_code, reason = "Retained profile/settings response contract; validated even when not displayed.")]
     pub created_at: DateTime<Utc>,
     pub roles: Option<Vec<RoleSummary>>,
 }
@@ -164,6 +168,7 @@ pub struct WhoamiResponse {
     pub status_message: Option<String>,
     pub typing: Option<String>,
     pub status_updated_at: Option<DateTime<Utc>>,
+    #[expect(dead_code, reason = "Retained profile/settings response contract; validated even when not displayed.")]
     pub created_at: DateTime<Utc>,
     pub roles: Option<Vec<RoleSummary>>,
     pub settings: Option<WhoamiSettings>,
@@ -178,6 +183,7 @@ impl WhoamiResponse {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct WhoamiSettings {
+    #[expect(dead_code, reason = "Retained profile/settings response contract; validated even when not displayed.")]
     pub version: i32,
     pub config: UserConfig,
 }
@@ -193,19 +199,8 @@ pub struct UpdateUserRequest {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct UpdateAvatarRequest {
-    pub avatar: String,
-    pub avatar_format: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
 pub struct UpdateStatusRequest {
     pub status: Option<UserStatus>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct ChangePasswordRequest {
-    pub password: String,
 }
 
 #[derive(Debug, Clone, Serialize)]

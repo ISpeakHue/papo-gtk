@@ -38,12 +38,21 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
         performance::settle(context);assert_fitted(chat.widget().upcast_ref());
         if animated{assert!(chat.model().transfers.animations.contains_key(&key));}
         let actual=frame(chat.widget().upcast_ref());assert_ne!((actual.width(),actual.height()),(guessed.width(),guessed.height()),"decoded geometry must supersede the guessed first frame");
-        // Resizing and returning to an unloaded channel use the same learned ratio.
+        // Resizing and returning to a recent channel reuse its fitted preview.
         window.set_default_size(400,680);performance::settle(context);assert_fitted(chat.widget().upcast_ref());let narrow=frame(chat.widget().upcast_ref());let geometry=(narrow.width(),narrow.height());assert!(geometry.0<400);
         if !embedded&&width>height{crate::ui::main_window::layout::tests::preview(&window,"first-image-fitted",context);}
+        let cached_preview=chat.model().transfers.textures[&key].as_ptr();
         chat.emit(ChatMsg::SetChannel(target(Uuid::new_v4())));pump(context);chat.emit(ChatMsg::SetChannel(target(channel)));
         until(context,||!chat.model().viewport.opening_flag().get()&&!chat.model().history.messages.is_empty());performance::settle(context);
-        assert!(chat.model().transfers.textures.is_empty());let restored=frame(chat.widget().upcast_ref());assert_eq!((restored.width(),restored.height()),geometry,"unloading must retain the corrected frame geometry");
+        assert_eq!(chat.model().transfers.textures.get(&key).map(|t|t.as_ptr()),Some(cached_preview),"recent geometry reuses the cached preview");assert_fitted(chat.widget().upcast_ref());
+        // Explicitly evict the decoded preview as memory pressure would do;
+        // losing the pixels must not restore the guessed frame dimensions.
+        {let mut state=chat.state().get_mut();let media=&mut state.model.transfers;
+            media.textures.remove(&key);media.animations.remove(&key);media.resident.invalidate(key);media.dirty.insert(key);
+            let token=Uuid::new_v4();state.model.media_render_pending=Some(token);chat.emit(ChatMsg::RenderMedia(token));
+        }
+        until(context,||chat.model().media_render_pending.is_none());performance::settle(context);
+        assert!(chat.model().transfers.textures.is_empty());let restored=frame(chat.widget().upcast_ref());assert_eq!((restored.width(),restored.height()),geometry,"eviction must retain the corrected frame geometry");
         chat.emit(ChatMsg::Transfer(TransferMsg::Bytes{epoch:chat.model().transfers.epoch,message:message.id,key,token:None,result:Ok(bytes)}));
         until(context,||chat.model().transfers.textures.contains_key(&key)&&chat.model().media_render_pending.is_none());performance::settle(context);assert_fitted(chat.widget().upcast_ref());
         window.set_content(None::<&gtk::Widget>);window.close();drop(chat);pump(context);

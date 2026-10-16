@@ -77,7 +77,8 @@ pub(super) fn parse(source:&str)->Vec<Run>{
     }
     output.runs
 }
-pub(super) fn plain(source:&str)->String{parse(source).into_iter().map(|r|r.text).collect()}
+#[cfg(test)]
+fn plain(source:&str)->String{parse(source).into_iter().map(|r|r.text).collect()}
 
 #[cfg(test)]mod tests{
     use super::*;

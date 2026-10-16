@@ -1,10 +1,15 @@
 //! Chat view component — displays channel header, message history, attachments, link previews, reactions, and composer.
+//! EN: Core messaging interface managing virtualized message history, media attachments, link embeds, emoji/mention autocompletion, and composer.
+//! PT-BR: Componente de visualização de chat — exibe cabeçalho do canal, histórico de mensagens virtualizado, anexos, prévias de links, reações, autocompletar de emojis/menções e editor de texto.
+
 mod window;
 mod cache;
 mod surface_cache;
 pub(crate) mod video;
 pub(crate) mod rich;
 mod embed_editor;
+mod draft_preview;
+#[cfg(test)]pub(crate) use draft_preview::exercise as exercise_draft_previews;
 pub(crate) mod mentions;
 #[cfg(test)]pub(crate) mod mention_background;
 #[cfg(test)]pub(crate) mod multiline;
@@ -22,6 +27,7 @@ mod markdown;
 mod moderation;
 #[cfg(test)]pub(crate) use moderation::exercise as exercise_moderation;
 mod emoji;
+#[cfg(test)]pub(crate) use emoji::exercise_categories as exercise_emoji_categories;
 mod emoji_details;
 #[cfg(test)]pub(crate) use emoji_details::exercise as exercise_emoji_details;
 use viewport::{Viewport,Position};
@@ -47,17 +53,24 @@ use uuid::Uuid;
 use crate::media::{avatar_image, format_file_size};
 use crate::models::{Attachment, Channel, ConversationTarget, DirectConversation, Embed, Message, MessageListResponse, MessageCursor, UserSummary};
 
+/// EN: Initialization data for mounting the ChatModel component.
+/// PT-BR: Dados de inicialização para montagem do componente ChatModel.
 #[derive(Debug, Clone, Default)]
 pub struct ChatInit {
     pub active_channel: Option<Channel>,
     pub messages: Vec<Message>,
     pub api: Option<crate::api::ApiClient>,
     pub user_id: Option<Uuid>,
+    pub(crate) pinned:bool,
+    pub(crate) pinned_inbox:Option<std::rc::Rc<std::cell::RefCell<Option<actions::pins::Snapshot>>>>,
 }
 
+/// EN: Central state for the Chat view, managing history, media transfers, drafts, and UI row recycling.
+/// PT-BR: Estado central da tela de chat, gerenciando histórico, transferências de mídia, rascunhos e reciclagem de linhas de interface.
 pub struct ChatModel {
     pub active_channel: Option<ConversationTarget>,
     server_name:String,
+
     history: History,
     conversations: cache::Conversations,
     surfaces:surface_cache::Surfaces,
@@ -87,6 +100,7 @@ pub struct ChatModel {
     transfers: Transfers,
     config: crate::models::UserConfig,
     draft: Draft,
+    draft_previews:draft_preview::Previews,
     composer:composer::Composer,
     saved_drafts: HashMap<Uuid, Draft>,
     pub users_map: HashMap<Uuid, UserSummary>,
@@ -112,6 +126,8 @@ pub enum ChatMsg {
     AutoOlder, ExpireHighlight{epoch:Uuid,id:Uuid,generation:u64},
     Search, Notifications, NotificationCount{count:usize,more:bool},
     Action(ActionMsg),
+    DraftPreviewReady{token:Uuid,image:Option<crate::media::PreparedImage>},
+    PinnedSnapshot,
     Transfer(TransferMsg),
     SetConfig(crate::models::UserConfig),
     OpenProfile(Uuid),
@@ -196,6 +212,7 @@ impl Component for ChatModel {
             #[name="conversation_header"]
             adw::HeaderBar {
                 set_widget_name:"conversation-header",
+                #[watch] set_visible:!model.actions.pinned_view,
                 pack_start = &gtk::Button {set_icon_name:"sidebar-show-symbolic",set_tooltip_text:Some("Canais e conversas (F9)"),connect_clicked => ChatMsg::ToggleNavigation},
                 #[name="header_title_area"]
                 #[wrap(Some)]
@@ -305,7 +322,7 @@ impl Component for ChatModel {
 
             // ── Reply Indicator Banner ───────────────────────────────────────
             gtk::Box {
-                #[watch] set_visible:model.viewing_old,
+                #[watch] set_visible:model.viewing_old&&!model.actions.pinned_view,
                 set_spacing:8,add_css_class:"papo-history-banner",
                 gtk::Label {set_text:"Você está vendo mensagens antigas",set_hexpand:true,set_xalign:0.0,set_ellipsize:pango::EllipsizeMode::End},
                 gtk::Button {set_label:"Mais recentes",set_tooltip_text:Some("Avançar para mensagens recentes"),add_css_class:"flat",connect_clicked => ChatMsg::Latest},
@@ -387,8 +404,15 @@ impl Component for ChatModel {
                 add_css_class:"dim-label",set_wrap:true,
             },
 
-            #[name = "selected_files"]
-            gtk::Box { set_orientation: gtk::Orientation::Vertical, set_spacing: 4 },
+            gtk::ScrolledWindow {
+                set_widget_name:"draft-attachments",
+                #[watch] set_visible:!model.draft.files.is_empty()&&!model.actions.pinned_view,
+                set_hscrollbar_policy:gtk::PolicyType::Automatic,set_vscrollbar_policy:gtk::PolicyType::Never,
+                set_propagate_natural_height:true,set_max_content_height:144,
+                set_margin_start:16,set_margin_end:16,
+                #[name = "selected_files"]
+                gtk::Box { set_orientation: gtk::Orientation::Horizontal, set_spacing: 8 },
+            },
             gtk::Label {
                 #[watch] set_visible:!model.draft.embeds.is_empty(),
                 #[watch] set_text:&format!("{} embed(s) personalizado(s)",model.draft.embeds.len()),
@@ -435,6 +459,7 @@ impl Component for ChatModel {
                 set_orientation: gtk::Orientation::Horizontal,
                 set_spacing: 10,
                 add_css_class:"papo-composer",
+                #[watch] set_visible:!model.actions.pinned_view,
 
                 gtk::Button {
                     set_valign:gtk::Align::End,
@@ -523,10 +548,10 @@ impl Component for ChatModel {
             render_passes: 0,
             #[cfg(test)]media_hydrations:0,
             unread_start:None,
-            initial_read:init.active_channel.clone().map(ConversationTarget::Channel).as_ref().map(viewport::ReadBoundary::new),
+            initial_read:if init.pinned{None}else{init.active_channel.clone().map(ConversationTarget::Channel).as_ref().map(viewport::ReadBoundary::new)},
             emoji_visible:false,emoji_manual:false,emoji_dismissed:false,emoji_signature:String::new(),unicode_emojis:emoji::builtin(),
             active_channel: init.active_channel.clone().map(ConversationTarget::Channel),
-            access: Default::default(),
+            access: crate::models::Access{read:init.pinned,..Default::default()},
             user_id: init.user_id,
             actions: Actions::new(init.api),
             transfers: Transfers::default(),
@@ -537,7 +562,7 @@ impl Component for ChatModel {
                 for message in init.messages { history.apply(Change::Upsert(message)); }
                 history
             },
-            draft: Draft::default(),
+            draft: Draft::default(),draft_previews:Default::default(),
             composer:Default::default(),
             saved_drafts: HashMap::new(),
             users_map: HashMap::new(),
@@ -550,6 +575,8 @@ impl Component for ChatModel {
             retry_cursor: None,mention_visible:false,mention_manual:false,mention_signature:String::new(),mention_dismissed:false,older_requested:false,highlight_generation:0,viewport:Viewport::default(),rendered:HashMap::new(),viewing_old:false,trim_when_idle:false,unread_notifications:0,more_notifications:false,
         };
 
+        model.actions.pinned_view=init.pinned;
+        model.actions.pinned_inbox=init.pinned_inbox;
         model.transfers.opening=model.viewport.opening_flag();
         let widgets = view_output!();
         crate::performance::watch(&root);
@@ -561,7 +588,7 @@ impl Component for ChatModel {
 
         model.composer.connect(&widgets.message_entry,&sender);
         input::configure_im(&widgets.message_entry);
-        input::shortcuts::type_to_focus(&widgets.message_entry);
+        if !model.actions.pinned_view{input::shortcuts::type_to_focus(&widgets.message_entry);}
         let placeholder=widgets.composer_placeholder.downgrade();let composing=model.composer.clone();
         widgets.message_entry.connect_preedit_changed(move |view,text|{
             if let Some(placeholder)=placeholder.upgrade(){placeholder.set_visible(text.is_empty()&&!composing.is_composing()&&view.buffer().char_count()==0);}
@@ -653,6 +680,11 @@ impl Component for ChatModel {
             ChatMsg::SetChannel(c)=>(ChatMsg::SetTarget(ConversationTarget::Channel(c)),None),
             ChatMsg::InsertEmoji(value)=>{self.emoji_manual=true;(ChatMsg::EmojiSelected(value),None)},other=>(other,None),
         };
+        match &message {
+            ChatMsg::ApplyChange(change)=>self.update_pin(change,&sender),
+            ChatMsg::DeleteMessage(id)=>self.update_pin(&Change::Delete(*id),&sender),
+            _=>{},
+        }
         let incremental=matches!(&message,ChatMsg::AddMessage(_)|ChatMsg::ApplyChange(_)|ChatMsg::ModerationChecked{..}|ChatMsg::DeleteMessage(_)|ChatMsg::RenderMedia(_)|ChatMsg::MediaViewport|ChatMsg::SendFinished{..}|ChatMsg::Action(ActionMsg::ReactionsLoaded{..}|ActionMsg::ToggleReaction{..}));
         let update_moderation=matches!(&message,ChatMsg::CheckModeration(_)|ChatMsg::ModerationChecked{..}|ChatMsg::MediaViewport|ChatMsg::ViewportChanged(_)|ChatMsg::HistoryFailure{..});
         let hydrate=!matches!(&message,ChatMsg::RenderMedia(_));
@@ -661,7 +693,7 @@ impl Component for ChatModel {
         let update_emojis=matches!(&message,ChatMsg::OpenEmojis|ChatMsg::CloseEmojis|ChatMsg::EmojiSelected(_)|ChatMsg::InputChanged(_)|ChatMsg::MentionCursorChanged|ChatMsg::SetTarget(_)|ChatMsg::ClearChannel|ChatMsg::SetAccess{..}|ChatMsg::SendClicked|ChatMsg::SendFinished{..}|ChatMsg::OpenMentions|ChatMsg::Action(ActionMsg::EmojiPage{..}|ActionMsg::EmojisLoaded{..}));
         let update_edit_mentions=matches!(&message,ChatMsg::SetUsers(_)|ChatMsg::SetAvatars(_)|ChatMsg::SetConfig(_)|ChatMsg::SetAccess{..});
         let update_mentions=matches!(&message,ChatMsg::OpenMentions|ChatMsg::MentionCursorChanged|ChatMsg::CloseMentions|ChatMsg::SendClicked|ChatMsg::SendFinished{..}|ChatMsg::InputChanged(_)|ChatMsg::MentionSelected(_)|ChatMsg::SetUsers(_)|ChatMsg::SetConfig(_)|ChatMsg::SetAccess{..}|ChatMsg::SetTarget(_)|ChatMsg::ClearChannel);
-        let update_files=matches!(&message,ChatMsg::SetTarget(_)|ChatMsg::ClearChannel|ChatMsg::SendClicked|ChatMsg::SendFinished{..}|ChatMsg::Transfer(TransferMsg::Selected{..}|TransferMsg::PasteReady{..}|TransferMsg::Remove(_)|TransferMsg::Cancel));
+        let update_files=matches!(&message,ChatMsg::SetAccess{..}|ChatMsg::SetTarget(_)|ChatMsg::ClearChannel|ChatMsg::SendClicked|ChatMsg::SendFinished{..}|ChatMsg::Transfer(TransferMsg::Selected{..}|TransferMsg::PasteReady{..}|TransferMsg::Remove(_)|TransferMsg::Cancel));
         let following=self.viewport.following();let mut position=None;let mut render_history=false;let mut restore_avatars=false;
         // Keep inactive snapshots current without rebuilding the active chat.
         match &message {
@@ -782,7 +814,9 @@ impl Component for ChatModel {
             ChatMsg::NotificationCount{count,more}=>{self.unread_notifications=count;self.more_notifications=more;},
             ChatMsg::OpenProfile(id) => {let _=sender.output(ChatOutput::OpenProfile(id));}
             ChatMsg::ChannelPreferences => {let _=sender.output(ChatOutput::ChannelPreferences);}
-            ChatMsg::SetConfig(config) => {render_history=self.config.complete()!=config.complete();self.config=config.complete();},
+            ChatMsg::DraftPreviewReady{token,image}=>self.draft_previews.finish(token,image),
+            ChatMsg::PinnedSnapshot=>{let snapshot=self.actions.pinned_inbox.as_ref().and_then(|inbox|inbox.borrow_mut().take());if let Some(snapshot)=snapshot{snapshot.apply(self);render_history=true;}},
+            ChatMsg::SetConfig(config) => {render_history=self.config.complete()!=config.complete();self.config=config.complete();self.render_pins(&sender);},
             ChatMsg::RenderMedia(token) => {
                 if self.media_render_pending==Some(token){if self.viewport.scrolling(){self.viewport.media_when_idle(&sender);}else{self.media_render_pending=None;render_history=true;}}
             },
@@ -1029,7 +1063,7 @@ impl Component for ChatModel {
                 crate::media::update_member_avatars(widgets.messages_list.upcast_ref(),&self.avatars,&avatars);
                 crate::media::update_member_avatars(widgets.mention_choices.upcast_ref(),&self.avatars,&avatars);self.avatars=avatars;self.render_pins(&sender);
             }
-            ChatMsg::ServerName(name)=>{*self.actions.emoji_source.borrow_mut()=name.clone();self.server_name=name;self.render_picker(&sender);},
+            ChatMsg::ServerName(name)=>{*self.actions.emoji_source.borrow_mut()=name.clone();self.server_name=name;self.render_picker(&sender);self.render_pins(&sender);},
             ChatMsg::SetUsers(users) => {
                 let users:HashMap<_,_>=users.into_iter().map(|u| (u.id, u)).collect();render_history=self.users_map.len()!=users.len()||users.iter().any(|(id,u)|self.users_map.get(id).is_none_or(|old|old.display_name()!=u.display_name()||old.roles!=u.roles));self.users_map=users;self.refresh_reaction_hints();self.render_pins(&sender);
                 self.composer.refresh_names(&widgets.message_entry,&self.users_map);
@@ -1166,7 +1200,7 @@ impl Component for ChatModel {
         if self.viewport.open_ready((self.history_ready&&self.initial_read.is_none())||self.history_error.is_some())&&!render_history&&position.is_none(){
             position=Some(self.viewport.capture(&widgets.scrolled_window,&widgets.messages_list));
         }
-        if self.trim_when_idle&&self.transfers.saving==0&&self.initial_read.is_none()&&self.history_ready&&!self.viewport.scrolling()&&(self.viewport.following()||matches!(position,Some(Position::Bottom))){
+        if !self.actions.pinned_view&&self.trim_when_idle&&self.transfers.saving==0&&self.initial_read.is_none()&&self.history_ready&&!self.viewport.scrolling()&&(self.viewport.following()||matches!(position,Some(Position::Bottom))){
             if self.history.trim_recent(cache::MESSAGE_LIMIT){
                 self.transfers.trim_provider_ids(&self.history.messages);
                 self.has_more=true;self.older_requested=false;self.retry_cursor=None;self.history_error=None;
@@ -1200,11 +1234,8 @@ impl Component for ChatModel {
         else if let Some(position)=position{self.viewport.restore(&widgets.scrolled_window,&widgets.messages_list,position,&sender);}
         if restore_avatars{crate::media::update_member_avatars(widgets.messages_list.upcast_ref(),&HashMap::new(),&self.avatars);self.transfers.external.restore(&widgets.messages_list,self.history.messages.iter().skip(self.render_window.range.start).take(self.render_window.range.len()));}
         if update_files{
-        while let Some(child)=widgets.selected_files.first_child(){widgets.selected_files.remove(&child);}
-        for (index,file) in self.draft.files.iter().enumerate(){
-            let button=gtk::Button::with_label(&format!("Remover {} ({})",file.name,format_file_size(file.size as i64)));
-            button.set_sensitive(!self.draft.is_sending());let s=sender.clone();button.connect_clicked(move |_|s.input(ChatMsg::Transfer(TransferMsg::Remove(index))));widgets.selected_files.append(&button);
-        }
+            let context=self.active_channel.as_ref().map(|c|(c.id(),self.user_id));
+            self.draft_previews.render(&widgets.selected_files,&self.draft.files,context,self.access.send&&self.access.attachments,self.draft.is_sending(),&sender);
         }
         widgets.reply_author.set_attributes(None);
         if let Some(roles)=self.draft.reply.as_ref().and_then(|m|m.author_id).and_then(|id|self.users_map.get(&id)).and_then(|u|u.roles.as_deref()){crate::ui::style::role_color(&widgets.reply_author,roles);}
@@ -1233,7 +1264,7 @@ impl ChatModel {
     }
     /// Never acknowledge unread navigation, pagination or an unsettled opening.
     pub(crate) fn read_candidate(&self)->Option<Message> {
-        if !self.access.read || !self.history_ready || self.history.loading()
+        if self.actions.pinned_view || !self.access.read || !self.history_ready || self.history.loading()
             || self.reconcile_request.is_some() || self.initial_read.is_some()
             || self.viewing_old || !self.viewport.read_ready() {
             return None;
@@ -1339,6 +1370,7 @@ fn rebuild_messages_view(
 
         let label = gtk::Label::new(Some("Nenhuma mensagem por aqui ainda.\nComece a conversa!"));
         label.set_justify(gtk::Justification::Center);
+        if actions.pinned_view{label.set_text("Nenhuma mensagem fixada.");}
         label.add_css_class("dim-label");
         empty_box.append(&label);
 
@@ -1477,6 +1509,12 @@ fn rebuild_messages_view(
         let media_box=gtk::Box::new(gtk::Orientation::Vertical,4);media_box.set_widget_name("message-media");
         transfers::update_media_box(&media_box,msg,media,users_map,actions,sender);content_box.append(&media_box);
 
+        if actions.pinned_view{
+            let open=gtk::Button::with_label("Abrir mensagem no histórico");open.add_css_class("flat");open.set_halign(gtk::Align::Start);
+            let output=sender.clone();let channel_id=msg.channel_id;let message_id=msg.id;
+            open.connect_clicked(move |_|{let _=output.output(ChatOutput::Navigate{channel_id,message_id});});content_box.append(&open);
+        }
+
         // Reactions Flow / Pill List
         let reactions_box = gtk::FlowBox::new();
         reactions_box.set_halign(gtk::Align::Start);
@@ -1504,7 +1542,7 @@ fn rebuild_messages_view(
         let s = sender.clone(); who.connect_clicked(move |_| s.input(ChatMsg::Action(ActionMsg::OpenParticipants(msg_id)))); message_actions.append(&who);
         let reply=gtk::Button::with_label("Responder");reply.add_css_class("flat");reply.set_sensitive(access.send);let s=sender.clone();let message=msg.clone();reply.connect_clicked(move |_|s.input(ChatMsg::SetReply(Some(message.clone()))));message_actions.append(&reply);
         if let Some(text)=text{let copy=gtk::Button::with_label("Copiar texto");copy.add_css_class("flat");let s=sender.clone();copy.connect_clicked(move |_|s.input(ChatMsg::CopyMessage(text.clone())));message_actions.append(&copy);}
-        if let Some(user) = user_id {
+        if let Some(user) = user_id.filter(|_|!actions.pinned_view) {
             if access.can_edit(user, msg.author_id) {
                 let edit = gtk::Button::with_label("Editar");edit.set_widget_name("message-mutate"); edit.add_css_class("flat"); edit.set_sensitive(!actions.busy.contains(&msg.id));
                 let s = sender.clone(); let m = msg.clone(); edit.connect_clicked(move |_| s.input(ChatMsg::Action(ActionMsg::OpenEdit(m.clone())))); message_actions.append(&edit);

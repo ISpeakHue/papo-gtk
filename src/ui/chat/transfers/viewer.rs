@@ -47,7 +47,8 @@ impl ChatModel {
         match result {
             Ok(image)=>{if let Some(picture)=picture(window){picture.set_paintable(Some(&image.texture()));}},
             Err(error)=>{
-                window.set_title(Some("Imagem · não foi possível carregar o original"));
+                let title=window.title().unwrap_or_else(||"Imagem".into());
+                window.set_title(Some(&format!("{title} · não foi possível carregar o original")));
                 if let Some(picture)=picture(window){picture.set_tooltip_text(Some(&format!("Exibindo prévia. {error}")));}
                 if crate::api::is_session_error(&error){let _=sender.output(ChatOutput::ActionError(error));}
             },

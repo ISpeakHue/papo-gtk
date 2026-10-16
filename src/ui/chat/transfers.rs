@@ -1,6 +1,7 @@
 //! Streaming transfers and bounded media textures owned by the chat session.
 use super::*;
 mod viewer;
+#[cfg(test)]pub(crate) mod pins_tests;
 pub(super) mod gifs;
 mod author;
 mod external;
@@ -113,6 +114,16 @@ pub(super) struct Transfers {
     giphy:HashMap<String,Uuid>,animations:HashMap<Uuid,(crate::media::animation::Animation,usize)>,
     pub(super) image_tokens:HashMap<Uuid,Uuid>,preview_tokens:HashMap<Uuid,Uuid>, pub(super) epoch: Uuid, limiter: std::sync::Arc<tokio::sync::Semaphore>, pub(super) textures: HashMap<Uuid, gtk::gdk::Texture>, order: VecDeque<Uuid>, requested: HashSet<Uuid>, revealed: HashSet<Uuid>, pub(super) jobs: Vec<tokio::task::JoinHandle<()>>, uploads: HashMap<Uuid, tokio::task::JoinHandle<()>>, pub progress: u64, video_requests:HashMap<(Uuid,Uuid),Uuid>,videos: Vec<Playback>,images:Vec<(Uuid,Uuid,gtk::Window)>,
 }
+// Only immutable cached media is shared; players and pending work stay scoped.
+#[derive(Clone, Default)]
+pub(in crate::ui::chat) struct PinnedMedia {
+    textures: HashMap<Uuid, gtk::gdk::Texture>,
+    animations: HashMap<Uuid, (crate::media::animation::Animation, usize)>,
+    sizes: HashMap<Uuid, (i32, i32)>,
+    static_previews: HashSet<Uuid>,
+    embeds: Vec<Embed>,
+    external: external::Cached,
+}
 // Keep the temporary file alive until the player and fullscreen view are detached.
 struct Playback {message:Uuid,key:Uuid,view:gtk::Box,media:gtk::MediaFile,_file:std::sync::Arc<TemporaryFile>,fullscreen:std::rc::Rc<super::video::Fullscreen>}
 impl Drop for Playback{
@@ -183,6 +194,29 @@ impl Drop for Transfers {
     }
 }
 impl Transfers {
+    pub(in crate::ui::chat) fn pinned_media(&self, messages: &[Message]) -> PinnedMedia {
+        let keys: HashSet<_> = messages.iter().flat_map(|m| m.attachments.iter().flatten().map(|a| a.id).chain(m.embeds.iter().flatten().map(|e| e.id))).collect();
+        PinnedMedia {
+            textures: self.textures.iter().filter(|(id,_)| keys.contains(id)).map(|(id,v)| (*id,v.clone())).collect(),
+            animations: self.animations.iter().filter(|(id,_)| keys.contains(id)).map(|(id,v)| (*id,v.clone())).collect(),
+            sizes: self.sizes.iter().filter(|(id,_)| keys.contains(id)).map(|(id,v)| (*id,*v)).collect(),
+            static_previews: self.static_previews.intersection(&keys).copied().collect(),
+            embeds: self.embeds.values().filter(|e| keys.contains(&e.id)).cloned().collect(),
+            external: self.external.cached(messages),
+        }
+    }
+    pub(in crate::ui::chat) fn seed_pinned(&mut self, media: PinnedMedia) {
+        for (id, image) in media.textures {
+            if self.textures.contains_key(&id) { continue; }
+            self.textures.insert(id,image);self.order.push_back(id);
+            if let Some(animation)=media.animations.get(&id) { self.animations.insert(id,animation.clone());self.gif_resolved.insert(id); }
+            if media.static_previews.contains(&id) { self.static_previews.insert(id); }
+        }
+        for (id,size) in media.sizes { self.sizes.entry(id).or_insert(size); }
+        for embed in media.embeds { if !self.embeds.contains_key(&embed.id) { self.remember_preview(embed); } }
+        self.external.seed(media.external);
+        self.prune_textures();
+    }
     fn media_job(&mut self,key:Uuid,job:tokio::task::JoinHandle<()>){
         self.media_jobs.entry(key).or_default().push(job.abort_handle());
         self.jobs.push(job);
@@ -593,7 +627,6 @@ impl ChatModel {
         messages.sort_by_key(|m|(!scope.contains(&m.id),self.transfers.priority.get(&m.id).copied().unwrap_or(u64::MAX),std::cmp::Reverse(m.created_at)));
         self.transfers.external.clear_queue();
         self.transfers.external.request(messages.iter().filter(|m|scope.contains(&m.id)).map(|m|&**m),&api,sender);
-        if self.actions.pins_window.as_ref().is_some_and(|(w,_)|w.is_visible()){self.transfers.external.request(self.actions.pinned.iter(),&api,sender);}
         for m in messages {
             let mut links=crate::media::gif_links::links(m.content.as_deref().unwrap_or(""));
             for p in m.embeds.iter().flatten().filter(|p|p.animated_link()){for id in gifs::keys(p){if !links.contains(&id){links.push(id);}}}
@@ -799,6 +832,7 @@ impl ChatModel {
                 let embed=self.history.messages.iter().find(|m|m.id==message).and_then(|m|m.embeds.iter().flatten().find(|p|p.id==key));
                 if embed.is_some_and(Embed::animated_link)||self.transfers.giphy.values().any(|id|*id==key){let source=gifs::source(&self.transfers,message,key,&self.history.messages);gifs::viewer(&window,embed,source.as_deref());}
                 if let Some(attachment)=self.history.messages.iter().find(|m|m.id==message).and_then(|m|m.attachments.iter().flatten().find(|a|a.id==key)) {
+                    if !attachment.original_file_name.trim().is_empty(){window.set_title(Some(&attachment.original_file_name));}
                     if let Some(header)=window.child().and_then(|root|root.first_child()).and_downcast::<adw::HeaderBar>() {
                         let save=gtk::Button::from_icon_name("folder-download-symbolic");save.set_tooltip_text(Some("Baixar arquivo"));
                         save.update_property(&[gtk::accessible::Property::Label("Baixar arquivo")]);
@@ -1025,8 +1059,9 @@ impl ChatModel {
     fn videos_retain(&mut self,message:Uuid,key:Uuid){self.transfers.videos.retain(|p|p.message!=message||p.key!=key);}
     fn play_video(&mut self,message:Uuid,key:Uuid,file:std::sync::Arc<TemporaryFile>,sender:&ComponentSender<Self>){
                             if self.transfers.videos.len()>=2{self.transfers.videos.remove(0);}
-                            let view=gtk::Box::new(gtk::Orientation::Vertical,0);view.set_widget_name(&format!("video-{message}-{key}"));let player=gtk::Box::new(gtk::Orientation::Vertical,6);view.append(&player);
-                            let close=gtk::Button::with_label("Fechar vídeo");close.set_halign(gtk::Align::End);let input=sender.input_sender().clone();close.connect_clicked(move |_|{let _=input.send(ChatMsg::Transfer(TransferMsg::CloseVideo{message,key}));});player.append(&close);
+                            let view=gtk::Box::new(gtk::Orientation::Vertical,6);view.set_widget_name(&format!("video-{message}-{key}"));let player=gtk::Box::new(gtk::Orientation::Vertical,6);
+                            // Keep the chat action outside the player moved to fullscreen.
+                            let close=gtk::Button::with_label("Fechar vídeo");close.set_halign(gtk::Align::End);let input=sender.input_sender().clone();close.connect_clicked(move |_|{let _=input.send(ChatMsg::Transfer(TransferMsg::CloseVideo{message,key}));});view.append(&close);view.append(&player);
                             let media=gtk::MediaFile::for_filename(&file.0);let video=video_surface(&media);video.set_hexpand(true);let frame=crate::media::frame::frame(&video,640,360);player.append(&frame);let controls=super::video::controls(&video,&media);player.append(&controls);
                             let fullscreen=super::video::Fullscreen::new(&view,&player,&frame,&media,&controls);
                             let error=gtk::Label::new(None);error.set_wrap(true);error.add_css_class("error");player.append(&error);let error_now=error.clone();media.connect_error_notify(move |m|{if let Some(e)=m.error(){error.set_text(&format!("Não foi possível reproduzir: {e}"));}});if let Some(e)=media.error(){error_now.set_text(&format!("Não foi possível reproduzir: {e}"));}

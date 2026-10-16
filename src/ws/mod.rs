@@ -1,8 +1,6 @@
 //! WebSocket client — runs as a long-lived background tokio task.
-//!
-//! Connects to `ws://<host>/ws`, parses incoming events and forwards them to
-//! the UI layer via an `mpsc` channel, with bounded reconnect backoff.
-
+//! EN: Long-lived Tokio background task connecting to `ws://<host>/ws`, parsing real-time events, sending heartbeats, and handling exponential backoff reconnects.
+//! PT-BR: Cliente WebSocket — executa como uma tarefa de segundo plano de longa duração no Tokio. Conecta-se a `ws://<host>/ws`, analisa eventos em tempo real, envia heartbeats e gerencia reconexões com recuo exponencial.
 
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
@@ -16,6 +14,8 @@ use crate::models::*;
 // ── Incoming event types ──────────────────────────────────────────────────────
 
 /// Envelope shared by all WebSocket events.
+/// EN: Generic event wrapper extracting the `type` tag and raw JSON payload.
+/// PT-BR: Envelope compartilhado por todos os eventos WebSocket para identificar o tipo e o payload JSON bruto.
 #[derive(Debug, Deserialize)]
 struct RawEvent {
     #[serde(rename = "type")]
@@ -25,19 +25,22 @@ struct RawEvent {
 }
 
 /// Strongly-typed events surfaced to the UI layer.
+/// EN: High-level application events dispatched to Relm4 components.
+/// PT-BR: Eventos tipados de alto nível repassados para a camada de interface (Relm4).
 #[derive(Debug, Clone)]
 pub enum WsEvent {
     Voice(VoiceEvent),
     ConnectionReady(Uuid),
     Error { message: String, code: Option<String> },
-    /// A new message was posted.
+    /// EN: A new message was posted. / PT-BR: Uma nova mensagem foi publicada.
     NewMessage(Message),
     NewNotification(crate::models::NotificationEvent),
-    /// A message was edited.
+    /// EN: A message was edited. / PT-BR: Uma mensagem foi editada.
     MessageEdit { id: Uuid, content: String, channel_id: Option<Uuid>, edited_at: Option<chrono::DateTime<chrono::Utc>> },
-    /// A message was deleted.
+    /// EN: A message was deleted. / PT-BR: Uma mensagem foi apagada.
     MessageDelete {
         id: Uuid,
+
         #[cfg_attr(not(test), expect(dead_code, reason = "Retained event identity; handlers refresh authoritative state instead of trusting partial updates."))]
         channel_id: Uuid,
     },
@@ -110,9 +113,10 @@ impl WsCommand {fn for_connection(self,id:Uuid)->Option<String>{match self{Self:
 // ── Client ───────────────────────────────────────────────────────────────────
 
 /// Spawns a background task that manages the WebSocket connection.
-///
-/// Returns an `mpsc::Receiver` of [`WsEvent`] values and an `mpsc::Sender`
-/// that can be used to send raw text frames (e.g. heartbeats or typing).
+/// EN: Spawns the background Tokio task managing the live WebSocket stream.
+/// Returns an event receiver for the UI and a command sender for outgoing frames.
+/// PT-BR: Inicializa uma tarefa assíncrona em segundo plano no Tokio gerenciando a conexão WebSocket.
+/// Retorna um receptor de eventos para a interface e um transmissor de comandos para envio de mensagens/status.
 #[derive(Clone,Copy)]
 struct Deadlines { handshake:std::time::Duration, write:std::time::Duration, heartbeat:std::time::Duration, silence:std::time::Duration }
 impl Default for Deadlines{fn default()->Self{use std::time::Duration as D;Self{handshake:D::from_secs(10),write:D::from_secs(10),heartbeat:D::from_secs(25),silence:D::from_secs(75)}}}
@@ -120,15 +124,23 @@ async fn send_frame<S>(write:&mut S,frame:WsMessage,events:&mpsc::Sender<WsEvent
 where S:futures_util::Sink<WsMessage>+Unpin {
     tokio::select!{_ = events.closed()=>false,result=tokio::time::timeout(deadline,write.send(frame))=>matches!(result,Ok(Ok(())))}
 }
+
+/// EN: Public entry point to start the WebSocket loop using default timeout thresholds.
+/// PT-BR: Ponto de entrada público para iniciar o loop WebSocket utilizando limites de tempo padrão.
 pub fn spawn(client: crate::api::ApiClient) -> (mpsc::Receiver<WsEvent>, mpsc::Sender<WsCommand>) {spawn_with_deadlines(client,Deadlines::default())}
+
 fn spawn_with_deadlines(client: crate::api::ApiClient,deadlines:Deadlines) -> (mpsc::Receiver<WsEvent>, mpsc::Sender<WsCommand>) {
     let (ev_tx, ev_rx) = mpsc::channel::<WsEvent>(256);
     let (cmd_tx, mut cmd_rx) = mpsc::channel::<WsCommand>(64);
 
     tokio::spawn(async move {
+        // EN: Initial reconnect delay in seconds (doubles exponentially up to 60s).
+        // PT-BR: Atraso inicial de reconexão em segundos (dobra exponencialmente até 60s).
         let mut backoff_secs = 2u64;
 
         loop {
+            // EN: If the UI has dropped the event receiver, stop the background task.
+            // PT-BR: Se a interface fechou o canal receptor de eventos, encerra a tarefa em segundo plano.
             if ev_tx.is_closed() {
                 break;
             }
@@ -149,7 +161,9 @@ fn spawn_with_deadlines(client: crate::api::ApiClient,deadlines:Deadlines) -> (m
                 Ok((stream, _)) => {
                     let connection_id=Uuid::new_v4();
                     if ev_tx.send(WsEvent::ConnectionReady(connection_id)).await.is_err(){return;}
-                    backoff_secs = 2; // Reset backoff on successful connect
+                    // EN: Reset backoff counter upon successful connection.
+                    // PT-BR: Redefine o contador de recuo (backoff) após uma conexão bem-sucedida.
+                    backoff_secs = 2;
                     // Also resync after the first connection: initial HTTP loading
                     // may have completed before the socket became available.
                     if ev_tx.send(WsEvent::Reconnected).await.is_err() {
@@ -157,8 +171,11 @@ fn spawn_with_deadlines(client: crate::api::ApiClient,deadlines:Deadlines) -> (m
                     }
 
                     let (mut write, mut read) = stream.split();
+                    // EN: Heartbeat ticker every 25 seconds.
+                    // PT-BR: Intervalo de pulso (heartbeat) a cada 25 segundos.
                     let mut heartbeat = tokio::time::interval(deadlines.heartbeat);
                     heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
 
                     let mut last_ack=tokio::time::Instant::now();
                     loop {

@@ -4,6 +4,8 @@ use adw::prelude::*;
 use crate::models::*;
 use crate::ui::chat::actions::window;
 pub(crate) mod settings;
+mod preferences;
+mod profile;
 use settings::{profile_values,preferences_values,watch_profile,watch_preferences};
 #[derive(Debug)]
 pub enum AccountMsg {
@@ -38,7 +40,7 @@ pub(super) struct Account {
 }
 struct ProfileView {
     baseline:Vec<String>,reconcile:Option<Uuid>,identity:Option<(adw::Avatar,gtk::Label)>,banner:Option<gtk::Picture>,
-    embedded:bool,
+    embedded:bool,hero:Option<profile::Hero>,
     text:Vec<ProfileText>,
     loading:bool,refresh_again:bool,refresh_scheduled:bool,
     token: Uuid, id: Uuid, window: gtk::Window, body: gtk::Box, error: gtk::Label, save:Option<gtk::Button>, fields: Option<ProfileFields>, pending: bool, image_write: bool
@@ -50,7 +52,7 @@ struct ProfileFields {
 struct PreferencesView {
     baseline:Vec<String>,save:gtk::Button,
     embedded:bool,
-    token: Uuid, window: gtk::Window, body: gtk::Box, error: gtk::Label, motion:gtk::DropDown, theme: gtk::DropDown, font: gtk::DropDown, density: gtk::DropDown, checks: Vec<gtk::CheckButton>, pending: bool
+    token: Uuid, window: gtk::Window, body: gtk::Box, error: gtk::Label, motion:adw::ComboRow, theme: adw::ComboRow, font: adw::ComboRow, density: adw::ComboRow, toggles: Vec<adw::SwitchRow>, pending: bool
 }
 impl Drop for Account {
     fn drop(&mut self) {
@@ -136,8 +138,13 @@ impl MainWindowModel {
                 v.reconcile=None;
                 match result{
                     Ok((p,banner,image))=>{
-                        if let Some((avatar,name))=&v.identity{name.set_text(p.display_name());if v.image_write{avatar.set_custom_image(image.map(|i|i.texture()).as_ref());}}
-                        if v.image_write{if let Some(old)=v.banner.take(){v.body.remove(&old);}if let Some(texture)=banner.as_deref().and_then(crate::media::bounded_texture){let picture=gtk::Picture::for_paintable(&texture);picture.set_height_request(140);picture.set_can_shrink(true);v.body.prepend(&picture);v.banner=Some(picture);}}
+                        let image=image.map(crate::media::PreparedImage::texture);
+                        if let Some(hero)=&v.hero{
+                            hero.name.set_text(p.display_name());hero.avatar.set_text(Some(p.display_name()));
+                            if v.image_write{hero.avatar.set_custom_image(image.as_ref());let texture=banner.as_deref().and_then(crate::media::bounded_texture);hero.set_banner(texture.as_ref());}
+                        }
+                        if let Some((avatar,name))=&v.identity{name.set_text(p.display_name());if v.image_write{avatar.set_custom_image(image.as_ref());}}
+                        if v.image_write&&v.hero.is_none(){if let Some(old)=v.banner.take(){v.body.remove(&old);}if let Some(texture)=banner.as_deref().and_then(crate::media::bounded_texture){let picture=gtk::Picture::for_paintable(&texture);picture.set_height_request(140);picture.set_can_shrink(true);v.body.prepend(&picture);v.banner=Some(picture);}}
                         if !v.image_write{if let Some(f)=&v.fields{
                             let current=profile_values(f);let manual=match p.status{Some(UserStatus::Away)=>1,Some(UserStatus::Busy)=>2,None=>0};
                             let accepted=vec![p.nickname.unwrap_or_default(),p.status_message.unwrap_or_default(),p.description.unwrap_or_default(),p.typing.unwrap_or_default(),manual.to_string()];
@@ -243,9 +250,9 @@ impl MainWindowModel {
                 let w:gtk::Window=mount.as_ref().map(|(w,_)|w.clone()).unwrap_or_else(||adw::Window::builder().title(if own{"Editar perfil"}else{"Perfil"}).default_width(if own{620}else{460}).default_height(if own{780}else{-1}).modal(true).build().upcast());
                 if !embedded{if let Some(parent)=root.root().and_downcast::<gtk::Window>(){w.set_transient_for(Some(&parent));}}
                 let toolbar=adw::ToolbarView::new();let header=adw::HeaderBar::new();let title=adw::WindowTitle::new(if own{"Editar perfil"}else{"Perfil"},"");header.set_title_widget(Some(&title));
-                let actions=gtk::Box::new(gtk::Orientation::Horizontal,8);actions.set_halign(gtk::Align::End);actions.set_margin_top(8);actions.set_margin_end(18);actions.set_margin_bottom(8);
-                if embedded{toolbar.add_top_bar(&actions);}else{toolbar.add_top_bar(&header);}
-                let save=own.then(||{let save=gtk::Button::with_label("Salvar perfil");save.add_css_class("suggested-action");save.set_sensitive(false);let output=sender.input_sender().clone();save.connect_clicked(move |_|{let _=output.send(MainWindowMsg::Account(AccountMsg::SaveProfile(token)));});if embedded{actions.append(&save);}else{header.pack_end(&save);}save});
+                let actions=gtk::Box::new(gtk::Orientation::Horizontal,12);
+                if embedded{actions.add_css_class("papo-profile-actions");toolbar.add_bottom_bar(&actions);}else{toolbar.add_top_bar(&header);}
+                let save=own.then(||{let save=gtk::Button::with_label("Salvar perfil");save.add_css_class("suggested-action");save.set_valign(gtk::Align::Center);save.set_sensitive(false);let output=sender.input_sender().clone();save.connect_clicked(move |_|{let _=output.send(MainWindowMsg::Account(AccountMsg::SaveProfile(token)));});if embedded{actions.append(&save);}else{header.pack_end(&save);}save});
                 let body=gtk::Box::new(gtk::Orientation::Vertical,0);toolbar.set_content(Some(&body));if let Some((_,page))=mount{page.append(&toolbar);}else{w.downcast_ref::<adw::Window>().unwrap().set_content(Some(&toolbar));}
                 let scroll = gtk::ScrolledWindow::new();
                 scroll.set_vexpand(own);scroll.set_hscrollbar_policy(gtk::PolicyType::Never);
@@ -255,17 +262,17 @@ impl MainWindowModel {
                     scroll.set_min_content_height(140);
                     scroll.set_max_content_height(560);
                 }
-                let content = gtk::Box::new(gtk::Orientation::Vertical, if own{24}else{16});content.set_valign(gtk::Align::Start);
-                content.set_margin_top(24);content.set_margin_bottom(if own{24}else{16});content.set_margin_start(if embedded{32}else{18});content.set_margin_end(if embedded{32}else{18});
+                let content = gtk::Box::new(gtk::Orientation::Vertical, if own{20}else{16});content.set_valign(gtk::Align::Start);
+                content.set_margin_top(if embedded{18}else{24});content.set_margin_bottom(if own{24}else{16});content.set_margin_start(if embedded{32}else{18});content.set_margin_end(if embedded{32}else{18});
                 let clamp=adw::Clamp::new();clamp.set_maximum_size(if embedded{768}else{560});clamp.set_tightening_threshold(if embedded{640}else{440});clamp.set_child(Some(&content));scroll.set_child(Some(&clamp));
                 body.append(&scroll);
                 let error = gtk::Label::new(Some("Carregando perfil…"));
                 error.set_wrap(true);
                 error.connect_notify_local(Some("label"),|label,_|label.set_visible(!label.text().is_empty()));
-                body.append(&error);
+                if embedded{error.set_xalign(0.0);let status=gtk::Box::new(gtk::Orientation::Vertical,0);status.set_hexpand(true);status.set_valign(gtk::Align::Center);status.append(&error);actions.prepend(&status);}else{body.append(&error);}
                 w.present();
                 self.account.profile = Some(ProfileView {
-                    baseline:vec![],reconcile:None,identity:None,banner:None,embedded,
+                    baseline:vec![],reconcile:None,identity:None,banner:None,embedded,hero:None,
                     text:vec![],
                     token, id, window: w, body: content, error, save, fields: None, pending: false, image_write: false,loading:true,refresh_again:false,refresh_scheduled:false
                 });
@@ -307,22 +314,28 @@ impl MainWindowModel {
                     }, Ok((p, banner, image)) => {
                         v.error.set_text("");
                         if let Some(save)=&v.save{save.set_sensitive(self.account.mutation.is_none());v.body.set_sensitive(self.account.mutation.is_none());}
-                        if let Some(t) = banner.as_deref().and_then(crate::media::bounded_texture) {
-                            let picture = gtk::Picture::for_paintable(&t);
-                            picture.set_height_request(140);
-                            picture.set_can_shrink(true);
-                            v.body.append(&picture);v.banner=Some(picture);
-                        }
                         let avatar=image.map(crate::media::PreparedImage::texture);
-                        let identity=gtk::Box::new(gtk::Orientation::Horizontal,16);let picture=crate::media::avatar_image(avatar.as_ref(),80);picture.set_text(Some(p.display_name()));identity.append(&picture);
-                        let names=gtk::Box::new(gtk::Orientation::Vertical,4);names.set_valign(gtk::Align::Center);let name=gtk::Label::new(Some(p.display_name()));name.add_css_class("title-2");name.set_xalign(0.0);name.set_ellipsize(gtk::pango::EllipsizeMode::End);if let Some(roles)=p.roles.as_deref(){crate::ui::style::role_color(&name,roles);}names.append(&name);let username=gtk::Label::new(Some(&format!("@{}",p.username)));username.add_css_class("dim-label");username.set_xalign(0.0);names.append(&username);identity.append(&names);v.body.append(&identity);v.identity=Some((picture,name));
-                        let badges=gtk::FlowBox::new();badges.set_selection_mode(gtk::SelectionMode::None);badges.set_min_children_per_line(1);badges.set_max_children_per_line(8);badges.set_halign(gtk::Align::Start);
-                        for role in p.roles.iter().flatten() {
-                            let badge = gtk::Label::new(Some(&role.name));
-                            badge.add_css_class("pill");
-                            crate::ui::style::role_color(&badge,std::slice::from_ref(role));badges.insert(&badge,-1);
+                        if v.embedded{
+                            let banner=banner.as_deref().and_then(crate::media::bounded_texture);
+                            let hero=profile::Hero::new(&p,avatar.as_ref(),banner.as_ref());
+                            v.body.append(&hero.widget);v.hero=Some(hero);
+                        }else{
+                            if let Some(t) = banner.as_deref().and_then(crate::media::bounded_texture) {
+                                let picture = gtk::Picture::for_paintable(&t);
+                                picture.set_height_request(140);
+                                picture.set_can_shrink(true);
+                                v.body.append(&picture);v.banner=Some(picture);
+                            }
+                            let identity=gtk::Box::new(gtk::Orientation::Horizontal,16);let picture=crate::media::avatar_image(avatar.as_ref(),80);picture.set_text(Some(p.display_name()));identity.append(&picture);
+                            let names=gtk::Box::new(gtk::Orientation::Vertical,4);names.set_valign(gtk::Align::Center);let name=gtk::Label::new(Some(p.display_name()));name.add_css_class("title-2");name.set_xalign(0.0);name.set_ellipsize(gtk::pango::EllipsizeMode::End);if let Some(roles)=p.roles.as_deref(){crate::ui::style::role_color(&name,roles);}names.append(&name);let username=gtk::Label::new(Some(&format!("@{}",p.username)));username.add_css_class("dim-label");username.set_xalign(0.0);names.append(&username);identity.append(&names);v.body.append(&identity);v.identity=Some((picture,name));
+                            let badges=gtk::FlowBox::new();badges.add_css_class("papo-profile-roles");badges.set_selection_mode(gtk::SelectionMode::None);badges.set_min_children_per_line(1);badges.set_max_children_per_line(8);badges.set_column_spacing(4);badges.set_row_spacing(4);badges.set_halign(gtk::Align::Start);
+                            for role in p.roles.iter().flatten() {
+                                let badge = gtk::Label::new(Some(&role.name));
+                                badge.set_ellipsize(gtk::pango::EllipsizeMode::End);
+                                crate::ui::style::role_color(&badge,std::slice::from_ref(role));badges.insert(&badge,-1);
+                            }
+                            if badges.first_child().is_some(){v.body.append(&badges);}
                         }
-                        if badges.first_child().is_some(){v.body.append(&badges);}
                         if p.id!=self.current_user.id{v.body.append(&gtk::Label::new(Some(&format!("Presença manual: {}", match p.status {
                             Some(UserStatus::Away) => "Ausente", Some(UserStatus::Busy) => "Ocupado", None => "Automática"
                         }))));}
@@ -341,7 +354,7 @@ impl MainWindowModel {
                             let about=adw::PreferencesGroup::new();about.set_title("Descrição");about.set_description(Some("Conte um pouco sobre você · até 512 caracteres"));v.body.append(&about);
                             let text=gtk::TextView::new();text.set_wrap_mode(gtk::WrapMode::WordChar);text.set_top_margin(12);text.set_bottom_margin(12);text.set_left_margin(12);text.set_right_margin(12);
                             let description=text.buffer();description.set_text(p.description.as_deref().unwrap_or(""));
-                            let editor=gtk::ScrolledWindow::builder().min_content_height(110).hscrollbar_policy(gtk::PolicyType::Never).child(&text).build();let frame=gtk::Frame::new(None);frame.set_child(Some(&editor));about.add(&frame);
+                            let editor=gtk::ScrolledWindow::builder().min_content_height(110).hscrollbar_policy(gtk::PolicyType::Never).child(&text).build();let frame=gtk::Frame::new(None);frame.add_css_class("papo-profile-description");frame.set_overflow(gtk::Overflow::Hidden);frame.set_child(Some(&editor));about.add(&frame);
                             let preview=gtk::Box::new(gtk::Orientation::Vertical,6);preview.set_margin_top(8);preview.set_margin_bottom(8);preview.set_margin_start(12);preview.set_margin_end(12);
                             let caption=gtk::Label::new(Some("Prévia"));caption.add_css_class("caption");caption.add_css_class("dim-label");caption.set_xalign(0.0);preview.append(&caption);
                             let content=gtk::Box::new(gtk::Orientation::Vertical,0);preview.append(&content);about.add(&preview);
@@ -544,34 +557,38 @@ impl MainWindowModel {
                 let c = self.account.config.complete();
                 let d = c.display.as_ref().unwrap();
                 let n = c.notifications.as_ref().unwrap();
-                let theme = dropdown(&body, "Tema", &["Sistema", "Claro", "Escuro"], match c.theme {
+                body.add_css_class("papo-preferences");body.set_spacing(16);body.set_margin_top(20);body.set_margin_bottom(20);
+                let appearance=preferences::group(&body,"Aparência");
+                let theme = preferences::choice(&appearance, "Tema", &["Sistema", "Claro", "Escuro"], match c.theme {
                     Some(Theme::Light) => 1, Some(Theme::Dark) => 2, _ => 0
                 });
-                let font = dropdown(&body, "Tamanho do texto", &["Pequeno", "Médio", "Grande"], match d.font_size {
+                let font = preferences::choice(&appearance, "Tamanho do texto", &["Pequeno", "Médio", "Grande"], match d.font_size {
                     Some(FontSize::Small) => 0, Some(FontSize::Huge) => 2, _ => 1
                 });
-                let density = dropdown(&body, "Espaçamento", &["Compacto", "Normal", "Confortável"], match d.message_density {
+                let density = preferences::choice(&appearance, "Espaçamento", &["Compacto", "Normal", "Confortável"], match d.message_density {
                     Some(MessageDensity::Compact) => 0, Some(MessageDensity::Comfortable) => 2, _ => 1
                 });
-                let motion=dropdown(&body,"Animações de GIFs e emojis (neste dispositivo)",&["Seguir o sistema","Sempre animar","Reduzir movimento"],crate::media::animation::motion().index());
-                let mut checks = Vec::new();
-                for (label, value) in [("Mostrar horários", d.show_timestamps), ("Mostrar avatares", d.show_avatars), ("Ativar notificações", n.enabled), ("Prévia nas notificações", n.message_preview), ("Som das notificações", n.sound), ("Notificar menções", n.mentions)] {
-                    let check = gtk::CheckButton::with_label(label);
-                    check.set_active(value.unwrap_or(true));
-                    body.append(&check);
-                    checks.push(check);
+                let motion=preferences::choice(&appearance,"Animações de GIFs e emojis (neste dispositivo)",&["Seguir o sistema","Sempre animar","Reduzir movimento"],crate::media::animation::motion().index());
+                let display=preferences::group(&body,"Exibição");
+                let notifications=preferences::group(&body,"Notificações");
+                let mut toggles = Vec::new();
+                for (index,(label, value)) in [("Mostrar horários", d.show_timestamps), ("Mostrar avatares", d.show_avatars), ("Ativar notificações", n.enabled), ("Prévia nas notificações", n.message_preview), ("Som das notificações", n.sound), ("Notificar menções", n.mentions)].into_iter().enumerate() {
+                    let row=adw::SwitchRow::new();row.set_title(label);row.set_title_lines(0);row.set_active(value.unwrap_or(true));
+                    if index<2{display.add(&row);}else{notifications.add(&row);}
+                    toggles.push(row);
                 }
                 let save = gtk::Button::with_label("Salvar preferências");
+                save.add_css_class("suggested-action");save.set_halign(gtk::Align::End);save.set_margin_top(4);
                 let s = sender.clone();
                 save.connect_clicked(move |_|s.input(MainWindowMsg::Account(AccountMsg::SavePreferences(token))));
                 body.append(&save);
                 let error = gtk::Label::new(None);
-                error.set_wrap(true);
+                error.set_wrap(true);error.set_xalign(0.0);error.set_visible(false);error.connect_label_notify(|label|label.set_visible(!label.text().is_empty()));
                 body.append(&error);
                 w.present();
                 self.account.preferences = Some(PreferencesView {
                     baseline:vec![],save:save.clone(),embedded,
-                    token, window: w, body, error, motion, theme, font, density, checks, pending: false
+                    token, window: w, body, error, motion, theme, font, density, toggles, pending: false
                 });
                 let v=self.account.preferences.as_mut().unwrap();v.baseline=preferences_values(v);watch_preferences(v,sender);self.settings_dirty();
             }
@@ -593,13 +610,13 @@ impl MainWindowModel {
                 d.message_density = Some(match v.density.selected() {
                     0 => MessageDensity::Compact, 2 => MessageDensity::Comfortable, _ => MessageDensity::Normal
                 });
-                d.show_timestamps = Some(v.checks[0].is_active());
-                d.show_avatars = Some(v.checks[1].is_active());
+                d.show_timestamps = Some(v.toggles[0].is_active());
+                d.show_avatars = Some(v.toggles[1].is_active());
                 let n = config.notifications.as_mut().unwrap();
-                n.enabled = Some(v.checks[2].is_active());
-                n.message_preview = Some(v.checks[3].is_active());
-                n.sound = Some(v.checks[4].is_active());
-                n.mentions = Some(v.checks[5].is_active());
+                n.enabled = Some(v.toggles[2].is_active());
+                n.message_preview = Some(v.toggles[3].is_active());
+                n.sound = Some(v.toggles[4].is_active());
+                n.mentions = Some(v.toggles[5].is_active());
                 v.pending = true;
                 self.account.settings_pending = true;
                 v.body.set_sensitive(false);
@@ -847,9 +864,9 @@ pub(crate) fn exercise_preferences_and_profiles(main: &Controller<MainWindowMode
     let image_button=find_button(profile.upcast_ref(),"Alterar avatar");until(context,||image_button.height()>0);
     let bounds=image_button.compute_bounds(&profile).unwrap();assert!(bounds.y()+bounds.height()<profile.height() as f32,"profile image controls should be visible when the window opens: button={bounds:?}, window={}x{}",profile.width(),profile.height());
     assert!(descendants(profile.upcast_ref()).iter().any(|w|w.is::<adw::HeaderBar>()));assert!(descendants(profile.upcast_ref()).iter().any(|w|w.is::<adw::EntryRow>()));
-    let save=find_button(profile.upcast_ref(),"Salvar perfil");let save_bounds=save.compute_bounds(&profile).unwrap();assert!(save_bounds.y()<150.0,"save stays in the native header");
+    let save=find_button(profile.upcast_ref(),"Salvar perfil");let save_bounds=save.compute_bounds(&profile).unwrap();assert!(save_bounds.y()>profile.height() as f32-90.0&&save_bounds.y()+save_bounds.height()<=profile.height() as f32,"save stays visible in the fixed bottom bar");
     profile.set_default_size(390,650);until(context,||profile.width()<=420);crate::ui::main_window::layout::tests::preview(&profile,"profile-narrow",context);
-    assert!(profile.width()<=420,"the profile editor must fit a narrow window");assert!(save.compute_bounds(&profile).unwrap().y()<150.0);
+    assert!(profile.width()<=420,"the profile editor must fit a narrow window");let bounds=save.compute_bounds(&profile).unwrap();assert!(bounds.y()>profile.height() as f32-90.0&&bounds.y()+bounds.height()<=profile.height() as f32);
     let old = main.model().account.profile.as_ref().unwrap().token;
     {
         let m = main.model();
@@ -892,7 +909,7 @@ pub(crate) fn exercise_preferences_and_profiles(main: &Controller<MainWindowMode
         v.theme.set_selected(2);
         v.font.set_selected(2);
         v.density.set_selected(0);
-        for c in &v.checks {
+        for c in &v.toggles {
             c.set_active(false);
         }
     }

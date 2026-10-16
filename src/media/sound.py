@@ -5,10 +5,27 @@ import sys
 import gi
 
 gi.require_version("Gst", "1.0")
-from gi.repository import Gst
+from gi.repository import GLib, Gst
+
+
+def configure_audio_output(_pipeline, _bin, element):
+    """Use Papo's audio identity, without changing saved volume or mute choices."""
+    if element.find_property("stream-properties") is not None:
+        properties = Gst.Structure.new_empty("props")
+        properties.set_value("application.id", "br.com.papo.gtk")
+        properties.set_value("application.name", "Papo")
+        properties.set_value("media.role", "event")
+        properties.set_value("media.name", "Papo call sound")
+        element.set_property("stream-properties", properties)
+    if element.find_property("client-name") is not None:
+        element.set_property("client-name", "Papo")
 
 
 def main():
+    # These helpers run under Python, but must not inherit Python's restored
+    # application mute/volume or appear as an unrelated interpreter in mixers.
+    GLib.set_application_name("Papo")
+    GLib.set_prgname("papo-gtk")
     Gst.init(None)
     wav = sys.stdin.buffer.read(65537)
     if len(wav) > 65536 or not wav.startswith(b"RIFF"):
@@ -18,6 +35,9 @@ def main():
         "appsrc name=source format=bytes ! wavparse ! audioconvert ! "
         "audioresample ! volume name=cue-volume volume=0.7 ! " + sink
     )
+    # autoaudiosink creates its real sink during the state transition. Configure
+    # it before opening its stream, including when PulseAudio is backed by PipeWire.
+    pipeline.connect("deep-element-added", configure_audio_output)
     decoded = [0]
 
     def buffer_probe(_pad, info):

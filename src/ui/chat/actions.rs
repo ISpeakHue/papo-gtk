@@ -2,6 +2,7 @@
 #[cfg(test)]
 pub(crate) mod tests;
 mod edit_mentions;
+pub(crate) mod pins;
 #[cfg(test)]pub(crate) use edit_mentions::exercise as exercise_edit_mentions;
 use super::*;
 use crate::api::ApiClient;
@@ -16,7 +17,9 @@ pub(super) struct Actions {
     pub pins_ready: bool,
     pins_request: Option<Uuid>,
     pins_again: bool,
-    pub(super) pins_window: Option<(gtk::Window, gtk::Box)>,
+    pub(super) pins_window: Option<pins::View>,
+    pub pinned_view:bool,
+    pub pinned_inbox:Option<std::rc::Rc<std::cell::RefCell<Option<pins::Snapshot>>>>,
     pub emojis: Vec<Emoji>,
     pub emoji_names:HashMap<String,Uuid>,
     pub emoji_source:std::rc::Rc<std::cell::RefCell<String>>,
@@ -61,7 +64,7 @@ pub enum ActionMsg {
     EditFinished { epoch: Uuid, token: Uuid, result: anyhow::Result<Message> },
     ConfirmDelete(Message), DeleteConfirmed { epoch: Uuid, id: Uuid },
     DeleteFinished { epoch: Uuid, id: Uuid, result: anyhow::Result<()> },
-    Pin(Uuid), PinEvent { id: Uuid, pinned: bool }, OpenPins,
+    Pin(Uuid), PinEvent { id: Uuid, pinned: bool }, OpenPins, PinsClosed(String),
     PinsLoaded { epoch: Uuid, token: Uuid, result: anyhow::Result<Vec<Message>> },
     PinFinished { epoch: Uuid, id: Uuid, result: anyhow::Result<()> },
     Navigate(Uuid), CancelNavigation,
@@ -130,7 +133,7 @@ impl Actions {
         self.navigation = None; self.highlight = None; self.navigation_cursor = None;
         if let Some(view) = self.edit.take() { view.window.close(); }
         if let Some(w) = self.confirmation.take() { w.close(); }
-        if let Some((w, _)) = self.pins_window.take() { w.close(); }
+        self.pins_window.take();
         if let Some((w, _, _)) = self.picker.take() { w.close(); }
         if let Some((w,_))=self.composer_picker.take(){w.close();}
         if let Some((w,_,_))=self.embed_editor.take(){w.close();}
@@ -148,6 +151,7 @@ impl ChatModel {
         let _ = sender.output(ChatOutput::ActionError(error));
     }
     fn request_pins(&mut self, sender: &ComponentSender<Self>) {
+        if self.actions.pinned_view{return;}
         let (Some(api), Some(channel)) = (self.actions.api.clone(), self.active_channel.as_ref().map(|c| c.id())) else { return; };
         if !self.access.read { return; }
         if self.actions.pins_request.is_some() { self.actions.pins_again = true; return; }
@@ -359,21 +363,22 @@ impl ChatModel {
             }
             ActionMsg::OpenPins => {
                 if !self.access.read { return; }
-                let (w, outer) = window(root, "Mensagens fixadas"); let list = scroll_box(&outer);
-                if let Some((old, _)) = self.actions.pins_window.replace((w.clone(), list)) { old.close(); }
-                self.render_pins(sender); self.request_pins(sender); w.present();
+                if self.actions.pinned_view{return;}
+                if let Some(view)=self.actions.pins_window.as_ref().filter(|v|v.window.is_visible()){view.window.present();return;}
+                let view=pins::View::new(self,root,sender);view.window.present();self.actions.pins_window=Some(view);
+                self.render_pins(sender);self.request_pins(sender);
             }
+            ActionMsg::PinsClosed(token)=>{if self.actions.pins_window.as_ref().is_some_and(|v|v.window.widget_name()==token){self.actions.pins_window.take();}},
             ActionMsg::PinsLoaded { epoch, token, result } => {
                 let current = epoch == self.actions.epoch && self.actions.pins_request == Some(token);
                 if current { self.actions.pins_request = None; }
                 match result {
                     Ok(pinned) if current => {
                         self.actions.pinned=pinned.into_iter().filter(|m|!self.history.is_deleted(m.id)).collect();self.actions.pins_ready=true;
-                        if self.actions.pins_window.as_ref().is_some_and(|(window,_)|window.is_visible()){if let Some(api)=&self.actions.api{self.transfers.external.request(self.actions.pinned.iter(),api,sender);}}
                         self.render_pins(sender);
-                        if self.actions.pins_window.as_ref().is_some_and(|(window,_)|window.is_visible()){if let Some(channel)=self.active_channel.as_ref(){let _=sender.output(ChatOutput::AuthorMetadata{channel:channel.id(),ids:self.actions.pinned.iter().filter_map(|m|m.author_id).collect()});}}
+                        if self.actions.pins_window.as_ref().is_some_and(|view|view.window.is_visible()){if let Some(channel)=self.active_channel.as_ref(){let _=sender.output(ChatOutput::AuthorMetadata{channel:channel.id(),ids:self.actions.pinned.iter().filter_map(|m|m.author_id).collect()});}}
                     }
-                    Err(error) => { if current { self.actions.pins_ready = false; if let Some((_, list)) = &self.actions.pins_window { clear(list); list.append(&label(&format!("Não foi possível carregar: {error}"))); } } self.action_error(error, sender, current); }
+                    Err(error) => { if current { self.actions.pins_ready = false; if let Some(view) = &self.actions.pins_window { view.show_error(&format!("Não foi possível carregar: {error}")); } } self.action_error(error, sender, current); }
                     _ => {}
                 }
                 if current && std::mem::take(&mut self.actions.pins_again) { self.request_pins(sender); }
@@ -461,7 +466,7 @@ impl ChatModel {
                 for (id,image) in images{self.actions.install_emoji(id,image);}
                 for e in emojis{if let Some(old)=self.actions.emojis.iter_mut().find(|old|old.id==e.id){*old=e;}else{self.actions.emojis.push(e);}}
                 self.actions.emoji_names=self.actions.emojis.iter().map(|e|(e.name.clone(),e.id)).collect();
-                self.render_picker(sender);self.render_manager(sender);
+                self.render_picker(sender);self.render_manager(sender);self.render_pins(sender);
             },
             ActionMsg::EmojisLoaded { token, result } => {
                 let current = self.actions.emojis_request == Some(token); if current { self.actions.emojis_request = None; }
@@ -475,7 +480,7 @@ impl ChatModel {
                             e.image_blob = None;
                         }
                         self.actions.emojis_loaded = Some(std::time::Instant::now());
-                        self.actions.emojis = emojis; self.actions.emoji_names=self.actions.emojis.iter().map(|e|(e.name.clone(),e.id)).collect(); self.render_picker(sender); self.render_manager(sender);
+                        self.actions.emojis = emojis; self.actions.emoji_names=self.actions.emojis.iter().map(|e|(e.name.clone(),e.id)).collect(); self.render_picker(sender); self.render_manager(sender); self.render_pins(sender);
                     }
                     Err(error) => { if current { if let Some(m) = &self.actions.manager { m.error.set_text(&error.to_string()); } if let Some((_,picker,_))=&self.actions.picker{picker.show_error(&format!("Emojis personalizados indisponíveis: {error}"));}if let Some((_,picker))=&self.actions.composer_picker{picker.show_error(&format!("Emojis personalizados indisponíveis: {error}"));} } self.action_error(error, sender, current); }
                     _ => {}
@@ -559,17 +564,8 @@ impl ChatModel {
         self.actions.navigation_cursor = cursor;
         if let Some(channel) = &self.active_channel { let _ = sender.output(ChatOutput::LoadMoreMessages { channel_id: channel.id(), cursor }); }
     }
-    pub(super) fn render_pins(&self, sender: &ComponentSender<Self>) {
-        let Some((_, list)) = &self.actions.pins_window else { return; }; clear(list);
-        if !self.actions.pins_ready { list.append(&label("Carregando mensagens fixadas…")); }
-        else if self.actions.pinned.is_empty() { list.append(&label("Nenhuma mensagem fixada.")); }
-        for m in &self.actions.pinned {
-            let id=m.id;let open=button("",sender,move||ActionMsg::Navigate(id));open.set_tooltip_text(Some("Abrir mensagem no histórico"));
-            let row=gtk::Box::new(gtk::Orientation::Horizontal,10);let user=m.author_id.and_then(|id|self.users_map.get(&id));let name=m.sender_name(&self.users_map);
-            let avatar=crate::media::avatar_image(m.author_id.and_then(|id|self.avatars.get(&id)).or_else(||self.transfers.external.texture(m)),36);avatar.set_text(Some(name));avatar.set_valign(gtk::Align::Start);row.append(&avatar);
-            let column=gtk::Box::new(gtk::Orientation::Vertical,4);column.set_hexpand(true);let heading=label(name);heading.add_css_class("heading");if let Some(roles)=user.and_then(|u|u.roles.as_deref()){crate::ui::style::role_color(&heading,roles);}column.append(&heading);
-            column.append(&label(&mentions::render(&markdown::plain(m.content.as_deref().unwrap_or("Mensagem com anexos")),&self.users_map)));row.append(&column);open.set_child(Some(&row));list.append(&open);
-        }
+    pub(super) fn render_pins(&self, _sender: &ComponentSender<Self>) {
+        if let Some(view)=&self.actions.pins_window{view.update(self);}
     }
     pub(super) fn render_picker(&self,_sender:&ComponentSender<Self>){
         if let Some((_,picker,_))=&self.actions.picker{picker.update(&self.server_name,&self.actions.emojis,&self.actions.textures,&self.actions.animations);}

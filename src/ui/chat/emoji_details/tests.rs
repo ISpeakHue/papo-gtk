@@ -3,7 +3,7 @@ use actions::tests::{descendants,pump,until};
 use adw::prelude::*;
 
 fn choices()->Vec<emoji::Choice>{
-    [("thumbsup","👍"),("woman","👩"),("family","👩‍👩‍👧‍👧"),("heart","❤️"),("flag_br","🇧🇷"),("smile","😄")].into_iter().map(|(name,text)|emoji::Choice{name:name.into(),text:text.into(),id:None}).collect()
+    [("thumbsup","👍"),("woman","👩"),("family","👩‍👩‍👧‍👧"),("heart","❤️"),("flag_br","🇧🇷"),("smile","😄")].into_iter().map(|(name,text)|emoji::Choice{name:name.into(),text:text.into(),id:None,category:None}).collect()
 }
 #[test]fn unicode_sequences_have_whole_glyph_targets_and_character_offsets(){
     let index=UnicodeIndex::new(choices());

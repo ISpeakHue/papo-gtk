@@ -1,4 +1,6 @@
 //! Persistent application configuration stored in `~/.config/papo-gtk/config.toml`.
+//! EN: Manages user preferences, server URL, credentials retention, theme settings, and motion mode.
+//! PT-BR: Configuração persistente da aplicação armazenada em `~/.config/papo-gtk/config.toml`. Gerencia preferências do usuário, URL do servidor, retenção de credenciais, configurações de tema e modo de movimento.
 
 use anyhow::{Context, Result};
 use dirs::config_dir;
@@ -6,26 +8,44 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// User-editable app config that survives restarts.
+/// EN: Serializable configuration struct representing stored user options.
+/// PT-BR: Estrutura de configuração serializável representando opções salvas do usuário que persistem entre inicializações.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppConfig {
-    /// Last server URL the user connected to.
+    /// EN: Last server URL the user connected to.
+    /// PT-BR: Última URL de servidor à qual o usuário se conectou.
     pub server_url: Option<String>,
-    /// Last logged-in username (to pre-fill the login form).
+    /// EN: Last logged-in username (used to pre-fill the login form).
+    /// PT-BR: Último nome de usuário autenticado (usado para pré-preencher o formulário de login).
     pub last_username: Option<String>,
-    /// GTK colour scheme override ("dark" | "light" | "system").
+    /// EN: GTK colour scheme override ("dark" | "light" | "system").
+    /// PT-BR: Substituição do esquema de cores GTK ("dark" | "light" | "system").
     pub theme: Option<String>,
-    /// Resume a valid session from the desktop keyring on the next launch.
+    /// EN: Flag to resume a valid session from the desktop keyring on next launch.
+    /// PT-BR: Sinalizador para retomar uma sessão válida do chaveiro do sistema na próxima inicialização.
     pub remember_session: Option<bool>,
+    /// EN: Animation/motion playback policy.
+    /// PT-BR: Política de reprodução de animações e movimento.
     #[serde(default)]
     pub motion:Motion,
 }
 
+/// EN: Animation and motion policy: System setting, Always play, or Reduced motion.
+/// PT-BR: Política de movimento e animações: Configuração do sistema, Sempre reproduzir ou Movimento reduzido.
 #[derive(Debug,Clone,Copy,Default,PartialEq,Eq,Serialize,Deserialize)]
 #[serde(rename_all="snake_case")]
 pub enum Motion{#[default] System,Always,Reduced}
-impl Motion{pub fn from_index(index:u32)->Self{match index{1=>Self::Always,2=>Self::Reduced,_=>Self::System}}pub fn index(self)->u32{match self{Self::System=>0,Self::Always=>1,Self::Reduced=>2}}}
+impl Motion{
+    // EN: Convert UI dropdown index to Motion enum.
+    // PT-BR: Converte o índice do menu suspenso da interface para a enumeração Motion.
+    pub fn from_index(index:u32)->Self{match index{1=>Self::Always,2=>Self::Reduced,_=>Self::System}}
+    // EN: Convert Motion enum to UI dropdown index.
+    // PT-BR: Converte a enumeração Motion para o índice do menu suspenso da interface.
+    pub fn index(self)->u32{match self{Self::System=>0,Self::Always=>1,Self::Reduced=>2}}
+}
 impl AppConfig {
-    /// XDG config path: `~/.config/papo-gtk/config.toml`.
+    /// EN: Returns the XDG config path: `~/.config/papo-gtk/config.toml`.
+    /// PT-BR: Retorna o caminho de configuração XDG: `~/.config/papo-gtk/config.toml`.
     pub fn path() -> PathBuf {
         config_dir()
             .unwrap_or_else(|| PathBuf::from("."))
@@ -33,8 +53,8 @@ impl AppConfig {
             .join("config.toml")
     }
 
-    /// Load config from disk; returns `Default::default()` if the file does
-    /// not exist or cannot be parsed.
+    /// EN: Load config from disk; returns `Default::default()` if the file does not exist or fails parsing.
+    /// PT-BR: Carrega a configuração do disco; retorna `Default::default()` caso o arquivo não exista ou falhe na análise.
     pub fn load() -> Self {
         let p = Self::path();
         std::fs::read_to_string(&p)
@@ -43,7 +63,8 @@ impl AppConfig {
             .unwrap_or_default()
     }
 
-    /// Persist config to disk, creating parent directories if needed.
+    /// EN: Persist config to disk, automatically creating parent directories if needed.
+    /// PT-BR: Salva a configuração no disco, criando diretórios pai automaticamente se necessário.
     pub fn save(&self) -> Result<()> {
         let p = Self::path();
         if let Some(parent) = p.parent() {

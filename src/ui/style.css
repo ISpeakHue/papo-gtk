@@ -12,6 +12,8 @@
 .papo-navigation list, .papo-members list { background: transparent; }
 .papo-navigation row, .papo-members row { border-radius: 7px; margin: 1px 8px; padding: 0; }
 .papo-navigation row:selected { background: alpha(@accent_bg_color, .16); color: @accent_color; }
+.papo-navigation row.papo-voice-selected { background: alpha(@accent_bg_color, .12); color: @accent_color; }
+.papo-navigation row.papo-voice-selected:hover { background: alpha(@accent_bg_color, .20); }
 .papo-channel-unread { font-weight: 700; }
 .papo-category { padding-top: 14px; padding-bottom: 6px; }
 .papo-direct-row { margin: 1px 8px; }
@@ -97,3 +99,21 @@
 .papo-security-session button.destructive-action, .papo-security-end-all button.destructive-action { background: @destructive_bg_color; color: @destructive_fg_color; }
 .papo-security-session button.destructive-action:hover, .papo-security-end-all button.destructive-action:hover { background: shade(@destructive_bg_color, 1.1); }
 .papo-security-session button.destructive-action:active, .papo-security-end-all button.destructive-action:active { background: shade(@destructive_bg_color, .9); }
+
+.papo-preferences row > box.header { min-height: 40px; }
+.papo-profile-banner { border-radius: 12px 12px 0 0; }
+.papo-profile-avatar { border: 4px solid @window_bg_color; border-radius: 999px; }
+.papo-profile-roles flowboxchild { padding: 0; }
+.papo-profile-roles label { background: alpha(@accent_bg_color, .14); border-radius: 999px; padding: 2px 8px; }
+.papo-profile-actions { background: @window_bg_color; border-top: 1px solid alpha(@window_fg_color, .12); padding: 10px 24px; }
+.papo-profile-actions button { padding: 8px 18px; }
+.papo-profile-description { border: 1px solid alpha(@window_fg_color, .2); border-radius: 12px; }
+.papo-profile-description:focus-within { outline: 2px solid alpha(@accent_color, .5); outline-offset: -1px; }
+.papo-profile-description textview, .papo-profile-description textview text { background: @window_bg_color; }
+.papo-call-actions { padding: 12px 32px 16px; }
+.papo-call-actions button { padding: 8px 18px; }
+.papo-emoji-category { min-width: 24px; min-height: 32px; padding: 2px; font-size: 16px; }
+.papo-emoji-category:checked { background: alpha(@accent_bg_color, .18); color: @accent_color; }
+.papo-draft-attachment { border: 1px solid alpha(@window_fg_color, .12); border-radius: 10px; background: alpha(@window_fg_color, .04); }
+.papo-draft-thumbnail { border-radius: 10px; }
+.papo-draft-thumbnail button { min-width: 24px; min-height: 24px; padding: 0; }

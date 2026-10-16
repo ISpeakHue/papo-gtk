@@ -1,40 +1,71 @@
 //! Authentication cookies live in the desktop keyring, never application files.
+//! EN: Secure desktop session management using the OS keyring (libsecret/KWallet). Never stores plain tokens on disk.
+//! PT-BR: Gerenciamento seguro de sessão desktop usando o chaveiro do SO (libsecret/KWallet). Nunca armazena tokens em texto puro no disco.
+
 use crate::{api::ApiClient,models::WhoamiResponse};
 use anyhow::{Result,anyhow};
 use serde::{Serialize,Deserialize};
 pub mod refresh;
+
+// EN: Desktop keyring service identifier.
+// PT-BR: Identificador do serviço no chaveiro do desktop.
 const SERVICE:&str="br.com.papo.gtk.session.v1";
+
+// EN: Mutex to serialize access to the system keyring, preventing concurrent backend race conditions.
+// PT-BR: Mutex para serializar o acesso ao chaveiro do sistema, prevenindo condições de corrida no backend.
 static STORAGE:std::sync::Mutex<()>=std::sync::Mutex::new(());
+
+// EN: Keyring session payload structure storing the auth token, user, base URL, and unique session owner.
+// PT-BR: Estrutura da carga útil da sessão no chaveiro guardando o token de autenticação, usuário, URL base e dono único da sessão.
 #[derive(Serialize,Deserialize)]
 struct SavedSession{version:u8,base:String,username:String,auth:String,#[serde(default)]owner:Option<uuid::Uuid>}
+
+// EN: Format compound keyring lookup key from server base URL and username.
+// PT-BR: Formata a chave composta de busca no chaveiro a partir da URL base do servidor e nome de usuário.
 fn account(base:&str,user:&str)->String{format!("{base}\n{user}")}
 
 #[cfg(not(test))]
+// EN: Read a credential from the OS keyring by key.
+// PT-BR: Lê uma credencial do chaveiro do SO pela chave informada.
 fn read(key:&str)->Result<Option<String>>{
     let entry=keyring::Entry::new(SERVICE,key).map_err(|_|anyhow!("Chaveiro indisponível."))?;
     match entry.get_password(){Ok(value)=>Ok(Some(value)),Err(keyring::Error::NoEntry)=>Ok(None),Err(_)=>Err(anyhow!("Não foi possível abrir a sessão no chaveiro."))}
 }
+
 #[cfg(not(test))]
+// EN: Write or delete a credential in the OS keyring.
+// PT-BR: Grava ou remove uma credencial no chaveiro do SO.
 fn write(key:&str,value:Option<&str>)->Result<()>{
     let entry=keyring::Entry::new(SERVICE,key).map_err(|_|anyhow!("Chaveiro indisponível."))?;
     match value{Some(value)=>entry.set_password(value).map_err(|_|anyhow!("Não foi possível salvar a sessão no chaveiro.")),None=>match entry.delete_credential(){Ok(())|Err(keyring::Error::NoEntry)=>Ok(()),Err(_)=>Err(anyhow!("Não foi possível remover a sessão do chaveiro."))}}
 }
+
 // UI/protocol tests must never read a real user's credentials or modify their keyring.
+// EN: In-memory mock storage for testing environments.
+// PT-BR: Armazenamento simulado em memória para ambientes de teste.
 #[cfg(test)]static MEMORY:std::sync::Mutex<Option<std::collections::HashMap<String,String>>>=std::sync::Mutex::new(None);
 #[cfg(test)]fn read(key:&str)->Result<Option<String>>{Ok(MEMORY.lock().unwrap().as_ref().and_then(|m|m.get(key).cloned()))}
 #[cfg(test)]fn write(key:&str,value:Option<&str>)->Result<()>{let mut memory=MEMORY.lock().unwrap();let map=memory.get_or_insert_with(Default::default);if let Some(value)=value{map.insert(key.into(),value.into());}else{map.remove(key);}Ok(())}
 
+/// EN: Save current authenticated session cookie to the desktop keyring.
+/// PT-BR: Salva o cookie de sessão autenticada atual no chaveiro do sistema operacional.
 pub async fn save(api:&ApiClient,user:&str)->Result<()>{
     let Some(auth)=api.auth_cookie()else{return Ok(());};
     let saved=SavedSession{version:1,base:api.base_url().into(),username:user.into(),auth,owner:Some(api.session_owner())};
     let key=account(&saved.base,user);let encoded=serde_json::to_string(&saved).map_err(|_|anyhow!("Não foi possível preparar a sessão."))?;
     tokio::task::spawn_blocking(move ||{let _guard=STORAGE.lock().map_err(|_|anyhow!("Chaveiro indisponível."))?;write(&key,Some(&encoded))}).await.map_err(|_|anyhow!("Chaveiro indisponível."))?
 }
+
 /// Explicit user choice (e.g. unchecking Remember) clears any saved account.
+/// EN: Explicitly removes any saved credential for this account from the keyring.
+/// PT-BR: Escolha explícita do usuário (ex: desmarcar Lembrar-me) remove qualquer conta salva do chaveiro.
 pub async fn forget_account(api:&ApiClient,user:&str)->Result<()>{
     let key=account(api.base_url(),user);tokio::task::spawn_blocking(move ||{let _guard=STORAGE.lock().map_err(|_|anyhow!("Chaveiro indisponível."))?;write(&key,None)}).await.map_err(|_|anyhow!("Chaveiro indisponível."))?
 }
+
 /// Delayed logout may remove only the credential owned by this session.
+/// EN: Removes the session only if it belongs to the current session owner, preventing race conditions with newer logins.
+/// PT-BR: O logout atrasado só remove a credencial pertencente a esta sessão, evitando apagar um login mais recente.
 pub async fn forget(api:&ApiClient,user:&str)->Result<()>{
     let key=account(api.base_url(),user);let owner=api.session_owner();let auth=api.auth_cookie();
     tokio::task::spawn_blocking(move ||{
@@ -45,8 +76,11 @@ pub async fn forget(api:&ApiClient,user:&str)->Result<()>{
         Ok(())
     }).await.map_err(|_|anyhow!("Chaveiro indisponível."))?
 }
+
 /// Keep the remembered cookie in sync with refresh rotation. A late refresh
 /// must not recreate a logged-out credential or overwrite a newer login.
+/// EN: Synchronizes a refreshed auth cookie into the keyring without overwriting newer sessions.
+/// PT-BR: Mantém o cookie salvo sincronizado com a rotação de refresh. Um refresh tardio não deve recriar uma credencial deslogada.
 pub async fn rotated(api:&ApiClient,user:&str,previous:&str)->Result<()>{
     let Some(auth)=api.auth_cookie()else{return Ok(());};let base=api.base_url().to_owned();let user=user.to_owned();let key=account(&base,&user);let previous=previous.to_owned();let owner=api.session_owner();
     tokio::task::spawn_blocking(move ||{
@@ -56,6 +90,9 @@ pub async fn rotated(api:&ApiClient,user:&str,previous:&str)->Result<()>{
         saved.auth=auth;saved.owner=Some(owner);let encoded=serde_json::to_string(&saved).map_err(|_|anyhow!("Não foi possível preparar a sessão."))?;write(&key,Some(&encoded))
     }).await.map_err(|_|anyhow!("Chaveiro indisponível."))?
 }
+
+/// EN: Resume a saved session from the keyring, validating and proactively refreshing tokens.
+/// PT-BR: Retoma uma sessão salva do chaveiro, validando-a e renovando proativamente os tokens.
 pub async fn resume(api:&ApiClient,user:&str)->Result<Option<WhoamiResponse>>{
     let key=account(api.base_url(),user);let copy=key.clone();
     let Some(encoded)=tokio::task::spawn_blocking(move ||read(&copy)).await.map_err(|_|anyhow!("Chaveiro indisponível."))?? else{return Ok(None);};
@@ -67,6 +104,8 @@ pub async fn resume(api:&ApiClient,user:&str)->Result<Option<WhoamiResponse>>{
         Ok(profile) if profile.username==user=>{
             // A remembered cookie may be close to expiry. Refresh before the
             // first WebSocket handshake so the regular 12-hour timer is safe.
+            // EN: Proactively refresh token before WebSocket connection to avoid expiration mid-session.
+            // PT-BR: Renova o token proativamente antes do handshake WebSocket para evitar expiração durante o uso.
             match api.refresh().await{
                 Ok(_)=>{if rotated(api,user,&saved.auth).await.is_err(){tracing::warn!("Could not update remembered session in desktop keyring");}Ok(Some(profile))},
                 Err(error) if crate::api::is_session_error(&error)=>{forget(api,user).await?;Ok(None)},
@@ -78,6 +117,7 @@ pub async fn resume(api:&ApiClient,user:&str)->Result<Option<WhoamiResponse>>{
         Err(_)=>Err(anyhow!("Não foi possível retomar a sessão salva. Verifique a conexão e tente novamente.")),
     }
 }
+
 
 #[cfg(test)]mod tests{
     use super::*;

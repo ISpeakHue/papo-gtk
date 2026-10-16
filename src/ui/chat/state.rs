@@ -32,6 +32,11 @@ pub struct History {
 }
 
 impl History {
+    // Unpinning hides a message without tombstoning it: it can be pinned again.
+    pub(super) fn retain_pins(&mut self, ids: &HashSet<Uuid>) {
+        self.messages.retain(|m|ids.contains(&m.id));self.dirty.retain(|id|ids.contains(id));
+        self.media_revision=self.media_revision.wrapping_add(1);
+    }
     pub(super) fn trim_recent(&mut self,limit:usize)->bool {
         if self.messages.len()<=limit{return false;}
         self.messages.drain(..self.messages.len()-limit);self.messages.shrink_to_fit();

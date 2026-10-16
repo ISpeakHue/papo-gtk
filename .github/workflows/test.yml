@@ -32,6 +32,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check AppImage media plugin and host driver boundaries
         run: python3 -m unittest discover -s tests -p 'appimage_packaging_test.py'
+      - name: Check call sound decoding and application audio identity
+        run: python3 -m unittest discover -s tests -p 'call_sound_test.py'
       - name: Compile application and run unit and integration tests
         run: cargo test --locked
       - name: Check login, chat workflows and adaptive layouts under a virtual display
@@ -77,6 +79,15 @@ jobs:
           for scenario in avatar-viewport search-recycling emoji-notifications notification-window recovery media-loading recent-media; do
             PAPO_UI_CASE="$scenario" dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
           done
+      - name: Check staged attachment previews and clipboard uploads
+        run: |
+          for scenario in draft-previews clipboard; do
+            PAPO_UI_CASE="$scenario" dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+          done
+      - name: Check Unicode emoji categories and search
+        run: PAPO_UI_CASE=emoji-categories dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+      - name: Check pinned-message media and scoped playback
+        run: PAPO_UI_CASE=pins-media dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
       - name: Check private screen portal permissions and cleanup
         run: dbus-run-session -- python3 tests/portal_probe.py
       - name: Check native audio worker cleanup using synthetic capture

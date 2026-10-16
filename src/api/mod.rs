@@ -1,8 +1,6 @@
 //! Async REST API client for the Papo backend.
-//!
-//! All methods return `anyhow::Result<T>` so callers can use `?` freely.
-//! The underlying `reqwest::Client` is configured to store cookies for the
-//! session (the backend sends the JWT exclusively via an HttpOnly cookie).
+//! EN: Async HTTP client using reqwest with cookie-based JWT sessions, rate limiting, and RFC 7807 error discrimination.
+//! PT-BR: Cliente REST assíncrono para o backend do Papo com sessões JWT baseadas em cookies, controle de taxa e discriminação de erros RFC 7807.
 
 use anyhow::{Context, Result};
 use reqwest::{Client, StatusCode, Url};
@@ -26,6 +24,8 @@ mod poster;
 use requests::{PacedRequest, RequestScheduler};
 
 /// Preserve status and RFC 7807 problem codes so expired sessions reach the login view.
+/// EN: Structured error holding HTTP status, machine-readable problem code, and human message.
+/// PT-BR: Erro estruturado contendo status HTTP, código legível por máquina e mensagem para o usuário.
 #[derive(Debug, thiserror::Error)]
 #[error("{message}")]
 pub struct ApiError {
@@ -34,17 +34,23 @@ pub struct ApiError {
     pub message: String,
 }
 
+/// EN: Checks if an error represents an invalidated session (401 Unauthorized or 403 Banned), requiring re-login.
+/// PT-BR: Verifica se um erro representa uma sessão invalidada (401 Unauthorized ou 403 Banned), exigindo novo login.
 pub fn is_session_error(error: &anyhow::Error) -> bool {
     error.downcast_ref::<ApiError>().is_some_and(|error|
         error.status == StatusCode::UNAUTHORIZED ||
         (error.status == StatusCode::FORBIDDEN && error.code.as_deref() == Some("banned")))
 }
 
+/// EN: Checks if an error is a permissions failure (403 Forbidden without being banned).
+/// PT-BR: Verifica se um erro é de permissão insuficiente (403 Forbidden sem ser banimento).
 pub fn is_permission_error(error: &anyhow::Error) -> bool {
     error.downcast_ref::<ApiError>().is_some_and(|e| e.status == StatusCode::FORBIDDEN) && !is_session_error(error)
 }
 
 /// Redact cookies in HeaderValue/Request debug output without changing the wire.
+/// EN: Sensitive cookie wrapper preventing token leakage in debug logs.
+/// PT-BR: Invólucro de cookies sensíveis que impede vazamento de tokens em logs de depuração.
 #[derive(Default)]
 struct SessionCookies(Jar);
 impl SessionCookies {
@@ -60,6 +66,7 @@ impl CookieStore for SessionCookies {
         Some(value)
     }
 }
+
 
 /// Wraps a `reqwest::Client` and the base URL of the backend.
 #[derive(Clone)]

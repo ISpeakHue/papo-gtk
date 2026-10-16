@@ -1,9 +1,11 @@
 //! Voice controls share the chat WebSocket but own their media lifetime.
 use super::*;
+use adw::prelude::*;
 use crate::models::{VoiceEvent,VoiceMember,IceConfig,ChannelType};
 use crate::voice::{Engine,EngineEvent,Device};
 use std::collections::{HashMap,HashSet};
 pub(super) mod video;
+mod settings;
 use video::{VideoControls,VideoMsg};
 #[derive(Debug)]
 pub enum VoiceMsg {#[cfg(test)]TestEngine,Video(VideoMsg),Select(Uuid),Join,Leave,Close,Settings,Mute,Gain,ApplyGain,Device,ReloadDevices,
@@ -13,7 +15,7 @@ enum Phase {Ice,Joining,Negotiating,Connected}
 struct Call {id:Uuid,channel:Uuid,connection:Uuid,phase:Phase,started:Instant,ice:Option<IceConfig>,engine:Option<Engine>,muted:bool}
 pub(super) struct Voice {
     pub panel:gtk::Box,status:gtk::Label,title:gtk::Label,join:gtk::Button,leave:gtk::Button,mute:gtk::ToggleButton,settings:gtk::Window,settings_button:gtk::Button,
-    gain:gtk::Scale,gain_pending:bool,devices:gtk::DropDown,device_list:Vec<Device>,device:Option<String>,device_request:Option<Uuid>,
+    gain:gtk::Scale,gain_pending:bool,devices:adw::ComboRow,device_list:Vec<Device>,device:Option<String>,device_request:Option<Uuid>,
     pub(super) connection:Option<Uuid>,selected:Option<Uuid>,call:Option<Call>,pending_leave:Option<(Uuid,Uuid,Instant)>,
     members:HashMap<Uuid,HashMap<Uuid,VoiceMember>>,speakers:HashMap<Uuid,HashSet<Uuid>>,pub(super) presence:HashMap<Uuid,Vec<Uuid>>,routes:HashMap<String,Uuid>,
     jobs:Vec<tokio::task::JoinHandle<()>>,
@@ -21,9 +23,6 @@ pub(super) struct Voice {
     #[cfg(test)]test_engine:bool,
 }
 impl Drop for Voice{fn drop(&mut self){self.settings.close();self.video.clear();self.video.viewer_window.close();self.call=None;for j in self.jobs.drain(..){j.abort();}}}
-fn wrapping_controls()->gtk::FlowBox{
-    let controls=gtk::FlowBox::new();controls.set_selection_mode(gtk::SelectionMode::None);controls.set_min_children_per_line(1);controls.set_max_children_per_line(4);controls.set_column_spacing(6);controls.set_row_spacing(6);controls.set_homogeneous(false);controls
-}
 impl Voice {
     pub fn new(s:&ComponentSender<MainWindowModel>)->Self{
         let panel=gtk::Box::new(gtk::Orientation::Vertical,4);panel.add_css_class("papo-voice-dock");panel.set_visible(false);
@@ -31,16 +30,12 @@ impl Voice {
         fn button(icon:&str,label:&str,s:&ComponentSender<MainWindowModel>,f:impl Fn()->VoiceMsg+'static)->gtk::Button{let w=if icon.is_empty(){gtk::Button::with_label(label)}else{gtk::Button::from_icon_name(icon)};w.set_tooltip_text(Some(label));let s=s.clone();w.connect_clicked(move |_|s.input(MainWindowMsg::Voice(f())));w}
         let close=button("window-close-symbolic","Fechar voz",s,||VoiceMsg::Close);close.add_css_class("flat");heading.append(&close);
         let controls=gtk::Box::new(gtk::Orientation::Horizontal,4);panel.append(&controls);
-        let join=button("","Entrar na voz",s,||VoiceMsg::Join);join.add_css_class("suggested-action");join.set_hexpand(true);controls.append(&join);
+        let join=button("","Entrar na chamada",s,||VoiceMsg::Join);join.add_css_class("suggested-action");join.set_hexpand(true);controls.append(&join);
         let mute=gtk::ToggleButton::new();mute.set_icon_name("microphone-disabled-symbolic");mute.set_tooltip_text(Some("Microfone silenciado"));mute.set_active(true);let s2=s.clone();mute.connect_toggled(move |_|s2.input(MainWindowMsg::Voice(VoiceMsg::Mute)));controls.append(&mute);
         let settings_button=button("emblem-system-symbolic","Configurar chamada",s,||VoiceMsg::Settings);settings_button.add_css_class("flat");controls.append(&settings_button);
         let leave=button("call-stop-symbolic","Sair da voz",s,||VoiceMsg::Leave);leave.add_css_class("flat");controls.append(&leave);
-        let status=gtk::Label::new(Some("Microfone inicialmente silenciado"));status.set_xalign(0.0);status.set_ellipsize(gtk::pango::EllipsizeMode::End);status.add_css_class("caption");status.add_css_class("dim-label");panel.append(&status);
-        let settings=gtk::Window::builder().title("Configurar chamada").default_width(480).default_height(480).hide_on_close(true).build();let body=gtk::Box::new(gtk::Orientation::Vertical,12);body.set_margin_top(16);body.set_margin_bottom(16);body.set_margin_start(16);body.set_margin_end(16);settings.set_child(Some(&gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).child(&body).build()));
-        let info=gtk::Label::new(Some("O microfone começa silenciado. Trocar o dispositivo encerra a chamada para liberar o microfone anterior."));info.set_wrap(true);info.set_xalign(0.0);body.append(&info);let label=gtk::Label::new(Some("Microfone"));label.set_xalign(0.0);body.append(&label);
-        let devices=gtk::DropDown::from_strings(&["Microfone padrão do sistema"]);let s2=s.clone();devices.connect_selected_notify(move |_|s2.input(MainWindowMsg::Voice(VoiceMsg::Device)));body.append(&devices);body.append(&button("","Atualizar microfones",s,||VoiceMsg::ReloadDevices));
-        let label=gtk::Label::new(Some("Volume do microfone"));label.set_xalign(0.0);body.append(&label);
-        let gain=gtk::Scale::with_range(gtk::Orientation::Horizontal,0.0,300.0,5.0);gain.set_widget_name("microphone-gain");gain.set_value(150.0);gain.set_draw_value(true);gain.set_value_pos(gtk::PositionType::Right);gain.set_format_value_func(|_,value|format!("{value:.0}%"));gain.set_tooltip_text(Some("Ajuste a amplificação do microfone. 100% mantém o nível original."));let s2=s.clone();gain.connect_value_changed(move |_|s2.input(MainWindowMsg::Voice(VoiceMsg::Gain)));body.append(&gain);
+        let status=gtk::Label::new(None);status.set_visible(false);status.connect_notify_local(Some("label"),|label,_|label.set_visible(!label.text().is_empty()));status.set_xalign(0.0);status.set_ellipsize(gtk::pango::EllipsizeMode::End);status.add_css_class("caption");status.add_css_class("dim-label");panel.append(&status);
+        let settings::Controls{window:settings,body,devices,gain}=settings::new(s);
         let video=VideoControls::new(&body,&controls,s);
         Self{local_speaking:false,cue:Default::default(),video,panel,title,status,join,leave,mute,settings,settings_button,gain,gain_pending:false,devices,device_list:vec![],device:None,device_request:None,connection:None,selected:None,call:None,pending_leave:None,members:Default::default(),speakers:Default::default(),presence:Default::default(),routes:Default::default(),jobs:vec![],#[cfg(test)]test_engine:false}
 
@@ -62,7 +57,11 @@ impl MainWindowModel {
         self.voice.local_speaking=false;
         if joined{self.voice.cue.play_leave(self.account.config.notifications.as_ref().and_then(|n|n.sound).unwrap_or(true));}else if had_call{self.voice.cue.stop();}self.voice.video.clear();self.voice.status.set_text(message);self.render_voice();
     }
-    pub(super) fn voice_disconnected(&mut self){self.voice.connection=None;self.voice.pending_leave=None;self.voice.members.clear();self.voice.speakers.clear();self.voice.presence.clear();self.stop_voice(false,"Conexão encerrada. Entre na voz novamente após reconectar.");}
+    pub(super) fn voice_disconnected(&mut self){
+        // A new chat socket is not a failed call. Preserve real call errors,
+        // but report an interruption only when a call was actually in progress.
+        let message=if self.voice.call.is_some(){"Conexão encerrada. Entre na voz novamente após reconectar.".into()}else{self.voice.status.text()};
+        self.voice.connection=None;self.voice.pending_leave=None;self.voice.members.clear();self.voice.speakers.clear();self.voice.presence.clear();self.stop_voice(false,&message);}
     pub(super) fn publish_voice_channels(&self){
         let mut channels=self.channels.clone();channels.retain(|c|c.channel_type!=Some(ChannelType::Voice)||self.voice_allowed(c.id));channels.extend(self.managed_channels.iter().filter(|c|self.voice_allowed(c.id)&&!channels.iter().any(|item|item.id==c.id)).cloned().collect::<Vec<_>>());channels.sort_by_key(|c|c.position.unwrap_or(0));self.sidebar.emit(SidebarMsg::SetChannels(channels));
     }
@@ -78,10 +77,11 @@ impl MainWindowModel {
         let rooms=self.managed_channels.iter().filter(|c|self.voice_allowed(c.id)).map(|channel|{
             let mut ids:HashSet<_>=self.voice.members.get(&channel.id).into_iter().flat_map(|m|m.keys().copied()).collect();ids.extend(self.voice.presence.iter().filter(|(_,channels)|channels.contains(&channel.id)).map(|(id,_)|*id));if self.voice.call.as_ref().is_some_and(|c|c.channel==channel.id){ids.insert(self.current_user.id);}let mut ids:Vec<_>=ids.into_iter().collect();ids.sort();
             crate::ui::sidebar::VoiceRoom{id:channel.id,members:ids.into_iter().map(|id|{let state=self.voice.members.get(&channel.id).and_then(|m|m.get(&id));crate::ui::sidebar::VoiceParticipant{id,name:self.users.iter().find(|u|u.id==id).map(|u|u.display_name().to_owned()).unwrap_or_else(||id.to_string()),muted:if id==self.current_user.id{self.voice.call.as_ref().filter(|c|c.channel==channel.id).map_or(state.is_some_and(|m|m.muted),|c|c.muted)}else{state.is_some_and(|m|m.muted)},speaking:if id==self.current_user.id&&self.voice.call.as_ref().is_some_and(|c|c.channel==channel.id){self.voice.local_speaking&&self.voice.call.as_ref().is_some_and(|c|!c.muted)}else{self.voice.speakers.get(&channel.id).is_some_and(|s|s.contains(&id))},camera:id!=self.current_user.id&&state.is_some_and(|m|m.camera_on)&&self.voice.call.as_ref().is_some_and(|c|c.channel==channel.id&&c.phase==Phase::Connected),screen:id!=self.current_user.id&&state.is_some_and(|m|m.screen_sharing)&&self.voice.call.as_ref().is_some_and(|c|c.channel==channel.id&&c.phase==Phase::Connected)}}).collect()}
-        }).collect();self.sidebar.emit(SidebarMsg::VoiceRooms(rooms));
+        }).collect();
         let id=self.voice.call.as_ref().map(|c|c.channel).or(self.voice.selected);
-        let Some(id)=id else{self.voice.panel.set_visible(false);return;};
+        self.sidebar.emit(SidebarMsg::VoiceRooms{rooms,selected:id});
         self.render_video();
+        let Some(id)=id else{self.voice.panel.set_visible(false);return;};
         self.voice.title.set_text(&format!("Voz · {}",self.managed_channels.iter().find(|c|c.id==id).map(|c|c.name.as_str()).unwrap_or("Canal indisponível")));
         self.voice.join.set_sensitive(self.voice_allowed(id)&&self.voice.connection.is_some()&&self.voice.call.is_none()&&self.voice.pending_leave.is_none());
         self.voice.panel.set_visible(true);self.voice.join.set_visible(self.voice.call.is_none());self.voice.leave.set_visible(self.voice.call.is_some());self.voice.mute.set_visible(self.voice.call.is_some());self.voice.video.screen.set_visible(self.voice.call.is_some());self.voice.settings_button.set_sensitive(self.voice_allowed(id));
@@ -114,7 +114,7 @@ impl MainWindowModel {
         match msg {
             VoiceMsg::Video(msg)=>self.video_event(msg,s),
             #[cfg(test)]VoiceMsg::TestEngine=>{self.voice.test_engine=true;self.voice.cue.use_test_sink();},
-            VoiceMsg::Select(id)=>{if !self.voice_allowed(id){return;}if self.voice.call.as_ref().is_some_and(|c|c.channel!=id){self.voice.status.set_text("Saia da chamada atual antes de escolher outra sala.");return;}self.voice.selected=Some(id);self.voice.panel.set_visible(true);self.render_voice();s.input(MainWindowMsg::Voice(VoiceMsg::ReloadDevices));s.input(MainWindowMsg::Voice(VoiceMsg::Video(VideoMsg::Reload)));}
+            VoiceMsg::Select(id)=>{if !self.voice_allowed(id){return;}if self.voice.call.as_ref().is_some_and(|c|c.channel!=id){self.voice.status.set_text("Saia da chamada atual antes de escolher outra sala.");return;}if self.voice.call.is_none()&&self.voice.selected!=Some(id){self.voice.status.set_text("");}self.voice.selected=Some(id);self.voice.panel.set_visible(true);self.render_voice();s.input(MainWindowMsg::Voice(VoiceMsg::ReloadDevices));s.input(MainWindowMsg::Voice(VoiceMsg::Video(VideoMsg::Reload)));}
             VoiceMsg::Settings=>{if let Some(parent)=self.sidebar.widget().root().and_downcast::<gtk::Window>(){self.voice.settings.set_transient_for(Some(&parent));}self.voice.settings.present();s.input(MainWindowMsg::Voice(VoiceMsg::ReloadDevices));s.input(MainWindowMsg::Voice(VoiceMsg::Video(VideoMsg::Reload)));},
             VoiceMsg::ReloadDevices=>{let request=Uuid::new_v4();self.voice.device_request=Some(request);self.voice.jobs.push(tokio::spawn(async move{let result=crate::voice::devices().await;let _=s.input_sender().send(MainWindowMsg::Voice(VoiceMsg::Devices{request,result}));}));}
             VoiceMsg::Devices{request,result}=>{if self.voice.device_request!=Some(request){return;}self.voice.device_request=None;match result{Ok(devices)=>{let previous=self.voice.device.clone();let mut labels=vec!["Microfone padrão do sistema".to_owned()];labels.extend(devices.iter().map(|d|d.name.clone()));self.voice.device_list=devices;self.voice.devices.set_model(Some(&gtk::StringList::new(&labels.iter().map(String::as_str).collect::<Vec<_>>())));let selected=previous.and_then(|id|self.voice.device_list.iter().position(|d|d.id==id)).map(|i|i as u32+1).unwrap_or(0);self.voice.devices.set_selected(selected);},Err(e)=>self.voice.status.set_text(&e.to_string())}}
@@ -129,7 +129,7 @@ impl MainWindowModel {
                 match result{Ok(ice)=>{let c=self.voice.call.as_mut().unwrap();c.ice=Some(ice);c.phase=Phase::Joining;let connection=c.connection;let channel=c.channel;if !self.voice_frame(connection,serde_json::json!({"type":"voice_join","channel_id":channel})){self.stop_voice(false,"Sem conexão para entrar na voz.");}else{self.voice.status.set_text("Entrando na sala…");}},Err(e)=>{self.stop_voice(false,&e.to_string());s.input(MainWindowMsg::ActionError(e));}}
             }
             VoiceMsg::Leave=>self.stop_voice(true,"Você saiu da voz."),
-            VoiceMsg::Close=>{self.stop_voice(true,"Você saiu da voz.");self.voice.selected=None;self.voice.panel.set_visible(false);},
+            VoiceMsg::Close=>{self.voice.selected=None;self.stop_voice(true,"Você saiu da voz.");},
             VoiceMsg::Gain=>{
                 if !self.voice.gain_pending{self.voice.gain_pending=true;let input=s.input_sender().clone();gtk::glib::timeout_add_local_once(Duration::from_millis(50),move||{let _=input.send(MainWindowMsg::Voice(VoiceMsg::ApplyGain));});}
             },

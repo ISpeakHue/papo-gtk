@@ -58,7 +58,10 @@ pub(in crate::ui::chat::transfers) fn install(window:&gtk::Window,picture:&gtk::
     let percentage=gtk::Label::new(None);percentage.set_width_chars(5);percentage.add_css_class("numeric");percentage.set_widget_name("image-viewer-zoom");
     let zoom_controls=gtk::Box::new(gtk::Orientation::Horizontal,6);zoom_controls.set_widget_name("image-viewer-zoom-controls");zoom_controls.set_visible(false);controls.append(&zoom_controls);
     for item in [minus.clone().upcast::<gtk::Widget>(),percentage.clone().upcast(),plus.clone().upcast(),fit.clone().upcast(),original.clone().upcast()]{zoom_controls.append(&item);}controls.append(&full);
-    let header=adw::HeaderBar::new();header.set_title_widget(Some(&controls));
+    let header=adw::HeaderBar::new();header.set_centering_policy(adw::CenteringPolicy::Strict);
+    let title=adw::WindowTitle::new(window.title().as_deref().unwrap_or("Imagem"),"");
+    window.bind_property("title",&title,"title").sync_create().build();
+    header.set_title_widget(Some(&title));header.pack_end(&controls);
     let root=gtk::Box::new(gtk::Orientation::Vertical,0);root.append(&header);root.append(&scroll);window.set_titlebar(Some(&gtk::Box::new(gtk::Orientation::Vertical,0)));window.set_child(Some(&root));window.set_destroy_with_parent(true);
     let state=Rc::new(State{picture:picture.downgrade(),scroll:scroll.downgrade(),percentage:percentage.downgrade(),fullscreen:Cell::new(false),fit:Cell::new(true),scale:Cell::new(1.0),dimensions:Cell::new((0,0)),generation:Cell::new(0)});
     // The root owns state; all widget callbacks use weak refs, so closing the

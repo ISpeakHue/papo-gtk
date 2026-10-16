@@ -84,6 +84,19 @@ impl MainWindowModel {
 pub(crate) fn exercise(context:&gtk::glib::MainContext){
     use crate::ui::chat::actions::tests::{mock,pump,until,descendants,find_button};
     let(api,backend,server)=tokio::runtime::Handle::current().block_on(mock());
+    // Synthetic profile artwork exercises real image fetching and later removal.
+    {
+        use base64::Engine;
+        let mut banner=std::io::Cursor::new(Vec::new());
+        let pixels=image::ImageBuffer::from_fn(800,160,|x,y|image::Rgba([20+(x/8) as u8,35+(y/4) as u8,110+(x/8) as u8,255]));
+        image::DynamicImage::ImageRgba8(pixels).write_to(&mut banner,image::ImageFormat::Png).unwrap();
+        let mut avatar=std::io::Cursor::new(Vec::new());
+        let pixels=image::ImageBuffer::from_fn(96,96,|x,y|image::Rgba(if (x==30||x==66)&&(28..40).contains(&y)||(y==65&&(25..72).contains(&x)){[25,35,65,255]}else{[255,207,90,255]}));
+        image::DynamicImage::ImageRgba8(pixels).write_to(&mut avatar,image::ImageFormat::Png).unwrap();
+        let mut b=backend.lock().unwrap();b.attachment_thumbnails.insert("/media/profile-banner".into(),banner.into_inner());
+        b.profile["banner_media"]=serde_json::json!("profile-banner");b.profile["avatar_blob"]=serde_json::json!(base64::engine::general_purpose::STANDARD.encode(avatar.into_inner()));
+        b.profile["roles"]=serde_json::json!([{"id":Uuid::new_v4(),"name":"Member","color":"#33b875"}]);
+    }
     let current_user=serde_json::from_value(backend.lock().unwrap().profile.clone()).unwrap();
     let main=MainWindowModel::builder().launch(MainWindowInit{current_user,api_client:api}).detach();
     let host=adw::Window::builder().default_width(1100).default_height(740).content(main.widget()).build();host.present();
@@ -96,9 +109,25 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     assert!(main.model().account.preferences.is_none(),"inactive pages are lazy");
     let requests=||backend.lock().unwrap().requests.clone();
     assert!(!requests().iter().any(|(_,path,_)|path=="/auth/connected_devices"));
+    let (save,scroll)={let model=main.model();let v=model.account.profile.as_ref().unwrap();(v.save.as_ref().unwrap().clone(),v.body.ancestor(gtk::ScrolledWindow::static_type()).unwrap().downcast::<gtk::ScrolledWindow>().unwrap())};
+    until(context,||save.height()>0&&scroll.vadjustment().upper()>scroll.vadjustment().page_size());
+    main.model().account.profile.as_ref().unwrap().hero.as_ref().unwrap().check_layout(&window,true);
+    let y=save.compute_bounds(&window).unwrap().y();assert!(y>window.height() as f32-90.0);
+    scroll.vadjustment().set_value(scroll.vadjustment().upper()-scroll.vadjustment().page_size());
+    until(context,||main.model().account.profile.as_ref().unwrap().hero.as_ref().unwrap().widget.compute_bounds(&window).unwrap().y()<0.0);
+    assert!((save.compute_bounds(&window).unwrap().y()-y).abs()<1.0,"scrolling keeps Save in the bottom bar");scroll.vadjustment().set_value(0.0);
     main.model().account.profile.as_ref().unwrap().fields.as_ref().unwrap().nickname.set_text("Tabbed nickname");
     find_button(window.upcast_ref(),"Preferências").emit_clicked();until(context,||main.model().account.preferences.as_ref().is_some_and(|v|v.embedded));
-    assert_eq!(main.model().account.preferences.as_ref().unwrap().window,window);main.model().account.preferences.as_ref().unwrap().theme.set_selected(2);main.model().account.preferences.as_ref().unwrap().motion.set_selected(2);
+    assert_eq!(main.model().account.preferences.as_ref().unwrap().window,window);
+    until(context,||main.model().account.preferences.as_ref().unwrap().save.width()>0);
+    {let model=main.model();let save=&model.account.preferences.as_ref().unwrap().save;let bounds=save.compute_bounds(&window).unwrap();assert!(bounds.y()+bounds.height()<=window.height() as f32,"the default preferences window must show the save action without scrolling");}
+    if std::env::var_os("PAPO_DESIGN_PREVIEW").is_some(){
+        let style=adw::StyleManager::default();let previous=style.color_scheme();
+        for (scheme,name) in [(adw::ColorScheme::ForceDark,"account-settings-preferences"),(adw::ColorScheme::ForceLight,"account-settings-preferences-light")]{style.set_color_scheme(scheme);crate::ui::main_window::layout::tests::preview(&window,name,context);}
+        style.set_color_scheme(previous);
+    }
+    main.model().account.preferences.as_ref().unwrap().theme.set_selected(2);main.model().account.preferences.as_ref().unwrap().motion.set_selected(2);
+    {let model=main.model();let v=model.account.preferences.as_ref().unwrap();for (toggle,value) in v.toggles.iter().zip([false,true,true,false,false,true]){toggle.set_active(value);}}
     find_button(window.upcast_ref(),"Segurança").emit_clicked();until(context,||find_passwords(&window).len()==2&&descendants(window.upcast_ref()).iter().any(|w|w.downcast_ref::<gtk::Button>().is_some_and(|b|b.label().as_deref()==Some("Encerrar sessão"))));
     let passwords=find_passwords(&window);passwords[0].set_text("Draft password");
     let baseline=requests();
@@ -109,7 +138,11 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     assert_eq!(main.model().account.preferences.as_ref().unwrap().theme.selected(),2);assert_eq!(passwords[0].text(),"Draft password");
     assert_eq!(requests().iter().filter(|(method,_,_)|method=="GET").count(),baseline.iter().filter(|(method,_,_)|method=="GET").count(),"tab switches must reuse mounted forms and fetched sessions");
     gear.emit_clicked();pump(context);assert_eq!(main.model().account.settings.as_ref().unwrap().window,window);
-    crate::ui::main_window::layout::tests::preview(&window,"account-settings-profile",context);
+    if std::env::var_os("PAPO_DESIGN_PREVIEW").is_some(){
+        let style=adw::StyleManager::default();let previous=style.color_scheme();
+        for (scheme,name) in [(adw::ColorScheme::ForceDark,"account-settings-profile"),(adw::ColorScheme::ForceLight,"account-settings-profile-light")]{style.set_color_scheme(scheme);crate::ui::main_window::layout::tests::preview(&window,name,context);}
+        style.set_color_scheme(previous);
+    }
     // Accepted profile writes retain the mounted form, preserving the window,
     // the currently selected tab and an unsaved preferences draft.
     let old=main.model().account.profile.as_ref().unwrap().token;
@@ -121,15 +154,27 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     find_button(window.upcast_ref(),"Salvar preferências").emit_clicked();until(context,||main.model().account.preferences.as_ref().is_some_and(|v|!v.pending&&v.error.text().contains("Settings failed")));
     assert_eq!(main.model().account.config.theme,Some(Theme::System));
     find_button(window.upcast_ref(),"Salvar preferências").emit_clicked();until(context,||main.model().account.config.theme==Some(Theme::Dark));assert_eq!(crate::media::animation::motion(),crate::config::Motion::Reduced);
+    {let model=main.model();let config=&model.account.config;let d=config.display.as_ref().unwrap();let n=config.notifications.as_ref().unwrap();assert_eq!([d.show_timestamps,d.show_avatars,n.enabled,n.message_preview,n.sound,n.mentions],[Some(false),Some(true),Some(true),Some(false),Some(false),Some(true)],"each native switch saves its corresponding setting");}
     let (token,draft)={let model=main.model();let v=model.account.profile.as_ref().unwrap();(v.token,profile_values(v.fields.as_ref().unwrap()))};
     let generation=Uuid::new_v4();main.state().get_mut().model.account.profile.as_mut().unwrap().reconcile=Some(generation);
     main.model().account.profile.as_ref().unwrap().fields.as_ref().unwrap().description.set_text("Draft entered during reconciliation");
     let mut accepted:UserProfile=serde_json::from_value(backend.lock().unwrap().profile.clone()).unwrap();accepted.nickname=Some("Normalized nickname".into());
     main.emit(MainWindowMsg::Account(AccountMsg::ProfileAccepted{token,generation,draft,result:Ok((accepted,None,None))}));pump(context);
     {let model=main.model();let fields=model.account.profile.as_ref().unwrap().fields.as_ref().unwrap();assert_eq!(fields.nickname.text(),"Normalized nickname");assert_eq!(profile_values(fields)[2],"Draft entered during reconciliation");assert!(model.account.profile_dirty());}
+    tabs.set_visible_child_name("profile");pump(context);
+    find_button(window.upcast_ref(),"Remover banner").emit_clicked();
+    until(context,||main.model().account.profile.as_ref().is_some_and(|v|!v.pending&&v.reconcile.is_none()&&v.error.text()=="Salvo.")&&backend.lock().unwrap().profile["banner_media"].is_null());
+    until(context,||main.model().account.profile.as_ref().unwrap().hero.as_ref().unwrap().widget.height()<144);
+    {let model=main.model();let v=model.account.profile.as_ref().unwrap();v.hero.as_ref().unwrap().check_layout(&window,false);assert_eq!(v.token,token);assert_eq!(profile_values(v.fields.as_ref().unwrap())[2],"Draft entered during reconciliation","image changes preserve the mounted profile draft");}
     tabs.set_visible_child_name("security");pump(context);super::super::security::exercise_controls(&main,context);
     passwords[0].set_text("Clear on close");passwords[1].set_text("Clear on close");
-    window.set_default_size(390,650);until(context,||window.width()<=420);crate::ui::main_window::layout::tests::preview(&window,"account-settings-narrow",context);
+    window.set_default_size(390,650);until(context,||window.width()<=420);
+    tabs.set_visible_child_name("profile");crate::ui::main_window::layout::tests::preview(&window,"account-settings-profile-narrow",context);
+    {let model=main.model();let v=model.account.profile.as_ref().unwrap();v.hero.as_ref().unwrap().check_layout(&window,false);let bounds=v.save.as_ref().unwrap().compute_bounds(&window).unwrap();assert!(bounds.y()>window.height() as f32-90.0&&bounds.y()+bounds.height()<=window.height() as f32,"the narrow profile keeps Save visible");}
+    tabs.set_visible_child_name("preferences");
+    until(context,||main.model().account.preferences.as_ref().unwrap().toggles.iter().all(|row|row.compute_bounds(&window).is_some_and(|b|b.width()>0.0&&b.x()>=0.0&&b.x()+b.width()<=window.width() as f32)));
+    crate::ui::main_window::layout::tests::preview(&window,"account-settings-preferences-narrow",context);
+    tabs.set_visible_child_name("security");crate::ui::main_window::layout::tests::preview(&window,"account-settings-narrow",context);
     for entry in &passwords{let bounds=entry.compute_bounds(&window).unwrap();assert!(bounds.x()>=0.0&&bounds.x()+bounds.width()<=window.width() as f32,"password fields must fit the narrow settings window");assert!(entry.shows_peek_icon());}
     window.close();pump(context);let native=window.downcast_ref::<adw::Window>().unwrap();until(context,||native.visible_dialog().is_some());
     find_button(native.visible_dialog().unwrap().upcast_ref(),"Descartar").emit_clicked();until(context,||!window.is_visible());assert!(passwords.iter().all(|p|p.text().is_empty()));
@@ -162,7 +207,7 @@ fn find_passwords(window:&gtk::Window)->Vec<gtk::PasswordEntry>{
 }
 
 pub(super) fn profile_values(f:&ProfileFields)->Vec<String>{vec![f.nickname.text().into(),f.status.text().into(),f.description.text(&f.description.start_iter(),&f.description.end_iter(),false).into(),f.typing.text().into(),f.manual.selected().to_string()]}
-pub(super) fn preferences_values(v:&PreferencesView)->Vec<String>{std::iter::once(v.theme.selected().to_string()).chain([v.font.selected().to_string(),v.density.selected().to_string(),v.motion.selected().to_string()]).chain(v.checks.iter().map(|c|c.is_active().to_string())).collect()}
+pub(super) fn preferences_values(v:&PreferencesView)->Vec<String>{std::iter::once(v.theme.selected().to_string()).chain([v.font.selected().to_string(),v.density.selected().to_string(),v.motion.selected().to_string()]).chain(v.toggles.iter().map(|c|c.is_active().to_string())).collect()}
 pub(super) fn watch_profile(f:&ProfileFields,sender:&ComponentSender<MainWindowModel>){
     for entry in [&f.nickname,&f.status,&f.typing]{let s=sender.clone();entry.connect_changed(move |_|s.input(MainWindowMsg::Account(AccountMsg::Dirty)));}
     let s=sender.clone();f.description.connect_changed(move |_|s.input(MainWindowMsg::Account(AccountMsg::Dirty)));
@@ -170,7 +215,7 @@ pub(super) fn watch_profile(f:&ProfileFields,sender:&ComponentSender<MainWindowM
 }
 pub(super) fn watch_preferences(v:&PreferencesView,sender:&ComponentSender<MainWindowModel>){
     for dropdown in [&v.theme,&v.font,&v.density,&v.motion]{let s=sender.clone();dropdown.connect_selected_notify(move |_|s.input(MainWindowMsg::Account(AccountMsg::Dirty)));}
-    for check in &v.checks{let s=sender.clone();check.connect_toggled(move |_|s.input(MainWindowMsg::Account(AccountMsg::Dirty)));}
+    for toggle in &v.toggles{let s=sender.clone();toggle.connect_active_notify(move |_|s.input(MainWindowMsg::Account(AccountMsg::Dirty)));}
 }
 impl Account {
     fn profile_dirty(&self)->bool{self.profile.as_ref().is_some_and(|v|v.embedded&&v.fields.as_ref().is_some_and(|f|profile_values(f)!=v.baseline))}

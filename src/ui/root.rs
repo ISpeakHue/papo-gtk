@@ -90,6 +90,9 @@ mod tests {
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("presence-selector"){
             crate::ui::main_window::account::exercise_presence_selector(&context);window.close();return;
         }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("voice-controls"){crate::ui::main_window::voice::tests::exercise_controls(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("pins-media"){crate::ui::chat::transfers::pins_tests::exercise(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("call-sounds"){crate::media::sound::exercise(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("multiline"){crate::ui::chat::multiline::exercise(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("full-app-input"){crate::ui::chat::multiline::exercise_full_app(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("login-input"){
@@ -99,6 +102,7 @@ mod tests {
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("notification-filters"){
             crate::ui::main_window::notifications::exercise_filters(&context);crate::ui::main_window::notifications::exercise_tabs(&context);window.close();return;
         }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("emoji-categories"){crate::ui::chat::exercise_emoji_categories(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("emoji-grid"){
             crate::ui::chat::exercise_animated_emojis(&context);crate::ui::chat::bugs8::exercise(&context);window.close();return;
         }
@@ -124,6 +128,7 @@ mod tests {
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("status-viewer"){crate::ui::status::exercise(&context);crate::ui::user_list::exercise_corrections(&context);crate::ui::chat::transfers::exercise_viewer(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("attachment-media"){crate::ui::chat::transfers::exercise_attachments(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("media-cache"){crate::ui::chat::transfers::exercise_cache(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("draft-previews"){crate::ui::chat::exercise_draft_previews(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("clipboard"){crate::ui::chat::clipboard::exercise(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("retention"){crate::ui::chat::transfers::exercise_retention(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("mentions"){crate::ui::chat::composer::exercise(&context);crate::ui::chat::clipboard::exercise(&context);crate::ui::chat::bugs::exercise(&context);window.close();return;}
@@ -448,6 +453,8 @@ mod tests {
     }
 }
 
+/// EN: Root state coordinator holding references to child controllers and session identity.
+/// PT-BR: Coordenador de estado raiz contendo referências aos controladores filhos e identidade da sessão.
 pub struct RootModel {
     view: View,
     login_controller: Controller<LoginModel>,
@@ -459,15 +466,23 @@ pub struct RootModel {
 
 // ── Messages ──────────────────────────────────────────────────────────────────
 
+/// EN: Messages that transition the top-level application state.
+/// PT-BR: Mensagens que realizam a transição do estado de nível superior da aplicação.
 #[derive(Debug)]
 pub enum RootMsg {
     /// Received from Login component upon successful auth
+    /// EN: Emitted when authentication succeeds with user profile and authenticated API client.
+    /// PT-BR: Emitido após autenticação bem-sucedida contendo o perfil do usuário e cliente de API autenticado.
     Authenticated {
         whoami: WhoamiResponse,
         client: ApiClient,
     },
     /// Log out and return to the login screen
+    /// EN: Triggered by user requesting manual logout.
+    /// PT-BR: Disparado quando o usuário solicita desconexão manual.
     Logout,
+    /// EN: Triggered when token validation fails or session expires, redirecting to login.
+    /// PT-BR: Disparado quando a validação de token falha ou a sessão expira, redirecionando para a tela de login.
     SessionExpired,
 }
 
@@ -509,6 +524,8 @@ impl Component for RootModel {
                     set_hhomogeneous:false,set_vhomogeneous:false,
                     // Each view owns its header; avoid crossfading two sets
                     // of window controls during authentication or logout.
+                    // EN: Disables crossfading transitions to prevent conflicting window controls during view switch.
+                    // PT-BR: Desativa transições com crossfade para evitar controles de janela conflitantes durante a troca de visualização.
                     set_transition_type: gtk::StackTransitionType::None,
                     add_named[Some("login")] = model.login_controller.widget(),
                     #[watch]
@@ -520,6 +537,7 @@ impl Component for RootModel {
             },
         }
     }
+
 
     fn init(_init: (), root: Self::Root, sender: ComponentSender<Self>) -> ComponentParts<Self> {
         crate::app::branding::install();

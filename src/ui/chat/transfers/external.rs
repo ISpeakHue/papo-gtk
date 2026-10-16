@@ -20,6 +20,8 @@ fn key(value:&str)->String{
     value.to_owned()
 }
 
+#[derive(Clone, Default)]
+pub(in crate::ui::chat) struct Cached(Vec<(String, std::time::Instant, Option<gtk::gdk::Texture>)>);
 #[derive(Default)]
 pub(in crate::ui::chat) struct Avatars {
     entries:HashMap<String,(std::time::Instant,Option<gtk::gdk::Texture>)>,
@@ -31,6 +33,17 @@ pub(in crate::ui::chat) struct Avatars {
 }
 impl Drop for Avatars {fn drop(&mut self){if let Some((_,job))=self.wake.take(){job.abort();}for (_,(_,job)) in self.pending.drain(){job.abort();}}}
 impl Avatars {
+    pub(in crate::ui::chat) fn cached(&self, messages: &[Message]) -> Cached {
+        let keys: HashSet<_> = messages.iter().filter_map(|m| m.external().map(|a| key(&a.avatar_url))).collect();
+        Cached(self.entries.iter().filter(|(k,_)| keys.contains(*k)).map(|(k,(at,image))| (k.clone(),*at,image.clone())).collect())
+    }
+    pub(in crate::ui::chat) fn seed(&mut self, cached: Cached) {
+        for (key,at,image) in cached.0 {
+            if self.entries.get(&key).is_some_and(|(old,_)| *old>=at) { continue; }
+            self.entries.insert(key.clone(),(at,image));self.order.retain(|k|k!=&key);self.order.push_back(key);
+        }
+        while self.order.len()>CACHED { if let Some(key)=self.order.pop_front(){self.entries.remove(&key);self.failures.remove(&key);} }
+    }
     /// Reconcile mutable avatar routes after missed socket events. Discord hash
     /// resources identify immutable pixels and need no forced re-download.
     pub(in crate::ui::chat) fn revalidate(&mut self){for (key,(at,_)) in &mut self.entries{if !key.starts_with("discord-avatar:"){*at=std::time::Instant::now()-std::time::Duration::from_secs(3601);}}}

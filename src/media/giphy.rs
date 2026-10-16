@@ -1,7 +1,18 @@
 //! Recognize Giphy identifiers; media resolution belongs to the backend.
+//! EN: Parses and validates Giphy identifiers from raw tokens (`giphy:<id>`), web URLs, and CDN paths, enforcing safety checks.
+//! PT-BR: Reconhece identificadores do Giphy; análise e validação a partir de tokens (`giphy:<id>`), URLs da web e caminhos de CDN, aplicando verificações de segurança.
+
+/// EN: Extracts a sanitized Giphy ID from a string, URL, or token.
+/// Validates alphanumeric characters (max 128 chars), rejecting malicious hosts or injection attempts.
+/// PT-BR: Extrai um identificador seguro do Giphy a partir de uma string, URL ou token.
+/// Valida caracteres alfanuméricos (máx 128 caracteres), rejeitando hosts maliciosos ou tentativas de injeção.
 pub fn id(value:&str)->Option<String>{
+    // EN: Strip wrapping markdown or punctuation delimiters.
+    // PT-BR: Remove delimitadores de pontuação ou markdown ao redor do texto.
     let value=value.trim_matches(|c|matches!(c,'<'|'>'|'('|')'|','|'.'|'"'|'\''));
     let id=if let Some(id)=value.strip_prefix("giphy:"){id.to_owned()}else{
+        // EN: Ensure valid HTTP/HTTPS URL and reject embedded credentials.
+        // PT-BR: Garante URL HTTP/HTTPS válida e rejeita credenciais embutidas (username/password).
         let url=reqwest::Url::parse(value).ok()?;if !matches!(url.scheme(),"https"|"http")||!url.username().is_empty()||url.password().is_some(){return None;}
         let host=url.host_str()?;
         if host=="giphy.com"||host=="www.giphy.com"{let mut path=url.path_segments()?;if !matches!(path.next()?,"gifs"|"stickers"|"embed"){return None;}path.next()?.rsplit('-').next()?.to_owned()}
@@ -9,8 +20,11 @@ pub fn id(value:&str)->Option<String>{
             let parts=url.path_segments()?.collect::<Vec<_>>();if parts.first()==Some(&"media"){let index=if parts.get(1)?.starts_with("v1."){2}else{1};parts.get(index)?.to_string()}else{let file=parts.first()?;file.strip_suffix(".gif").or_else(||file.strip_suffix(".webp")).or_else(||file.strip_suffix(".mp4"))?.to_owned()}
         }else{return None;}
     };
+    // EN: Guard against oversized or non-alphanumeric IDs.
+    // PT-BR: Protege contra identificadores excessivamente longos ou com caracteres não alfanuméricos.
     if id.is_empty()||id.len()>128||!id.bytes().all(|c|c.is_ascii_alphanumeric()){None}else{Some(id)}
 }
+
 #[cfg(test)]
 fn ids(text:&str)->Vec<String>{
     let mut ids=vec![];let mut i=0;

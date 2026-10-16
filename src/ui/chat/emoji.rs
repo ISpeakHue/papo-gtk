@@ -1,7 +1,10 @@
 //! Composer emoji completion uses GTK's local Unicode catalog and server names.
 use super::*;
+#[cfg(test)]pub(crate) use categories::exercise as exercise_categories;
+mod categories;
+pub(super) use categories::Category;
 #[derive(Clone)]
-pub(super) struct Choice{pub name:String,pub text:String,pub id:Option<Uuid>}
+pub(super) struct Choice{pub name:String,pub text:String,pub id:Option<Uuid>,pub category:Option<Category>}
 pub(super) fn completion(text:&str,position:i32)->Option<(usize,usize,&str)>{
     let end=if position<0{text.len()}else{text.char_indices().nth(position as usize).map_or(text.len(),|(i,_)|i)};
     let start=text[..end].rfind(':')?;
@@ -19,7 +22,7 @@ pub(super) fn completion(text:&str,position:i32)->Option<(usize,usize,&str)>{
     (format!("{}{value}{suffix}",&text[..start]),caret)
 }
 pub(super) fn builtin()->Vec<Choice>{
-    let mut names=std::collections::BTreeMap::<String,String>::new();
+    let mut names=std::collections::BTreeMap::<String,(String,Category)>::new();
     if let Ok(bytes)=gtk::gio::resources_lookup_data("/org/gtk/libgtk/emoji/en.data",gtk::gio::ResourceLookupFlags::NONE){
         // GTK versions ship one of these catalog formats; validate before reading.
         for signature in ["a(aussasasu)","a(ausasu)"]{
@@ -31,15 +34,15 @@ pub(super) fn builtin()->Vec<Choice>{
                 let value:String=codes.into_iter().filter(|c|*c!=0).filter_map(char::from_u32).collect();
                 let name:String=name.chars().flat_map(char::to_lowercase).map(|c|if c.is_alphanumeric(){c}else{'_'}).collect();
                 let name=name.split('_').filter(|p|!p.is_empty()).collect::<Vec<_>>().join("_");
-                if !name.is_empty()&&!value.is_empty(){names.insert(name,value);}
+                if !name.is_empty()&&!value.is_empty(){let category=Category::from_gtk(item.child_value(item.n_children()-1).get::<u32>().unwrap_or(8));names.insert(name,(value,category));}
             }break;
         }
     }
-    for (name,value) in [("smile","😄"),("smiley","😃"),("grinning","😀"),("joy","😂"),("rofl","🤣"),("heart","❤️"),("+1","👍"),("-1","👎"),("thumbsup","👍"),("thumbsdown","👎"),("tada","🎉"),("sob","😭"),("thinking","🤔"),("fire","🔥"),("eyes","👀"),("100","💯"),("wave","👋"),("laughing","😆"),("sweat_smile","😅"),("blush","😊"),("wink","😉"),("sunglasses","😎"),("slight_smile","🙂"),("upside_down","🙃"),("cry","😢"),("angry","😠"),("rage","😡"),("poop","💩"),("ok_hand","👌"),("clap","👏"),("pray","🙏"),("muscle","💪"),("rocket","🚀"),("warning","⚠️"),("white_check_mark","✅"),("x","❌"),("skull","💀")]{names.insert(name.into(),value.into());}
-    names.into_iter().map(|(name,text)|Choice{name,text,id:None}).collect()
+    for (name,value) in [("smile","😄"),("smiley","😃"),("grinning","😀"),("joy","😂"),("rofl","🤣"),("heart","❤️"),("+1","👍"),("-1","👎"),("thumbsup","👍"),("thumbsdown","👎"),("tada","🎉"),("sob","😭"),("thinking","🤔"),("fire","🔥"),("eyes","👀"),("100","💯"),("wave","👋"),("laughing","😆"),("sweat_smile","😅"),("blush","😊"),("wink","😉"),("sunglasses","😎"),("slight_smile","🙂"),("upside_down","🙃"),("cry","😢"),("angry","😠"),("rage","😡"),("poop","💩"),("ok_hand","👌"),("clap","👏"),("pray","🙏"),("muscle","💪"),("rocket","🚀"),("warning","⚠️"),("white_check_mark","✅"),("x","❌"),("skull","💀")]{let category=names.values().find(|(text,_)|text==value).map_or_else(||Category::alias(name),|(_,category)|*category);names.insert(name.into(),(value.into(),category));}
+    names.into_iter().map(|(name,(text,category))|Choice{name,text,id:None,category:Some(category)}).collect()
 }
 pub(super) fn choices(builtin:&[Choice],custom:&[crate::models::Emoji],filter:&str)->Vec<Choice>{
-    let filter=filter.to_lowercase();let mut choices:Vec<_>=custom.iter().map(|e|Choice{name:e.name.clone(),text:format!(":{}:",e.name),id:Some(e.id)}).chain(builtin.iter().cloned()).filter(|c|c.name.to_lowercase().contains(&filter)||c.text.contains(&filter)).collect();
+    let filter=filter.to_lowercase();let mut choices:Vec<_>=custom.iter().map(|e|Choice{name:e.name.clone(),text:format!(":{}:",e.name),id:Some(e.id),category:None}).chain(builtin.iter().cloned()).filter(|c|c.name.to_lowercase().contains(&filter)||c.text.contains(&filter)).collect();
     choices.sort_by_cached_key(|c|{let common=filter.is_empty()&&["heart","thumbsup","joy","smile","fire","tada","eyes"].contains(&c.name.as_str())&&c.id.is_none();(!common,!c.name.to_lowercase().starts_with(&filter),c.id.is_none(),c.name.to_lowercase())});choices
 }
 #[cfg(test)]mod tests{
@@ -68,15 +71,23 @@ impl Picker {
         let choose:std::rc::Rc<dyn Fn(Choice)>=std::rc::Rc::new(choose);let mut renders=Vec::<std::rc::Rc<dyn Fn()>>::new();let mut server_page=None;
         for custom in [false,true] {
             let body=gtk::Box::new(gtk::Orientation::Vertical,4);
+            let category=std::rc::Rc::new(std::cell::Cell::new(None::<Category>));
+            let navigation=(!custom).then(categories::navigation);
+            if let Some((bar,_))=&navigation{body.append(bar);}
+            let heading=gtk::Label::new(Some("Todos os emojis"));heading.set_widget_name("emoji-category-title");heading.set_xalign(0.0);heading.add_css_class("heading");heading.set_visible(!custom);body.append(&heading);
             let grid=gtk::FlowBox::new();grid.set_selection_mode(gtk::SelectionMode::None);grid.set_homogeneous(true);grid.set_min_children_per_line(1);grid.set_max_children_per_line(128);grid.set_valign(gtk::Align::Start);grid.set_row_spacing(4);grid.set_column_spacing(4);
             let scroll=gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).min_content_height(240).child(&grid).build();body.append(&scroll);
             let empty=gtk::Label::new(Some("Nenhum emoji encontrado"));body.append(&empty);
             let page=tabs.add_titled(&body,Some(if custom{"server"}else{"unicode"}),if custom{"Servidor"}else{"Unicode"});if custom{server_page=Some(page);}
             let limit=std::rc::Rc::new(std::cell::Cell::new(96usize));let rendered=std::rc::Rc::new(std::cell::RefCell::new(Vec::<String>::new()));let total=std::rc::Rc::new(std::cell::Cell::new(0usize));
-            let (weak_search,weak_grid,weak_empty)=(search.downgrade(),grid.downgrade(),empty.downgrade());let data=catalog.clone();let count=limit.clone();let keys=rendered.clone();let size=total.clone();let select=choose.clone();
+            let (weak_search,weak_grid,weak_empty)=(search.downgrade(),grid.downgrade(),empty.downgrade());let data=catalog.clone();let count=limit.clone();let keys=rendered.clone();let size=total.clone();let select=choose.clone();let selected=category.clone();let weak_heading=heading.downgrade();
             let render:std::rc::Rc<dyn Fn()>=std::rc::Rc::new(move || {
                 let(Some(search),Some(grid),Some(empty))=(weak_search.upgrade(),weak_grid.upgrade(),weak_empty.upgrade())else{return;};let data=data.borrow();
-                let found=if custom{choices(&[],&data.custom,search.text().trim())}else{choices(&data.builtin,&[],search.text().trim())};size.set(found.len());empty.set_visible(found.is_empty());
+                let query=search.text();let query=query.trim();
+                let mut found=if custom{choices(&[],&data.custom,query)}else{choices(&data.builtin,&[],query)};
+                if !custom&&query.is_empty(){if let Some(category)=selected.get(){found.retain(|c|c.category==Some(category));}}
+                if let Some(heading)=weak_heading.upgrade(){heading.set_text(if query.is_empty(){selected.get().map_or("Todos os emojis",Category::title)}else{"Resultados da busca"});}
+                size.set(found.len());empty.set_visible(found.is_empty());
                 let found:Vec<_>=found.into_iter().take(count.get()).collect();
                 let signatures:Vec<_>=found.iter().map(|c|format!("{}|{:?}|{}|{:?}|{:?}",c.name,c.id,c.text,c.id.and_then(|id|data.textures.get(&id)).map(|p|p.as_ptr()),c.id.and_then(|id|data.animations.get(&id)).map(|p|p.as_ptr()))).collect();
                 let mut keys=keys.borrow_mut();if !signatures.starts_with(&keys){while let Some(child)=grid.first_child(){grid.remove(&child);}keys.clear();}
@@ -89,6 +100,18 @@ impl Picker {
                 }
                 *keys=signatures;
             });
+            if let Some((_,buttons))=navigation {
+                for (value,button) in buttons {
+                    let selected=category.clone();let count=limit.clone();let update=render.clone();let weak=scroll.downgrade();let search=search.downgrade();
+                    button.connect_toggled(move |button|{
+                        if !button.is_active(){return;}
+                        selected.set(value);count.set(96);
+                        if let Some(search)=search.upgrade(){search.set_text("");}
+                        if let Some(scroll)=weak.upgrade(){scroll.vadjustment().set_value(0.0);}
+                        update();
+                    });
+                }
+            }
             let update=render.clone();let count=limit.clone();let weak=scroll.downgrade();search.connect_search_changed(move |_|{if let Some(scroll)=weak.upgrade(){scroll.vadjustment().set_value(0.0);}count.set(96);update();});
             let update=render.clone();let count=limit.clone();let size=total.clone();let weak=scroll.downgrade();
             let pending=std::rc::Rc::new(std::cell::Cell::new(false));
@@ -145,14 +168,14 @@ impl Picker {
 pub(crate) fn exercise_resize(context:&gtk::glib::MainContext){
     use actions::tests::{descendants,pump,until};use adw::prelude::*;
     let root=gtk::Box::new(gtk::Orientation::Vertical,8);
-    let builtin:Vec<_>=(0..1024).map(|i|Choice{name:format!("unicode_{i:04}"),text:"😀".into(),id:None}).collect();
+    let builtin:Vec<_>=(0..1024).map(|i|Choice{name:format!("unicode_{i:04}"),text:"😀".into(),id:None,category:Some(Category::Smileys)}).collect();
     let custom:Vec<crate::models::Emoji>=(0..512).map(|i|serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"name":format!("server_{i:04}"),"format":"PNG","created_at":"2026-10-15T12:00:00Z"})).unwrap()).collect();
     let chosen=std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));let selected=chosen.clone();
     let picker=Picker::new(&root,&builtin,move |choice|selected.borrow_mut().push(choice.id));picker.update("Server",&custom,&HashMap::new(),&HashMap::new());
     let window=adw::Window::builder().default_width(400).default_height(420).content(&root).build();window.present();performance::settle(context);
     let tabs=descendants(root.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Stack>().ok()).unwrap();
     let search=descendants(root.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::SearchEntry>().ok()).unwrap();
-    let active=||{let widgets=descendants(&tabs.visible_child().unwrap());(widgets.iter().find_map(|w|w.downcast_ref::<gtk::FlowBox>()).unwrap().clone(),widgets.iter().find_map(|w|w.downcast_ref::<gtk::ScrolledWindow>()).unwrap().clone())};
+    let active=||{let widgets=descendants(&tabs.visible_child().unwrap());(widgets.iter().find_map(|w|w.downcast_ref::<gtk::FlowBox>()).unwrap().clone(),widgets.iter().find_map(|w|w.downcast_ref::<gtk::FlowBox>()).unwrap().ancestor(gtk::ScrolledWindow::static_type()).and_downcast::<gtk::ScrolledWindow>().unwrap())};
     let geometry=|grid:&gtk::FlowBox,scroll:&gtk::ScrolledWindow|{
         let mut rows=Vec::<i32>::new();let mut first_row=0;let mut visible=0;
         let mut child=grid.first_child();

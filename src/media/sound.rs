@@ -1,10 +1,11 @@
 //! Room-entry cue isolated from GTK's native player lifecycle.
 use std::sync::{Arc,Mutex,atomic::{AtomicU32,Ordering}};
-use tokio::{io::AsyncWriteExt,task::JoinHandle};
+use tokio::{io::{AsyncReadExt,AsyncWriteExt},sync::oneshot,task::JoinHandle};
 
 #[derive(Default)]
 pub struct CallCue {
     job:Option<JoinHandle<()>>,
+    cancel:Option<oneshot::Sender<()>>,
     outcome:Arc<Mutex<Option<Result<(),String>>>>,
     pid:Arc<AtomicU32>,
     pub played:u64,
@@ -21,28 +22,41 @@ impl CallCue {
         let outcome=self.outcome.clone();let pid=self.pid.clone();
         #[cfg(test)]let test_sink=self.test_sink;
         #[cfg(not(test))]let test_sink=false;
+        let (cancel,cancelled)=oneshot::channel();self.cancel=Some(cancel);
         self.job=Some(tokio::spawn(async move{
-            let result=play_cue(test_sink,pid,leave).await;
+            let result=play_cue(test_sink,pid,leave,cancelled).await;
             if let Err(error)=&result{tracing::warn!("Call cue failed: {error}");}
             *outcome.lock().unwrap()=Some(result);
         }));self.played+=1;
     }
-    pub fn stop(&mut self){if let Some(job)=self.job.take(){job.abort();}}
+    pub fn stop(&mut self){if let Some(cancel)=self.cancel.take(){let _=cancel.send(());}self.job.take();}
     #[cfg(test)]pub fn use_test_sink(&mut self){self.test_sink=true;}
 }
 impl Drop for CallCue{fn drop(&mut self){self.stop();}}
 
-async fn play_cue(test_sink:bool,pid:Arc<AtomicU32>,leave:bool)->Result<(),String>{
+async fn play_cue(test_sink:bool,pid:Arc<AtomicU32>,leave:bool,mut cancelled:oneshot::Receiver<()>)->Result<(),String>{
+    if cancelled.try_recv()!=Err(oneshot::error::TryRecvError::Empty){return Ok(());}
     let mut command=crate::media::runtime::python();
     command.args(["-u","-c",include_str!("sound.py")]);if test_sink{command.arg("--test-sink");}
     command.kill_on_drop(true).stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
     let mut child=command.spawn().map_err(|e|e.to_string())?;pid.store(child.id().unwrap_or(0),Ordering::SeqCst);
-    // Dropping a cancelled task kills and reaps the helper; GTK never waits on
-    // a GStreamer pipeline being torn down while it is still preparing.
-    let mut stdin=child.stdin.take().unwrap();stdin.write_all(if leave{include_bytes!("voice_leave.wav")}else{include_bytes!("voice_join.wav")}).await.map_err(|e|e.to_string())?;drop(stdin);
-    let output=tokio::time::timeout(std::time::Duration::from_secs(8),child.wait_with_output()).await.map_err(|_|"Call cue process timed out".to_string())?.map_err(|e|e.to_string())?;
-    if !output.status.success(){return Err(String::from_utf8_lossy(&output.stderr).trim().to_owned());}
-    let report:serde_json::Value=serde_json::from_slice(&output.stdout).map_err(|e|e.to_string())?;
+    // Keep ownership while cancellation is handled: kill_on_drop alone only
+    // queues best-effort orphan reaping. Explicit wait also handles a helper
+    // cancelled immediately after spawn, without making GTK wait for it.
+    let mut stdin=child.stdin.take().unwrap();let mut stdout=child.stdout.take().unwrap();let mut stderr=child.stderr.take().unwrap();
+    let exchange=async{
+        stdin.write_all(if leave{include_bytes!("voice_leave.wav")}else{include_bytes!("voice_join.wav")}).await?;drop(stdin);
+        let mut out=Vec::new();let mut err=Vec::new();
+        let(status,_,_)=tokio::try_join!(child.wait(),stdout.read_to_end(&mut out),stderr.read_to_end(&mut err))?;
+        Ok::<_,std::io::Error>((status,out,err))
+    };
+    let result=tokio::select!{_=&mut cancelled=>None,result=tokio::time::timeout(std::time::Duration::from_secs(8),exchange)=>Some(result)};
+    let(status,out,err)=match result{
+        Some(Ok(Ok(output)))=>output,
+        result=>{let _=child.kill().await;let _=child.wait().await;return match result{None=>Ok(()),Some(Err(_))=>Err("Call cue process timed out".into()),Some(Ok(Err(e)))=>Err(e.to_string()),_=>unreachable!()};}
+    };
+    if !status.success(){return Err(String::from_utf8_lossy(&err).trim().to_owned());}
+    let report:serde_json::Value=serde_json::from_slice(&out).map_err(|e|e.to_string())?;
     if report["decoded_bytes"].as_u64().unwrap_or(0)==0{return Err("Call cue produced no audio".into());}Ok(())
 }
 #[cfg(test)]mod tests{

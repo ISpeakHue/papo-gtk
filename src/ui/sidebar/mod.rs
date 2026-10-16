@@ -26,6 +26,7 @@ pub struct SidebarModel {
     pub server: Option<Server>,
     pub channels: Vec<Channel>,
     voice_rooms:Vec<VoiceRoom>,
+    selected_voice_id:Option<Uuid>,
     direct_rows:std::collections::HashMap<Uuid,(String,gtk::Box)>,
     channel_rows:std::collections::HashMap<String,(String,gtk::ListBoxRow)>,
     pub unread_notifications: usize,
@@ -46,7 +47,7 @@ impl Drop for SidebarModel{fn drop(&mut self){if let Some(job)=self.icon_job.tak
 
 #[derive(Debug)]
 pub enum SidebarMsg {
-    VoiceDock(gtk::Box),VoiceRooms(Vec<VoiceRoom>),OpenProfile(Uuid),WatchVoice{user:Uuid,kind:&'static str},
+    VoiceDock(gtk::Box),VoiceRooms{rooms:Vec<VoiceRoom>,selected:Option<Uuid>},OpenProfile(Uuid),WatchVoice{user:Uuid,kind:&'static str},
     SetServer(Server),
     IconReady{request:Uuid,image:Option<crate::media::PreparedImage>},
     ShowChannels, ShowDirect,
@@ -243,7 +244,7 @@ impl Component for SidebarModel {
         let mut model = SidebarModel {
             current_user: init.current_user,
             server: init.server,
-            channels: init.channels,voice_rooms:vec![],channel_rows:Default::default(),direct_rows:Default::default(),
+            channels: init.channels,voice_rooms:vec![],selected_voice_id:None,channel_rows:Default::default(),direct_rows:Default::default(),
             selected_channel_id: first_channel_id,
             unread_notifications: 0,
             more_notifications:false,
@@ -258,7 +259,7 @@ impl Component for SidebarModel {
         // picture. Decoding it here duplicates that work on GTK's main thread.
         model.load_icon(&sender);
 
-        rebuild_channel_list(&widgets.channels_list, &model.channels, model.selected_channel_id, &model.voice_rooms,&model.avatars,model.show_avatars,&mut model.channel_rows,&sender);
+        rebuild_channel_list(&widgets.channels_list, &model.channels, model.selected_channel_id, model.selected_voice_id, &model.voice_rooms,&model.avatars,model.show_avatars,&mut model.channel_rows,&sender);
 
         ComponentParts { model, widgets }
     }
@@ -276,7 +277,7 @@ impl Component for SidebarModel {
     ) {
         match message {
             SidebarMsg::VoiceDock(panel)=>{if panel.parent().is_none(){widgets.voice_slot.append(&panel);}},
-            SidebarMsg::VoiceRooms(rooms)=>{if self.voice_rooms!=rooms{self.voice_rooms=rooms;rebuild_channel_list(&widgets.channels_list,&self.channels,self.selected_channel_id,&self.voice_rooms,&self.avatars,self.show_avatars,&mut self.channel_rows,&sender);}},
+            SidebarMsg::VoiceRooms{rooms,selected}=>{if self.voice_rooms!=rooms||self.selected_voice_id!=selected{self.voice_rooms=rooms;self.selected_voice_id=selected;rebuild_channel_list(&widgets.channels_list,&self.channels,self.selected_channel_id,self.selected_voice_id,&self.voice_rooms,&self.avatars,self.show_avatars,&mut self.channel_rows,&sender);}},
             SidebarMsg::OpenProfile(id)=>{let _=sender.output(SidebarOutput::Profile(id));},
             SidebarMsg::WatchVoice{user,kind}=>{let _=sender.output(SidebarOutput::WatchVoice{user,kind});},
             SidebarMsg::ShowChannels=>self.direct_mode=false,
@@ -292,7 +293,7 @@ impl Component for SidebarModel {
             SidebarMsg::PeerAvatars(avatars)=>{crate::media::update_member_avatars(widgets.direct_list.upcast_ref(),&self.avatars,&avatars);crate::media::update_member_avatars(widgets.channels_list.upcast_ref(),&self.avatars,&avatars);self.avatars=avatars;},
             SidebarMsg::Presence(presence)=>{if self.presence==presence{return;}self.presence=presence;self.rebuild_direct(&widgets.direct_list,&sender);},
             SidebarMsg::SetCurrentUser(user) => self.current_user=user,
-            SidebarMsg::SetConfig(config) => {self.show_avatars=config.display.as_ref().and_then(|d|d.show_avatars).unwrap_or(true);widgets.avatar_widget.set_visible(self.show_avatars);self.rebuild_direct(&widgets.direct_list,&sender);rebuild_channel_list(&widgets.channels_list,&self.channels,self.selected_channel_id,&self.voice_rooms,&self.avatars,self.show_avatars,&mut self.channel_rows,&sender);},
+            SidebarMsg::SetConfig(config) => {self.show_avatars=config.display.as_ref().and_then(|d|d.show_avatars).unwrap_or(true);widgets.avatar_widget.set_visible(self.show_avatars);self.rebuild_direct(&widgets.direct_list,&sender);rebuild_channel_list(&widgets.channels_list,&self.channels,self.selected_channel_id,self.selected_voice_id,&self.voice_rooms,&self.avatars,self.show_avatars,&mut self.channel_rows,&sender);},
             SidebarMsg::Profile => {let _=sender.output(SidebarOutput::Profile(self.current_user.id));}
             SidebarMsg::UnreadNotifications{count,more}=>{self.unread_notifications=count;self.more_notifications=more;},
             SidebarMsg::Settings => {let _=sender.output(SidebarOutput::Settings);}
@@ -308,9 +309,9 @@ impl Component for SidebarModel {
                     self.selected_channel_id = channels.iter().find(|channel| matches!(channel.channel_type, None | Some(ChannelType::Text))).map(|channel| channel.id);
                 }
                 self.channels = channels;
-                rebuild_channel_list(&widgets.channels_list, &self.channels, self.selected_channel_id, &self.voice_rooms,&self.avatars,self.show_avatars,&mut self.channel_rows,&sender);
+                rebuild_channel_list(&widgets.channels_list, &self.channels, self.selected_channel_id, self.selected_voice_id, &self.voice_rooms,&self.avatars,self.show_avatars,&mut self.channel_rows,&sender);
             }
-            SidebarMsg::SetSelection(id)=>{self.direct_mode=self.direct.iter().any(|d|d.id==id);self.selected_channel_id=Some(id);self.rebuild_direct(&widgets.direct_list,&sender);rebuild_channel_list(&widgets.channels_list,&self.channels,self.selected_channel_id,&self.voice_rooms,&self.avatars,self.show_avatars,&mut self.channel_rows,&sender);}
+            SidebarMsg::SetSelection(id)=>{self.direct_mode=self.direct.iter().any(|d|d.id==id);self.selected_channel_id=Some(id);self.rebuild_direct(&widgets.direct_list,&sender);rebuild_channel_list(&widgets.channels_list,&self.channels,self.selected_channel_id,self.selected_voice_id,&self.voice_rooms,&self.avatars,self.show_avatars,&mut self.channel_rows,&sender);}
             SidebarMsg::VoiceSelect(id)=>{if self.channels.iter().any(|c|c.id==id&&c.channel_type==Some(ChannelType::Voice)){let _=sender.output(SidebarOutput::VoiceSelect(id));}},
             SidebarMsg::SelectChannel(id) => {
                 self.direct_mode=false;
@@ -318,7 +319,7 @@ impl Component for SidebarModel {
                 if let Some(channel) = self.channels.iter().find(|c| c.id == id).cloned() {
                     let _ = sender.output(SidebarOutput::ChannelSelected(channel));
                 }
-                rebuild_channel_list(&widgets.channels_list, &self.channels, self.selected_channel_id, &self.voice_rooms,&self.avatars,self.show_avatars,&mut self.channel_rows,&sender);
+                rebuild_channel_list(&widgets.channels_list, &self.channels, self.selected_channel_id, self.selected_voice_id, &self.voice_rooms,&self.avatars,self.show_avatars,&mut self.channel_rows,&sender);
                 self.rebuild_direct(&widgets.direct_list,&sender);
             }
             SidebarMsg::MarkChannelRead(id)=>{if self.channels.iter().any(|c|c.id==id&&!matches!(c.channel_type,Some(ChannelType::Category|ChannelType::Voice))){let _=sender.output(SidebarOutput::MarkChannelRead(id));}},
@@ -351,6 +352,7 @@ fn rebuild_channel_list(
     list_box: &gtk::ListBox,
     channels: &[Channel],
     selected_id: Option<Uuid>,
+    selected_voice_id: Option<Uuid>,
     rooms:&[VoiceRoom],avatars:&std::collections::HashMap<Uuid,gtk::gdk::Texture>,
     show_avatars:bool,cache:&mut std::collections::HashMap<String,(String,gtk::ListBoxRow)>,
     sender: &ComponentSender<SidebarModel>,
@@ -458,6 +460,10 @@ fn rebuild_channel_list(
     let keep:std::collections::HashSet<_>=rows.iter().cloned().collect();let mut child=list_box.first_child();while let Some(w)=child{child=w.next_sibling();if !w.downcast_ref::<gtk::ListBoxRow>().is_some_and(|r|keep.contains(r)){list_box.remove(&w);}}
     for (index,row) in rows.iter().enumerate(){if list_box.row_at_index(index as i32).as_ref()!=Some(row){if row.parent().is_some(){list_box.remove(row);}list_box.insert(row,index as i32);}}
     list_box.unselect_all();if let Some(id)=selected_id{if let Some((_,row))=next.get(&format!("channel-{id}")){if row.is_selectable(){list_box.select_row(Some(row));}}}
+    let voice_key=selected_voice_id.map(|id|format!("channel-{id}"));
+    for (_,row) in next.values(){
+        if row.has_css_class("papo-voice-channel")&&Some(row.widget_name().as_str())==voice_key.as_deref(){row.add_css_class("papo-voice-selected");}else{row.remove_css_class("papo-voice-selected");}
+    }
     *cache=next;
 }
 
@@ -526,7 +532,7 @@ Abra o perfil de um membro para enviar uma mensagem."));empty.set_wrap(true);emp
     drop(permit);until(context,||sidebar.model().icon_request.is_none());let texture=icon.paintable().and_downcast::<gtk::gdk::Texture>().unwrap();assert!(texture.width()<=64&&texture.height()<=64,"a 2048-pixel source must not remain a full-size texture");
     sidebar.emit(SidebarMsg::SetServer(server.clone()));pump(context);let pending=sidebar.model().icon_request.unwrap();let mut removal=server;removal.icon_blob=None;sidebar.emit(SidebarMsg::SetServer(removal));pump(context);sidebar.emit(SidebarMsg::IconReady{request:pending,image:Some(crate::media::PreparedImage{width:1,height:1,pixels:vec![0;4]})});pump(context);assert_eq!(icon.icon_name().as_deref(),Some("network-server-symbolic"));
     let peers:Vec<Uuid>=(0..8).map(|_|Uuid::new_v4()).collect();let dms=peers.iter().enumerate().map(|(i,id)|serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"user":{"id":id,"username":format!("peer-{i}"),"created_at":created},"created_at":created,"unread_count":0})).unwrap()).collect();
-    sidebar.emit(SidebarMsg::SetDirect(dms));sidebar.emit(SidebarMsg::VoiceRooms(vec![VoiceRoom{id:voice,members:peers.iter().enumerate().map(|(i,id)|VoiceParticipant{id:*id,name:format!("peer-{i}"),muted:false,speaking:false,camera:false,screen:false}).collect()}]));pump(context);
+    sidebar.emit(SidebarMsg::SetDirect(dms));sidebar.emit(SidebarMsg::VoiceRooms{selected:None,rooms:vec![VoiceRoom{id:voice,members:peers.iter().enumerate().map(|(i,id)|VoiceParticipant{id:*id,name:format!("peer-{i}"),muted:false,speaking:false,camera:false,screen:false}).collect()}]});pump(context);
     let before:Vec<_>=descendants(sidebar.widget().upcast_ref()).into_iter().filter(|w|(w.is::<gtk::Button>()&&w.widget_name().starts_with("dm-"))||(w.is::<gtk::ListBoxRow>()&&w.widget_name().starts_with("voice-member-"))).collect();assert_eq!(before.len(),16);
     let textures=peers.iter().map(|id|(*id,crate::media::PreparedImage{width:8,height:8,pixels:vec![255;256]}.texture())).collect();sidebar.emit(SidebarMsg::PeerAvatars(textures));pump(context);
     let after:Vec<_>=descendants(sidebar.widget().upcast_ref()).into_iter().filter(|w|(w.is::<gtk::Button>()&&w.widget_name().starts_with("dm-"))||(w.is::<gtk::ListBoxRow>()&&w.widget_name().starts_with("voice-member-"))).collect();assert_eq!(before,after,"avatar batches preserve DM and voice rows");

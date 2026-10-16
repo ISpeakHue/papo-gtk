@@ -73,8 +73,15 @@ libadwaita controls, system colors and GNOME window behavior.
   and libadwaita respects the desktop's reduced-motion setting.
 - Voice participants appear beneath their room before joining. Compact call
   controls sit above the account footer: microphone, call settings, leave and
-  screen sharing. Device selectors and camera controls live in a separate
-  settings window. Watching a participant opens a separate stream window. A
+  screen sharing. The selected voice room has a subtle highlight independent
+  of the text channel, cleared when its controls close. Idle connection changes
+  do not display a call-ended warning; actual call interruptions still do.
+  The join action reads “Entrar na chamada”. Call settings use a native header,
+  grouped microphone/camera rows, refresh icons beside the section titles,
+  a microphone gain slider with a percentage, and a camera switch. Concluir
+  closes the settings; device and gain changes remain immediate. Camera state
+  follows worker acknowledgements, with controls disabled during negotiation.
+  Watching a participant opens a separate stream window. A
   microphone beside the name and a semantic highlight mark active speakers,
   including when avatars are hidden. A short original cue plays once on accepted
   room entry, respecting the account sound preference; cancellation releases its
@@ -326,3 +333,17 @@ its details and a destructive end-session action. The full-width end-all action
 follows the session list. The current session is identified only when its ID is
 known from the connection event. All colors use Adwaita theme roles, including
 the selected tab and destructive controls; existing confirmations remain in place.
+
+Preferences follows the matching mockup with three native preference groups:
+“Aparência”, “Exibição” and “Notificações”. Appearance uses combo rows with the
+selected value on the right; display and notification settings use switch rows.
+Long titles wrap in narrow windows, and the suggested Save button follows the
+groups at the right. Draft retention, explicit saving, failure recovery and the
+device-local animation preference keep their existing behavior.
+
+Meu perfil places the avatar across the banner's lower edge, with the nickname,
+username and role badges together beside it. A profile without a banner uses a
+compact identity row. Image controls, personal details, description and presence
+stay grouped in the scrolling form; the Save action stays in a fixed bottom bar.
+Image changes update the existing header without remounting or clearing drafts.
+The description editor uses the window background and a native focus outline.

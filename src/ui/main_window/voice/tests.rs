@@ -1,8 +1,60 @@
 use super::*;
-use adw::prelude::*;
 use crate::ui::chat::actions::tests::{pump,until,descendants,find_button};
 use crate::models::AudioRoute;
 const ROOM:&str="12345678-1234-4234-8234-123456789ad0";
+
+pub(crate) fn exercise_controls(context:&gtk::glib::MainContext){
+    use crate::ui::chat::actions::tests::mock;
+    let(api,backend,server)=tokio::runtime::Handle::current().block_on(mock());
+    let first:Uuid=ROOM.parse().unwrap();let second=Uuid::new_v4();
+    {
+        let mut b=backend.lock().unwrap();
+        for (id,name,position) in [(first,"Voice one",10),(second,"Voice two",11)]{
+            b.admin_channels.push(serde_json::json!({"id":id,"name":name,"type":"voice","position":position,"created_at":"2026-10-03T12:00:00Z"}));
+        }
+    }
+    let current_user=serde_json::from_value(backend.lock().unwrap().profile.clone()).unwrap();
+    let main=MainWindowModel::builder().launch(MainWindowInit{current_user,api_client:api}).detach();
+    let window=adw::Window::builder().default_width(1100).default_height(740).content(main.widget()).build();window.present();
+    until(context,||main.model().voice_allowed(second)&&main.model().active_channel_id.is_some()&&main.model().access_request.is_none());
+    // Drive socket transitions explicitly; no live server or audio capture is used.
+    if let Some(listener)=main.state().get_mut().model.ws_listener.take(){listener.abort();}
+    let (commands,_receiver)=tokio::sync::mpsc::channel(64);
+    main.state().get_mut().model.ws_tx=commands;
+    let text=main.model().active_channel_id;
+    let row=|id|descendants(main.model().sidebar.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::ListBoxRow>().ok().filter(|r|r.widget_name()==format!("channel-{id}"))).unwrap();
+    let select=|id|{let row=row(id);row.parent().and_downcast::<gtk::ListBox>().unwrap().emit_by_name::<()>("row-activated",&[&row]);};
+    let ready=||{main.emit(MainWindowMsg::WsReceived(WsEvent::ConnectionReady(Uuid::new_v4())));pump(context);};
+    ready();select(first);until(context,||row(first).has_css_class("papo-voice-selected")&&main.model().voice.join.is_sensitive());
+    assert!(main.model().voice.call.is_none());assert!(!main.model().voice.status.is_visible());assert!(main.model().voice.status.text().is_empty());
+    let text_row=row(text.unwrap());assert!(text_row.is_selected(),"opening voice controls preserves the selected text channel");
+    main.emit(MainWindowMsg::WsReceived(WsEvent::Disconnected));pump(context);
+    assert!(main.model().voice.status.text().is_empty(),"an idle socket disconnect is not an interrupted call");assert!(!main.model().voice.status.is_visible());assert!(!main.model().voice.join.is_sensitive());
+    ready();assert!(main.model().voice.join.is_sensitive());assert!(main.model().voice.status.text().is_empty());
+    select(second);until(context,||row(second).has_css_class("papo-voice-selected")&&!row(first).has_css_class("papo-voice-selected"));
+    assert_eq!(main.model().active_channel_id,text);
+    assert!(!backend.lock().unwrap().requests.iter().any(|(_,path,_)|path=="/voice/ice-servers"),"selecting a room never joins a call");
+    backend.lock().unwrap().admin_channels.iter_mut().find(|c|c["id"]==second.to_string()).unwrap()["name"]=serde_json::json!("Renamed voice");
+    main.emit(MainWindowMsg::RefreshAccess);
+    until(context,||main.model().managed_channels.iter().any(|c|c.id==second&&c.name=="Renamed voice")&&main.model().access_request.is_none());
+    until(context,||row(second).has_css_class("papo-voice-selected"));assert!(text_row.is_selected());
+    let style=adw::StyleManager::default();let scheme=style.color_scheme();style.set_color_scheme(adw::ColorScheme::ForceDark);
+    crate::ui::main_window::layout::tests::preview(&window,"voice-selection",context);style.set_color_scheme(scheme);
+    super::video::exercise_configuration(&main,context);
+    find_button(main.model().voice.panel.upcast_ref(),"Fechar voz").emit_clicked();until(context,||!main.model().voice.panel.is_visible()&&!row(second).has_css_class("papo-voice-selected"));
+    select(first);until(context,||main.model().voice.join.is_sensitive()&&row(first).has_css_class("papo-voice-selected"));assert!(main.model().voice.status.text().is_empty());
+    main.model().voice.join.emit_clicked();until(context,||main.model().voice.call.as_ref().is_some_and(|c|c.phase==Phase::Joining));
+    main.emit(MainWindowMsg::WsReceived(WsEvent::Disconnected));pump(context);
+    assert!(main.model().voice.call.is_none());assert!(main.model().voice.status.is_visible());assert!(main.model().voice.status.text().contains("Conexão encerrada"),"an interrupted join must still report its error");
+    ready();assert!(main.model().voice.status.text().contains("Conexão encerrada"),"reconnecting must preserve a real call interruption");
+    select(second);until(context,||row(second).has_css_class("papo-voice-selected"));assert!(main.model().voice.status.text().is_empty(),"choosing a different room clears the old room's error");
+    backend.lock().unwrap().admin_channels.retain(|c|c["id"]!=second.to_string());main.emit(MainWindowMsg::RefreshAccess);
+    until(context,||main.model().voice.selected.is_none()&&!main.model().voice.panel.is_visible());
+    assert_eq!(main.model().active_channel_id,text);
+    assert!(!descendants(main.model().sidebar.widget().upcast_ref()).iter().any(|w|w.has_css_class("papo-voice-selected")));
+    window.set_content(None::<&gtk::Widget>);window.close();drop(main);server.abort();pump(context);
+}
+
 fn join(main:&Controller<MainWindowModel>,context:&gtk::glib::MainContext)->Uuid{
     main.emit(MainWindowMsg::WsReceived(WsEvent::ConnectionReady(Uuid::new_v4())));
     let row=descendants(main.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::ListBoxRow>().ok().filter(|r|r.widget_name()==format!("channel-{ROOM}"))).expect("voice room must be in native navigation");
@@ -56,7 +108,7 @@ pub(crate) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::Mai
     main.model().voice.leave.emit_clicked();pump(context);assert!(main.model().voice.call.is_none());main.emit(MainWindowMsg::Voice(VoiceMsg::Engine{call,event:EngineEvent::Connection{state:"connected".into()}}));pump(context);assert!(main.model().voice.call.is_none());assert_eq!(main.model().active_channel_id,text);
     main.emit(MainWindowMsg::Account(super::super::account::AccountMsg::Preferences));pump(context);
     let prefs=gtk::Window::list_toplevels().into_iter().filter_map(|w|w.downcast::<gtk::Window>().ok()).find(|w|w.title().as_deref()==Some("Configurações da conta")).unwrap();
-    let sound=descendants(prefs.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::CheckButton>().ok().filter(|c|c.label().is_some_and(|l|l.to_lowercase().contains("som")))).unwrap();sound.set_active(true);
+    let sound=descendants(prefs.upcast_ref()).into_iter().find_map(|w|w.downcast::<adw::SwitchRow>().ok().filter(|c|c.title().to_lowercase().contains("som"))).unwrap();sound.set_active(true);
     find_button(prefs.upcast_ref(),"Salvar preferências").emit_clicked();until(context,||main.model().account.config.notifications.as_ref().and_then(|n|n.sound)==Some(true));prefs.close();pump(context);
     let cues=main.model().voice.cue.played;
     let next=join(main,context);assert_eq!(main.model().voice.cue.played,cues+1,"room entry plays the enabled cue before ICE connects");

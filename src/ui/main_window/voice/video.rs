@@ -6,11 +6,11 @@ use serde_json::json;
 
 #[derive(Debug)]
 pub enum VideoMsg {
-    Camera, Screen, Reload, Cameras{request:Uuid,result:anyhow::Result<Vec<Device>>},
+    Camera(bool), Screen, Reload, Cameras{request:Uuid,result:anyhow::Result<Vec<Device>>},
     Watch{user:Uuid,kind:&'static str}, StopWatching,
 }
 pub(super) struct VideoControls {
-    camera:gtk::Button, pub(super) screen:gtk::Button, devices:gtk::DropDown,
+    camera:adw::SwitchRow, camera_sync:std::rc::Rc<std::cell::Cell<bool>>, camera_pending:Option<bool>, pub(super) screen:gtk::Button, devices:adw::ComboRow,
     list:Vec<Device>, request:Option<Uuid>, picture:gtk::Picture,
     pub(super) viewer_window:gtk::Window,viewer:gtk::Box, label:gtk::Label, choices:gtk::Box,
     sender:ComponentSender<MainWindowModel>,
@@ -20,21 +20,21 @@ pub(super) struct VideoControls {
 }
 impl VideoControls {
     pub fn new(panel:&gtk::Box,dock:&gtk::Box,s:&ComponentSender<MainWindowModel>)->Self{
-        let controls=wrapping_controls();
-        let camera=gtk::Button::with_label("Ligar câmera");let screen=gtk::Button::from_icon_name("video-display-symbolic");screen.set_tooltip_text(Some("Compartilhar tela"));
-        for (button,is_camera) in [(&camera,true),(&screen,false)]{let s=s.clone();button.connect_clicked(move |_|s.input(MainWindowMsg::Voice(VoiceMsg::Video(if is_camera{VideoMsg::Camera}else{VideoMsg::Screen}))));if is_camera{controls.insert(button,-1);}else{dock.append(button);}}
-        panel.append(&controls);
-        let devices=gtk::DropDown::from_strings(&["Nenhuma câmera disponível"]);panel.append(&devices);
-        let refresh=gtk::Button::with_label("Atualizar câmeras");let s2=s.clone();refresh.connect_clicked(move |_|s2.input(MainWindowMsg::Voice(VoiceMsg::Video(VideoMsg::Reload))));panel.append(&refresh);
+        let group=settings::group(panel,"Câmera","Atualizar câmeras",s,||VoiceMsg::Video(VideoMsg::Reload));
+        let camera=adw::SwitchRow::builder().title("Ligar câmera").sensitive(false).build();
+        let camera_sync=std::rc::Rc::new(std::cell::Cell::new(false));let syncing=camera_sync.clone();let input=s.input_sender().clone();
+        camera.connect_active_notify(move |row|{if !syncing.get(){let _=input.send(MainWindowMsg::Voice(VoiceMsg::Video(VideoMsg::Camera(row.is_active()))));}});group.add(&camera);
+        let devices=settings::device_row("Nenhuma câmera disponível");devices.set_sensitive(false);group.add(&devices);
+        let screen=gtk::Button::from_icon_name("video-display-symbolic");screen.set_tooltip_text(Some("Compartilhar tela"));let input=s.input_sender().clone();screen.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Voice(VoiceMsg::Video(VideoMsg::Screen)));});dock.append(&screen);
         let viewer_window=gtk::Window::builder().title("Transmissões da chamada").default_width(800).default_height(560).hide_on_close(true).build();let streams=gtk::Box::new(gtk::Orientation::Vertical,8);streams.set_margin_top(12);streams.set_margin_bottom(12);streams.set_margin_start(12);streams.set_margin_end(12);viewer_window.set_child(Some(&streams));let s2=s.clone();viewer_window.connect_close_request(move |_|{let _=s2.input_sender().send(MainWindowMsg::Voice(VoiceMsg::Video(VideoMsg::StopWatching)));gtk::glib::Propagation::Proceed});
         let choices=gtk::Box::new(gtk::Orientation::Vertical,3);let subscriptions=gtk::ScrolledWindow::builder().max_content_height(100).propagate_natural_height(true).child(&choices).build();streams.append(&subscriptions);
         let viewer=gtk::Box::new(gtk::Orientation::Vertical,4);viewer.set_visible(false);
         let label=gtk::Label::new(None);viewer.append(&label);
         let picture=gtk::Picture::new();picture.set_can_shrink(true);picture.set_vexpand(true);picture.set_hexpand(true);picture.set_size_request(240,135);viewer.set_vexpand(true);picture.set_content_fit(gtk::ContentFit::Contain);viewer.append(&picture);
         let stop=gtk::Button::with_label("Parar de assistir");let s2=s.clone();stop.connect_clicked(move |_|s2.input(MainWindowMsg::Voice(VoiceMsg::Video(VideoMsg::StopWatching))));viewer.append(&stop);streams.append(&viewer);
-        Self{camera,screen,devices,viewer_window,list:vec![],request:None,picture,viewer,label,choices,sender:s.clone(),busy:false,negotiated:false,camera_on:false,screen_on:false,watching:None,epoch:0,started:Instant::now(),watch_started:Instant::now(),last_frame:None,pending_subscribe:false,problem:false}
+        Self{camera,camera_sync,camera_pending:None,screen,devices,viewer_window,list:vec![],request:None,picture,viewer,label,choices,sender:s.clone(),busy:false,negotiated:false,camera_on:false,screen_on:false,watching:None,epoch:0,started:Instant::now(),watch_started:Instant::now(),last_frame:None,pending_subscribe:false,problem:false}
     }
-    pub fn clear(&mut self){self.problem=false;self.busy=false;self.negotiated=false;self.camera_on=false;self.screen_on=false;self.watching=None;self.pending_subscribe=false;self.epoch+=1;self.last_frame=None;self.picture.set_paintable(None::<&gtk::gdk::Texture>);self.viewer.set_visible(false);self.viewer_window.set_visible(false);while let Some(child)=self.choices.first_child(){self.choices.remove(&child);}}
+    pub fn clear(&mut self){self.problem=false;self.busy=false;self.negotiated=false;self.camera_on=false;self.camera_pending=None;self.screen_on=false;self.watching=None;self.pending_subscribe=false;self.epoch+=1;self.last_frame=None;self.picture.set_paintable(None::<&gtk::gdk::Texture>);self.viewer.set_visible(false);self.viewer_window.set_visible(false);while let Some(child)=self.choices.first_child(){self.choices.remove(&child);}}
 }
 impl MainWindowModel {
     fn video_command(&mut self,value:serde_json::Value)->bool{
@@ -46,8 +46,8 @@ impl MainWindowModel {
         let v=&self.voice.video;let connected=self.voice.call.as_ref().is_some_and(|c|c.phase==Phase::Connected);
         let ready=connected&&v.negotiated&&!v.busy;
         v.camera.set_sensitive(ready&&(v.camera_on||!v.list.is_empty()));v.screen.set_sensitive(ready);
-        v.devices.set_sensitive(!v.camera_on&&!v.busy);
-        v.camera.set_label(if v.camera_on{"Desligar câmera"}else{"Ligar câmera"});v.screen.set_tooltip_text(Some(if v.screen_on{"Parar compartilhamento"}else{"Compartilhar tela"}));
+        v.devices.set_sensitive(!v.list.is_empty()&&!v.camera_on&&!v.busy);
+        v.camera_sync.set(true);v.camera.set_active(v.camera_pending.unwrap_or(v.camera_on));v.camera_sync.set(false);v.screen.set_tooltip_text(Some(if v.screen_on{"Parar compartilhamento"}else{"Compartilhar tela"}));
         let mut keep=HashSet::new();if let Some(call)=self.voice.call.as_ref().filter(|c|c.phase==Phase::Connected){for member in self.voice.members.get(&call.channel).into_iter().flat_map(|members|members.values()){if member.user_id==self.current_user.id{continue;}for (active,kind) in [(member.camera_on,"video"),(member.screen_sharing,"screen")]{if active{keep.insert(format!("watch-{}-{kind}",member.user_id));}}}}
         let mut child=v.choices.first_child();while let Some(w)=child{child=w.next_sibling();if !keep.contains(w.widget_name().as_str()){v.choices.remove(&w);}}
     }
@@ -66,11 +66,11 @@ impl MainWindowModel {
         match msg{
             VideoMsg::Reload=>{let request=Uuid::new_v4();self.voice.video.request=Some(request);self.voice.jobs.push(tokio::spawn(async move{let result=crate::voice::cameras().await;let _=s.input_sender().send(MainWindowMsg::Voice(VoiceMsg::Video(VideoMsg::Cameras{request,result})));}));}
             VideoMsg::Cameras{request,result}=>{if self.voice.video.request!=Some(request){return;}self.voice.video.request=None;match result{Ok(list)=>{let v=&mut self.voice.video;let old=v.list.get(v.devices.selected() as usize).map(|d|d.id.clone());let mut labels:Vec<_>=list.iter().map(|d|d.name.as_str()).collect();if labels.is_empty(){labels.push("Nenhuma câmera disponível");}v.devices.set_model(Some(&gtk::StringList::new(&labels)));v.devices.set_selected(old.and_then(|id|list.iter().position(|d|d.id==id)).unwrap_or(0) as u32);v.list=list;},Err(e)=>self.voice.status.set_text(&e.to_string())}}
-            VideoMsg::Camera|VideoMsg::Screen=>{
-                let v=&self.voice.video;if v.busy||!v.negotiated||!self.voice.call.as_ref().is_some_and(|c|c.phase==Phase::Connected){return;}
-                let camera=matches!(msg,VideoMsg::Camera);let on=if camera{!v.camera_on}else{!v.screen_on};let kind=if camera{"video"}else{"screen"};let device=v.list.get(v.devices.selected() as usize).map(|d|d.id.clone());
-                if camera&&on&&device.is_none(){self.voice.status.set_text("Escolha uma câmera disponível.");return;}
-                self.voice.video.problem=false;self.voice.video.busy=true;self.voice.video.started=Instant::now();
+            VideoMsg::Camera(_)|VideoMsg::Screen=>{
+                let v=&self.voice.video;if v.busy||!v.negotiated||!self.voice.call.as_ref().is_some_and(|c|c.phase==Phase::Connected){self.render_voice();return;}
+                let camera=matches!(msg,VideoMsg::Camera(_));let on=if let VideoMsg::Camera(on)=msg{on}else{!v.screen_on};if camera&&on==v.camera_on{self.render_voice();return;}let kind=if camera{"video"}else{"screen"};let device=v.list.get(v.devices.selected() as usize).map(|d|d.id.clone());
+                if camera&&on&&device.is_none(){self.voice.status.set_text("Escolha uma câmera disponível.");self.render_voice();return;}
+                if camera{self.voice.video.camera_pending=Some(on);}self.voice.video.problem=false;self.voice.video.busy=true;self.voice.video.started=Instant::now();
                 self.voice.status.set_text(if !camera&&on{"Escolha a janela ou tela no seletor do desktop…"}else{"Atualizando vídeo…"});
                 self.video_command(json!({"type":"media","kind":kind,"on":on,"device":device}));
             }
@@ -105,8 +105,8 @@ impl MainWindowModel {
         match event{
             EngineEvent::Negotiated=>{self.voice.video.negotiated=true;self.voice.video.busy=false;self.render_voice();}
             EngineEvent::MediaIntent{kind,on}=>{let Some(c)=&self.voice.call else{return;};let frame=if kind=="video"{json!({"type":"voice_camera","channel_id":c.channel,"on":on})}else{json!({"type":if on{"screen_share_start"}else{"screen_share_stop"},"channel_id":c.channel})};if !self.voice_frame(c.connection,frame){self.stop_voice(true,"Não foi possível atualizar o vídeo.");}}
-            EngineEvent::MediaState{kind,on}=>{if kind=="video"{self.voice.video.camera_on=on;}else{self.voice.video.screen_on=on;}if !self.voice.video.problem{self.voice.status.set_text(if on{"Vídeo iniciado."}else{"Captura encerrada."});}self.render_voice();}
-            EngineEvent::MediaError{kind,message}=>{self.voice.video.problem=true;if kind=="video"{self.voice.video.camera_on=false;}else{self.voice.video.screen_on=false;}self.voice.status.set_text(&message);self.render_voice();}
+            EngineEvent::MediaState{kind,on}=>{if kind=="video"{self.voice.video.camera_on=on;self.voice.video.camera_pending=None;}else{self.voice.video.screen_on=on;}if !self.voice.video.problem{self.voice.status.set_text(if on{"Vídeo iniciado."}else{"Captura encerrada."});}self.render_voice();}
+            EngineEvent::MediaError{kind,message}=>{self.voice.video.problem=true;if kind=="video"{self.voice.video.camera_on=false;self.voice.video.camera_pending=None;}else{self.voice.video.screen_on=false;}self.voice.status.set_text(&message);self.render_voice();}
             EngineEvent::VideoReset{epoch}=>{
                 if epoch==self.voice.video.epoch&&self.voice.video.pending_subscribe{self.voice.video.pending_subscribe=false;if let (Some(c),Some((user,kind)))=(&self.voice.call,self.voice.video.watching){if !self.voice_frame(c.connection,json!({"type":"track_subscribe","channel_id":c.channel,"publisher_id":user,"kind":kind})){self.stop_voice(true,"Não foi possível solicitar o vídeo.");}}}
             }
@@ -120,6 +120,47 @@ impl MainWindowModel {
             _=>{}
         }
     }
+}
+
+#[cfg(test)]
+pub(super) fn exercise_configuration(main:&Controller<MainWindowModel>,context:&gtk::glib::MainContext){
+    use crate::ui::chat::actions::tests::{descendants,find_button,pump,until};
+    assert_eq!(main.model().voice.join.label().as_deref(),Some("Entrar na chamada"));
+    main.model().voice.settings_button.emit_clicked();
+    until(context,||main.model().voice.settings.is_mapped()&&main.model().voice.jobs.iter().all(|job|job.is_finished()));
+    let window=main.model().voice.settings.clone();
+    let combos:Vec<_>=descendants(window.upcast_ref()).into_iter().filter_map(|w|w.downcast::<adw::ComboRow>().ok()).collect();
+    assert_eq!(combos.len(),2);let camera=main.model().voice.video.camera.clone();
+    assert!(!camera.is_sensitive()&&!camera.is_active(),"the camera cannot start before joining a call");
+    let done=find_button(window.upcast_ref(),"Concluir");
+    let style=adw::StyleManager::default();let previous=style.color_scheme();
+    for (scheme,name) in [(adw::ColorScheme::ForceDark,"call-settings"),(adw::ColorScheme::ForceLight,"call-settings-light")]{style.set_color_scheme(scheme);crate::ui::main_window::layout::tests::preview(&window,name,context);}
+    let bounds=done.compute_bounds(&window).unwrap();let last=combos[1].compute_bounds(&window).unwrap();
+    assert!(last.y()+last.height()<=bounds.y(),"the camera controls fit above Concluir without scrolling");
+    main.model().voice.gain.set_value(200.0);pump(context);assert_eq!(main.model().voice.gain.value(),200.0);
+    window.set_default_size(390,600);until(context,||window.width()<=420);
+    crate::ui::main_window::layout::tests::preview(&window,"call-settings-narrow",context);
+    for row in &combos{let bounds=row.compute_bounds(&window).unwrap();assert!(bounds.x()>=0.0&&bounds.x()+bounds.width()<=window.width() as f32);}
+    style.set_color_scheme(previous);
+    done.emit_clicked();until(context,||!window.is_visible());assert!(main.model().voice.call.is_none());
+
+    // Drive the worker protocol locally; toggling the switch never opens a camera.
+    main.emit(MainWindowMsg::Voice(VoiceMsg::TestEngine));pump(context);
+    let call=Uuid::new_v4();let request=Uuid::new_v4();
+    {let mut state=main.state().get_mut();let model=&mut state.model;model.voice.call=Some(Call{id:call,channel:model.voice.selected.unwrap(),connection:model.voice.connection.unwrap(),phase:Phase::Connected,started:Instant::now(),ice:None,engine:None,muted:true});model.voice.video.request=Some(request);}
+    main.emit(MainWindowMsg::Voice(VoiceMsg::Video(VideoMsg::Cameras{request,result:Ok(vec![Device{id:"test-camera".into(),name:"Test camera".into()}])})));
+    let engine=|event|{main.emit(MainWindowMsg::Voice(VoiceMsg::Engine{call,event}));pump(context);};
+    engine(EngineEvent::Negotiated);assert!(camera.is_sensitive());
+    camera.set_active(true);pump(context);assert!(camera.is_active()&&!camera.is_sensitive()&&main.model().voice.video.busy);
+    assert_eq!(main.model().voice.video.camera_pending,Some(true));
+    engine(EngineEvent::MediaState{kind:"video".into(),on:true});engine(EngineEvent::Negotiated);
+    assert!(camera.is_active()&&camera.is_sensitive()&&main.model().voice.video.camera_pending.is_none());assert!(!combos[1].is_sensitive());assert!(!main.model().voice.video.busy,"backend state updates must not trigger another camera request");
+    camera.set_active(false);pump(context);assert!(!camera.is_active()&&main.model().voice.video.busy);
+    engine(EngineEvent::MediaState{kind:"video".into(),on:false});engine(EngineEvent::Negotiated);assert!(combos[1].is_sensitive());
+    camera.set_active(true);pump(context);engine(EngineEvent::MediaError{kind:"video".into(),message:"Test camera unavailable".into()});engine(EngineEvent::Negotiated);
+    assert!(!camera.is_active()&&camera.is_sensitive(),"camera errors restore the switch to the actual state");
+    main.emit(MainWindowMsg::WsReceived(WsEvent::Disconnected));pump(context);assert!(!camera.is_active()&&!camera.is_sensitive());
+    main.emit(MainWindowMsg::WsReceived(WsEvent::ConnectionReady(Uuid::new_v4())));pump(context);
 }
 
 #[cfg(test)]

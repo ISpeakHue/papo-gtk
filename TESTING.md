@@ -761,7 +761,7 @@ Invalid filters and failed operations retain input. Audit metadata values are
 withheld from the viewer and Debug output to avoid exposing account secrets.
 
 Click a voice channel to open compact audio controls above the sidebar account
-footer, then click **Entrar na voz**. The gear opens microphone/camera settings
+footer, then click **Entrar na chamada**. The gear opens microphone/camera settings
 in a separate window. Calls start muted, matching the backend; use the microphone
 button to speak. Participants appear beneath their rooms before joining and show
 mute state and active speakers. Camera/screen buttons beside connected participants
@@ -1972,6 +1972,17 @@ and checks that both reveal-enabled password fields fit the narrow window.
 With `PAPO_DESIGN_PREVIEW=1`, it writes private synthetic previews to
 `/tmp/papo-design-account-settings-security.png` and
 `/tmp/papo-design-account-settings-narrow.png`.
+The Preferences redesign uses native combo and switch rows in appearance,
+display and notification groups. Mixed switch values are checked after saving
+to catch incorrect field mappings; the same fixture verifies drafts, failed-save
+recovery and row bounds in the narrow layout. Optional previews also include
+`/tmp/papo-design-account-settings-preferences.png`, its `-light` variant and
+`/tmp/papo-design-account-settings-preferences-narrow.png`.
+The profile fixture loads synthetic avatar/banner images, checks avatar overlap
+and keeps the Save action visible while scrolling and at narrow widths. Removing
+the banner must collapse its space without losing a description draft. Optional
+previews include `/tmp/papo-design-account-settings-profile.png` and
+`/tmp/papo-design-account-settings-profile-narrow.png`.
 The existing `account-notices` fixture continues to cover profile, preferences,
 security and notification workflows.
 
@@ -2079,3 +2090,101 @@ scrolling nineteen messages up and down, channel return with both decoders held,
 offscreen GIF first-frame promotion without downloading again, byte/channel
 eviction, shared-owner deletion, moderation
 and revoked access. Older media keeps normal lazy loading and bounded eviction.
+
+## Voice room selection and connection messages
+
+```sh
+PAPO_UI_CASE=voice-controls dbus-run-session -- xvfb-run -a \
+  cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+```
+
+The synthetic fixture activates the actual voice rows without capturing audio.
+It checks the independent room highlight, room changes and renaming, closing the
+controls, deletion, preserved text-channel selection, and that selecting a room
+does not join it. Initial connections and idle reconnects must stay quiet; an
+interrupted join must report its error even after reconnecting. Selecting a new
+room clears the previous room's error. With `PAPO_DESIGN_PREVIEW=1`, the fixture
+writes `/tmp/papo-design-voice-selection.png`.
+The same fixture checks the redesigned call settings at normal and narrow
+widths, the “Entrar na chamada” label, Concluir, microphone gain and camera
+availability. Synthetic worker acknowledgements verify the camera switch's
+pending state, successful start/stop, error recovery and call teardown without
+opening a camera. Optional previews include `/tmp/papo-design-call-settings.png`,
+its `-light` variant and `/tmp/papo-design-call-settings-narrow.png`.
+
+## Call sound playback and mixer identity
+
+```sh
+/usr/bin/python3 -m unittest discover -s tests -p 'call_sound_test.py' -v
+PAPO_UI_CASE=call-sounds dbus-run-session -- xvfb-run -a \
+  cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+```
+
+The sound helper identifies its audio stream as Papo (`br.com.papo.gtk`, event
+role), rather than Python. This prevents an interpreter's restored mute/zero
+volume from silencing call cues. Existing Papo/event volume and mute choices,
+and the account sound preference, remain respected. The headless checks verify
+metadata on dynamically added output sinks without opening an audio device and
+decode both bundled cues to a fake sink. The GTK case checks disabled sounds,
+join/leave playback, cancellation, rapid restarts and process cleanup.
+
+### Pinned-message media
+
+The **Mensagens fixadas** window uses the chat renderer in a read-only scope:
+GIFs animate, custom emojis render inline, and images, rich embeds, videos,
+audio and other attachments retain their usual viewers and download actions.
+Each pin has an **Abrir mensagem no histórico** button. Browsing pins does not
+fetch ordinary channel history or acknowledge unread messages. Closing the
+window, changing channels or losing access releases its media work and players.
+
+Run the synthetic integration test on a private display:
+
+```sh
+PAPO_UI_CASE=pins-media dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+```
+
+It covers old pins outside loaded history, decoded-cache reuse, animated GIFs,
+custom emoji assets, attachment actions, edits/moderation/deletion, unpin/re-pin,
+and window/access cleanup. No saved session or remote server is used.
+
+### Unicode emoji categories
+
+The Unicode tab in both composer and reaction pickers has a category strip:
+faces/emotions, people/body, animals/nature, food/drink, travel/places,
+activities, objects, symbols and flags. **Todos os emojis** shows the full
+catalog. Category buttons have Portuguese labels/tooltips and keyboard focus.
+Search spans all Unicode categories; clearing it returns to the selected group.
+Selecting another category clears the query and returns its grid to the top.
+Server emoji updates preserve the category, existing cells and scroll position.
+
+```sh
+cargo test --locked ui::chat::emoji::
+PAPO_UI_CASE=emoji-categories dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+PAPO_UI_CASE=emoji-grid dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+```
+
+The category test uses GTK's bundled Unicode catalog and synthetic server emoji
+metadata; it checks all categories, cross-category search, selection, empty
+results, refresh/tab persistence and narrow-window layout. The grid test covers
+responsive columns, lazy pages, stable spacing and animated custom emojis.
+
+### Attachment previews before sending
+
+Selecting, dropping or pasting an image/video adds a compact thumbnail card
+above the composer. Videos show a silent still frame; GIFs show their first
+frame. The remove button and filename remain available for every attachment,
+including files whose preview cannot be decoded. Local originals are never
+modified or uploaded just to produce thumbnails. Preview decoding is serialized
+away from GTK, uses bounded images, and rejects late results after removal or
+conversation changes. Failed sends retain the staged files and decoded previews.
+
+```sh
+cargo test --locked ui::chat::draft_preview::
+PAPO_UI_CASE=draft-previews dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+PAPO_UI_CASE=clipboard dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+```
+
+These checks cover image dimensions, GIF/video thumbnails, non-media/corrupt
+fallbacks, duplicate attachments, caption editing, removal, failed-send retries,
+successful-send cleanup and stale completions during channel switches. The
+clipboard workflow exercises pasted images and temporary-file cleanup.

@@ -45,6 +45,7 @@ impl ChatModel {
             .collect()
     }
     pub(super) fn schedule_moderation(&mut self,sender:&ComponentSender<Self>,mapped:bool){
+        if self.actions.pinned_view{return;}
         let channel=self.active_channel.as_ref().map(|c|c.id());
         if self.moderation.channel!=channel||self.moderation.user!=self.user_id{
             if let Some(request)=self.moderation.stop(){self.history.fail_snapshot(request);}
@@ -129,7 +130,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let mut complete=value;complete["attachments"][0]["moderation_status"]=serde_json::json!("");
     let mut png=std::io::Cursor::new(Vec::new());image::DynamicImage::new_rgba8(30,20).write_to(&mut png,image::ImageFormat::Png).unwrap();
     {let mut b=backend.lock().unwrap();b.channel_messages.insert(channel.to_string(),vec![complete.clone()]);b.attachment_thumbnails.insert(format!("/attachments/{key}/thumbnail"),png.into_inner());}
-    let chat=ChatModel::builder().launch(ChatInit{active_channel:Some(target),messages:vec![pending.clone()],api:Some(api),user_id:Some(user)}).detach();
+    let chat=ChatModel::builder().launch(ChatInit{active_channel:Some(target),messages:vec![pending.clone()],api:Some(api),user_id:Some(user),..Default::default()}).detach();
     chat.emit(ChatMsg::SetAccess{user_id:user,access:crate::models::Access::direct()});
     let window=adw::Window::builder().default_width(950).default_height(650).content(chat.widget()).build();window.present();settle(context);
     chat.emit(ChatMsg::AddMessage(pending.clone()));
@@ -172,7 +173,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let mut png=std::io::Cursor::new(Vec::new());image::DynamicImage::new_rgba8(300,20).write_to(&mut png,image::ImageFormat::Png).unwrap();let png=png.into_inner();
     backend.lock().unwrap().attachment_thumbnails.insert(format!("/attachments/{key}/thumbnail"),png.clone());
     let target=serde_json::from_value(serde_json::json!({"id":channel,"name":"Moderation events","created_at":now})).unwrap();
-    let chat=ChatModel::builder().launch(ChatInit{active_channel:Some(target),messages:vec![pending.clone()],api:Some(api),user_id:Some(user)}).detach();chat.emit(ChatMsg::SetAccess{user_id:user,access:crate::models::Access::direct()});
+    let chat=ChatModel::builder().launch(ChatInit{active_channel:Some(target),messages:vec![pending.clone()],api:Some(api),user_id:Some(user),..Default::default()}).detach();chat.emit(ChatMsg::SetAccess{user_id:user,access:crate::models::Access::direct()});
     let window=adw::Window::builder().default_width(950).default_height(760).content(chat.widget()).build();window.present();settle(context);
     let deliver=|kind:&str,id:Uuid,key:Uuid,status:&str|{
         let event=crate::ws::parse_event(&serde_json::json!({"type":kind,"channel_id":channel,"message_id":id,"attachment_id":key,"status":status}).to_string()).unwrap();

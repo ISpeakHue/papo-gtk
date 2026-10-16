@@ -2,6 +2,7 @@
 use super::*;
 use adw::prelude::*;
 use crate::models::{SearchRequest, SearchResponse, SearchResult};
+mod rows;
 
 #[derive(Debug)]
 pub enum SearchMsg { Open, Submit, More, Cancel(Uuid), Loaded { token: Uuid, result: anyhow::Result<SearchResponse> }, Navigate(Uuid, Uuid) }
@@ -17,11 +18,12 @@ pub(super) struct Search {
     pub view: Option<SearchView>, pub request: Option<SearchRequest>, pub token: Option<Uuid>,
     pub cursor: Option<MessageCursor>, pub rows: Vec<SearchResult>, pub more: bool,
     pub job: Option<tokio::task::JoinHandle<()>>,
+    ids:std::collections::HashSet<Uuid>,
 }
 pub(super) struct SearchView {
     token:Uuid, window: gtk::Window, fields: Vec<gtk::Entry>, author: Choice, channel: Choice,
     mention: Choice, links: gtk::CheckButton, files: Choice, order: Choice,
-    results: gtk::Box, status: gtk::Label, more: gtk::Button,
+    results: gtk::gio::ListStore, status: gtk::Label, more: gtk::Button,
 }
 impl Drop for Search { fn drop(&mut self) { if let Some(job)=self.job.take(){job.abort();} if let Some(v)=self.view.take(){v.window.close();} } }
 impl MainWindowModel {
@@ -49,12 +51,12 @@ impl MainWindowModel {
                 let actions=gtk::Box::new(gtk::Orientation::Horizontal,8);
                 for (label,submit) in [("Pesquisar",true),("Cancelar pesquisa",false)]{let b=gtk::Button::with_label(label);if submit{b.add_css_class("suggested-action");}let input=sender.input_sender().clone();b.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Search(if submit{SearchMsg::Submit}else{SearchMsg::Cancel(view_token)}));});actions.append(&b);}body.append(&actions);
                 let status=gtk::Label::new(Some("Digite um termo ou escolha filtros para pesquisar."));status.set_wrap(true);status.set_xalign(0.0);status.add_css_class("dim-label");body.append(&status);
-                let results=gtk::Box::new(gtk::Orientation::Vertical,8);let scroll=gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).child(&results).build();body.append(&scroll);
+                let(results,result_view)=rows::view(&sender);let scroll=gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).child(&result_view).build();body.append(&scroll);
                 let more=gtk::Button::with_label("Mais resultados");more.set_visible(false);let input=sender.input_sender().clone();more.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Search(SearchMsg::More));});body.append(&more);
                 let keys=gtk::EventControllerKey::new();keys.set_propagation_phase(gtk::PropagationPhase::Capture);let weak=window.downgrade();
                 keys.connect_key_pressed(move |_,key,_,_|{if key==gtk::gdk::Key::Escape{if let Some(window)=weak.upgrade(){window.close();}gtk::glib::Propagation::Stop}else{gtk::glib::Propagation::Proceed}});window.add_controller(keys);
                 let input=sender.input_sender().clone();window.connect_close_request(move |_|{let _=input.send(MainWindowMsg::Search(SearchMsg::Cancel(view_token)));gtk::glib::Propagation::Proceed});window.present();fields[0].grab_focus();
-                self.search.view=Some(SearchView{token:view_token,window,fields,author,channel,mention,links,files,order,results,status,more});self.search.rows.clear();self.search.cursor=None;self.search.more=false;
+                self.search.view=Some(SearchView{token:view_token,window,fields,author,channel,mention,links,files,order,results,status,more});self.search.rows.clear();self.search.ids.clear();self.search.cursor=None;self.search.more=false;
             }
             SearchMsg::Cancel(view_token) => {if !self.search.view.as_ref().is_some_and(|v|v.token==view_token){return;}if let Some(job)=self.search.job.take(){job.abort();}self.search.token=None;if let Some(v)=&self.search.view{v.status.set_text("Pesquisa cancelada.");v.more.set_sensitive(self.search.more);}}
             SearchMsg::Submit => {
@@ -63,7 +65,7 @@ impl MainWindowModel {
                 let id=|c:&Choice|c.id().to_owned();
                 let request=SearchRequest{text:v.fields[0].text().trim().to_owned(),date_start:v.fields[1].text().trim().to_owned(),date_end:v.fields[2].text().trim().to_owned(),author:id(&v.author),channel_id:id(&v.channel),mention:id(&v.mention),has:if v.links.is_active(){"link".into()}else{String::new()},order:id(&v.order),contains_attachment:match id(&v.files).as_str(){"yes"=>Some(true),"no"=>Some(false),_=>None}};
                 if let Err(e)=request.validate(){v.status.set_text(&e.to_string());return;}
-                self.search.request=Some(request);self.search.rows.clear();self.search.cursor=None;self.search.more=false;while let Some(c)=v.results.first_child(){v.results.remove(&c);}self.start_search(sender);
+                self.search.request=Some(request);self.search.rows.clear();self.search.ids.clear();self.search.cursor=None;self.search.more=false;v.results.remove_all();self.start_search(sender);
             }
             SearchMsg::More => {if self.search.token.is_none()&&self.search.more{self.start_search(sender);}}
             SearchMsg::Loaded{token,result} => {
@@ -74,7 +76,7 @@ impl MainWindowModel {
                         let next=page.results.last().map(|r|MessageCursor{created_at:r.created_at,id:r.id});
                         self.search.more=page.has_more&&next.is_some()&&next!=self.search.cursor;
                         self.search.cursor=next.or(self.search.cursor);
-                        for r in page.results {if !self.search.rows.iter().any(|old|old.id==r.id){self.search.rows.push(r);}}
+                        for r in page.results {if self.search.ids.insert(r.id){self.search.rows.push(r);}}
                         v.status.set_text(if self.search.rows.is_empty(){"Nenhuma mensagem encontrada."}else{"Selecione uma mensagem para abrir no chat."});
                     }
                     Err(e)=>{v.status.set_text(&e.to_string());sender.input(MainWindowMsg::ActionError(e));}
@@ -83,14 +85,15 @@ impl MainWindowModel {
             SearchMsg::Navigate(channel_id,message_id)=>{if let Some(v)=&self.search.view{v.window.set_visible(false);}sender.input(MainWindowMsg::Navigate{channel_id,message_id});}
         }
     }
-    pub(super) fn render_search(&self,sender:&ComponentSender<Self>){
-        let Some(v)=&self.search.view else{return;};
-                        while let Some(c)=v.results.first_child(){v.results.remove(&c);}
-                        for r in &self.search.rows {
-                            if !self.can_read_target(r.channel_id){continue;}
-                            let b=gtk::Button::new();b.add_css_class("flat");b.add_css_class("card");let content=gtk::Box::new(gtk::Orientation::Vertical,6);let heading=gtk::Label::new(Some(&format!("#{} · {} · {}",r.channel_name,r.author_username.as_deref().unwrap_or("Usuário removido"),r.created_at.with_timezone(&chrono::Local).format("%d/%m/%Y %H:%M"))));heading.set_xalign(0.0);heading.set_ellipsize(gtk::pango::EllipsizeMode::End);heading.add_css_class("caption");heading.add_css_class("dim-label");content.append(&heading);
-                            let text=crate::ui::chat::mentions::render(r.content.as_deref().unwrap_or("[Anexo]"),&self.users.iter().map(|u|(u.id,u.clone())).collect());let l=gtk::Label::new(Some(&text));l.set_wrap(true);l.set_wrap_mode(gtk::pango::WrapMode::WordChar);l.set_xalign(0.0);content.append(&l);b.set_child(Some(&content));let input=sender.input_sender().clone();let(ch,id)=(r.channel_id,r.id);b.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Search(SearchMsg::Navigate(ch,id)));});v.results.append(&b);
-                        }
+    pub(super) fn render_search(&self,_sender:&ComponentSender<Self>){
+        let Some(v)=self.search.view.as_ref().filter(|v|v.window.is_visible())else{return;};
+        let _timing=crate::performance::timer("search_update_us");
+        let users=self.users.iter().map(|u|(u.id,u.clone())).collect();
+        let desired=self.search.rows.iter().filter(|r|self.can_read_target(r.channel_id)).map(|r|rows::Row{
+            id:r.id,channel:r.channel_id,
+            heading:format!("#{} · {} · {}",r.channel_name,r.author_username.as_deref().unwrap_or("Usuário removido"),r.created_at.with_timezone(&chrono::Local).format("%d/%m/%Y %H:%M")),
+            text:crate::ui::chat::mentions::render(r.content.as_deref().unwrap_or("[Anexo]"),&users),
+        }).collect();rows::update(&v.results,desired);
     }
     fn start_search(&mut self,sender:ComponentSender<Self>){
         let Some(request)=self.search.request.clone() else{return;};if let Some(job)=self.search.job.take(){job.abort();}
@@ -123,4 +126,28 @@ pub(crate) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::Mai
     // Set editable text, since this synthetic input is also used for state testing.
     let composer=crate::ui::chat::composer::field(main.model().chat.widget().upcast_ref());composer.set_text("Olá @al");composer.set_position(-1);pump(context);main.model().chat.emit(ChatMsg::MentionSelected(Some(id)));pump(context);assert_eq!(composer.text(),format!("Olá @{} ",main.model().current_user.display_name()));
     main.model().chat.emit(ChatMsg::MentionSelected(None));pump(context);assert!(composer.text().contains("@everyone"));
+}
+
+#[cfg(test)]pub(crate) fn exercise_recycling(context:&gtk::glib::MainContext){
+    use crate::ui::chat::actions::tests::{mock,pump,until,descendants};
+    let(api,_,server)=tokio::runtime::Handle::current().block_on(mock());
+    let current_user=api.clone();let user=tokio::runtime::Handle::current().block_on(current_user.whoami()).unwrap();
+    let main=MainWindowModel::builder().launch(MainWindowInit{current_user:user,api_client:api}).detach();
+    let host=adw::Window::builder().default_width(1000).default_height(720).content(main.widget()).build();host.present();until(context,||main.model().background_started&&main.model().access_request.is_none());
+    exercise(&main,context);
+    main.emit(MainWindowMsg::Search(SearchMsg::Open));pump(context);
+    let channel=main.model().channels[0].id;let own=main.model().current_user.id;
+    let results:Vec<SearchResult>=(0..1000).map(|i|serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"channel_id":channel,"channel_name":"test","type":"message","author_id":own,"author_username":"alice","content":format!("Result {i} @mention(<@{own}>)"),"created_at":"2026-10-15T00:00:00Z"})).unwrap()).collect();
+    let token=Uuid::new_v4();main.state().get_mut().model.search.token=Some(token);
+    main.emit(MainWindowMsg::Search(SearchMsg::Loaded{token,result:Ok(SearchResponse{results:results[..500].to_vec(),has_more:true})}));until(context,||main.model().search.view.as_ref().unwrap().results.n_items()==500);
+    let store=main.model().search.view.as_ref().unwrap().results.clone();let first=store.item(0).unwrap();let w=main.model().search.view.as_ref().unwrap().window.clone();
+    let scroll=descendants(w.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::ScrolledWindow>().ok().filter(|s|s.child().is_some_and(|c|c.is::<gtk::ListView>()))).unwrap();
+    let position=scroll.vadjustment().value();
+    let token=Uuid::new_v4();main.state().get_mut().model.search.token=Some(token);
+    main.emit(MainWindowMsg::Search(SearchMsg::Loaded{token,result:Ok(SearchResponse{results:results[490..].to_vec(),has_more:false})}));until(context,||store.n_items()==1000);
+    assert_eq!(store.item(0).unwrap(),first,"pagination retains existing model objects");assert_eq!(scroll.vadjustment().value(),position);
+    assert_eq!(main.model().search.rows.len(),1000,"overlapping pages are deduplicated");
+    let widgets=descendants(scroll.upcast_ref()).len();assert!(widgets<1500,"search must recycle widgets: {widgets}");
+    let object=store.item(0).and_downcast::<gtk::glib::BoxedAnyObject>().unwrap();assert!(!object.borrow::<rows::Row>().text.contains("@mention("));
+    w.close();host.set_content(None::<&gtk::Widget>);host.close();drop(main);server.abort();pump(context);
 }

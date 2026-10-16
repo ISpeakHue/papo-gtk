@@ -33,28 +33,37 @@ impl Channels {
     }
 }
 
-pub(super) struct Rows {body:gtk::Box,badge:gtk::Label,unread:usize}
+pub(super) struct Rows {
+    pub expander:gtk::Expander,pub body:gtk::Box,pub rows:std::collections::HashMap<Uuid,(String,gtk::Box)>,
+    badge:gtk::Label,title:gtk::Label,avatar:Option<adw::Avatar>,
+}
 impl Rows {
     pub fn new(view:&InboxView,parent:&gtk::Box,key:Group,name:&str,texture:Option<&gtk::gdk::Texture>,author:Option<&crate::models::UserSummary>,sender:&ComponentSender<MainWindowModel>)->Self{
         let expander=gtk::Expander::new(None);expander.set_widget_name(&key.name());expander.add_css_class("card");
         let header=gtk::Box::new(gtk::Orientation::Horizontal,8);header.set_margin_top(6);header.set_margin_bottom(6);header.set_margin_end(6);
         let server=matches!(key,Group::Channel(_)|Group::Unknown);
-        if server{let icon=gtk::Label::new(Some("#"));icon.set_size_request(32,32);icon.add_css_class("heading");icon.add_css_class("dim-label");header.append(&icon);}
-        else{let avatar=crate::media::avatar_image(texture,32);avatar.set_text(Some(name));header.append(&avatar);}
-        let title=gtk::Label::new(Some(name));title.set_xalign(0.0);title.set_hexpand(true);title.set_ellipsize(gtk::pango::EllipsizeMode::End);title.add_css_class("heading");if let Some(author)=author{title.set_tooltip_text(Some(&format!("@{}",author.username)));if let Some(roles)=author.roles.as_deref(){crate::ui::style::role_color(&title,roles);}}header.append(&title);
-        let badge=gtk::Label::new(None);badge.set_widget_name(if server{"notification-channel-unread"}else{"notification-sender-unread"});badge.add_css_class("papo-notification-count");badge.set_valign(gtk::Align::Center);badge.set_visible(false);header.append(&badge);expander.set_label_widget(Some(&header));
+        let avatar=if server{let icon=gtk::Label::new(Some("#"));icon.set_size_request(32,32);icon.add_css_class("heading");icon.add_css_class("dim-label");header.append(&icon);None}
+            else{let avatar=crate::media::avatar_image(texture,32);avatar.set_text(Some(name));header.append(&avatar);Some(avatar)};
+        let title=gtk::Label::new(None);title.set_xalign(0.0);title.set_hexpand(true);title.set_ellipsize(gtk::pango::EllipsizeMode::End);title.add_css_class("heading");header.append(&title);
+        let badge=gtk::Label::new(None);badge.set_widget_name(if server{"notification-channel-unread"}else{"notification-sender-unread"});badge.add_css_class("papo-notification-count");badge.set_valign(gtk::Align::Center);header.append(&badge);expander.set_label_widget(Some(&header));
         let body=gtk::Box::new(gtk::Orientation::Vertical,8);body.set_margin_start(12);body.set_margin_top(8);body.set_margin_bottom(8);expander.set_child(Some(&body));
         expander.set_expanded(view.expanded.borrow().get(&key).copied().unwrap_or(false));
         let input=sender.input_sender().clone();expander.connect_expanded_notify(move |widget|{let _=input.send(MainWindowMsg::Notification(NoticeMsg::GroupExpanded(key,widget.is_expanded())));});
-        parent.append(&expander);Self{body,badge,unread:0}
+        parent.append(&expander);let mut rows=Self{expander,body,badge,title,avatar,rows:Default::default()};rows.update(name,texture,author,0);rows
     }
-    pub fn append(&mut self,row:&gtk::Box,read:bool){
-        self.body.append(row);self.unread+=usize::from(!read);
-        self.badge.set_text(&self.unread.to_string());self.badge.set_visible(self.unread>0);
-        let label=format!("{} {}",self.unread,if self.unread==1{"notificação não lida"}else{"notificações não lidas"});
-        self.badge.update_property(&[gtk::accessible::Property::Label(&label)]);
-        self.badge.set_tooltip_text(Some(&label));
+    pub fn update(&mut self,name:&str,texture:Option<&gtk::gdk::Texture>,author:Option<&crate::models::UserSummary>,unread:usize){
+        self.title.set_text(name);self.title.set_attributes(None);self.title.remove_css_class("papo-role-name");self.title.set_tooltip_text(None);
+        if let Some(author)=author{self.title.set_tooltip_text(Some(&format!("@{}",author.username)));if let Some(roles)=author.roles.as_deref(){crate::ui::style::role_color(&self.title,roles);}}
+        if let Some(avatar)=&self.avatar{avatar.set_text(Some(name));avatar.set_custom_image(texture);}
+        self.badge.set_text(&unread.to_string());self.badge.set_visible(unread>0);
+        let label=format!("{unread} notificações não lidas carregadas. Outras páginas podem não estar nesta janela.");
+        self.badge.update_property(&[gtk::accessible::Property::Label(&label)]);self.badge.set_tooltip_text(Some(&label));
     }
+}
+pub(super) fn reconcile(parent:&gtk::Box,desired:&[gtk::Widget]){
+    let mut child=parent.first_child();while let Some(widget)=child{child=widget.next_sibling();if !desired.contains(&widget){parent.remove(&widget);}}
+    let mut previous=None::<gtk::Widget>;
+    for widget in desired{if widget.parent().is_none(){parent.append(widget);}if widget.prev_sibling()!=previous{parent.reorder_child_after(widget,previous.as_ref());}previous=Some(widget.clone());}
 }
 impl MainWindowModel {
     pub(super) fn notice_author(&self,n:&state::Notice)->Option<&crate::models::UserSummary>{
@@ -104,11 +113,11 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     assert!(descendants(window.upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::Label>()).any(|label|label.is_visible()&&label.text()=="Mensagens diretas (3)"),"the count must be on the tab button");
     let group=|peer|descendants(personal.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Expander>().ok().filter(|w|w.widget_name()==Group::Sender(peer).name())).unwrap();
     assert_eq!(descendants(personal.upcast_ref()).iter().filter(|w|w.is::<gtk::Expander>()).count(),2,"equal nicknames must remain separate sender groups");
-    assert!(descendants(&group(peer_a).child().unwrap()).iter().any(|w|w.widget_name()==format!("notification-{dm1}")));
+    assert!(group(peer_a).child().unwrap().first_child().is_none(),"collapsed groups must not build message widgets");
     assert!(!group(peer_a).is_expanded()&&!group(peer_b).is_expanded(),"DM senders start collapsed");
     let badge=|peer|descendants(group(peer).upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Label>().ok().filter(|w|w.widget_name()=="notification-sender-unread")).unwrap();
     assert_eq!(badge(peer_a).text(),"2");assert_eq!(badge(peer_b).text(),"1");assert!(badge(peer_a).is_visible()&&badge(peer_b).is_visible());
-    select(Some(b));assert!(contains(&rows,b1)&&!contains(&rows,a1));
+    select(Some(b));assert!(!contains(&rows,b1)&&!contains(&rows,a1),"collapsed channels have only a header");
     assert!(!channel_group(b).is_expanded());assert_eq!(channel_badge(b).text(),"1");assert!(!main.model().notifications.inbox.rows[&b1].read);
     select(None);assert!(channel_group(a).is_expanded()&&!channel_group(b).is_expanded(),"channel expansion survives filtering without expanding other channels");
     crate::ui::main_window::layout::tests::preview(&window,"notification-channel-groups",context);
@@ -133,7 +142,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     until(context,||main.model().notifications.request.is_none());pump(context);
     assert_eq!(dm_page.title().as_deref(),Some("Mensagens diretas (1)"),"new unread notifications update the tab count");
     assert!(!group(peer_b).is_expanded());assert!(badge(peer_b).is_visible());assert_eq!(badge(peer_b).text(),"1","new notifications update a collapsed sender's count");assert!(!main.model().notifications.inbox.rows[&dm_extra].read);assert!(!main.model().notifications.inbox.rows[&extra].read);
-    tabs.set_visible_child_name("server");pump(context);assert!(contains(&rows,b1)&&!contains(&rows,extra));assert_eq!(main.model().notifications.view.as_ref().unwrap().channel_filter.selected(),Some(b));
+    tabs.set_visible_child_name("server");pump(context);assert!(!contains(&rows,b1)&&!contains(&rows,extra));assert_eq!(main.model().notifications.view.as_ref().unwrap().channel_filter.selected(),Some(b));
     assert!(!main.model().notifications.inbox.rows[&b1].read);assert_eq!(channel_badge(b).text(),"1");
     channel_group(b).set_expanded(true);until(context,||main.model().notifications.marks.is_empty()&&main.model().notifications.inbox.rows[&b1].read);assert!(!channel_badge(b).is_visible());
     select(None);until(context,||main.model().notifications.marks.is_empty()&&main.model().notifications.inbox.rows[&extra].read);assert!(contains(&rows,a1)&&contains(&rows,b1)&&contains(&rows,extra));

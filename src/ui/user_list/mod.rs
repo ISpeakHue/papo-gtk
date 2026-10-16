@@ -1,5 +1,7 @@
 //! Online users and member list component.
 
+mod recycled;
+#[cfg(test)]mod scrolling;
 use gtk::pango;
 use gtk::prelude::*;
 use relm4::prelude::*;
@@ -14,26 +16,30 @@ pub struct UserListInit {
     pub users: Vec<UserSummary>,
 }
 
-#[derive(Debug)]
 pub struct UserListModel {
     pub users: Vec<UserSummary>,
     pub presence: HashMap<Uuid, PresenceEntry>,
     avatars: HashMap<Uuid, gtk::gdk::Texture>,
     show_avatars: bool,
+    recycled:Option<recycled::List>,
+    wheel:crate::ui::smooth_scroll::Wheel,
     rows:HashMap<String,(String,gtk::ListBoxRow)>,
     status: Option<UserStatus>,
     status_pending: bool,
     status_error: String,
+    pub(crate) visible_avatars:Vec<Uuid>,
 }
 
 #[derive(Debug)]
 pub enum UserListOutput {
+    AvatarViewport(Vec<Uuid>),
     OpenProfile(Uuid),
     ChangeStatus(Option<UserStatus>),
 }
 
 #[derive(Debug)]
 pub enum UserListMsg {
+    Viewport,
     SelectStatus(Option<UserStatus>),
     SetStatus(Option<UserStatus>),
     StatusPending(bool),
@@ -114,7 +120,7 @@ impl Component for UserListModel {
             },
 
             // Members List
-            gtk::ScrolledWindow {
+            #[name="members_scroll"] gtk::ScrolledWindow {
                 set_hscrollbar_policy: gtk::PolicyType::Never,
                 set_vscrollbar_policy: gtk::PolicyType::Automatic,
                 set_vexpand: true,
@@ -136,11 +142,12 @@ impl Component for UserListModel {
             users: init.users,
             presence: HashMap::new(),
             avatars: HashMap::new(),
-            show_avatars: true,rows:HashMap::new(),
-            status: None, status_pending: false, status_error: String::new(),
+            show_avatars: true,rows:HashMap::new(),recycled:None,wheel:Default::default(),
+            status: None, status_pending: false, status_error: String::new(),visible_avatars:vec![],
         };
 
         let widgets = view_output!();
+        crate::ui::smooth_scroll::connect(&widgets.members_scroll,&model.wheel);
         widgets.status_button.update_property(&[gtk::accessible::Property::Label("Alterar meu status")]);
         let popover=gtk::Popover::new();
         let options=gtk::Box::new(gtk::Orientation::Vertical,2);
@@ -156,7 +163,9 @@ impl Component for UserListModel {
             options.append(&button);
         }
         popover.set_child(Some(&options));widgets.status_button.set_popover(Some(&popover));
-        rebuild_members_list(&widgets.members_list, &model.users, &model.presence, &model.avatars, model.show_avatars, &mut model.rows, &sender);
+        model.rebuild(&widgets,&sender);
+        let pending=std::rc::Rc::new(std::cell::Cell::new(false));let input=sender.input_sender().clone();let schedule:std::rc::Rc<dyn Fn()>=std::rc::Rc::new(move ||{if pending.replace(true){return;}let pending=pending.clone();let input=input.clone();gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(20),move ||{pending.set(false);let _=input.send(UserListMsg::Viewport);});});
+        let next=schedule.clone();widgets.members_scroll.connect_map(move |_|next());let next=schedule.clone();widgets.members_scroll.vadjustment().connect_value_changed(move |_|next());let next=schedule.clone();widgets.members_scroll.vadjustment().connect_changed(move |_|next());widgets.members_scroll.connect_unmap(move |_|schedule());
 
         ComponentParts { model, widgets }
     }
@@ -169,6 +178,11 @@ impl Component for UserListModel {
         _root: &Self::Root,
     ) {
         match message {
+            UserListMsg::Viewport=>{
+                let mut ids=vec![];
+                if self.show_avatars&&widgets.members_scroll.is_mapped(){if let Some(list)=&self.recycled{ids=list.visible(&widgets.members_scroll);}else{let adj=widgets.members_scroll.vadjustment();let mut row=widgets.members_list.first_child();while let Some(widget)=row{row=widget.next_sibling();if let Some(id)=widget.widget_name().strip_prefix("member-").and_then(|s|Uuid::parse_str(s).ok()){if let Some(b)=widget.compute_bounds(&widgets.members_list){if b.height()>0.0&&f64::from(b.y()+b.height())>=adj.value()-adj.page_size()/2.0&&f64::from(b.y())<=adj.value()+adj.page_size()*1.5{ids.push(id);}}}}}}
+                if self.visible_avatars!=ids{self.visible_avatars=ids.clone();let _=sender.output(UserListOutput::AvatarViewport(ids));}
+            }
             UserListMsg::OpenProfile(id) => {let _=sender.output(UserListOutput::OpenProfile(id));}
             UserListMsg::SelectStatus(status) => {
                 widgets.status_button.popdown();
@@ -181,18 +195,19 @@ impl Component for UserListModel {
             UserListMsg::SetStatus(status) => self.status=status,
             UserListMsg::StatusPending(pending) => {self.status_pending=pending;if pending{self.status_error.clear();}}
             UserListMsg::StatusError(error) => self.status_error=error,
-            UserListMsg::SetConfig(config) => {self.show_avatars=config.display.as_ref().and_then(|d|d.show_avatars).unwrap_or(true);rebuild_members_list(&widgets.members_list,&self.users,&self.presence,&self.avatars,self.show_avatars,&mut self.rows,&sender);}
+            UserListMsg::SetConfig(config) => {self.show_avatars=config.display.as_ref().and_then(|d|d.show_avatars).unwrap_or(true);self.rebuild(widgets,&sender);sender.input(UserListMsg::Viewport);}
             UserListMsg::SetAvatars(avatars) => {
                 crate::media::update_member_avatars(widgets.members_list.upcast_ref(),&self.avatars,&avatars);
                 self.avatars = avatars;
+                if let Some(list)=&self.recycled{list.update(self);}
             }
             UserListMsg::SetUsers(users) => {
                 self.users = users;
-                rebuild_members_list(&widgets.members_list, &self.users, &self.presence, &self.avatars, self.show_avatars, &mut self.rows, &sender);
+                self.rebuild(widgets,&sender);
             }
             UserListMsg::PresenceSync(entries) => {
                 self.presence = entries.into_iter().map(|entry| (entry.user_id, entry)).collect();
-                rebuild_members_list(&widgets.members_list, &self.users, &self.presence, &self.avatars, self.show_avatars, &mut self.rows, &sender);
+                self.rebuild(widgets,&sender);
             }
             UserListMsg::UpdatePresence(entry) => {
                 if self.presence.get(&entry.user_id)==Some(&entry){return;}
@@ -200,19 +215,24 @@ impl Component for UserListModel {
                 let group_changed=member_group(self.presence.get(&id).map(|p|p.status))!=member_group(Some(entry.status));
                 let only_status=self.presence.get(&id).is_some_and(|old|old.online()==entry.online()&&old.nickname==entry.nickname&&old.status_message==entry.status_message);
                 self.presence.insert(id, entry);
+                if self.recycled.is_some(){self.rebuild(widgets,&sender);self.update_view(widgets,sender);return;}
                 if only_status{
                     if let Some((signature,row))=self.rows.get_mut(&format!("member-{id}")){
                         set_status_icon(row.upcast_ref(),self.presence[&id].status);
                         if let Some(user)=self.users.iter().find(|u|u.id==id){*signature=member_signature(user,&self.presence,&self.avatars,self.show_avatars);}
                     }
-                    if group_changed{rebuild_members_list(&widgets.members_list,&self.users,&self.presence,&self.avatars,self.show_avatars,&mut self.rows,&sender);}
+                    if group_changed{self.rebuild(widgets,&sender);sender.input(UserListMsg::Viewport);}
                     self.update_view(widgets,sender);return;
                 }
-                rebuild_members_list(&widgets.members_list, &self.users, &self.presence, &self.avatars, self.show_avatars, &mut self.rows, &sender);
+                self.rebuild(widgets,&sender);
             }
         }
         self.update_view(widgets, sender);
     }
+}
+
+impl Drop for UserListModel {
+    fn drop(&mut self){crate::ui::smooth_scroll::stop_wheel(&self.wheel);}
 }
 
 fn status_label(status:Option<&UserStatus>)->&'static str {
@@ -354,4 +374,38 @@ fn set_status_icon(widget:&gtk::Widget,status:PresenceStatus){
     assert!(name.has_css_class("dim-label"),"offline members remain dimmed");
     list.emit(UserListMsg::PresenceSync(vec![entry(users[0].id,PresenceStatus::Online),entry(users[1].id,PresenceStatus::Busy),entry(users[2].id,PresenceStatus::Away),entry(users[3].id,PresenceStatus::Offline)]));pump(context);
     assert_eq!(headings(),["ONLINE — 1","OCUPADOS — 1","AUSENTES — 1","OFFLINE — 497"],"full syncs must keep four sections and count unknown presence as offline");
+}
+
+#[cfg(test)]pub(crate) fn exercise_viewport(context:&gtk::glib::MainContext){
+    use crate::ui::chat::actions::tests::{pump,until,descendants};
+    for count in [100,5000]{
+        let users=(0..count).map(|i|serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"username":format!("member-{i:05}"),"created_at":"2026-10-15T00:00:00Z"})).unwrap()).collect();
+        let started=std::time::Instant::now();let list=UserListModel::builder().launch(UserListInit{users}).detach();let built=started.elapsed();
+        let window=gtk::Window::builder().default_width(280).default_height(680).child(list.widget()).build();window.present();until(context,||!list.model().visible_avatars.is_empty());
+        let first=list.model().visible_avatars.clone();assert!(first.len()<50,"initial avatar demand must follow the viewport: {}",first.len());
+        let scroll=descendants(list.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::ScrolledWindow>().ok()).unwrap();
+        scrolling::exercise(context,&list,&window,&scroll);
+        let adj=scroll.vadjustment();adj.set_value(adj.upper()-adj.page_size());until(context,||!list.model().visible_avatars.is_empty()&&list.model().visible_avatars!=first);
+        assert!(list.model().visible_avatars.len()<50);
+        let last=list.model().visible_avatars.len();window.set_visible(false);until(context,||list.model().visible_avatars.is_empty());
+        eprintln!("member benchmark: users={count}, build_us={}, first_viewport_avatars={}, last_viewport_avatars={}",built.as_micros(),first.len(),last);
+        window.set_child(None::<&gtk::Widget>);window.close();drop(list);pump(context);
+    }
+}
+
+impl UserListModel{
+    fn rebuild(&mut self,widgets:&<Self as Component>::Widgets,sender:&ComponentSender<Self>){
+        if self.users.len()>=1000{
+            if self.recycled.is_none(){
+                if let Some(view)=widgets.members_scroll.child().and_downcast::<gtk::Viewport>(){view.set_child(None::<&gtk::Widget>);}
+                while let Some(child)=widgets.members_list.first_child(){widgets.members_list.remove(&child);}self.rows.clear();
+                let list=recycled::List::new(sender);widgets.members_scroll.set_child(Some(&list.widget));self.recycled=Some(list);
+            }
+            self.recycled.as_ref().unwrap().update(self);
+        }else{
+            if self.recycled.take().is_some(){widgets.members_scroll.set_child(None::<&gtk::Widget>);widgets.members_scroll.set_child(Some(&widgets.members_list));}
+            rebuild_members_list(&widgets.members_list,&self.users,&self.presence,&self.avatars,self.show_avatars,&mut self.rows,sender);
+        }
+        sender.input(UserListMsg::Viewport);
+    }
 }

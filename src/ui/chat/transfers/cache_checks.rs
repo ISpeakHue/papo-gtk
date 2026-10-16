@@ -1,4 +1,4 @@
-//! Real posters, bounded HTTP ranges and channel-cache reuse without retained textures.
+//! Real posters, bounded HTTP ranges and recent first-frame residency.
 use super::*;
 use adw::prelude::*;
 use actions::tests::{mock,descendants,pump,until};
@@ -56,9 +56,10 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     for _ in 0..3 {
         let image=chat.model().transfers.textures[&png].downgrade();let poster=chat.model().transfers.textures[&mp4].downgrade();let motion=chat.model().transfers.animations[&gif].0.downgrade();
         chat.emit(ChatMsg::SetChannel(target(other)));
-        until(context,||chat.model().active_channel.as_ref().is_some_and(|c|c.id()==other)&&image.upgrade().is_none()&&poster.upgrade().is_none()&&motion.upgrade().is_none());
+        until(context,||chat.model().active_channel.as_ref().is_some_and(|c|c.id()==other)&&motion.upgrade().is_none());
+        assert!(image.upgrade().is_some()&&poster.upgrade().is_some(),"recent first-frame textures remain resident while inactive");
         assert!(chat.model().transfers.textures.is_empty()&&chat.model().transfers.animations.is_empty());
-        assert!(keys.iter().all(|key|chat.model().transfers.encoded.contains(*key)),"only compressed data survives a channel switch");
+        assert!(keys.iter().all(|key|chat.model().transfers.encoded.contains(*key)),"compressed data remains reusable alongside resident first frames");
         chat.emit(ChatMsg::SetChannel(target(channel)));
         until(context,||keys.iter().all(|key|chat.model().transfers.textures.contains_key(key))&&chat.model().media_render_pending.is_none());
         assert_eq!(calls(),baseline,"recent media must not be downloaded or probed again when returning to a channel");

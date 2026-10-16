@@ -16,7 +16,7 @@ pub(super) fn source(media:&Transfers,message:Uuid,key:Uuid,messages:&[Message])
     }
     media.giphy.iter().find(|(_,id)|**id==key).map(|(url,_)|if url.starts_with("https://"){url.clone()}else{format!("https://giphy.com/gifs/{url}")})
 }
-pub(super) fn separate_animation(embed:&Embed)->bool{embed.animated_link()&&(embed.has_video()||!keys(embed).is_empty())}
+pub(super) fn separate_animation(embed:&Embed)->bool{embed.animated_link()&&embed.has_video()}
 fn info(embed:Option<&Embed>,source:Option<&str>)->gtk::Box{
     let body=gtk::Box::new(gtk::Orientation::Vertical,6);body.set_margin_start(12);body.set_margin_end(12);body.set_margin_top(10);body.set_margin_bottom(10);
     if let Some(title)=embed.and_then(|p|p.title.as_deref()).filter(|s|!s.is_empty()){
@@ -61,7 +61,8 @@ fn without_links(text:&str,links:&[String])->String{
 }
 pub(in crate::ui::chat) fn display_text(message:&Message)->String{
     let text=message.content.as_deref().unwrap_or("");
-    without_links(text,&crate::media::gif_links::links(text))
+    let available:Vec<_>=message.embeds.iter().flatten().filter(|p|p.animated_link()).flat_map(keys).collect();
+    without_links(text,&available)
 }
 pub(super) fn attribution<'a>(embed:&'a Embed,message:&Message)->std::borrow::Cow<'a,Embed>{
     use std::borrow::Cow;
@@ -78,9 +79,11 @@ pub(super) fn attribution<'a>(embed:&'a Embed,message:&Message)->std::borrow::Co
     #[test]fn source_links_are_hidden_before_hydration_but_prose_and_code_remain(){
         let url="https://tenor.com/nihxadXt69o.gif";
         let mut msg:Message=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"channel_id":Uuid::new_v4(),"created_at":chrono::Utc::now(),"content":format!("Here {url} hello\n`{url}`")})).unwrap();
+        assert_eq!(display_text(&msg),msg.content.as_deref().unwrap(),"unresolved links remain readable");
+        msg.embeds=Some(vec![serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"fetch_method":"gif","url":url,"thumbnail":{"mime_type":"image/gif"}})).unwrap()]);
         assert_eq!(display_text(&msg),format!("Here  hello\n`{url}`"));
         msg.content=Some(url.into());assert!(display_text(&msg).is_empty());
-        msg.content=Some("giphy:a giphy:b giphy:c giphy:d giphy:e".into());assert_eq!(display_text(&msg),"giphy:e","unrendered links remain accessible");
+        msg.content=Some("giphy:a giphy:b giphy:c giphy:d giphy:e".into());assert_eq!(display_text(&msg),msg.content.as_deref().unwrap(),"unresolved links remain accessible");
     }
     #[test]fn bridge_identity_is_preserved_while_its_duplicate_gif_url_is_hidden(){
         let url="https://klipy.com/gifs/halloween-scary-22";

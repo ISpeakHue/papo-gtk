@@ -35,6 +35,7 @@ mod tests {
     #[test]
     #[ignore = "requires a GTK display; CI runs this under Xvfb"]
     fn ui_smoke_window_has_header_controls_and_server_password() {
+        let _report=crate::performance::Report;
         adw::init().unwrap();
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let _guard = runtime.enter();
@@ -78,6 +79,11 @@ mod tests {
             window.close();
             return;
         }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("notification-window"){crate::ui::main_window::notifications::exercise_page_window(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("recovery"){crate::ui::main_window::recovery::exercise(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("search-recycling"){crate::ui::main_window::search::exercise_recycling(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("avatar-viewport"){crate::ui::user_list::exercise_viewport(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("perf-baseline"){crate::ui::chat::performance::exercise_corrections(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("gnome-layout"){
             exercise_gnome_layout(&controller,&context);window.close();return;
         }
@@ -99,12 +105,16 @@ mod tests {
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("emoji-details"){crate::ui::chat::exercise_emoji_details(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("emoji-notifications"){crate::media::animation::exercise(&context);crate::ui::chat::exercise_animated_emojis(&context);crate::ui::main_window::notifications::exercise_tabs(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("account-notices"){crate::ui::main_window::bugs7::exercise(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("account-settings"){crate::ui::main_window::account::settings::exercise(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("webhooks"){crate::ui::main_window::webhooks::exercise(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("webhook-chat"){crate::ui::chat::transfers::exercise_external(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("backend-update"){
             crate::ui::chat::exercise_read_candidate(&context);
             crate::ui::main_window::notifications::exercise_backend_update(&context);window.close();return;
         }
-        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("klipy-live"){crate::ui::chat::transfers::exercise_klipy(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("recent-media"){crate::ui::chat::transfers::exercise_recent(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("media-loading"){crate::ui::chat::transfers::exercise_loading(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("backend-gifs"){crate::ui::chat::transfers::exercise_backend_gifs(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("gif-embeds"){crate::ui::chat::transfers::exercise9(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("report9"){crate::ui::chat::bugs9::exercise(&context);crate::ui::chat::transfers::exercise9(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("report8"){
@@ -516,6 +526,7 @@ impl Component for RootModel {
         crate::ui::style::install();
         crate::ui::chat::input::configure_desktop_im();
         let config = AppConfig::load();
+        crate::media::animation::set_motion(config.motion);
 
         // Initialize Login child component controller
         let login_controller = LoginModel::builder()

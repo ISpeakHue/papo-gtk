@@ -89,7 +89,7 @@ impl MainWindowModel {
         self.direct.jobs.retain(|j|!j.is_finished());
         self.direct.jobs.push(tokio::spawn(async move{let result=api.list_direct().await;let _=sender.input_sender().send(MainWindowMsg::Direct(DirectMsg::Listed{token,version,result}));}));
     }
-    pub(super) fn tick_direct(&mut self,sender:ComponentSender<Self>){if self.direct.last_refresh.map_or(true,|t|t.elapsed()>=Duration::from_secs(30)){self.refresh_direct(sender);}}
+    pub(super) fn tick_direct(&mut self,sender:ComponentSender<Self>,interval:Duration){if self.direct.last_refresh.map_or(true,|t|t.elapsed()>=interval){self.refresh_direct(sender);}}
     fn clear_direct(&mut self,id:Uuid){
         self.chat.emit(ChatMsg::InvalidateConversation(id));
         self.direct.items.retain(|d|d.id!=id);self.direct.changed.remove(&id);
@@ -140,7 +140,7 @@ impl MainWindowModel {
                         self.direct.known.extend(items.iter().map(|d|d.id));self.direct.items=items;self.direct.changed.retain(|_,v|*v>version);self.publish_direct();
                         self.load_avatars(self.direct.items.iter().map(|d|d.user.id).collect(),false,sender.clone());self.deliver_notices(sender.clone());self.render_inbox(&sender);self.render_search(&sender);
                     }
-                    Err(e)=>{self.direct_denied_without_refresh();self.deliver_notices(sender.clone());self.render_inbox(&sender);self.render_search(&sender);sender.input(MainWindowMsg::OperationFailed(e));}
+                    Err(e)=>{if crate::api::is_permission_error(&e)||crate::api::is_session_error(&e){self.direct_denied_without_refresh();}self.deliver_notices(sender.clone());self.render_inbox(&sender);self.render_search(&sender);sender.input(MainWindowMsg::OperationFailed(e));}
                 }
             }
             DirectMsg::Hide(id)=>{
@@ -254,4 +254,11 @@ mod tests{
         m.id=Uuid::from_u128(5);m.created_at=chrono::DateTime::parse_from_rfc3339("2026-10-06T00:00:00Z").unwrap().with_timezone(&chrono::Utc);assert!(apply_live(&mut dm,&m,own,&HashMap::new()));assert_eq!(dm.unread_count,1);
         assert!(!apply_live(&mut dm,&m,own,&HashMap::new()));assert_eq!(dm.unread_count,1);
     }
+}
+
+#[cfg(test)]pub(super) fn exercise_transient(main:&Controller<MainWindowModel>,context:&gtk::glib::MainContext){
+    let token=Uuid::new_v4();let peer=Uuid::new_v4();
+    let dm:DirectConversation=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"user":{"id":peer,"username":"fixture-peer","created_at":"2026-10-15T00:00:00Z"},"created_at":"2026-10-15T00:00:00Z","unread_count":0})).unwrap();let id=dm.id;
+    {let mut state=main.state().get_mut();state.model.direct.items=vec![dm];state.model.direct.request=Some(token);}
+    main.emit(MainWindowMsg::Direct(DirectMsg::Listed{token,version:0,result:Err(anyhow::anyhow!("temporary offline"))}));crate::ui::chat::actions::tests::pump(context);assert!(main.model().direct.items.iter().any(|d|d.id==id),"a transient DM refresh failure cannot erase the cached conversation");
 }

@@ -9,10 +9,13 @@ pub struct Notice {
 }
 #[derive(Default)]
 pub struct Inbox {
-    pub rows:HashMap<Uuid,Notice>,pub messages:HashMap<Uuid,Message>,
+    pub rows:HashMap<Uuid,Notice>,pub messages:HashMap<Uuid,MessageObservation>,
     message_order:VecDeque<Uuid>,read:HashSet<Uuid>,deleted:HashSet<Uuid>,
 }
 impl Inbox {
+    /// Recoverable page window: old persisted rows are fetched again from the
+    /// head, never marked read merely because they leave local memory.
+    pub fn reset_pages(&mut self){self.rows.retain(|_,n|!n.persisted);}
     pub fn event(&mut self,event:NotificationEvent){
         if self.deleted.contains(&event.message_id){return;}
         if let Some(row)=self.rows.get_mut(&event.id){if !row.seen_event{row.seen_event=true;row.pending_desktop=!row.read;}return;}
@@ -36,11 +39,12 @@ impl Inbox {
             self.rows.insert(n.id,Notice{id:n.id,message_id:n.message_id,channel_id:Some(n.channel_id),author_id:n.author_id,content:n.message_content,read,persisted:true,created_at:n.created_at,pending_desktop:pending,seen_event});
         }
     }
-    pub fn observe(&mut self,m:Message){
+    pub fn observe(&mut self,m:impl Into<MessageObservation>){
+        let m=m.into();
         if self.deleted.contains(&m.id){return;}
         for n in self.rows.values_mut().filter(|n|n.message_id==m.id){n.channel_id=Some(m.channel_id);n.author_id=m.author_id;}
         if !self.messages.contains_key(&m.id){self.message_order.push_back(m.id);}self.messages.insert(m.id,m);
-        while self.message_order.len()>512 {if let Some(id)=self.message_order.pop_front(){self.messages.remove(&id);}}
+        while self.message_order.len()>512||self.messages.values().map(MessageObservation::bytes).sum::<usize>()>4<<20 {if let Some(id)=self.message_order.pop_front(){self.messages.remove(&id);}else{break;}}
     }
     pub fn mark(&mut self,id:Uuid){if let Some(n)=self.rows.get_mut(&id){n.read=true;n.pending_desktop=false;if n.persisted{self.read.insert(id);}}}
     pub fn mark_through(&mut self,message:&Message){
@@ -59,7 +63,7 @@ impl Inbox {
 pub struct NoticeChannel {pub id:Uuid,pub name:String,pub notification_settings:Option<NotificationSettings>}
 impl From<Channel> for NoticeChannel{fn from(c:Channel)->Self{Self{id:c.id,name:c.name,notification_settings:c.notification_settings}}}
 /// No preview or destination may be exposed until current channel access is known.
-pub fn delivery(n:&Notice,config:&UserConfig,channels:&[NoticeChannel],user:Uuid,messages:&HashMap<Uuid,Message>)->Option<(String,bool)> {
+pub fn delivery(n:&Notice,config:&UserConfig,channels:&[NoticeChannel],user:Uuid,messages:&HashMap<Uuid,MessageObservation>)->Option<(String,bool)> {
     let channel=channels.iter().find(|c|Some(c.id)==n.channel_id)?;
     let prefs=config.notifications.as_ref()?;
     if !prefs.enabled.unwrap_or(true)||n.read||n.author_id==Some(user)||channel.notification_settings==Some(NotificationSettings::Off){return None;}
@@ -103,6 +107,14 @@ impl ReadJournal {
 }
 #[cfg(test)] mod tests {
     use super::*;
+    #[test]fn observations_drop_rich_payloads_and_enforce_a_metadata_budget(){
+        let mut inbox=Inbox::default();let mut m=message(Uuid::new_v4(),Uuid::new_v4(),1);
+        m.embeds=Some(vec![serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"source_type":"custom","created_at":m.created_at,"image_data":"x".repeat(2<<20)})).unwrap()]);
+        let observed=MessageObservation::from(&m);assert!(observed.bytes()<1024);assert_eq!(observed.reply_to,m.reply_to);
+        inbox.observe(observed);assert!(inbox.messages[&m.id].bytes()<1024);
+        for _ in 0..512{let mut big=m.clone();big.embeds=None;big.id=Uuid::new_v4();big.content=Some("a".repeat(32768));inbox.observe(big);}
+        assert!(inbox.messages.values().map(MessageObservation::bytes).sum::<usize>()<=4<<20);assert!(inbox.messages.len()<512);
+    }
     fn message(channel:Uuid,id:Uuid,second:i64)->Message{serde_json::from_value(serde_json::json!({"id":id,"channel_id":channel,"author_id":Uuid::nil(),"content":"hello","created_at":chrono::DateTime::from_timestamp(second,0).unwrap()})).unwrap()}
     fn channel(id:Uuid)->Channel{serde_json::from_value(serde_json::json!({"id":id,"name":"general","created_at":"2026-10-03T00:00:00Z"})).unwrap()}
     fn event(id:Uuid,message_id:Uuid)->NotificationEvent{NotificationEvent{id,message_id,user_id:Some(Uuid::nil()),message_content:"hello".into()}}
@@ -146,5 +158,13 @@ impl ReadJournal {
     #[test] fn live_unread_survives_old_snapshot_and_older_history_cannot_regress_read(){
         let ch=Uuid::new_v4();let mut channels=vec![channel(ch)];let mut journal=ReadJournal::default();let first=message(ch,Uuid::from_u128(1),1);let second=message(ch,Uuid::from_u128(2),1);
         let old_version=journal.version;journal.message(&first,&mut channels);assert!(channels[0].has_unread());journal.observed_read(ch,&[first.clone()],&mut channels);assert!(!channels[0].has_unread());journal.message(&second,&mut channels);assert!(channels[0].has_unread());let mut stale=vec![channel(ch)];journal.reconcile(old_version,&mut stale);assert_eq!(stale[0].last_message.as_ref().unwrap().id,second.id);assert_eq!(stale[0].last_read_message,Some(first.id));assert!(stale[0].has_unread());journal.observed_read(ch,&[second.clone()],&mut stale);journal.observed_read(ch,&[first],&mut stale);assert_eq!(stale[0].last_read_message,Some(second.id));assert!(!stale[0].has_unread());
+    }
+}
+
+#[cfg(test)]mod page_window_tests{
+    use super::*;
+    #[test]fn resetting_pages_is_recoverable_and_preserves_pending_read_precedence(){
+        let mut inbox=Inbox::default();let channel=Uuid::new_v4();let id=Uuid::new_v4();let row=NotificationSummary{id,message_id:Uuid::new_v4(),channel_id:channel,author_id:None,message_content:"preview".into(),read:false,created_at:chrono::Utc::now()};
+        inbox.merge(vec![row.clone()]);inbox.mark(id);inbox.reset_pages();assert!(inbox.rows.is_empty());inbox.merge(vec![row]);assert!(inbox.rows[&id].read,"a stale page cannot undo a read across a paging reset");assert!(!inbox.rows[&id].pending_desktop,"paging cannot replay desktop alerts");
     }
 }

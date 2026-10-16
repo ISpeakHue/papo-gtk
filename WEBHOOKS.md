@@ -32,11 +32,34 @@ The normal live edit/delete/embed/moderation events continue to update these
 messages, with no webhook polling or extra history refreshes.
 
 Small avatars are fetched only for relevant messages, decoded off the GTK thread,
-and cached by URL across channel changes (256 entries, at most four requests at
-once). Failed loads are cached briefly. Changing an avatar in the manager
+and cached across channel changes (256 entries, at most two requests at once).
+Distinct URLs enter a bounded queue instead of being dropped when slots are
+full. Repeated occurrences share one download and texture. Discord CDN aliases,
+size options and expiring query signatures share a cache entry for the same
+avatar resource; requests retain the original signed URL. The backend does not
+provide an external-avatar batch endpoint, so the client coalesces a viewport's
+work into this queue rather than issuing a request per message.
+
+Channel switches discard obsolete queued work while allowing the two active
+small downloads to finish into the session cache. Failed loads are cached
+briefly; a failed refresh preserves an existing picture. Changing an avatar in the manager
 invalidates its local cache. Public avatar requests use a separate HTTP client
 without Papo cookies or Authorization, reject redirects, and enforce a 2 MiB
-response limit. Requests to the Papo server share the session request budget.
+response limit. Requests to the Papo server share the session request budget;
+external CDN requests share a separate budget of at most two starts per second.
+Both paths use bounded retries and honor `Retry-After` on rate limits.
+
+Consecutive webhook messages group using the webhook ID, external source and
+external sender ID, with the existing five-minute/date/reply/pin/unread boundaries.
+Different people relayed by the same webhook never merge. External names and
+pictures retain normal contrast; noninteractive profile controls cannot receive
+clicks or keyboard focus instead of inheriting GTK's disabled appearance.
+
+The current backend's `ExternalAuthor` contains only `source`, `id`, `name`,
+`avatar_url` and `profile_url`: no role or display color is sent. External names
+therefore use the theme's normal text color. Native Papo users still use their
+role colors. Supporting external role colors requires that metadata in the
+backend contract; matching external names to native accounts would be ambiguous.
 
 The backend already supplies external sender names in search results and channel
 previews. Notifications use the sender metadata when their message is known;

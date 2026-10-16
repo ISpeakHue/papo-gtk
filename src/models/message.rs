@@ -4,6 +4,9 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// Match the first text page and the recent media prefetch/residency window.
+pub const INITIAL_MESSAGE_LIMIT: usize = 30;
+
 // ── Attachment ───────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -72,6 +75,24 @@ pub struct Message {
     pub user_reactions: Option<Vec<MessageUserReaction>>,
 }
 
+/// Only metadata needed by notifications and read cursors crosses into the
+/// account model. No attachment bytes, embed payloads, or reaction collections.
+#[derive(Debug,Clone)]
+pub struct MessageObservation {
+    pub id:Uuid,pub channel_id:Uuid,pub author_id:Option<Uuid>,pub webhook_id:Option<Uuid>,
+    pub external_author:Option<super::ExternalAuthor>,pub content:Option<String>,
+    pub created_at:DateTime<Utc>,pub reply_to:Option<Uuid>,
+}
+impl MessageObservation {
+    pub fn external(&self)->Option<&super::ExternalAuthor>{if self.author_id.is_none()&&self.webhook_id.is_some(){self.external_author.as_ref()}else{None}}
+    pub fn bytes(&self)->usize{std::mem::size_of::<Self>()+self.content.as_ref().map_or(0,String::capacity)+self.external_author.as_ref().map_or(0,|a|a.source.capacity()+a.id.capacity()+a.name.capacity()+a.avatar_url.capacity()+a.profile_url.capacity())}
+    pub fn into_message(self)->Message{Message{id:self.id,channel_id:self.channel_id,author_id:self.author_id,webhook_id:self.webhook_id,external_author:self.external_author,content:self.content,created_at:self.created_at,reply_to:self.reply_to,edited_at:None,attachments:None,embeds:None,reactions:None,user_reactions:None}}
+}
+impl From<&Message> for MessageObservation {
+    fn from(m:&Message)->Self{Self{id:m.id,channel_id:m.channel_id,author_id:m.author_id,webhook_id:m.webhook_id,external_author:m.external().cloned(),content:m.content.clone(),created_at:m.created_at,reply_to:m.reply_to}}
+}
+impl From<Message> for MessageObservation {fn from(m:Message)->Self{let external_author=if m.author_id.is_none()&&m.webhook_id.is_some(){m.external_author}else{None};Self{id:m.id,channel_id:m.channel_id,author_id:m.author_id,webhook_id:m.webhook_id,external_author,content:m.content,created_at:m.created_at,reply_to:m.reply_to}}}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct MessageListResponse {
     pub channel_id: Uuid,
@@ -117,6 +138,16 @@ impl From<&Message> for MessageCursor {
 }
 
 impl Message {
+    /// A webhook can relay many people. Never group them by webhook ID alone,
+    /// or treat two missing/deleted human authors as the same person.
+    pub fn same_sender(&self,other:&Self)->bool{
+        if self.channel_id!=other.channel_id{return false;}
+        if let Some(id)=self.author_id{return other.author_id==Some(id);}
+        match (self.external(),other.external()) {
+            (Some(a),Some(b))=>self.webhook_id==other.webhook_id&&!a.id.trim().is_empty()&&!a.source.trim().is_empty()&&a.id==b.id&&a.source==b.source,
+            _=>false,
+        }
+    }
     /// External identities are display metadata and never a Papo account.
     pub fn external(&self) -> Option<&super::ExternalAuthor> {
         if self.author_id.is_none() && self.webhook_id.is_some() { self.external_author.as_ref() } else { None }

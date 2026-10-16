@@ -84,28 +84,47 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     window.set_content(None::<&gtk::Widget>);window.close();drop(chat);server.abort();pump(context);
 }
 
-// Opt-in integration check: a pasted link has no embed/video metadata from Papo.
-pub(crate) fn exercise_klipy(context:&gtk::glib::MainContext){
-    assert_eq!(std::env::var("PAPO_KLIPY_LIVE_TEST").as_deref(),Ok("1"),"public provider access must be explicitly enabled");
+// The GIF resolver is now entirely server-owned. No public network is used.
+pub(crate) fn exercise_backend_gifs(context:&gtk::glib::MainContext){
+    use base64::Engine;
     let(api,backend,server)=tokio::runtime::Handle::current().block_on(mock());
-    let user=Uuid::new_v4();let channel=Uuid::new_v4();let now=chrono::Utc::now();let url="https://klipy.com/gifs/halloween-scary-22";
-    let message:Message=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"channel_id":channel,"author_id":user,"content":url,"created_at":now})).unwrap();
-    let original:Channel=serde_json::from_value(serde_json::json!({"id":channel,"name":"Public Klipy link","created_at":now})).unwrap();
-    let chat=ChatModel::builder().launch(ChatInit{api:Some(api),active_channel:Some(original.clone()),messages:vec![message],user_id:Some(user),..Default::default()}).detach();
+    let user=Uuid::new_v4();let channel=Uuid::new_v4();let now=chrono::Utc::now();
+    let urls=["https://klipy.com/gifs/halloween-scary-22","https://giphy.com/gifs/cat-abc","https://tenor.com/view/cat-123"];
+    let target:Channel=serde_json::from_value(serde_json::json!({"id":channel,"name":"Backend GIF media","created_at":now})).unwrap();
+    let mut messages:Vec<Message>=urls.iter().map(|url|serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"channel_id":channel,"author_id":user,"content":url,"created_at":now})).unwrap()).collect();
+    let chat=ChatModel::builder().launch(ChatInit{api:Some(api),active_channel:Some(target.clone()),messages:messages.clone(),user_id:Some(user),..Default::default()}).detach();
     chat.emit(ChatMsg::SetAccess{user_id:user,access:crate::models::Access::direct()});
-    let window=adw::Window::builder().default_width(850).default_height(700).content(chat.widget()).build();window.present();
-    let ready=||{let m=chat.model();m.transfers.giphy.get(url).is_some_and(|key|m.transfers.animations.contains_key(key))&&m.media_render_pending.is_none()};
-    let deadline=std::time::Instant::now()+std::time::Duration::from_secs(45);
-    while !ready()&&std::time::Instant::now()<deadline{pump(context);std::thread::sleep(std::time::Duration::from_millis(10));}assert!(ready(),"a pasted Klipy URL must animate without a Papo embed");performance::settle(context);
-    let key=chat.model().transfers.giphy[url];
-    assert!(chat.model().history.messages[0].embeds.as_ref().is_none_or(Vec::is_empty));assert!(chat.model().transfers.videos.is_empty());
-    let widgets=descendants(chat.widget().upcast_ref());assert!(!widgets.iter().any(|w|w.is::<gtk::Video>()||w.is::<gtk::LinkButton>()));
-    assert!(!widgets.iter().filter_map(|w|w.downcast_ref::<gtk::TextView>()).any(|v|v.buffer().text(&v.buffer().start_iter(),&v.buffer().end_iter(),false).contains(url)));
-    let animation=chat.model().transfers.animations[&key].0.clone();let first=animation.current_image();until(context,||animation.current_image()!=first);let weak=animation.downgrade();drop(animation);drop(first);drop(widgets);
-    let bytes=chat.state().get_mut().model.transfers.encoded.get(key).unwrap();
-    let mut other=original.clone();other.id=Uuid::new_v4();chat.emit(ChatMsg::SetChannel(other));until(context,||weak.upgrade().is_none());
-    chat.emit(ChatMsg::SetChannel(original));until(context,ready);
-    let restored=chat.state().get_mut().model.transfers.encoded.get(key).unwrap();assert!(std::sync::Arc::ptr_eq(&bytes,&restored),"returning to a pasted Klipy GIF reuses the compressed bytes, without resolving or downloading again");
-    assert!(!backend.lock().unwrap().requests.iter().any(|(_,path,_)|path.starts_with("/embeds/")),"the public link requires no backend rendition");
+    let window=adw::Window::builder().default_width(850).default_height(850).content(chat.widget()).build();window.present();performance::settle(context);
+    assert!(chat.model().transfers.giphy.is_empty(),"a link without backend metadata must not start provider scraping");
+    let mut keys=vec![];
+    for(index,message) in messages.iter_mut().enumerate(){
+        let key=Uuid::new_v4();keys.push(key);
+        let mut bytes=crate::media::animation::fixture();
+        if index==0{bytes.resize((4<<20)+32,0);}
+        let mut value=serde_json::json!({"id":key,"source_type":"link","fetch_method":"gif","provider":(["KLIPY","GIPHY","Tenor"][index]),"url":urls[index],"title":"GIF from backend","thumbnail":{"mime_type":"image/gif","width":8,"height":8},"created_at":now});
+        let data=base64::engine::general_purpose::STANDARD.encode(bytes);
+        if index==2{value["image_data"]=data.into();}else{let mut response=value.clone();response["image_data"]=data.into();backend.lock().unwrap().embed_values.insert(key.to_string(),response);}
+        message.embeds=Some(vec![serde_json::from_value(value).unwrap()]);
+        chat.emit(ChatMsg::AddMessage(message.clone()));
+    }
+    until(context,||keys.iter().all(|key|chat.model().transfers.animations.contains_key(key))&&chat.model().media_render_pending.is_none());performance::settle(context);
+    assert!(chat.model().transfers.videos.is_empty());
+    assert!(chat.model().transfers.encoded.contains(keys[0]),"the backend's 5 MiB GIF limit must fit the compressed cache");
+    for(index,key) in keys.iter().enumerate(){let requests=backend.lock().unwrap().requests.clone();assert_eq!(requests.iter().filter(|(_,p,_)|p==&format!("/embeds/{key}")).count(),usize::from(index!=2));assert!(!requests.iter().any(|(_,p,_)|p==&format!("/embeds/{key}/video")));}
+    let widgets=descendants(chat.widget().upcast_ref());assert!(!widgets.iter().any(|w|w.is::<gtk::Video>()||w.is::<gtk::LinkButton>()));drop(widgets);
+    let before=backend.lock().unwrap().requests.iter().filter(|(_,p,_)|p.starts_with("/embeds/")).count();
+    let mut other=target.clone();other.id=Uuid::new_v4();chat.emit(ChatMsg::SetChannel(other));pump(context);chat.emit(ChatMsg::SetChannel(target));
+    until(context,||keys.iter().all(|key|chat.model().transfers.animations.contains_key(key))&&chat.model().media_render_pending.is_none());
+    assert_eq!(backend.lock().unwrap().requests.iter().filter(|(_,p,_)|p.starts_with("/embeds/")).count(),before,"returning to the channel reuses GIF bytes");
+    let composer=super::super::composer::field(chat.widget().upcast_ref());composer.set_text("Keep this draft");pump(context);
+    chat.emit(ChatMsg::OperationError("First temporary failure".into()));pump(context);let old=chat.model().error_timer.as_ref().unwrap().0;
+    // Simulate an already-finished source whose dismissal is still queued.
+    {let model=chat.model();let timer=&model.error_timer.as_ref().unwrap().1;gtk::glib::MainContext::default().find_source_by_id(timer).unwrap().destroy();}
+    chat.emit(ChatMsg::OperationError("New temporary failure".into()));pump(context);chat.emit(ChatMsg::DismissError(old));pump(context);
+    assert_eq!(chat.model().draft.error.as_deref(),Some("New temporary failure"),"an old timeout cannot dismiss a newer error");
+    let before_expiry=std::time::Instant::now()+std::time::Duration::from_secs(3);
+    while std::time::Instant::now()<before_expiry{pump(context);std::thread::sleep(std::time::Duration::from_millis(10));}
+    assert!(chat.model().draft.error.is_some(),"errors remain readable before the five-second timeout");
+    until(context,||chat.model().draft.error.is_none());assert_eq!(composer.text(),"Keep this draft");
     window.set_content(None::<&gtk::Widget>);window.close();drop(chat);server.abort();pump(context);
 }

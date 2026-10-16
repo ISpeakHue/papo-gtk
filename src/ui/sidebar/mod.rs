@@ -57,7 +57,7 @@ pub enum SidebarMsg {
     Presence(std::collections::HashMap<Uuid,crate::ws::PresenceStatus>),
     SetCurrentUser(WhoamiResponse),
     SetConfig(crate::models::UserConfig),
-    Profile, Preferences, Security,
+    Profile, Settings,
     UnreadNotifications{count:usize,more:bool},
     SetAvatar(Option<gtk::gdk::Texture>),
     SetChannels(Vec<Channel>),
@@ -77,7 +77,7 @@ pub enum SidebarOutput {
     MarkChannelRead(Uuid),
     VoiceSelect(Uuid),
     Logout,
-    Profile(Uuid), Preferences, Security,
+    Profile(Uuid), Settings,
 }
 
 #[relm4::component(pub)]
@@ -222,18 +222,9 @@ impl Component for SidebarModel {
                             },
                         },
                     },
-                    gtk::MenuButton {
+                    gtk::Button {
                         set_icon_name:"emblem-system-symbolic",set_has_frame:false,set_tooltip_text:Some("Configurações da conta"),
-                        #[wrap(Some)]
-                        set_popover = &gtk::Popover {
-                            add_css_class:"papo-menu",
-                            gtk::Box {
-                                set_orientation:gtk::Orientation::Vertical,set_spacing:2,
-                                gtk::Button {set_label:"Meu perfil",add_css_class:"flat",connect_clicked => SidebarMsg::Profile},
-                                gtk::Button {set_label:"Preferências",add_css_class:"flat",connect_clicked => SidebarMsg::Preferences},
-                                gtk::Button {set_label:"Segurança",add_css_class:"flat",connect_clicked => SidebarMsg::Security},
-                            },
-                        },
+                        connect_clicked => SidebarMsg::Settings,
                     },
                     gtk::Button {
                         set_icon_name:"system-log-out-symbolic",
@@ -304,8 +295,7 @@ impl Component for SidebarModel {
             SidebarMsg::SetConfig(config) => {self.show_avatars=config.display.as_ref().and_then(|d|d.show_avatars).unwrap_or(true);widgets.avatar_widget.set_visible(self.show_avatars);self.rebuild_direct(&widgets.direct_list,&sender);rebuild_channel_list(&widgets.channels_list,&self.channels,self.selected_channel_id,&self.voice_rooms,&self.avatars,self.show_avatars,&mut self.channel_rows,&sender);},
             SidebarMsg::Profile => {let _=sender.output(SidebarOutput::Profile(self.current_user.id));}
             SidebarMsg::UnreadNotifications{count,more}=>{self.unread_notifications=count;self.more_notifications=more;},
-            SidebarMsg::Security => {let _=sender.output(SidebarOutput::Security);}
-            SidebarMsg::Preferences => {let _=sender.output(SidebarOutput::Preferences);}
+            SidebarMsg::Settings => {let _=sender.output(SidebarOutput::Settings);}
             SidebarMsg::SetAvatar(texture) => crate::media::set_avatar(&widgets.avatar_widget, texture.as_ref()),
             SidebarMsg::SetServer(server) => {
                 let changed=self.server.as_ref().is_none_or(|old|old.id!=server.id||old.icon_blob!=server.icon_blob);

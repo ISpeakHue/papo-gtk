@@ -12,6 +12,7 @@ mod ui;
 mod ws;
 mod voice;
 mod logging;
+mod performance;
 
 fn main() {
     logging::init();
@@ -25,6 +26,7 @@ fn main() {
     // Enter the runtime context. The guard will keep it active for the thread.
     let _guard = rt.enter();
 
+    let _performance_report=performance::Report;
     app::run();
 
     // Graceful shutdown of async background tasks on application exit

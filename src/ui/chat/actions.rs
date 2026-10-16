@@ -16,7 +16,7 @@ pub(super) struct Actions {
     pub pins_ready: bool,
     pins_request: Option<Uuid>,
     pins_again: bool,
-    pins_window: Option<(gtk::Window, gtk::Box)>,
+    pub(super) pins_window: Option<(gtk::Window, gtk::Box)>,
     pub emojis: Vec<Emoji>,
     pub emoji_names:HashMap<String,Uuid>,
     pub emoji_source:std::rc::Rc<std::cell::RefCell<String>>,
@@ -369,7 +369,7 @@ impl ChatModel {
                 match result {
                     Ok(pinned) if current => {
                         self.actions.pinned=pinned.into_iter().filter(|m|!self.history.is_deleted(m.id)).collect();self.actions.pins_ready=true;
-                        if self.actions.pins_window.as_ref().is_some_and(|(window,_)|window.is_visible()){if let Some(api)=&self.actions.api{for m in &self.actions.pinned{self.transfers.external.request(m,api,sender);}}}
+                        if self.actions.pins_window.as_ref().is_some_and(|(window,_)|window.is_visible()){if let Some(api)=&self.actions.api{self.transfers.external.request(self.actions.pinned.iter(),api,sender);}}
                         self.render_pins(sender);
                         if self.actions.pins_window.as_ref().is_some_and(|(window,_)|window.is_visible()){if let Some(channel)=self.active_channel.as_ref(){let _=sender.output(ChatOutput::AuthorMetadata{channel:channel.id(),ids:self.actions.pinned.iter().filter_map(|m|m.author_id).collect()});}}
                     }

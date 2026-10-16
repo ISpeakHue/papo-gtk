@@ -1,5 +1,4 @@
-//! Resolve only public Giphy identifiers. The API session is never sent to a CDN.
-use futures_util::StreamExt;
+//! Recognize Giphy identifiers; media resolution belongs to the backend.
 pub fn id(value:&str)->Option<String>{
     let value=value.trim_matches(|c|matches!(c,'<'|'>'|'('|')'|','|'.'|'"'|'\''));
     let id=if let Some(id)=value.strip_prefix("giphy:"){id.to_owned()}else{
@@ -22,15 +21,6 @@ fn ids(text:&str)->Vec<String>{
         if let Some(id)=id(&text[i..end]){if !ids.contains(&id)&&ids.len()<4{ids.push(id);}}
         i=end;
     }ids
-}
-pub fn url(id:&str)->Option<String>{let checked=self::id(&format!("giphy:{id}"))?;Some(format!("https://media.giphy.com/media/{checked}/200.gif"))}
-pub async fn fetch(id:&str)->anyhow::Result<Vec<u8>>{
-    let url=url(id).ok_or_else(||anyhow::anyhow!("Identificador Giphy inválido"))?;
-    // Separate client: no API cookies, authorization, referrer, or redirects.
-    static CLIENT:std::sync::LazyLock<reqwest::Client>=std::sync::LazyLock::new(||reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).timeout(std::time::Duration::from_secs(15)).build().expect("public media client"));
-    let response=CLIENT.get(url).send().await?.error_for_status()?;
-    anyhow::ensure!(response.content_length().unwrap_or(0)<=4<<20,"GIF maior que 4 MiB");
-    let mut stream=response.bytes_stream();let mut bytes=vec![];while let Some(chunk)=stream.next().await{let chunk=chunk?;anyhow::ensure!(bytes.len()+chunk.len()<=4<<20,"GIF maior que 4 MiB");bytes.extend_from_slice(&chunk);}Ok(bytes)
 }
 #[cfg(test)]mod tests{
     use super::*;

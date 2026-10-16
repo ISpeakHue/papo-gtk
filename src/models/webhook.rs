@@ -63,4 +63,17 @@ pub struct WebhookIdentity {
         }
         assert!(Access::resolve(id,Some(id),&[],&[],&[]).manage_webhooks);assert!(!Access::direct().manage_webhooks);
     }
+    #[test]fn webhook_grouping_uses_the_external_identity_and_channel_not_just_the_hook(){
+        let message:Message=serde_json::from_value(json!({"id":Uuid::new_v4(),"channel_id":Uuid::new_v4(),"webhook_id":Uuid::new_v4(),"created_at":"2026-10-15T12:00:00Z","external_author":{"source":"discord","id":"123","name":"Sender"}})).unwrap();
+        let mut next=message.clone();next.id=Uuid::new_v4();assert!(next.same_sender(&message));
+        for part in ["hook","channel","source","id","missing","empty"]{
+            let mut other=message.clone();match part{
+                "hook"=>other.webhook_id=Some(Uuid::new_v4()),"channel"=>other.channel_id=Uuid::new_v4(),
+                "source"=>other.external_author.as_mut().unwrap().source="irc".into(),"id"=>other.external_author.as_mut().unwrap().id="456".into(),
+                "missing"=>other.external_author=None,_=>other.external_author.as_mut().unwrap().id.clear(),
+            }assert!(!other.same_sender(&message),"different {part} must split groups");
+        }
+        let mut deleted=message.clone();deleted.webhook_id=None;deleted.external_author=None;assert!(!deleted.same_sender(&deleted));
+        let mut human=message.clone();human.author_id=Some(Uuid::new_v4());assert!(human.same_sender(&human));assert!(!human.same_sender(&message));
+    }
 }

@@ -1,6 +1,7 @@
 //! Scroll only for explicit navigation or while following the newest messages.
 use super::*;
 use adw::prelude::*;
+use crate::ui::smooth_scroll::{animate_wheel,stop_wheel};
 use std::{cell::{Cell,RefCell},rc::Rc};
 
 #[derive(Clone)]
@@ -277,19 +278,9 @@ fn set_position(adj:&gtk::Adjustment,list:&gtk::ListBox,position:&Position,focus
     adj.set_value(value.clamp(adj.lower(),(adj.upper()-adj.page_size()).max(adj.lower())));
 }
 
-fn stop_wheel(wheel:&RefCell<Option<adw::TimedAnimation>>){if let Some(animation)=wheel.borrow_mut().take(){animation.pause();}}
 fn scrolling(motion:&Cell<Option<Instant>>,wheel:&RefCell<Option<adw::TimedAnimation>>)->bool{
     motion.get().is_some_and(|at|at.elapsed()<std::time::Duration::from_millis(120))||wheel.borrow().as_ref().is_some_and(|a|a.state()==adw::AnimationState::Playing)
 }
-fn animate_wheel(scroll:&gtk::ScrolledWindow,wheel:&RefCell<Option<adw::TimedAnimation>>,dy:f64){
-    if !dy.is_finite()||dy==0.0{return;}
-    let adj=scroll.vadjustment();let from=adj.value();
-    let previous=wheel.borrow().as_ref().filter(|a|a.state()==adw::AnimationState::Playing).map_or(from,|a|a.value_to());
-    let to=(previous+dy*adj.page_size().max(1.0).powf(2.0/3.0)).clamp(adj.lower(),(adj.upper()-adj.page_size()).max(adj.lower()));
-    stop_wheel(wheel);let target=adw::CallbackAnimationTarget::new(move |value|adj.set_value(value));
-    let animation=adw::TimedAnimation::new(scroll,from,to,160,target);animation.set_easing(adw::Easing::EaseOutCubic);animation.play();*wheel.borrow_mut()=Some(animation);
-}
-
 fn reveal_keyboard_focus(scroll:&gtk::ScrolledWindow,generation:Rc<Cell<u64>>,expected:u64){
     let frames=Cell::new(0);
     scroll.add_tick_callback(move |scroll,_|{
@@ -344,32 +335,40 @@ impl ReadBoundary{
 }
 
 #[cfg(test)]pub(crate) fn exercise_media_scroll(context:&gtk::glib::MainContext){
-    use actions::tests::{descendants,pump,until};use performance::settle;
-    let created=chrono::Utc::now();let channel=Uuid::new_v4();let user=Uuid::new_v4();let key=Uuid::new_v4();
+    use actions::tests::{descendants,mock,pump,until};use performance::settle;
+    let (api,backend,server)=tokio::runtime::Handle::current().block_on(mock());
+    let created=chrono::Utc::now();let channel=Uuid::new_v4();let user=Uuid::new_v4();let key=Uuid::new_v4();let fetched=Uuid::new_v4();
     let target:Channel=serde_json::from_value(serde_json::json!({"id":channel,"name":"scrolling images","created_at":created})).unwrap();
     let mut messages:Vec<Message>=(0..100).map(|i|serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"channel_id":channel,"author_id":user,"content":format!("Scroll message {i}"),"created_at":created+chrono::Duration::seconds(i)})).unwrap()).collect();
     messages[48].attachments=Some(vec![serde_json::from_value(serde_json::json!({"id":key,"mime_type":"image/png","original_file_name":"later.png","size_bytes":500,"created_at":created})).unwrap()]);
+    messages[47].attachments=Some(vec![serde_json::from_value(serde_json::json!({"id":fetched,"mime_type":"image/png","original_file_name":"during-scroll.png","size_bytes":500,"created_at":created})).unwrap()]);
+    use base64::Engine;
+    let endpoint=format!("/attachments/{fetched}/thumbnail");
+    backend.lock().unwrap().attachment_thumbnails.insert(endpoint.clone(),base64::engine::general_purpose::STANDARD.decode(actions::tests::tiny_png_base64()).unwrap());
     let chat=ChatModel::builder().launch(ChatInit{active_channel:Some(target),messages:messages.clone(),user_id:Some(user),..Default::default()}).detach();chat.emit(ChatMsg::SetAccess{user_id:user,access:crate::models::Access::direct()});
     let window=adw::Window::builder().default_width(900).default_height(650).content(chat.widget()).build();window.present();settle(context);
     gtk::Settings::default().unwrap().set_gtk_enable_animations(true);
     let all=descendants(chat.widget().upcast_ref());let scroll=all.iter().find_map(|w|w.downcast_ref::<gtk::ScrolledWindow>()).unwrap().clone();let list=all.iter().find_map(|w|w.downcast_ref::<gtk::ListBox>().filter(|w|w.has_css_class("papo-chat-history"))).unwrap().clone();let adj=scroll.vadjustment();
     let row=chat.model().rendered[&format!("message-{}",messages[48].id)].1.clone();adj.set_value(f64::from(row.compute_bounds(&list).unwrap().y())-100.0);settle(context);
     let media=find_media_box(row.upcast_ref()).unwrap();let placeholder=media.first_child().unwrap();
-    // Keep responses deterministic: the pending fixture completion below
-    // supplies the image; an API client lets us observe hydration work itself.
-    chat.state().get_mut().model.actions.api=Some(crate::api::ApiClient::new("http://127.0.0.1:9").unwrap());
+    // One injected completion and one real local GET must both prepare during
+    // the gesture without replacing either row's placeholder until idle.
+    chat.state().get_mut().model.actions.api=Some(api);
     let passes=chat.model().render_passes;let hydrations=chat.model().media_hydrations;let from=adj.value();
     {let state=chat.model();state.viewport.last_motion.set(Some(Instant::now()));animate_wheel(&scroll,&state.viewport.wheel,-6.0);}
     let animation=chat.model().viewport.wheel.borrow().as_ref().unwrap().clone();
     // Software GPU rendering can spend longer than the production gesture's
     // 160 ms inside one pump. Keep this test gesture alive long enough to
     // distinguish cancellation from naturally reaching its destination.
-    animation.set_duration(1000);
+    animation.set_duration(2000);
     let destination=animation.value_to();assert!(destination<from-100.0);assert_eq!(animation.state(),adw::AnimationState::Playing);
     let epoch=chat.model().transfers.epoch;let token=Uuid::new_v4();chat.state().get_mut().model.transfers.image_tokens.insert(key,token);
     chat.emit(ChatMsg::Transfer(TransferMsg::ImageReady{epoch,key,token,result:Some(crate::media::PreparedImage{width:640,height:160,pixels:vec![255;640*160*4]})}));
+    chat.emit(ChatMsg::MediaViewport);
+    until(context,||chat.model().transfers.textures.contains_key(&fetched));
+    assert_eq!(backend.lock().unwrap().requests.iter().filter(|(_,path,_)|path==&endpoint).count(),1,"newly encountered media starts before scrolling stops");
     let start=Instant::now();while start.elapsed()<std::time::Duration::from_millis(70){context.iteration(false);std::thread::sleep(std::time::Duration::from_millis(3));}
-    assert!(chat.model().transfers.textures.contains_key(&key));assert!(chat.model().media_render_pending.is_some());assert_eq!(chat.model().render_passes,passes,"decoding during scrolling must not rebuild media");assert_eq!(chat.model().media_hydrations,hydrations,"scroll ticks must not rescan/hydrate the history");assert_eq!(media.first_child().unwrap(),placeholder);assert_eq!(animation.state(),adw::AnimationState::Playing,"image completion must not cancel wheel motion");assert!(adj.value()<from-0.5,"scroll frames keep advancing while the picture waits");
+    assert!(chat.model().transfers.textures.contains_key(&key));assert!(chat.model().media_render_pending.is_some());assert_eq!(chat.model().render_passes,passes,"decoding during scrolling must not rebuild media");assert!(chat.model().media_hydrations>hydrations,"scrolling must allow bounded background media preparation");assert_eq!(chat.model().transfers.metadata_visits,messages.len(),"unchanged scroll ticks normalize metadata only once");assert_eq!(media.first_child().unwrap(),placeholder);assert_eq!(animation.state(),adw::AnimationState::Playing,"image completion must not cancel wheel motion");assert!(adj.value()<from-0.5,"scroll frames keep advancing while the picture waits");
     // Structural updates also preserve the same running animation. Reactions
     // do not touch the pending image row, so its placeholder still waits.
     chat.emit(ChatMsg::ApplyChange(Change::Reaction(messages[30].id,crate::models::MessageReactionSummary{emoji_id:None,unicode:Some("❤️".into()),count:1})));pump(context);assert_eq!(animation.state(),adw::AnimationState::Playing);assert_eq!(media.first_child().unwrap(),placeholder,"unrelated live changes must not flush deferred pictures");
@@ -378,12 +377,12 @@ impl ReadBoundary{
     if let Position::Anchor{id:Some(id),offset,..}=anchor{let row=chat.model().rendered[&format!("message-{id}")].1.clone();assert!((f64::from(row.compute_bounds(&list).unwrap().y())-adj.value()-offset).abs()<3.0,"idle image layout preserves the reading anchor");}
     // Pixel scrolling and scrollbar drags change the adjustment without the
     // custom wheel animation. Keep deferring throughout that continuous motion.
-    let displayed=media.first_child().unwrap();let passes=chat.model().render_passes;let hydrations=chat.model().media_hydrations;let token=Uuid::new_v4();chat.state().get_mut().model.transfers.image_tokens.insert(key,token);adj.set_value(adj.value()-10.0);
+    let displayed=media.first_child().unwrap();let passes=chat.model().render_passes;let metadata=chat.model().transfers.metadata_visits;let token=Uuid::new_v4();chat.state().get_mut().model.transfers.image_tokens.insert(key,token);adj.set_value(adj.value()-10.0);
     chat.emit(ChatMsg::Transfer(TransferMsg::ImageReady{epoch,key,token,result:Some(crate::media::PreparedImage{width:320,height:80,pixels:vec![180;320*80*4]})}));
     for _ in 0..6{adj.set_value(adj.value()-10.0);let start=Instant::now();while start.elapsed()<std::time::Duration::from_millis(30){context.iteration(false);std::thread::sleep(std::time::Duration::from_millis(3));}assert_eq!(media.first_child().unwrap(),displayed);}
-    assert_eq!(chat.model().render_passes,passes);assert_eq!(chat.model().media_hydrations,hydrations);until(context,||chat.model().media_render_pending.is_none());settle(context);assert_ne!(media.first_child().unwrap(),displayed,"a continuous pixel gesture also flushes its image after pausing");
+    assert_eq!(chat.model().render_passes,passes);assert_eq!(chat.model().transfers.metadata_visits,metadata);until(context,||chat.model().media_render_pending.is_none());settle(context);assert_ne!(media.first_child().unwrap(),displayed,"a continuous pixel gesture also flushes its image after pausing");
     // Explicit navigation still takes priority over scrolling and old results.
     {let state=chat.model();state.viewport.last_motion.set(Some(Instant::now()));animate_wheel(&scroll,&state.viewport.wheel,-2.0);}let running=chat.model().viewport.wheel.borrow().as_ref().unwrap().clone();chat.emit(ChatMsg::Latest);pump(context);assert_ne!(running.state(),adw::AnimationState::Playing);settle(context);assert!(chat.model().viewport.following());
     adj.set_value(adj.value()-10.0);let token=Uuid::new_v4();chat.state().get_mut().model.transfers.image_tokens.insert(key,token);chat.emit(ChatMsg::Transfer(TransferMsg::ImageReady{epoch,key,token,result:Some(crate::media::PreparedImage{width:32,height:32,pixels:vec![100;32*32*4]})}));pump(context);assert!(chat.model().media_render_pending.is_some());chat.emit(ChatMsg::SetAccess{user_id:user,access:Default::default()});settle(context);assert!(chat.model().transfers.textures.is_empty());assert!(!descendants(list.upcast_ref()).iter().any(|w|w.is::<gtk::Picture>()),"an idle flush cannot restore revoked images");
-    window.set_content(None::<&gtk::Widget>);window.close();drop(chat);pump(context);
+    window.set_content(None::<&gtk::Widget>);window.close();drop(chat);server.abort();pump(context);
 }

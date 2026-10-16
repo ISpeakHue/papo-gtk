@@ -313,3 +313,16 @@ messages, rich cards and profile descriptions. The popover shares existing emoji
 paintables and closes on source unmap; no extra image request or decoded cache
 is introduced. Unrevealed spoilers take precedence over emoji targets, and text
 selection, code literals, mentions and links retain their existing interactions.
+
+The account settings window follows the supplied configuration mockup: a centered
+title, icon-and-label pill tabs and a divider above the content. At narrow widths
+the tabs retain their icons, accessible names and tooltips while hiding their text.
+Pages remain mounted so changing tabs preserves drafts and does not refetch data.
+
+Security groups the two password fields in a rounded card, with visible labels
+and reveal controls, policy help below and the suggested action aligned right.
+The sessions heading owns the refresh icon; each session is a separate card with
+its details and a destructive end-session action. The full-width end-all action
+follows the session list. The current session is identified only when its ID is
+known from the connection event. All colors use Adwaita theme roles, including
+the selected tab and destructive controls; existing confirmations remain in place.

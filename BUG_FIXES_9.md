@@ -131,3 +131,19 @@ textures. The isolated `report6` geometry/cache regression passed.
 The complete default `ui_smoke` suite also passed before publication, including
 native media controls, direct messages, profile/search controls, adaptive layouts,
 cache retention, startup and channel-switch performance checks.
+
+## Backend GIF resolver migration (2026-10-16)
+
+Supersedes the historical public Klipy lookup described above: provider scraping
+now belongs to papo-backend (`0e80a5c`, `6d50023`). The frontend consumes animated
+GIF bytes from authenticated embed responses, retains bounded animation/cache
+handling and the bot video relay, and leaves unresolved links readable. The
+former `klipy-live` test is replaced by the offline `backend-gifs` fixture.
+Temporary composer/action errors now expire after five seconds; retryable history
+failures and connection state retain their dedicated controls.
+
+Validated on 2026-10-16: warning-free all-target compilation, 251 automated tests,
+and the `backend-gifs`, `gif-embeds` and `channel-cache` GTK fixtures. The backend
+GIF fixture also covers an expired timer whose dismissal is still queued behind
+a newer error. Obsolete frontend scraper tests and the opt-in public lookup were
+removed with their implementation.

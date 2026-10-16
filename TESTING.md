@@ -84,8 +84,9 @@ snapshots. Deletion tombstones are bounded; conversations exceeding that budget
 are discarded. Nothing is persisted to
 disk or reused by another login.
 
-Lightweight media metadata and learned dimensions survive channel switches;
-decoded pixels are released. The active cache holds up to 64 image textures
+Lightweight media metadata, learned dimensions and recent first-frame previews survive
+channel switches. A separate resident cache retains the latest 30-message batch
+for up to eight channels, with a 128 MiB/256-entry bound. The active cache holds up to 64 image textures
 with a 64 MiB RGBA-pixel budget. GIF animation has a separate budget. Known
 image dimensions size placeholders. When dimensions are unknown, the first
 decoded image replaces the guessed frame ratio immediately, without requiring
@@ -93,6 +94,17 @@ a channel revisit. Layout changes wait until scrolling pauses and preserve the
 reading anchor or latest-message position before painting. Learned dimensions
 are reused for unloaded placeholders and later visits. Server emoji textures remain shared
 across channels for the session.
+
+Downloads and off-thread decoding now continue during scrolling, using the
+bounded nearby scope and recent opening batch. Only presentation waits for idle.
+Obsolete preview jobs release their slots without removing displayed widgets,
+changing placeholder dimensions or cancelling explicit media viewers. The
+`scroll-media` case checks a real local image request and decode during an active
+gesture, deferred mounting, uninterrupted scrolling and anchor preservation.
+`media-loading` additionally blocks the local poster worker and verifies that
+video server thumbnails and still images load anyway, even with eight preceding
+videos lacking thumbnails. At most two fallback posters may queue; cached
+poster decodes are exempt from that transfer/extraction admission limit.
 
 The headless cache tests cover retention limits, eviction, oversized histories,
 permission pruning and cancelled-request/live-deletion races. The mapped GTK
@@ -208,10 +220,11 @@ See [BUG_FIXES_5.md](BUG_FIXES_5.md) for the full report and resource limits.
 ## Login request budget
 
 All REST requests share a session-wide scheduler, including cloned clients,
-avatars, emoji pages, previews and downloads. Request starts are spaced by at
-least 125 ms (at most eight per second). FIFO admission prevents background
+avatars, emoji pages, previews and downloads. An idle session has up to four
+request credits, refilling one credit every 125 ms (eight per second sustained).
+The four image download slots are unchanged. FIFO admission prevents background
 pagination and downloads from continually overtaking a foreground read.
-HTTP 429 imposes a shared cooldown;
+HTTP 429 imposes a shared cooldown and disables further bursts for that session;
 `Retry-After` seconds and HTTP dates are supported. Read-only requests can retry
 twice, with one- and two-second backoff when the backend supplies no header.
 Headers requesting more than five seconds return the error immediately while
@@ -1259,12 +1272,14 @@ on the test display.
 
 ## Older-history and media retention
 
-After scrolling settles, decoded images and GIF frames outside the nearby
-viewport are released, including pictures held by still-mounted message rows.
+After scrolling settles, media from distant older history is released, including
+pictures held by still-mounted message rows. A 30-message margin around the
+viewport avoids discarding pictures during short scrolls, while the latest
+30-message batch keeps its previews resident within the byte limits.
 Reserved media geometry prevents unloading from changing scroll positions.
 Returning to the latest messages retains the newest 200 messages and enables
-pagination to fetch older pages again. Channel switches release decoded media
-and exclude older pages from inactive row caches. Open image viewers and
+pagination to fetch older pages again. Channel switches release full animations
+and players, retain recent first-frame previews, and exclude older pages from inactive row caches. Open image viewers and
 fullscreen video are preserved while the user is viewing them.
 
 ```sh
@@ -1715,14 +1730,15 @@ Unsupported media produces an explanatory placeholder and is not repeatedly
 fetched by viewport updates.
 
 The same check switches channels three times and verifies no additional requests
-for cached media. Weak references prove that old textures and GIF animations are
-released while compressed bytes survive. Permission loss clears those bytes.
-Unit checks cover the 32 MiB/256-entry LRU, deletion/moderation/revocation,
+for cached media. Weak references prove that recent preview textures remain
+resident while full GIF animations are released. Permission loss clears both
+resident previews and reusable bytes. Unit checks cover the 96 MiB/512-entry
+compressed LRU and its preference for recent batches, deletion/moderation/revocation,
 strict HTTP-range limits, sparse-file offsets and cleanup, servers ignoring Range,
 malformed responses and bounded poster encoding. No real account is used.
 
-Decoded image buffers still need memory when revisiting media, but compressed
-cache reuse removes network waits and repeated poster extraction. RSS may remain
+Recent resident previews reuse the same textures on a revisit. Other images use
+compressed bytes to avoid network waits and repeated poster extraction. RSS may remain
 above the live buffer total because the allocator or graphics driver retains
 released storage for reuse; the weak-reference checks measure live ownership.
 
@@ -1794,30 +1810,29 @@ embedded GIF verifies the base64 payload path. It checks bare animations without
 video controls or duplicate source text, preserved bridge attribution, metadata
 only in the opened viewer, no HTTP request when opening, compressed cache reuse
 on channel switches, and information/retry UI for a failed rendition. All API
-requests use a local mock server. Pasted Klipy links additionally use the public
-website lookup covered by the opt-in checks below.
+requests use a local mock server.
 
-## Pasted Klipy links (public integration)
+## Backend GIF media and temporary chat errors
 
-Offline parser/transport regressions run with `cargo test`. To check the real
-public lookup and animated GIF data for the three supplied URLs:
-
-```sh
-cargo test --locked public_share_links_return_decodable_animations -- --ignored --nocapture
-```
-
-To check a pasted link in the native chat UI, with a local mock Papo server and
-no account/session, explicitly enable access to the public Klipy endpoint:
+The backend resolver added in `0e80a5c` and hardened in `6d50023` supplies
+`fetch_method: "gif"`, GIF thumbnail metadata and animated `image_data` through
+`GET /embeds/{id}`. The frontend no longer scrapes public GIF pages or downloads
+provider CDN renditions. Links without an embed remain readable until the
+backend publishes the embed update. Existing bot MP4/WebM renditions still use
+the authenticated video relay and render as bare animations.
 
 ```sh
-PAPO_UI_CASE=klipy-live PAPO_KLIPY_LIVE_TEST=1 \
-  dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+PAPO_UI_CASE=backend-gifs dbus-run-session -- xvfb-run -a \
+  cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
 ```
 
-This verifies animation with no backend embed, hidden inline source text, no
-video controls and cache reuse across channel switches. These live cases are
-opt-in because they require internet access and the provider's availability;
-CI's `report9` case continues to check bot renditions using a local fixture.
+This offline fixture checks delayed embed arrival for Klipy/GIPHY/Tenor, one
+backend GET per unresolved GIF, inline GIF payloads without another GET,
+animation without video controls, channel cache reuse, and a GIF larger than
+4 MiB within the backend's 5 MiB bound. It also checks that temporary errors
+disappear after five seconds without changing a draft, and that an older timeout
+cannot dismiss a newer error. History retry controls and connection status remain
+visible while their underlying condition persists.
 
 ## Webhooks (local fixtures)
 
@@ -1932,3 +1947,135 @@ duplicate nicknames, filter preservation during pagination and renames, permissi
 loss, nested message navigation and absence of notification refetches during UI
 filter/tab changes. It also reruns the existing server/DM tab and unread-badge
 regression. All API requests use local fixtures.
+
+## Tabbed account settings
+
+The gear next to Disconnect opens one native account settings window with
+“Meu perfil”, “Preferências” and “Segurança” tabs. Forms mount on first selection;
+returning to a tab preserves its unsaved fields without fetching the profile or
+sessions again. Profile saves reconcile accepted data into the mounted form and
+preserve the selected tab and other drafts. Dirty forms offer Save/Discard/Cancel
+on close; successful closure clears password fields. The own-avatar and preferences
+shortcuts select the corresponding tab in this same settings window.
+
+```sh
+PAPO_UI_CASE=account-settings dbus-run-session -- xvfb-run -a cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+```
+
+The local GTK fixture checks the gear button, lazy pages, repeated and rapid tab
+switches, retained drafts, failed/successful profile and preferences writes,
+password changes, session revocation, a narrow window and close/reopen cleanup.
+The configuration mockup is reflected in the icon-and-label pill tabs, grouped
+password fields, sessions header refresh icon, individual session cards and
+trailing destructive end-all action. The fixture clicks the real tab controls
+and checks that both reveal-enabled password fields fit the narrow window.
+With `PAPO_DESIGN_PREVIEW=1`, it writes private synthetic previews to
+`/tmp/papo-design-account-settings-security.png` and
+`/tmp/papo-design-account-settings-narrow.png`.
+The existing `account-notices` fixture continues to cover profile, preferences,
+security and notification workflows.
+
+## Webhook chat identities and avatars
+
+```sh
+PAPO_UI_CASE=webhook-chat dbus-run-session -- xvfb-run -a cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+cargo test --locked --offline webhook_grouping
+cargo test --locked --offline discord_avatar_variants
+cargo test --locked --offline custom_avatar_budget
+```
+
+The local GTK fixture sends pairs of messages from eight external senders through
+one webhook. Each pair must share a header while distinct senders stay separate.
+All eight pictures must load through the bounded queue, with one HTTP fetch per
+resource, normal contrast and no fake interactive profile buttons. Scrolling,
+revisiting the channel and switching while decoding is held must reuse images
+and pending work. Failed refreshes preserve displayed pictures; loss of channel
+access clears the session cache. Unit fixtures check external identity boundaries,
+Discord URL cache keys, conservative request pacing and `Retry-After` handling.
+No real account or Discord CDN connection is needed.
+
+## Performance and UX regressions
+
+The suggestions implementation keeps local fixture scenarios separate so failures
+identify the affected behavior. Run each with a private display/session, for example:
+
+```sh
+PAPO_UI_CASE=avatar-viewport PAPO_PERFORMANCE=1 dbus-run-session -- xvfb-run -a \
+  cargo test --locked --offline ui_smoke -- --ignored --test-threads=1 --nocapture
+```
+
+Cases added or extended:
+
+- `avatar-viewport`: 100/5,000 members, viewport/overscan demand, scrolling and
+  hidden-pane behavior; large rosters recycle rows. Both roster sizes also check
+  the shared chat/member wheel animation, intermediate positions, accumulated
+  wheel steps, click/drag interruption, unmap cleanup, reduced motion and bounds.
+- `search-recycling`: pagination overlap, stable model objects, bounded factory
+  widgets, mention rendering, navigation and stale/cancelled responses.
+- `account-settings`: mounted profile saves, shared shortcuts, retained drafts,
+  Save/Discard/Cancel on close, local motion preference and password cleanup.
+- `emoji-notifications`: animation timing, clipping, unmapping, returning to view,
+  live reduced-motion changes, cleanup and notification tabs.
+- `notification-window`: a recoverable 1,000-notice paging window, continued older-page
+  loading and return to the latest pages, without constructing
+  rows in collapsed groups or replaying read/desktop events.
+- `notification-filters` / `account-notices`: lazy collapsed groups, read batching,
+  retries, permissions, pagination, sender/channel counts and profile workflows.
+- `webhook-chat`: sender grouping, concurrent avatar queues, reuse across channels,
+  rejected stale completions and failed-refresh pixel/freshness preservation.
+- `recovery`: disconnect/reconnect status, readable cached messages, unsent drafts,
+  transient permission-refresh failures, visible-avatar revalidation and idle polling.
+- `smooth-updates`: continuous reaction bursts, delayed allocation, image completion,
+  scroll/reading anchors, opening cover and bounded 5,000-message history.
+- `perf-baseline`: just the bounded-history measurement, suitable for repeatable
+  `cargo test --release` samples without other fixture windows affecting RSS.
+
+`PAPO_PERFORMANCE=1` prints aggregate diagnostics on normal application/test exit.
+See [PERFORMANCE.md](PERFORMANCE.md) for metric definitions, recorded samples and
+conditional work. No public server or saved account is needed for these cases.
+
+## Media loading pipeline
+
+```sh
+PAPO_UI_CASE=media-loading dbus-run-session -- xvfb-run -a \
+  cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+```
+
+This synthetic case supplies thirty cached thumbnails and verifies that the next
+uncached attachment is still requested, without re-downloading those thumbnails.
+It then holds the full-animation worker and checks that two GIF first frames and
+a still image are displayed before full animation decoding can finish. Releasing
+the worker completes both animations, drops temporary first-frame textures and
+makes no extra media requests. `media-cache`, `backend-gifs`, `gif-embeds`,
+`scroll-media` and `smooth-updates` cover cache reuse, bot renditions, scrolling,
+layout stability and bounded retention around this pipeline.
+
+First-frame decoding and full animation preparation run off the GTK thread.
+Full GIF decoding shares a single animation gate and the existing two decoder
+slots; waiting animations do not reserve thumbnail workers. Blocking decoders
+retain their permit until the work finishes, even when the requesting future is
+cancelled. Network pacing and concurrent download limits remain unchanged; the recent
+preview/cache budgets below apply. Video poster extraction releases its download slot once the
+preview bytes have arrived, while its single poster worker remains bounded.
+
+## Recent opening media batch
+
+```sh
+PAPO_UI_CASE=recent-media dbus-run-session -- xvfb-run -a \
+  cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+```
+
+Text and media share `INITIAL_MESSAGE_LIMIT = 30`. Visible/nearby media gets first
+priority, then the rest of the latest 30 messages prefetches without scrolling.
+Recent static previews and video posters remain resident for up to eight channels
+(128 MiB/256 entries globally). Full GIF frames and video players remain scoped
+to the active view; prefetched GIFs prepare just a first frame and resume full
+animation when brought into view. The separate 96 MiB/512-entry compressed cache
+evicts older scroll history before recent opening batches, within its hard bound.
+These are demand-allocated ceilings, not memory reserved at startup.
+
+The native fixture checks a complete 30-image preload, texture identity after
+scrolling nineteen messages up and down, channel return with both decoders held,
+offscreen GIF first-frame promotion without downloading again, byte/channel
+eviction, shared-owner deletion, moderation
+and revoked access. Older media keeps normal lazy loading and bounded eviction.

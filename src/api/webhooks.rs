@@ -1,5 +1,9 @@
 //! Webhook management uses the user's session; execution belongs to external integrations.
 use super::*;
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+pub(crate) enum AvatarFailure {Missing,Invalid,Transient,RateLimited(std::time::Duration)}
+impl std::fmt::Display for AvatarFailure{fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result{f.write_str("Avatar indisponível")}}
+impl std::error::Error for AvatarFailure{}
 impl ApiClient {
     pub async fn list_webhooks(&self) -> Result<Vec<Webhook>> {
         let list: WebhookList = Self::decode(self.inner.get(self.url("/webhooks")).send_paced(&self.requests).await?, "listar webhooks").await?;
@@ -46,21 +50,27 @@ impl ApiClient {
         }
         Some(url)
     }
-    pub(crate) async fn external_avatar(&self, value: &str) -> Result<Vec<u8>> {
+    pub(crate) fn external_avatar_delay(&self,value:&str)->Duration{
+        self.external_avatar_url(value).map_or(Duration::ZERO,|url|if url.origin()==self.base.origin(){self.requests.remaining()}else{requests::avatar_origin(&url.origin().ascii_serialization()).remaining()})
+    }
+    pub(crate) async fn external_avatar(&self, value: &str) -> std::result::Result<Vec<u8>,AvatarFailure> {
         use futures_util::StreamExt;
-        let url = self.external_avatar_url(value).context("Avatar externo inválido")?;
+        let url = self.external_avatar_url(value).ok_or(AvatarFailure::Invalid)?;
         // No redirects, ambient proxy credentials, cookies, or Authorization.
         static PUBLIC: std::sync::LazyLock<std::result::Result<Client,reqwest::Error>> = std::sync::LazyLock::new(|| Client::builder().redirect(reqwest::redirect::Policy::none()).no_proxy().timeout(Duration::from_secs(12)).build());
-        let client = PUBLIC.as_ref().map_err(|_|anyhow::anyhow!("Client avatar indisponível"))?;
+        let client = PUBLIC.as_ref().map_err(|_|AvatarFailure::Transient)?;
         let same_server = url.origin() == self.base.origin();
-        let request = client.get(url);
-        let response = if same_server { request.send_paced(&self.requests).await? } else { request.send().await? };
-        let response = response.error_for_status()?;
-        anyhow::ensure!(response.status().is_success(), "Avatar indisponível");
+        let budget=requests::avatar_origin(&url.origin().ascii_serialization());
+        let response=client.get(url).send_paced(if same_server{&self.requests}else{&budget}).await.map_err(|_|AvatarFailure::Transient)?;
+        match response.status(){
+            reqwest::StatusCode::NOT_FOUND|reqwest::StatusCode::GONE=>return Err(AvatarFailure::Missing),
+            reqwest::StatusCode::TOO_MANY_REQUESTS=>return Err(AvatarFailure::RateLimited(if same_server{self.requests.remaining()}else{budget.remaining()})),
+            status if !status.is_success()=>return Err(AvatarFailure::Transient), _=>{}
+        }
         let limit = 2 << 20;
-        anyhow::ensure!(response.content_length().is_none_or(|n| n <= limit), "Avatar muito grande");
+        if response.content_length().is_some_and(|n|n>limit){return Err(AvatarFailure::Invalid);}
         let mut bytes = Vec::new(); let mut stream = response.bytes_stream();
-        while let Some(chunk) = stream.next().await { let chunk=chunk?; anyhow::ensure!(bytes.len() + chunk.len() <= limit as usize, "Avatar muito grande"); bytes.extend_from_slice(&chunk); }
+        while let Some(chunk) = stream.next().await { let chunk=chunk.map_err(|_|AvatarFailure::Transient)?; if bytes.len()+chunk.len()>limit as usize{return Err(AvatarFailure::Invalid);} bytes.extend_from_slice(&chunk); }
         Ok(bytes)
     }
 }

@@ -77,6 +77,7 @@ impl Embed {
     pub fn version(&self)->DateTime<Utc>{self.fetched_at.unwrap_or(self.created_at)}
     pub fn has_video(&self)->bool{self.video.as_ref().and_then(|v|v.url.as_ref()).is_some()}
     pub fn animated_link(&self)->bool{
+        if self.fetch_method=="gif"{return true;}
         let provider=self.url.as_deref().is_some_and(crate::media::gif_links::is_provider)
             ||self.provider.iter().chain(self.site_name.iter()).any(|name|crate::media::gif_links::provider_name(name));
         let gif=|m:&EmbedMedia|m.mime_type.as_deref().is_some_and(|mime|mime.split(';').next().unwrap_or("").trim().eq_ignore_ascii_case("image/gif"));
@@ -149,6 +150,10 @@ impl EmbedInput {
 
 #[cfg(test)]mod tests{
     use super::*;
+    #[test]fn backend_gif_marker_is_authoritative_without_a_public_media_url(){
+        let embed:Embed=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"fetch_method":"gif","url":"https://example.test/canonical","thumbnail":{"mime_type":"image/gif","width":240,"height":180}})).unwrap();
+        assert!(embed.animated_link());assert!(!embed.has_video());assert!(embed.thumbnail.as_ref().unwrap().url.is_none());
+    }
     #[test]fn animated_link_detection_accepts_provider_metadata_without_reclassifying_other_videos(){
         let mut e:Embed=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"url":"https://klipy.com/gifs/happycadogt-bang"})).unwrap();assert!(e.animated_link());
         e.url=Some("https://example.test/video".into());assert!(!e.animated_link());

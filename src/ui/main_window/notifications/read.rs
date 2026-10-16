@@ -14,8 +14,9 @@ impl Reads {
     #[cfg(test)]pub(super) fn idle(&self)->bool{self.pending.is_none()}
     #[cfg(test)]pub(super) fn retry_now(&mut self,channel:Uuid){self.retry.insert(channel,Instant::now());}
     pub(super) fn covers(&self,message:&Message)->bool{
-        self.acknowledged.get(&message.channel_id).is_some_and(|old|key(*old)>=key(MessageCursor::from(message)))
+        self.covers_cursor(message.channel_id,MessageCursor::from(message))
     }
+    pub(super) fn covers_cursor(&self,channel:Uuid,cursor:MessageCursor)->bool{self.acknowledged.get(&channel).is_some_and(|old|key(*old)>=key(cursor))}
     pub(super) fn begin(&mut self,message:&Message)->Option<Uuid>{
         if self.pending.is_some()
             || self.retry.get(&message.channel_id).is_some_and(|until|*until>Instant::now())

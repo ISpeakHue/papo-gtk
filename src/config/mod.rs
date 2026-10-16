@@ -16,8 +16,14 @@ pub struct AppConfig {
     pub theme: Option<String>,
     /// Resume a valid session from the desktop keyring on the next launch.
     pub remember_session: Option<bool>,
+    #[serde(default)]
+    pub motion:Motion,
 }
 
+#[derive(Debug,Clone,Copy,Default,PartialEq,Eq,Serialize,Deserialize)]
+#[serde(rename_all="snake_case")]
+pub enum Motion{#[default] System,Always,Reduced}
+impl Motion{pub fn from_index(index:u32)->Self{match index{1=>Self::Always,2=>Self::Reduced,_=>Self::System}}pub fn index(self)->u32{match self{Self::System=>0,Self::Always=>1,Self::Reduced=>2}}}
 impl AppConfig {
     /// XDG config path: `~/.config/papo-gtk/config.toml`.
     pub fn path() -> PathBuf {
@@ -59,7 +65,7 @@ mod tests {
             server_url: Some("http://localhost:8080".into()),
             last_username: Some("testuser".into()),
             theme: Some("dark".into()),
-            remember_session:Some(true),
+            remember_session:Some(true),motion:Motion::System,
         };
 
         let serialized = toml::to_string_pretty(&config).expect("serialization failed");

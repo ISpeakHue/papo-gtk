@@ -60,12 +60,23 @@ jobs:
         run: PAPO_UI_CASE=notification-filters dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
       - name: Check grouped notification read batching, retries and live events
         run: PAPO_UI_CASE=account-notices dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+      - name: Check tabbed account settings, retained drafts and password cleanup
+        run: PAPO_UI_CASE=account-settings dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+      - name: Check webhook message grouping, avatar queues and cache reuse
+        run: PAPO_UI_CASE=webhook-chat dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
       - name: Check GIF link animations, compact editing and autocomplete keyboard routing
         run: PAPO_UI_CASE=report9 PAPO_NATIVE_INPUT_TEST=1 GTK_IM_MODULE=simple dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
       - name: Check readable edit mentions, user replacement and native accented input
         run: PAPO_UI_CASE=edit-mentions PAPO_NATIVE_INPUT_TEST=1 GTK_IM_MODULE=simple dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
       - name: Check inline emoji details, animation, spoilers and popover cleanup
         run: PAPO_UI_CASE=emoji-details PAPO_NATIVE_INPUT_TEST=1 dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+      - name: Check backend GIF media, cache reuse and temporary chat errors
+        run: PAPO_UI_CASE=backend-gifs dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+      - name: Check viewport avatars, recycled search, motion and reconnect recovery
+        run: |
+          for scenario in avatar-viewport search-recycling emoji-notifications notification-window recovery media-loading recent-media; do
+            PAPO_UI_CASE="$scenario" dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+          done
       - name: Check private screen portal permissions and cleanup
         run: dbus-run-session -- python3 tests/portal_probe.py
       - name: Check native audio worker cleanup using synthetic capture

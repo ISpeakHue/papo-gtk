@@ -55,7 +55,7 @@ pub(crate) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::Mai
     super::video::exercise(main,context,call,peer);
     main.model().voice.leave.emit_clicked();pump(context);assert!(main.model().voice.call.is_none());main.emit(MainWindowMsg::Voice(VoiceMsg::Engine{call,event:EngineEvent::Connection{state:"connected".into()}}));pump(context);assert!(main.model().voice.call.is_none());assert_eq!(main.model().active_channel_id,text);
     main.emit(MainWindowMsg::Account(super::super::account::AccountMsg::Preferences));pump(context);
-    let prefs=gtk::Window::list_toplevels().into_iter().filter_map(|w|w.downcast::<gtk::Window>().ok()).find(|w|w.title().as_deref()==Some("Preferências")).unwrap();
+    let prefs=gtk::Window::list_toplevels().into_iter().filter_map(|w|w.downcast::<gtk::Window>().ok()).find(|w|w.title().as_deref()==Some("Configurações da conta")).unwrap();
     let sound=descendants(prefs.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::CheckButton>().ok().filter(|c|c.label().is_some_and(|l|l.to_lowercase().contains("som")))).unwrap();sound.set_active(true);
     find_button(prefs.upcast_ref(),"Salvar preferências").emit_clicked();until(context,||main.model().account.config.notifications.as_ref().and_then(|n|n.sound)==Some(true));prefs.close();pump(context);
     let cues=main.model().voice.cue.played;

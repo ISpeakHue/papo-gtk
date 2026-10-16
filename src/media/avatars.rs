@@ -31,11 +31,13 @@ pub async fn prepare_profiles(profiles:Vec<crate::models::UserProfile>)->Vec<(Uu
 pub struct AvatarCache {
     pub textures: HashMap<Uuid, Texture>,
     loaded: HashSet<Uuid>,
+    freshness:HashMap<Uuid,std::time::Instant>,
     pending: HashMap<Uuid, Uuid>,
     order:std::collections::VecDeque<Uuid>,
 }
 
 impl AvatarCache {
+    pub fn invalidate_freshness(&mut self){self.freshness.clear();}
     fn insert(&mut self,id:Uuid,texture:Texture){
         self.order.retain(|key|*key!=id);self.order.push_back(id);self.textures.insert(id,texture);
         while self.textures.len()>AVATAR_LIMIT{if let Some(id)=self.order.pop_front(){self.textures.remove(&id);self.loaded.remove(&id);}}
@@ -45,7 +47,7 @@ impl AvatarCache {
         let request_id = Uuid::new_v4();
         let mut seen = HashSet::new();
         let ids: Vec<_> = ids.iter().copied().filter(|id| {
-            seen.insert(*id) && (force || (!self.loaded.contains(id) && !self.pending.contains_key(id)))
+            seen.insert(*id) && (force || (!self.freshness.get(id).is_some_and(|at|at.elapsed()<std::time::Duration::from_secs(3600)) && !self.pending.contains_key(id)))
         }).collect();
         if ids.is_empty() { return None; }
         for id in &ids { self.pending.insert(*id, request_id); }
@@ -60,8 +62,10 @@ impl AvatarCache {
         for id in ids {
             if self.pending.get(id) != Some(&request_id) { continue; }
             self.pending.remove(id);
-            self.loaded.insert(*id);
-            if let Some(image)=profiles.remove(id).flatten(){self.insert(*id,image.texture());}else{self.textures.remove(id);self.order.retain(|key|key!=id);}
+            self.loaded.insert(*id);self.freshness.insert(*id,std::time::Instant::now());
+            self.order.retain(|key|key!=id);self.order.push_back(*id);
+            while self.order.len()>AVATAR_LIMIT{if let Some(old)=self.order.pop_front(){self.textures.remove(&old);self.loaded.remove(&old);self.freshness.remove(&old);}}
+            if let Some(image)=profiles.remove(id).flatten(){self.insert(*id,image.texture());}else{self.textures.remove(id);}
             changed = true;
         }
         changed
@@ -136,4 +140,13 @@ pub async fn prepare_bytes(bytes:Vec<u8>)->Option<PreparedImage>{
     if bytes.len()>2<<20{return None;}
     let permit=DECODERS.clone().acquire_owned().await.ok()?;
     tokio::task::spawn_blocking(move ||{let _permit=permit;PreparedImage::decode_thumbnail(&bytes,AVATAR_EDGE,AVATAR_EDGE)}).await.ok().flatten()
+}
+
+#[cfg(test)]mod freshness_tests{
+    use super::*;
+    #[test]fn reconnect_invalidates_freshness_without_eagerly_fetching_every_profile(){
+        let mut cache=AvatarCache::default();let ids:Vec<_>=(0..5000).map(|_|Uuid::new_v4()).collect();
+        let(token,offered)=cache.begin(&ids[..20],false).unwrap();cache.finish(token,&offered,vec![]);assert!(cache.begin(&ids[..20],false).is_none());
+        cache.invalidate_freshness();let(_,visible)=cache.begin(&ids[..3],false).unwrap();assert_eq!(visible.len(),3);assert_eq!(cache.pending.len(),3);assert_eq!(cache.loaded.len(),20);
+    }
 }

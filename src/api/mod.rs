@@ -18,6 +18,7 @@ pub mod security;
 mod discovery;
 mod administration;
 mod webhooks;
+pub(crate) use webhooks::AvatarFailure;
 mod moderation;
 mod voice;
 mod requests;
@@ -72,6 +73,7 @@ pub struct ApiClient {
 impl std::fmt::Debug for ApiClient{fn fmt(&self,f:&mut std::fmt::Formatter)->std::fmt::Result{f.debug_struct("ApiClient").field("base",&self.base).finish_non_exhaustive()}}
 
 impl ApiClient {
+    pub(crate) fn cooldown_remaining(&self)->std::time::Duration{self.requests.remaining()}
     /// Create a new client pointing at `base_url` (e.g. `http://localhost:8080`).
     pub fn new(base_url: &str) -> Result<Self> {
         let base = Self::parse_base_url(base_url)?;
@@ -394,7 +396,7 @@ impl ApiClient {
         }
     }
     pub async fn list_messages(&self, channel_id: Uuid, cursor: Option<MessageCursor>) -> Result<MessageListResponse> {
-        self.message_page(channel_id,cursor,if cursor.is_some(){100}else{30}).await
+        self.message_page(channel_id,cursor,if cursor.is_some(){100}else{crate::models::INITIAL_MESSAGE_LIMIT as u32}).await
     }
 
     // Keep opening light; use larger pages for history and retained-page validation.

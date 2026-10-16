@@ -5,9 +5,20 @@ use std::{cell::{Cell,RefCell,OnceCell},time::Duration};
 #[derive(Debug)]
 pub struct PreparedAnimation{pub frames:Vec<(PreparedImage,Duration)>}
 impl PreparedAnimation{
+    /// Publish a bounded first frame before preparing the remaining animation.
+    pub fn first(bytes:&[u8])->Option<PreparedImage>{
+        use image::{AnimationDecoder,ImageDecoder};
+        if bytes.len()>5<<20{return None;}
+        let mut decoder=image::codecs::gif::GifDecoder::new(std::io::Cursor::new(bytes)).ok()?;
+        let(w,h)=decoder.dimensions();if w==0||h==0||w>2048||h>2048{return None;}
+        let mut limits=image::Limits::default();limits.max_alloc=Some(32<<20);decoder.set_limits(limits).ok()?;
+        let frame=decoder.into_frames().next()?.ok()?;
+        let pixels=image::DynamicImage::ImageRgba8(frame.into_buffer()).thumbnail(420.min(w),300.min(h)).into_rgba8();
+        Some(PreparedImage{width:pixels.width(),height:pixels.height(),pixels:pixels.into_raw()})
+    }
     pub fn decode(bytes:&[u8])->Option<Self>{
         use image::{AnimationDecoder,ImageDecoder};
-        if bytes.len()>4<<20{return None;}
+        if bytes.len()>5<<20{return None;}
         let mut decoder=image::codecs::gif::GifDecoder::new(std::io::Cursor::new(bytes)).ok()?;
         let(w,h)=decoder.dimensions();if w==0||h==0||w>2048||h>2048{return None;}
         let mut limits=image::Limits::default();limits.max_alloc=Some(32<<20);decoder.set_limits(limits).ok()?;
@@ -53,14 +64,14 @@ impl PreparedAnimation{
     pub fn bytes(&self)->usize{self.frames.iter().map(|(f,_)|f.pixels.len()).sum()}
     pub fn paintable(self)->Animation{
         let animation:Animation=glib::Object::new();let frames=self.frames.into_iter().map(|(frame,delay)|(frame.texture(),delay)).collect::<Vec<_>>();
-        let _=animation.imp().frames.set(frames);animation
+        let _=animation.imp().frames.set(frames);ANIMATIONS.with(|all|all.borrow_mut().push(animation.downgrade()));animation
     }
 }
 mod imp{
     use super::*;
-    #[derive(Default)]pub struct Animation{pub frames:OnceCell<Vec<(gdk::Texture,Duration)>>,pub index:Cell<usize>,pub timer:RefCell<Option<glib::SourceId>>,pub consumers:RefCell<Vec<(glib::WeakRef<gtk::Widget>,Option<i32>)>>}
+    #[derive(Default)]pub struct Animation{pub frames:OnceCell<Vec<(gdk::Texture,Duration)>>,pub index:Cell<usize>,pub due:Cell<Option<std::time::Instant>>,pub consumers:RefCell<Vec<(glib::WeakRef<gtk::Widget>,Option<i32>)>>}
     #[glib::object_subclass]impl ObjectSubclass for Animation{const NAME:&'static str="PapoGifAnimation";type Type=super::Animation;type Interfaces=(gdk::Paintable,);}
-    impl ObjectImpl for Animation{fn dispose(&self){if let Some(timer)=self.timer.borrow_mut().take(){timer.remove();}}}
+    impl ObjectImpl for Animation{}
     impl PaintableImpl for Animation{
         fn flags(&self)->gdk::PaintableFlags{gdk::PaintableFlags::SIZE}
         fn current_image(&self)->gdk::Paintable{self.frames.get().unwrap()[self.index.get()].0.clone().upcast()}
@@ -85,10 +96,11 @@ impl Animation{
         let already_watched={let mut consumers=self.imp().consumers.borrow_mut();consumers.retain(|(w,_)|w.upgrade().is_some());
             let existing=consumers.iter().any(|(w,_)|w.upgrade().as_ref()==Some(widget));consumers.push((widget.downgrade(),offset));existing};
         if already_watched{return;}
-        let weak=self.downgrade();widget.connect_map(move |_|{if let Some(animation)=weak.upgrade(){schedule(&animation);}});
+        let weak=self.downgrade();widget.connect_map(move |widget|{let mut parent=widget.parent();while let Some(ancestor)=parent{if let Some(scroll)=ancestor.downcast_ref::<gtk::ScrolledWindow>(){watch_scroll(scroll);}parent=ancestor.parent();}if let Some(animation)=weak.upgrade(){schedule(&animation);}});
         let weak=self.downgrade();widget.connect_unmap(move |_|{if let Some(animation)=weak.upgrade(){
-            if !animation.has_mapped_consumer(){if let Some(timer)=animation.imp().timer.borrow_mut().take(){timer.remove();}}
+            if !animation.has_mapped_consumer(){animation.imp().due.set(None);}wake();
         }});
+        let mut parent=widget.parent();while let Some(ancestor)=parent{if let Some(scroll)=ancestor.downcast_ref::<gtk::ScrolledWindow>(){watch_scroll(scroll);}parent=ancestor.parent();}
         if widget.is_mapped(){schedule(self);}
     }
     fn has_mapped_consumer(&self)->bool{self.consumers().iter().any(|(w,_)|w.is_mapped())}
@@ -120,18 +132,53 @@ fn in_scroll_viewports(widget:&gtk::Widget,local:&gtk::graphene::Rect)->bool{
         parent=ancestor.parent();
     }true
 }
-fn schedule(animation:&Animation){
-    let frames=animation.imp().frames.get().unwrap();if frames.len()<2||animation.imp().timer.borrow().is_some()||!animation.has_mapped_consumer(){return;}
-    // Cached or clipped GIFs must not continually invalidate the entire chat.
-    // Poll clipped, mapped consumers slowly so scrolling them into view resumes.
-    let delay=if animation.on_screen(){frames[animation.imp().index.get()].1}else{Duration::from_millis(250)};let weak=animation.downgrade();
-    *animation.imp().timer.borrow_mut()=Some(glib::timeout_add_local_once(delay,move ||{if let Some(animation)=weak.upgrade(){
-        animation.imp().timer.borrow_mut().take();if animation.on_screen(){let count=animation.imp().frames.get().unwrap().len();animation.imp().index.set((animation.imp().index.get()+1)%count);animation.invalidate_contents();}schedule(&animation);
-    }}));
+thread_local!{
+    static ANIMATIONS:RefCell<Vec<glib::WeakRef<Animation>>>=const{RefCell::new(Vec::new())};
+    static TIMER:RefCell<Option<glib::SourceId>>=const{RefCell::new(None)};
+    static SCROLLS:RefCell<Vec<glib::WeakRef<gtk::Adjustment>>>=const{RefCell::new(Vec::new())};
+    static MOTION:Cell<crate::config::Motion>=const{Cell::new(crate::config::Motion::System)};
+    static SYSTEM_WATCHED:Cell<bool>=const{Cell::new(false)};
+    static WAKE_PENDING:Cell<bool>=const{Cell::new(false)};
+}
+fn allowed()->bool{MOTION.with(|mode|match mode.get(){crate::config::Motion::Always=>true,crate::config::Motion::Reduced=>false,crate::config::Motion::System=>gtk::Settings::default().is_none_or(|s|s.is_gtk_enable_animations())})}
+pub fn set_motion(motion:crate::config::Motion){MOTION.with(|mode|mode.set(motion));wake();}
+pub fn motion()->crate::config::Motion{MOTION.with(Cell::get)}
+fn animations()->Vec<Animation>{ANIMATIONS.with(|all|{let mut all=all.borrow_mut();all.retain(|a|a.upgrade().is_some());all.iter().filter_map(glib::WeakRef::upgrade).collect()})}
+fn watch_scroll(scroll:&gtk::ScrolledWindow){
+    let adjustment=scroll.vadjustment();let new=SCROLLS.with(|all|{let mut all=all.borrow_mut();all.retain(|a|a.upgrade().is_some());if all.iter().any(|a|a.upgrade().as_ref()==Some(&adjustment)){false}else{all.push(adjustment.downgrade());true}});
+    if new{
+        // Adjustment signals run during allocation, before the child transform
+        // is updated. Check visibility on the next allocated frame as well.
+        let pending=std::rc::Rc::new(Cell::new(false));let weak=scroll.downgrade();
+        let check:std::rc::Rc<dyn Fn()>=std::rc::Rc::new(move ||{wake();if pending.replace(true){return;}if let Some(scroll)=weak.upgrade(){let pending=pending.clone();let first=Cell::new(true);scroll.add_tick_callback(move |_,_|{if first.replace(false){return glib::ControlFlow::Continue;}pending.set(false);wake();glib::ControlFlow::Break});}else{pending.set(false);}});
+        let changed=check.clone();adjustment.connect_value_changed(move |_|changed());adjustment.connect_changed(move |_|check());
+    }
+}
+fn wake(){if WAKE_PENDING.with(|p|p.replace(true)){return;}glib::idle_add_local_once(||{WAKE_PENDING.with(|p|p.set(false));reschedule(false);});}
+fn schedule(_animation:&Animation){
+    SYSTEM_WATCHED.with(|watched|{if !watched.replace(true){if let Some(settings)=gtk::Settings::default(){settings.connect_gtk_enable_animations_notify(|_|wake());}}});wake();
+}
+fn reschedule(advance:bool){
+    TIMER.with(|timer|{if let Some(timer)=timer.borrow_mut().take(){timer.remove();}});
+    let now=std::time::Instant::now();let enabled=allowed();let mut next=None::<std::time::Instant>;
+    for animation in animations(){let imp=animation.imp();let frames=imp.frames.get().unwrap();
+        if !enabled{imp.due.set(None);if imp.index.replace(0)!=0{animation.invalidate_contents();}continue;}
+        if frames.len()<2||!animation.on_screen(){imp.due.set(None);continue;}
+        let mut due=imp.due.get().unwrap_or(now+frames[imp.index.get()].1);
+        if advance&&due<=now{imp.index.set((imp.index.get()+1)%frames.len());animation.invalidate_contents();crate::performance::record("animation_frames",1);due=now+frames[imp.index.get()].1;}
+        imp.due.set(Some(due));next=Some(next.map_or(due,|previous|previous.min(due)));
+    }
+    if let Some(next)=next{TIMER.with(|timer|*timer.borrow_mut()=Some(glib::timeout_add_local_once(next.saturating_duration_since(now).max(Duration::from_millis(1)),||{TIMER.with(|timer|timer.borrow_mut().take());reschedule(true);})) );}
 }
 #[cfg(test)]mod tests{
     use super::*;
     pub(crate) fn fixture()->Vec<u8>{let mut out=vec![];{let mut encoder=image::codecs::gif::GifEncoder::new(&mut out);encoder.set_repeat(image::codecs::gif::Repeat::Infinite).unwrap();for color in [[255,0,0,255],[0,255,0,255]]{encoder.encode_frame(image::Frame::from_parts(image::RgbaImage::from_pixel(8,8,image::Rgba(color)),0,0,image::Delay::from_numer_denom_ms(40,1))).unwrap();}}out}
+    #[test]fn progressive_first_frame_preserves_pixels_and_rejects_oversized_inputs(){
+        let bytes=fixture();let first=PreparedAnimation::first(&bytes).unwrap();let full=PreparedAnimation::decode(&bytes).unwrap();
+        assert_eq!((first.width,first.height),(full.frames[0].0.width,full.frames[0].0.height));assert_eq!(first.pixels,full.frames[0].0.pixels);
+        assert!(PreparedAnimation::first(b"invalid").is_none());assert!(PreparedAnimation::first(&vec![0;(5<<20)+1]).is_none());
+        let mut oversized=bytes;oversized[6..8].copy_from_slice(&2049u16.to_le_bytes());assert!(PreparedAnimation::first(&oversized).is_none());
+    }
     #[test]fn isolated_video_frames_validate_geometry_budget_and_complete_frames(){
         let mut data=b"PAPOGIF1".to_vec();data.extend_from_slice(&2u32.to_le_bytes());data.extend_from_slice(&2u32.to_le_bytes());data.extend_from_slice(&100u32.to_le_bytes());data.extend_from_slice(&[255;16]);
         let animation=PreparedAnimation::video_frames(&data).unwrap();assert_eq!(animation.frames.len(),1);assert_eq!(animation.bytes(),16);assert_eq!(animation.frames[0].1,Duration::from_millis(100));
@@ -158,14 +205,18 @@ fn schedule(animation:&Animation){
     }
     pub(crate) fn exercise(context:&glib::MainContext){
         use crate::ui::chat::actions::tests::{until,pump};
-        let animation=PreparedAnimation::decode(&fixture()).unwrap().paintable();assert!(animation.imp().timer.borrow().is_none(),"cached GIFs need no timer");
+        let previous=motion();set_motion(crate::config::Motion::Always);
+        let animation=PreparedAnimation::decode(&fixture()).unwrap().paintable();assert!(animation.imp().due.get().is_none(),"cached GIFs need no timer");
         let picture=animation.picture();picture.set_size_request(80,80);let column=gtk::Box::new(gtk::Orientation::Vertical,0);column.append(&picture);let spacer=gtk::Box::new(gtk::Orientation::Vertical,0);spacer.set_height_request(1000);column.append(&spacer);
         let scroll=gtk::ScrolledWindow::new();scroll.set_child(Some(&column));let window=gtk::Window::builder().default_width(300).default_height(200).child(&scroll).build();window.present();until(context,||picture.is_mapped());
         let first=animation.current_image();until(context,||animation.current_image()!=first);
         scroll.vadjustment().set_value(800.0);pump(context);let offscreen=animation.current_image();for _ in 0..80{pump(context);std::thread::sleep(Duration::from_millis(5));}assert_eq!(animation.current_image(),offscreen,"offscreen GIFs must not advance frames");
         scroll.vadjustment().set_value(0.0);until(context,||animation.current_image()!=offscreen);
-        picture.set_visible(false);pump(context);assert!(animation.imp().timer.borrow().is_none(),"unmapped GIFs stop their timer");
-        window.set_child(None::<&gtk::Widget>);window.close();scroll.set_child(None::<&gtk::Widget>);drop(column);drop(picture);let weak=animation.downgrade();drop(animation);assert!(weak.upgrade().is_none(),"timer must not retain an invisible GIF");
+        set_motion(crate::config::Motion::Reduced);pump(context);assert_eq!(animation.current_image(),animation.first().upcast::<gdk::Paintable>());assert!(animation.imp().due.get().is_none());
+        for _ in 0..20{pump(context);std::thread::sleep(Duration::from_millis(5));}assert_eq!(animation.current_image(),animation.first().upcast::<gdk::Paintable>());
+        set_motion(crate::config::Motion::Always);until(context,||animation.current_image()!=animation.first().upcast::<gdk::Paintable>());
+        picture.set_visible(false);pump(context);assert!(animation.imp().due.get().is_none(),"unmapped GIFs stop their timer");
+        window.set_child(None::<&gtk::Widget>);window.close();scroll.set_child(None::<&gtk::Widget>);drop(column);drop(picture);let weak=animation.downgrade();drop(animation);assert!(weak.upgrade().is_none(),"timer must not retain an invisible GIF");set_motion(previous);pump(context);
     }
 }
 #[cfg(test)]pub(crate) use tests::{exercise,fixture};

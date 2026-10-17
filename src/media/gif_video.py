@@ -4,6 +4,12 @@ import os
 import struct
 import sys
 
+# Reject manifests before native discovery. The app also isolates this process.
+with open(sys.argv[1], "rb") as media_input:
+    header = media_input.read(12)
+if not (header.startswith(b"\x1a\x45\xdf\xa3") or header[4:8] in (b"ftyp", b"moov", b"mdat", b"free", b"wide")):
+    raise ValueError("Unsupported or externally referenced media")
+
 import gi
 
 gi.require_version("Gst", "1.0")

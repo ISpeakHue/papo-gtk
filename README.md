@@ -34,8 +34,9 @@ cargo run --locked
 Enter the **backend API URL** in the login screen, for example
 `http://localhost:8080`. For a local server, start papo-backend separately and
 keep it running while using the frontend. For a remote server, only the frontend
-needs to run on your computer. Enter the server password when required, then use
-your account credentials.
+needs to run on your computer. Remote servers require HTTPS; HTTP is permitted
+only for localhost/loopback development. Enter the server password when required,
+then use your account credentials.
 
 The pelican icon is embedded in the executable, including when using `cargo run`.
 To also register Papo in the desktop app list and give its dock entry the same icon:
@@ -55,11 +56,13 @@ Voice, video playback, cameras and screen sharing use the native media runtime.
 Install it on Fedora with:
 
 ```sh
-sudo dnf install python3-gobject python3-gstreamer1 gstreamer1-plugins-base gstreamer1-plugins-good gstreamer1-plugins-bad-free libnice-gstreamer1
+sudo dnf install bubblewrap python3-gobject python3-gstreamer1 gstreamer1-plugins-base gstreamer1-plugins-good gstreamer1-plugins-bad-free libnice-gstreamer1
 ```
 
 Screen sharing also requires a working desktop portal. Media playback depends
 on the installed codecs; a backend configured for voice is required for calls.
+Video preview/animation helpers require Bubblewrap and working user namespaces.
+See [SECURITY_REVIEW.md](SECURITY_REVIEW.md) for media isolation and supported containers.
 
 ## Tests
 
@@ -78,7 +81,7 @@ Real SFU integration can be enabled through the workflow's manual inputs.
 
 See [TESTING.md](TESTING.md) for dependencies, commands and manual checks,
 [DESIGN.md](DESIGN.md) for interface decisions, and
-[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for feature implementation notes.
+[follow-ups](docs/FOLLOW_UPS.md) for unresolved investigations and deferred work.
 See [EMBEDS.md](EMBEDS.md) for the updated embed API, custom-card controls and
 current backend media limitations.
 

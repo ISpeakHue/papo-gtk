@@ -150,3 +150,15 @@ pub async fn prepare_bytes(bytes:Vec<u8>)->Option<PreparedImage>{
         cache.invalidate_freshness();let(_,visible)=cache.begin(&ids[..3],false).unwrap();assert_eq!(visible.len(),3);assert_eq!(cache.pending.len(),3);assert_eq!(cache.loaded.len(),20);
     }
 }
+
+#[cfg(test)]mod security_tests{
+    use super::*;
+    #[tokio::test]async fn icon_preparation_rejects_large_encoded_and_advertised_pixel_sizes(){
+        assert!(prepare_blob(Some("x".repeat((3<<20)+1)),64).await.is_none());
+        assert!(prepare_blob(Some("invalid base64".into()),64).await.is_none());
+        let mut png=std::io::Cursor::new(Vec::new());image::DynamicImage::new_rgb8(2,2).write_to(&mut png,image::ImageFormat::Png).unwrap();let mut png=png.into_inner();
+        png[16..20].copy_from_slice(&50_000u32.to_be_bytes());png[20..24].copy_from_slice(&50_000u32.to_be_bytes());
+        let mut crc=0xffffffffu32;for byte in &png[12..29]{crc^=*byte as u32;for _ in 0..8{crc=(crc>>1)^if crc&1!=0{0xedb88320}else{0};}}png[29..33].copy_from_slice(&(!crc).to_be_bytes());
+        assert!(prepare_blob(Some(base64::engine::general_purpose::STANDARD.encode(png)),64).await.is_none());
+    }
+}

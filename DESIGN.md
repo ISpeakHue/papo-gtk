@@ -117,7 +117,7 @@ Design references: GNOME HIG [sidebars](https://developer.gnome.org/hig/patterns
 [header bars](https://developer.gnome.org/hig/patterns/containers/header-bars.html)
 and libadwaita [theme colors](https://gnome.pages.gitlab.gnome.org/libadwaita/doc/1.6/css-variables.html).
 
-See [TESTING.md](TESTING.md#native-chat-layout) for automated layout checks and
+See the [layout tests](docs/testing/desktop.md#native-chat-layout) for automated checks and
 mock-data previews. Preview generation never connects to a production server.
 
 ## Fourth media and completion pass
@@ -165,7 +165,7 @@ message. Search starts at 540 × 520, with advanced filters collapsed.
 Voice entry and departure have distinct short cues under the same sound
 preference. Local capture reports speaking transitions with a short release
 threshold; muting immediately removes the microphone indicator and highlight.
-See [BUG_FIXES_5.md](BUG_FIXES_5.md) for implementation bounds and checks.
+See [voice acceptance checks](docs/testing/voice.md) for bounds and verification.
 
 ## Bounded chat and background updates
 

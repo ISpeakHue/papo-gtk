@@ -1,10 +1,11 @@
 //! CommonMark/GFM events become native text runs, never HTML or remote widgets.
-use pulldown_cmark::{Event,Options,Parser,Tag,TagEnd};
+use pulldown_cmark::{CodeBlockKind,Event,Options,Parser,Tag,TagEnd};
 
 #[derive(Clone,Debug,Default,PartialEq,Eq,Hash)]
 pub(super) struct Style {
     pub bold:bool,pub italic:bool,pub underline:bool,pub strike:bool,pub code:bool,
     pub heading:u8,pub quote:usize,pub table:bool,pub spoiler:bool,pub spoiler_group:usize,pub link:Option<String>,
+    pub code_block:usize,pub code_language:Option<String>,
 }
 #[derive(Clone,Debug,PartialEq,Eq)]pub(super) struct Run {pub text:String,pub style:Style}
 #[derive(Default)]struct Document {runs:Vec<Run>}
@@ -22,14 +23,17 @@ impl Document {
 }
 pub(super) fn parse(source:&str)->Vec<Run>{
     let options=Options::ENABLE_TABLES|Options::ENABLE_TASKLISTS|Options::ENABLE_STRIKETHROUGH|Options::ENABLE_FOOTNOTES|Options::ENABLE_GFM;
-    let mut doc=Document::default();let mut style=Style::default();let mut stack=Vec::new();let mut lists=Vec::<Option<u64>>::new();
+    let mut doc=Document::default();let mut style=Style::default();let mut stack=Vec::new();let mut lists=Vec::<Option<u64>>::new();let mut code_block=0;
     for (event,range) in Parser::new_ext(source,options).into_offset_iter(){match event{
         Event::Start(tag)=>{
             stack.push(style.clone());
             match tag{
                 Tag::Heading{level,..}=>{doc.newline(2,&style);style.heading=level as u8;style.bold=true;},
                 Tag::BlockQuote(_)=>{doc.newline(1,&style);style.quote+=1;},
-                Tag::CodeBlock(_)=>{doc.newline(1,&style);style.code=true;},
+                Tag::CodeBlock(kind)=>{
+                    doc.newline(1,&style);style.code=true;code_block+=1;style.code_block=code_block;
+                    if let CodeBlockKind::Fenced(info)=kind{style.code_language=info.split_whitespace().next().filter(|s|s.len()<=64).map(str::to_owned);}
+                },
                 Tag::Strong=>{if source[range].starts_with("__"){style.underline=true;}else{style.bold=true;}},
                 Tag::Emphasis=>style.italic=true,Tag::Strikethrough=>style.strike=true,
                 Tag::Link{dest_url,..}=>{style.link=super::rich::safe_url(&dest_url).map(|u|u.to_string());},
@@ -101,4 +105,10 @@ fn plain(source:&str)->String{parse(source).into_iter().map(|r|r.text).collect()
         assert_eq!(plain("\\*literal\\* &amp; incomplete **"),"*literal* & incomplete **");
     }
     #[test]fn wire_mentions_survive_parser_event_boundaries(){let token=format!("@mention(<@{}>)",uuid::Uuid::new_v4());assert_eq!(plain(&format!("**{token}**")),token);}
+    #[test]fn fenced_languages_and_block_boundaries_do_not_leak_into_prose_or_inline_code(){
+        let runs=parse("Antes `inline`\n\n```rust\n/* not closed\n```\n```rust\nfn main() {}\n```\n\nDepois\n\n    indented\n");
+        let blocks:Vec<_>=runs.iter().filter(|r|r.style.code_language.is_some()).collect();assert_eq!(blocks.len(),2);
+        assert_eq!(blocks[0].style.code_language.as_deref(),Some("rust"));assert_ne!(blocks[0].style.code_block,blocks[1].style.code_block);
+        assert!(runs.iter().filter(|r|r.text.contains("Antes")||r.text.contains("Depois")||r.text.contains("inline")||r.text.contains("indented")).all(|r|r.style.code_language.is_none()));
+    }
 }

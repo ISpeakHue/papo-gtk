@@ -21,14 +21,17 @@ jobs:
   test:
     runs-on: ubuntu-latest
     # The manifest requires GTK >= 4.12 and libadwaita >= 1.6.
-    container: fedora:44
+    # Media helpers create their own user/network/mount namespaces.
+    container:
+      image: fedora:44
+      options: --security-opt seccomp=unconfined --security-opt apparmor=unconfined
     timeout-minutes: 30
     env:
       CARGO_TERM_COLOR: always
       RUSTFLAGS: "-D warnings"
     steps:
       - name: Install Rust and native build dependencies
-        run: dnf install -y git gcc rust cargo pkgconf-pkg-config glib2-devel openssl-devel gtk4-devel libadwaita-devel python3-gobject python3-gstreamer1 gstreamer1-plugins-base gstreamer1-plugins-good gstreamer1-plugins-bad-free libnice-gstreamer1 xorg-x11-server-Xvfb xorg-x11-xauth setxkbmap libXtst dbus-daemon
+        run: dnf install -y bubblewrap git gcc rust cargo pkgconf-pkg-config glib2-devel openssl-devel gtk4-devel libadwaita-devel python3-gobject python3-gstreamer1 gstreamer1-plugins-base gstreamer1-plugins-good gstreamer1-plugins-bad-free libnice-gstreamer1 xorg-x11-server-Xvfb xorg-x11-xauth setxkbmap libXtst dbus-daemon
       - uses: actions/checkout@v4
       - name: Check AppImage media plugin and host driver boundaries
         run: python3 -m unittest discover -s tests -p 'appimage_packaging_test.py'
@@ -36,6 +39,14 @@ jobs:
         run: python3 -m unittest discover -s tests -p 'call_sound_test.py'
       - name: Compile application and run unit and integration tests
         run: cargo test --locked
+      - name: Reject local media playlists before decoder discovery
+        run: python3 tests/security/media_network_probe.py
+      - name: Check bounded asynchronous server icon preparation
+        run: PAPO_UI_CASE=security-icons dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+      - name: Check native syntax colors, Unicode offsets, themes and spoilers
+        run: PAPO_UI_CASE=syntax-highlighting dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+      - name: Check reaction filters, member avatars and profile metadata batches
+        run: PAPO_UI_CASE=reaction-participants dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
       - name: Check login, chat workflows and adaptive layouts under a virtual display
         run: dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
       - name: Check multiline composer, wrapping and dead-key input

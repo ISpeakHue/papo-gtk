@@ -5,7 +5,7 @@
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
 use tokio::sync::mpsc;
-use tokio_tungstenite::{connect_async, tungstenite::Message as WsMessage};
+use tokio_tungstenite::{ tungstenite::Message as WsMessage};
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
@@ -155,7 +155,7 @@ fn spawn_with_deadlines(client: crate::api::ApiClient,deadlines:Deadlines) -> (m
             info!("Connecting to WebSocket");
             let connection = tokio::select! {
                 _ = ev_tx.closed() => return,
-                connection = tokio::time::timeout(deadlines.handshake,connect_async(request)) => connection.unwrap_or_else(|_|Err(std::io::Error::new(std::io::ErrorKind::TimedOut,"WebSocket handshake timed out").into())),
+                connection = tokio::time::timeout(deadlines.handshake,tokio_tungstenite::connect_async_with_config(request,Some(tokio_tungstenite::tungstenite::protocol::WebSocketConfig{max_message_size:Some(8<<20),max_frame_size:Some(8<<20),..Default::default()}),false)) => connection.unwrap_or_else(|_|Err(std::io::Error::new(std::io::ErrorKind::TimedOut,"WebSocket handshake timed out").into())),
             };
             match connection {
                 Ok((stream, _)) => {
@@ -278,7 +278,11 @@ fn error_summary(error:&tokio_tungstenite::tungstenite::Error)->String{
 // ── Parser ────────────────────────────────────────────────────────────────────
 
 pub(crate) fn parse_event(text: &str) -> Option<WsEvent> {
-    let raw: RawEvent = serde_json::from_str(text)
+    if text.len()>8<<20{return None;}
+    let value:serde_json::Value=serde_json::from_str(text).ok()?;
+    if crate::api::body::validate(&value).is_err(){return None;}
+
+    let raw: RawEvent = serde_json::from_value(value)
         .map_err(|e| warn!(line = e.line(), column = e.column(), "Unparseable WS frame"))
         .ok()?;
 

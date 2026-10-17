@@ -16,11 +16,14 @@ pub mod security;
 mod discovery;
 mod administration;
 mod webhooks;
+mod public_dns;
 pub(crate) use webhooks::AvatarFailure;
 mod moderation;
 mod voice;
 mod requests;
 mod poster;
+#[cfg(test)]mod hardening_tests;
+pub(crate) mod body;
 use requests::{PacedRequest, RequestScheduler};
 
 /// Preserve status and RFC 7807 problem codes so expired sessions reach the login view.
@@ -87,11 +90,17 @@ impl ApiClient {
         let cookies = Arc::new(SessionCookies::default());
         let mut builder = Client::builder()
             .cookie_provider(cookies.clone())
+            .redirect({let origin=base.clone();reqwest::redirect::Policy::custom(move |attempt|{
+                if attempt.previous().len()>=5||!Self::redirect_allowed(&origin,attempt.url()){attempt.error("Redirecionamento da API para outro endereço bloqueado.")}
+                else{attempt.follow()}
+            })})
             .connect_timeout(Duration::from_secs(5))
             .timeout(Duration::from_secs(30));
         // Local development must connect directly, even if a system proxy is set.
         if Self::is_loopback(&base) {
-            builder = builder.no_proxy();
+            builder = builder.no_proxy().resolve_to_addrs("localhost",&[
+                std::net::SocketAddr::new(std::net::Ipv4Addr::LOCALHOST.into(),0),std::net::SocketAddr::new(std::net::Ipv6Addr::LOCALHOST.into(),0),
+            ]);
         }
         let inner = builder.build()
             .context("building reqwest client")?;
@@ -104,6 +113,8 @@ impl ApiClient {
                 .parse::<std::net::IpAddr>().is_ok_and(|ip| ip.is_loopback())
         })
     }
+
+    fn redirect_allowed(origin:&Url,target:&Url)->bool {target.origin()==origin.origin()}
 
     fn parse_base_url(input: &str) -> Result<Url> {
         let input = input.trim();
@@ -119,6 +130,7 @@ impl ApiClient {
         let mut base = Url::parse(&candidate).context("Endereço do servidor inválido")?;
         anyhow::ensure!(matches!(base.scheme(), "http" | "https") && base.host().is_some(),
             "Use um endereço HTTP ou HTTPS válido.");
+        anyhow::ensure!(base.scheme()=="https"||Self::is_loopback(&base),"Use HTTPS para servidores remotos. HTTP é permitido apenas no localhost.");
         anyhow::ensure!(base.username().is_empty() && base.password().is_none(),
             "Informe as credenciais nos campos de usuário e senha.");
         anyhow::ensure!(base.query().is_none() && base.fragment().is_none(),
@@ -167,7 +179,10 @@ impl ApiClient {
         if status.is_success() {
             return Ok(res);
         }
-        let body = res.text().await.unwrap_or_default();
+        let bytes=match body::read(res,body::ERROR_LIMIT).await{
+            Ok(bytes)=>bytes,Err(_)=>return Err(ApiError{status,code:None,message:format!("Erro HTTP {status}: resposta inválida ou grande demais.")}.into()),
+        };
+        let body=String::from_utf8_lossy(&bytes);
         let json = serde_json::from_str::<serde_json::Value>(&body).ok();
         let code = json.as_ref().and_then(|value| value["type"].as_str())
             .and_then(|value| value.rsplit('/').next()).map(str::to_owned);
@@ -211,11 +226,11 @@ impl ApiClient {
         let status = res.status();
         let content_type = res.headers().get(reqwest::header::CONTENT_TYPE)
             .and_then(|value| value.to_str().ok()).unwrap_or("não informado").to_owned();
-        let body = res.bytes().await.context("Erro ao ler a resposta da API")?;
+        let body = body::json_bytes(res).await.context("Erro ao ler a resposta da API")?;
         Self::check_api_body(&body, &url, status, &content_type)?;
         anyhow::ensure!(!body.iter().all(u8::is_ascii_whitespace),
             "Resposta vazia de {url} (HTTP {}). Era esperado JSON.", status.as_u16());
-        serde_json::from_slice(&body).with_context(|| format!(
+        body::decode(&body).with_context(|| format!(
             "Resposta JSON inválida de {url} (HTTP {}, Content-Type: {content_type})", status.as_u16()
         ))
     }
@@ -225,7 +240,7 @@ impl ApiClient {
         let status = res.status();
         let content_type = res.headers().get(reqwest::header::CONTENT_TYPE)
             .and_then(|value| value.to_str().ok()).unwrap_or("não informado").to_owned();
-        let body = res.bytes().await.context("Erro ao ler a resposta da API")?;
+        let body = body::read(res,body::ERROR_LIMIT).await.context("Erro ao ler a resposta da API")?;
         Self::check_api_body(&body, &url, status, &content_type)
     }
 
@@ -299,15 +314,15 @@ impl ApiClient {
             .await
             .context("POST /auth/register")?;
         let resp = Self::check_response(resp, "POST /auth/register").await?;
-        let text = resp.text().await.unwrap_or_default();
-        if text.trim().is_empty() {
+        let bytes = body::json_bytes(resp).await?;
+        if bytes.iter().all(u8::is_ascii_whitespace) {
             return Ok(RegisterResponse {
                 id: None,
                 username: Some(username.to_owned()),
                 created_at: None,
             });
         }
-        let parsed = serde_json::from_str::<RegisterResponse>(&text).unwrap_or(RegisterResponse {
+        let parsed = body::decode::<RegisterResponse>(&bytes).unwrap_or(RegisterResponse {
             id: None,
             username: Some(username.to_owned()),
             created_at: None,
@@ -547,7 +562,7 @@ impl ApiClient {
 
     pub async fn get_embed(&self, id: Uuid) -> Result<Embed> {
         let bytes = self.media_bytes(&format!("/embeds/{id}"), 8 << 20).await?;
-        let preview: Embed = serde_json::from_slice(&bytes).context("Prévia inválida")?;
+        let preview: Embed = body::decode(&bytes).context("Prévia inválida")?;
         anyhow::ensure!(preview.id == id, "Prévia retornada para outro link.");
         Ok(preview)
     }
@@ -654,7 +669,7 @@ mod tests {
 
     #[test]
     fn invalid_server_addresses_fail_before_any_request() {
-        for input in ["", "ftp://localhost:8080", "http://", "http://user:pass@localhost:8080", "http://localhost:8080?secret=value"] {
+        for input in ["http://chat.example.test","http://192.168.1.2","http://localhost.evil.test","", "ftp://localhost:8080", "http://", "http://user:pass@localhost:8080", "http://localhost:8080?secret=value"] {
             assert!(ApiClient::new(input).is_err(), "unexpectedly accepted {input}");
         }
     }
@@ -673,9 +688,7 @@ mod tests {
 
         let other = ApiClient::new("https://other.example.test").unwrap();
         assert!(other.websocket_request().unwrap().headers().get("Cookie").is_none());
-        let insecure = ApiClient::new("http://chat.example.test").unwrap();
-        insecure.cookies.add_cookie_str("session=secret; Secure; Path=/", &client.base);
-        assert!(insecure.websocket_request().unwrap().headers().get("Cookie").is_none());
+        assert!(ApiClient::new("http://chat.example.test").is_err());
     }
 
     #[tokio::test]

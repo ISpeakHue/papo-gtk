@@ -60,6 +60,7 @@ toml = "0.8"
 # XDG dirs for cache/config paths
 dirs = "5"
 pulldown-cmark = { version = "0.13", default-features = false }
+syntect = { version = "5.3", default-features = false, features = ["default-syntaxes", "default-themes", "regex-fancy"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["test-util"] }

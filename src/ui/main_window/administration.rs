@@ -7,7 +7,8 @@ pub enum AdminMsg {
     Open, Reload, EditRole(Option<Uuid>), EditChannel(Option<Uuid>), Member,
     SaveRole, SaveServer, SaveChannel, MoveChannel, SaveOverride, RemoveOverride,
     Assign(bool), DeleteRole(Uuid,bool), DeleteChannel(Uuid,bool),
-    Icon(bool), IconLoaded{token:Uuid,result:anyhow::Result<Vec<u8>>},
+    IconPreview{view:Uuid,request:Uuid,image:Option<crate::media::PreparedImage>,upload:Option<(String,String)>},
+    Icon(bool), IconLoaded{view:Uuid,token:Uuid,result:anyhow::Result<Option<Vec<u8>>>},
     Loaded{token:Uuid,result:anyhow::Result<(Vec<Role>,Vec<Channel>,Vec<UserSummary>)>},
     Saved{token:Uuid,result:anyhow::Result<Outcome>},
 }
@@ -31,7 +32,7 @@ struct AdminView {
     server:Option<ServerForm>,role:Option<RoleForm>,channel:Option<ChannelForm>,member:Option<MemberForm>,
 }
 struct ServerForm {name:gtk::Entry,public:gtk::CheckButton,password:gtk::PasswordEntry,change_password:gtk::CheckButton,
-    baseline:Option<Server>,icon:Option<(String,String)>,preview:gtk::Image,creating:bool}
+    baseline:Option<Server>,icon:Option<(String,String)>,preview:gtk::Image,preview_request:Uuid,icon_loading:bool,creating:bool}
 struct RoleForm {id:Option<Uuid>,name:gtk::Entry,color:gtk::Entry,checks:Vec<gtk::CheckButton>}
 struct ChannelForm {id:Option<Uuid>,name:gtk::Entry,topic:gtk::Entry,kind:gtk::DropDown,position:gtk::SpinButton,old_position:i32,role:Select,checks:Vec<gtk::CheckButton>}
 struct MemberForm {user:Select,role:Select,summary:gtk::Label}
@@ -117,11 +118,15 @@ impl MainWindowModel {
                 let change_password=gtk::CheckButton::with_label("Definir / alterar senha do servidor");pages[0].append(&change_password);
                 let password=gtk::PasswordEntry::new();password.set_show_peek_icon(true);pages[0].append(&password);
                 let notice=gtk::Label::new(Some("Alterar ou remover a senha encerra todas as sessões, incluindo a sua. Um servidor privado exige senha."));notice.set_wrap(true);pages[0].append(&notice);
-                let preview=gtk::Image::new();preview.set_pixel_size(64);if let Some(t)=self.server.as_ref().and_then(|s|s.icon_blob.as_deref()).and_then(crate::media::texture_from_base64){preview.set_paintable(Some(&t));}pages[0].append(&preview);
+                let preview=gtk::Image::new();preview.set_pixel_size(64);pages[0].append(&preview);
                 button(&pages[0],"Escolher ícone",&sender,||AdminMsg::Icon(false));button(&pages[0],"Remover ícone",&sender,||AdminMsg::Icon(true));
                 button(&pages[0],if self.setup{"Criar servidor e canal inicial"}else{"Salvar servidor"},&sender,||AdminMsg::SaveServer);
-                let server=Some(ServerForm{name,public,password,change_password,baseline:self.server.clone(),icon:None,preview,creating:self.setup});
+                let server=Some(ServerForm{name,public,password,change_password,baseline:self.server.clone(),icon:None,preview,preview_request:Uuid::new_v4(),icon_loading:false,creating:self.setup});
                 window.present();self.administration.view=Some(AdminView{token:Uuid::new_v4(),window,status,stack,server_body:pages[0].clone(),role_body:pages[1].clone(),channel_body:pages[2].clone(),member_body:pages[3].clone(),role_list,channel_list,role_form,channel_form,member_form,server,role:None,channel:None,member:None});
+                if let Some(v)=self.administration.view.as_ref(){if let Some(f)=v.server.as_ref(){
+                    let(view,request)=(v.token,f.preview_request);let blob=self.server.as_ref().and_then(|s|s.icon_blob.clone());let output=sender.input_sender().clone();
+                    self.administration.jobs.push(tokio::spawn(async move{let image=crate::media::avatars::prepare_blob(blob,64).await;let _=output.send(MainWindowMsg::Administration(AdminMsg::IconPreview{view,request,image,upload:None}));}));
+                }}
                 self.admin_lists(&sender);if !self.setup{self.admin_reload(sender);}
             }
             AdminMsg::Reload=>{self.refresh_channels(sender.clone());self.refresh_users(sender.clone(),None);self.admin_reload(sender);}
@@ -190,7 +195,7 @@ impl MainWindowModel {
                 let api=self.api_client.clone();self.admin_mutation(sender,async move{if role{api.delete_role(id).await?;}else{api.delete_channel(id).await?;}Ok(Outcome::Saved)});
             }
             AdminMsg::SaveServer=>{
-                if !self.setup&&!self.server_access.manage_server||self.administration.pending.is_some(){return;}let Some(f)=self.administration.view.as_ref().and_then(|v|v.server.as_ref())else{return;};let creating=f.creating;let request=match server_request(f){Ok(r)=>r,Err(e)=>{self.admin_error(&e.to_string());return;}};let api=self.api_client.clone();
+                if !self.setup&&!self.server_access.manage_server||self.administration.pending.is_some(){return;}let Some(f)=self.administration.view.as_ref().and_then(|v|v.server.as_ref())else{return;};if f.icon_loading{self.admin_error("Aguarde a preparação do ícone.");return;}let creating=f.creating;let request=match server_request(f){Ok(r)=>r,Err(e)=>{self.admin_error(&e.to_string());return;}};let api=self.api_client.clone();
                 self.admin_mutation(sender,async move{
                     if creating{
                         api.create_server(&request).await?;
@@ -220,27 +225,39 @@ impl MainWindowModel {
             }
             AdminMsg::Icon(remove)=>{
                 if !self.setup&&!self.server_access.manage_server||self.administration.pending.is_some(){return;}let Some(v)=self.administration.view.as_mut()else{return;};let Some(f)=v.server.as_mut()else{return;};
-                if remove{f.icon=Some((String::new(),String::new()));f.preview.clear();return;}
-                let token=v.token;let parent=v.window.clone();let s=sender.clone();
+                if remove{f.preview_request=Uuid::new_v4();f.icon_loading=false;f.icon=Some((String::new(),String::new()));f.preview.clear();return;}
+                f.preview_request=Uuid::new_v4();f.icon_loading=true;let token=f.preview_request;let view=v.token;let parent=v.window.clone();let s=sender.clone();
                 gtk::glib::spawn_future_local(async move {
                     let dialog=gtk::FileDialog::builder().title("Ícone do servidor (até 2 MiB)").build();
                     if let Ok(file)=dialog.open_future(Some(&parent)).await {
                         if let Some(path)=file.path(){tokio::spawn(async move {
                             let result=async {
-                                anyhow::ensure!(tokio::fs::metadata(&path).await?.len()<=2<<20,"Ícone de até 2 MiB");
-                                Ok(tokio::fs::read(path).await?)
+                                use tokio::io::AsyncReadExt;
+                                let file=tokio::fs::File::open(path).await?;let mut bytes=Vec::new();file.take((2<<20)+1).read_to_end(&mut bytes).await?;
+                                anyhow::ensure!(bytes.len()<=2<<20,"Ícone de até 2 MiB");Ok(Some(bytes))
                             }.await;
-                            s.input(MainWindowMsg::Administration(AdminMsg::IconLoaded{token,result}));
-                        });}
-                    }
+                            s.input(MainWindowMsg::Administration(AdminMsg::IconLoaded{view,token,result}));
+                        });}else{s.input(MainWindowMsg::Administration(AdminMsg::IconLoaded{view,token,result:Ok(None)}));}
+                    }else{s.input(MainWindowMsg::Administration(AdminMsg::IconLoaded{view,token,result:Ok(None)}));}
                 });
             }
-            AdminMsg::IconLoaded{token,result}=>{
-                if self.administration.pending.is_some(){return;}let Some(v)=self.administration.view.as_mut().filter(|v|v.token==token)else{return;};let Some(f)=v.server.as_mut()else{return;};
-                match result{Err(e)=>v.status.set_text(&e.to_string()),Ok(bytes)=>{
+            AdminMsg::IconPreview{view,request,image,upload}=>{
+                let Some(v)=self.administration.view.as_mut().filter(|v|v.token==view)else{return;};let Some(f)=v.server.as_mut().filter(|f|f.preview_request==request)else{return;};
+                if upload.is_some(){f.icon_loading=false;}
+                if let Some(image)=image{f.preview.set_paintable(Some(&image.texture()));if let Some(upload)=upload{f.icon=Some(upload);}}
+                else if upload.is_some(){v.status.set_text("Imagem inválida ou dimensões excessivas.");}
+            },
+            AdminMsg::IconLoaded{view,token,result}=>{
+                if self.administration.pending.is_some(){return;}let Some(v)=self.administration.view.as_mut().filter(|v|v.token==view)else{return;};let Some(f)=v.server.as_mut().filter(|f|f.preview_request==token)else{return;};
+                f.icon_loading=false;match result{Err(e)=>v.status.set_text(&e.to_string()),Ok(None)=>{},Ok(Some(bytes))=>{
                     use base64::Engine;
                     let format=match image::guess_format(&bytes){Ok(image::ImageFormat::Png)=>"PNG",Ok(image::ImageFormat::Jpeg)=>"JPEG",Ok(image::ImageFormat::Gif)=>"GIF",Ok(image::ImageFormat::WebP)=>"WEBP",_=>{v.status.set_text("Escolha PNG, JPEG, GIF ou WebP.");return;}};
-                    if bytes.len()>2<<20{v.status.set_text("Ícone de até 2 MiB");return;}let Some(texture)=crate::media::bounded_texture(&bytes)else{v.status.set_text("Imagem inválida ou dimensões excessivas.");return;};f.preview.set_paintable(Some(&texture));f.icon=Some((base64::engine::general_purpose::STANDARD.encode(bytes),format.into()));
+                    if bytes.len()>2<<20{v.status.set_text("Ícone de até 2 MiB");return;}
+                    let request=Uuid::new_v4();f.preview_request=request;f.icon_loading=true;let output=sender.input_sender().clone();
+                    self.administration.jobs.push(tokio::spawn(async move{
+                        let prepared=tokio::task::spawn_blocking(move||(base64::engine::general_purpose::STANDARD.encode(bytes),format.to_owned())).await;
+                        let upload=prepared.unwrap_or_default();let image=crate::media::avatars::prepare_blob(Some(upload.0.clone()),64).await;let _=output.send(MainWindowMsg::Administration(AdminMsg::IconPreview{view,request,image,upload:Some(upload)}));
+                    }));
                 }}
             }
         }
@@ -265,8 +282,8 @@ pub(crate) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::Mai
     main.emit(MainWindowMsg::Administration(AdminMsg::EditChannel(Some(c.id))));pump(context);main.model().administration.view.as_ref().unwrap().channel.as_ref().unwrap().checks[0].set_active(true);find_button(window.upcast_ref(),"Salvar permissões do cargo").emit_clicked();until(context,||main.model().administration.pending.is_none()&&main.model().access_request.is_none());find_button(window.upcast_ref(),"Remover permissões do cargo").emit_clicked();until(context,||main.model().administration.pending.is_none()&&main.model().access_request.is_none());
     main.emit(MainWindowMsg::ChannelSelected(c.clone()));pump(context);main.emit(MainWindowMsg::Administration(AdminMsg::DeleteChannel(c.id,true)));until(context,||main.model().administration.pending.is_none()&&main.model().access_request.is_none()&&!main.model().channels.iter().any(|ch|ch.id==c.id));assert_ne!(main.model().active_channel_id,Some(c.id));
     for (name,kind) in [("Category",1),("Voice",2)]{main.emit(MainWindowMsg::Administration(AdminMsg::EditChannel(None)));pump(context);let v=main.model();let f=v.administration.view.as_ref().unwrap().channel.as_ref().unwrap();f.name.set_text(name);f.kind.set_selected(kind);drop(v);main.emit(MainWindowMsg::Administration(AdminMsg::SaveChannel));until(context,||main.model().administration.pending.is_none()&&main.model().access_request.is_none()&&main.model().administration.load.is_none()&&main.model().channels.iter().any(|c|c.name==name));let id=main.model().channels.iter().find(|c|c.name==name).unwrap().id;main.emit(MainWindowMsg::Administration(AdminMsg::DeleteChannel(id,true)));until(context,||main.model().administration.pending.is_none()&&main.model().access_request.is_none());}
-    let mut bytes=std::io::Cursor::new(Vec::new());image::DynamicImage::new_rgba8(1,1).write_to(&mut bytes,image::ImageFormat::Png).unwrap();let token=main.model().administration.view.as_ref().unwrap().token;
-    main.emit(MainWindowMsg::Administration(AdminMsg::IconLoaded{token,result:Ok(bytes.into_inner())}));pump(context);
+    let mut bytes=std::io::Cursor::new(Vec::new());image::DynamicImage::new_rgba8(1,1).write_to(&mut bytes,image::ImageFormat::Png).unwrap();let view=main.model().administration.view.as_ref().unwrap().token;let token=main.model().administration.view.as_ref().unwrap().server.as_ref().unwrap().preview_request;
+    main.emit(MainWindowMsg::Administration(AdminMsg::IconLoaded{view,token,result:Ok(Some(bytes.into_inner()))}));until(context,||main.model().administration.view.as_ref().unwrap().server.as_ref().unwrap().icon.is_some());
     main.model().administration.view.as_ref().unwrap().server.as_ref().unwrap().name.set_text("Renamed server");find_button(window.upcast_ref(),"Salvar servidor").emit_clicked();until(context,||main.model().administration.pending.is_none()&&main.model().administration.view.as_ref().unwrap().status.text().contains("Server failed"));assert_eq!(main.model().administration.view.as_ref().unwrap().server.as_ref().unwrap().name.text(),"Renamed server");find_button(window.upcast_ref(),"Salvar servidor").emit_clicked();until(context,||main.model().administration.pending.is_none()&&main.model().access_request.is_none()&&main.model().server.as_ref().is_some_and(|s|s.name=="Renamed server"));
     assert!(main.model().server.as_ref().unwrap().icon_blob.is_some());
     assert!(crate::ui::chat::actions::tests::descendants(main.model().sidebar.widget().upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::Image>()).any(|w|w.paintable().is_some()));
@@ -291,4 +308,34 @@ pub(crate) fn exercise_denied(main:&Controller<MainWindowModel>,context:&gtk::gl
     assert!(!descendants(main.widget().upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::Button>()).any(|b|b.label().as_deref()==Some("Administração")&&b.get_visible()));
     main.emit(MainWindowMsg::Administration(AdminMsg::Open));main.emit(MainWindowMsg::Administration(AdminMsg::SaveRole));main.emit(MainWindowMsg::Administration(AdminMsg::SaveServer));main.emit(MainWindowMsg::Administration(AdminMsg::SaveChannel));main.emit(MainWindowMsg::Administration(AdminMsg::Assign(true)));pump(context);
     assert!(main.model().administration.pending.is_none());assert!(!main.model().admin_visible());
+}
+
+#[cfg(test)]pub(crate) fn exercise_icon_security(context:&gtk::glib::MainContext){
+    use crate::ui::chat::actions::tests::{mock,pump,until};use adw::prelude::*;use base64::Engine;
+    let(api,backend,server)=tokio::runtime::Handle::current().block_on(mock());
+    let user=serde_json::from_value(backend.lock().unwrap().profile.clone()).unwrap();
+    let main=MainWindowModel::builder().launch(MainWindowInit{current_user:user,api_client:api}).detach();
+    let host=adw::Window::builder().default_width(1000).default_height(700).content(main.widget()).build();host.present();
+    until(context,||main.model().server.is_some()&&main.model().server_access.manage_server&&main.model().access_request.is_none());crate::ui::chat::performance::settle(context);
+    let mut png=std::io::Cursor::new(Vec::new());image::DynamicImage::new_rgb8(512,256).write_to(&mut png,image::ImageFormat::Png).unwrap();
+    let png=png.into_inner();main.state().get_mut().model.server.as_mut().unwrap().icon_blob=Some(base64::engine::general_purpose::STANDARD.encode(&png));
+    let permit=crate::media::avatars::hold_decoders();
+    main.emit(MainWindowMsg::Administration(AdminMsg::Open));pump(context);
+    let window=main.model().administration.view.as_ref().unwrap().window.clone();let request=main.model().administration.view.as_ref().unwrap().server.as_ref().unwrap().preview_request;let view=main.model().administration.view.as_ref().unwrap().token;
+    assert!(main.model().administration.view.as_ref().unwrap().server.as_ref().unwrap().preview.paintable().is_none(),"opening must not decode on GTK");
+    main.model().administration.view.as_ref().unwrap().server.as_ref().unwrap().name.set_text("Still responsive");
+    main.emit(MainWindowMsg::Administration(AdminMsg::IconLoaded{view,token:request,result:Ok(Some(png))}));pump(context);
+    assert!(main.model().administration.view.as_ref().unwrap().server.as_ref().unwrap().icon_loading);
+    main.emit(MainWindowMsg::Administration(AdminMsg::SaveServer));pump(context);
+    assert!(main.model().administration.pending.is_none(),"saving must wait for the selected icon");
+    assert_eq!(main.model().administration.view.as_ref().unwrap().status.text(),"Aguarde a preparação do ícone.");
+    main.emit(MainWindowMsg::Administration(AdminMsg::Icon(true)));pump(context);drop(permit);
+    main.emit(MainWindowMsg::Administration(AdminMsg::IconPreview{view,request,image:Some(crate::media::PreparedImage{width:1,height:1,pixels:vec![255;4]}),upload:None}));pump(context);
+    assert!(main.model().administration.view.as_ref().unwrap().server.as_ref().unwrap().preview.paintable().is_none(),"late preparation must not undo removal");
+    main.emit(MainWindowMsg::Administration(AdminMsg::Open));
+    until(context,||main.model().administration.view.as_ref().unwrap().server.as_ref().unwrap().preview.paintable().is_some());
+    let paintable=main.model().administration.view.as_ref().unwrap().server.as_ref().unwrap().preview.paintable().unwrap();assert_eq!((paintable.intrinsic_width(),paintable.intrinsic_height()),(64,32));
+    let current=main.model().administration.view.as_ref().unwrap().window.clone();
+    crate::ui::main_window::layout::tests::preview(&current,"secure-admin-icon",context);
+    assert!(!window.is_visible());current.close();host.set_content(None::<&gtk::Widget>);host.close();drop(main);server.abort();pump(context);
 }

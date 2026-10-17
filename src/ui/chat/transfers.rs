@@ -1087,7 +1087,11 @@ impl ChatModel {
         if !inline{self.transfers.saving+=1;}
         let cached=if gif&&inline{self.transfers.encoded.get_video(key)}else{None};
         let job=tokio::spawn(async move {
-            let result=if let Some(bytes)=cached{gif_file(bytes).await}else{api.download_temporary(&endpoint,if video{if gif{8<<20}else{256<<20}}else{MAX_FILE}).await};
+            let result=async {
+                let file=if let Some(bytes)=cached{gif_file(bytes).await?}else{api.download_temporary(&endpoint,if video{if gif{8<<20}else{256<<20}}else{MAX_FILE}).await?};
+                if inline{let path=file.0.clone();tokio::task::spawn_blocking(move||crate::media::container::validate(&path)).await??;}
+                Ok(file)
+            }.await;
             s.input(ChatMsg::Transfer(TransferMsg::File {
                 epoch, message, key,token,destination, result
             }));

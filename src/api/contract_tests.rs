@@ -645,7 +645,7 @@ async fn external_avatar_fetches_are_public_bounded_and_do_not_follow_redirects(
     let path=format!("/webhooks/{ID}/avatar");assert_eq!(api.external_avatar(&path).await.unwrap(),b"png");
     assert!(api.external_avatar(&path).await.is_err());assert!(api.external_avatar(&path).await.is_err());
     let requests=server.await.unwrap();assert!(requests.iter().all(|r|r.starts_with(&format!("GET /api/webhooks/{ID}/avatar "))&&!r.to_ascii_lowercase().contains("cookie:")&&!r.to_ascii_lowercase().contains("authorization:")));
-    for value in ["//attacker.test/a","/users/x/avatar","/webhooks/invalid/avatar","file:///etc/passwd","https://user:pass@cdn.example/a","https://127.0.0.1/a","http://cdn.example/a","https://localhost/a"]{assert!(api.external_avatar_url(value).is_none(),"{value}");}
+    for value in ["//attacker.test/a","/users/x/avatar","/webhooks/invalid/avatar","file:///etc/passwd","https://user:pass@cdn.example/a","https://127.0.0.1/a","http://cdn.example/a","https://localhost/a","https://cdn.example:8443/a","https://[::ffff:127.0.0.1]/a","https://100.64.0.1/a","https://192.0.2.1/a"]{assert!(api.external_avatar_url(value).is_none(),"{value}");}
     assert!(api.external_avatar_url("https://cdn.discordapp.com/avatars/1/a.png").is_some());
     assert!(api.create_webhook(Uuid::nil()," ").await.is_err());assert!(api.create_webhook(Uuid::nil(),&"x".repeat(81)).await.is_err());
 }

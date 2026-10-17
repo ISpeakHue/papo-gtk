@@ -4,12 +4,12 @@ use serde_json::{json, Value};
 use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-const USER: &str = "12345678-1234-4234-8234-123456789abc";
-const CHANNEL: &str = "12345678-1234-4234-8234-123456789abd";
-const MESSAGE: &str = "12345678-1234-4234-8234-123456789abe";
+pub(super) const USER: &str = "12345678-1234-4234-8234-123456789abc";
+pub(super) const CHANNEL: &str = "12345678-1234-4234-8234-123456789abd";
+pub(super) const MESSAGE: &str = "12345678-1234-4234-8234-123456789abe";
 const OLDER: &str = "12345678-1234-4234-8234-123456789abf";
 const EMOJI: &str = "12345678-1234-4234-8234-123456789ac0";
-const DATE: &str = "2026-10-03T12:00:00Z";
+pub(super) const DATE: &str = "2026-10-03T12:00:00Z";
 pub(crate) struct Backend {
     pub(crate) webhooks:Vec<Value>,pub(crate) fail_webhooks:bool,
     pub(crate) range_media:bool,
@@ -22,7 +22,7 @@ pub(crate) struct Backend {
     pub(crate) peer_profile:Option<Value>,
     pub(crate) peer_banned:bool,pub(crate) fail_moderation:bool,pub(crate) fail_audit:bool,
     pub(crate) server_missing:bool, pub(crate) server_value:Value, pub(crate) admin_roles:Vec<Value>, pub(crate) admin_channels:Vec<Value>, pub(crate) dms:Vec<Value>, pub(crate) dm_messages:Vec<Value>, pub(crate) blocks:Vec<Value>, pub(crate) fail_role:bool, pub(crate) deny_dm:bool, pub(crate) fail_server:bool,
-    pub(crate) message: Value, old: Value, groups: Vec<Value>, pub(crate) emojis: Vec<Value>, pub(crate) pinned: bool,
+    pub(crate) message: Value, old: Value, pub(crate) groups: Vec<Value>, pub(crate) emojis: Vec<Value>, pub(crate) pinned: bool,
     pub(crate) profile:Value, config:Value, channel_setting:Value, pub(crate) fail_profile:bool, fail_settings:bool, fail_upload:bool,
     fail_password:bool, fail_recovery:bool, fail_search:bool, pub(crate) fail_read:bool, revoked:bool, dropped:Vec<String>, pub(crate) read_notices:Vec<Value>,
     fail_edit: bool, deny_edit: bool, fail_emoji: bool, pub(crate) requests: Vec<(String, String, Value)>, restricted: bool,
@@ -304,7 +304,7 @@ pub(crate) fn exercise(context: &gtk::glib::MainContext) {
     let calls=backend.lock().unwrap().requests.iter().filter(|(method,path,_)|method=="GET"&&path.split('?').next().unwrap().ends_with("/reactions")).count();
     let pill=descendants(cold.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Button>().ok().filter(|b|b.has_css_class("papo-reaction"))).unwrap();let controllers=pill.observe_controllers();let motion=(0..controllers.n_items()).find_map(|i|controllers.item(i).and_downcast::<gtk::EventControllerMotion>()).unwrap();for _ in 0..3{motion.emit_by_name::<()>("enter",&[&0.0f64,&0.0f64]);}
     until(context,||cold.model().actions.reaction_hints.borrow().get(&hint_key).is_some_and(|text|text.contains("Você")));assert_eq!(backend.lock().unwrap().requests.iter().filter(|(method,path,_)|method=="GET"&&path.split('?').next().unwrap().ends_with("/reactions")).count(),calls+1);
-    let contextual=descendants(chat.widget().upcast_ref()).into_iter().filter_map(|w|w.downcast::<gtk::Button>().ok()).find(|b|b.label().as_deref()==Some("Adicionar reação")).expect("context menu must offer reactions");contextual.emit_clicked();pump(context);assert!(chat.model().actions.picker.as_ref().is_some_and(|(w,_,_)|w.is_visible()));
+    let contextual=descendants(chat.widget().upcast_ref()).into_iter().filter_map(|w|w.downcast::<gtk::Button>().ok()).find(|b|b.tooltip_text().as_deref()==Some("Adicionar reação")&&b.ancestor(gtk::Popover::static_type()).is_some()).expect("context menu must offer reactions");contextual.emit_clicked();pump(context);assert!(chat.model().actions.picker.as_ref().is_some_and(|(w,_,_)|w.is_visible()));
     // Own reaction removal remains available in a read-only channel.
     chat.emit(ChatMsg::SetAccess { user_id:user, access:crate::models::Access { read:true, ..Default::default() } }); pump(context);
     chat.emit(ChatMsg::ReactionClicked { message_id:message.id, emoji_id:None, unicode:Some("❤️".into()) });
@@ -314,7 +314,7 @@ pub(crate) fn exercise(context: &gtk::glib::MainContext) {
     chat.emit(ChatMsg::Action(ActionMsg::ToggleReaction { id:message.id,emoji_id:Some(EMOJI.parse().unwrap()),unicode:None }));
     until(context,|| chat.model().history.messages[0].user_reactions.as_ref().is_some_and(|v| v.first().is_some_and(|r| r.emoji_id == Some(EMOJI.parse().unwrap()))) && !chat.model().actions.busy.contains(&message.id));
     find_button(chat.widget().upcast_ref(),"Quem reagiu").emit_clicked();
-    until(context,|| chat.model().actions.participants.as_ref().is_some_and(|(_,list,_)| descendants(list.upcast_ref()).iter().filter_map(|w| w.downcast_ref::<gtk::Label>()).any(|l| l.text().contains("(você)"))));
+    until(context,|| chat.model().actions.participants.as_ref().is_some_and(|view| descendants(view.list.upcast_ref()).iter().filter_map(|w| w.downcast_ref::<gtk::Label>()).any(|l| l.text().contains("(você)"))));
     // Deleting a custom emoji has an explicit confirmation; creator-only authorization is supported.
     chat.emit(ChatMsg::SetAccess { user_id:user, access:crate::models::Access { read:true, send:true, ..Default::default() } }); pump(context);
     let manager = chat.model().actions.manager.as_ref().unwrap().window.clone();
@@ -376,7 +376,7 @@ pub(crate) fn exercise(context: &gtk::glib::MainContext) {
     // A first connection starts one snapshot; it does not replay the startup wave.
     main.emit(MainWindowMsg::WsReceived(crate::ws::WsEvent::ConnectionReady(Uuid::new_v4())));
     main.emit(MainWindowMsg::WsReceived(crate::ws::WsEvent::Reconnected));
-    until(context,|| descendants(main.widget().upcast_ref()).iter().filter_map(|w| w.downcast_ref::<gtk::Button>()).any(|b| b.label().as_deref() == Some("Editar")));
+    until(context,|| descendants(main.widget().upcast_ref()).iter().filter_map(|w| w.downcast_ref::<gtk::Button>()).any(|b| b.tooltip_text().as_deref() == Some("Editar")));
     until(context,||main.model().users.len()==2);
     {
         let guard=backend.lock().unwrap();let startup=&guard.requests[startup_baseline..];

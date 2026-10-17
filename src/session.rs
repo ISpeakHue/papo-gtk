@@ -124,7 +124,7 @@ pub async fn resume(api:&ApiClient,user:&str)->Result<Option<WhoamiResponse>>{
     #[test]fn restored_cookies_require_safe_transport_and_never_appear_in_debug(){
         let api=ApiClient::new("https://example.test/api").unwrap();api.restore_auth_cookie("test-secret.jwt-value").unwrap();assert_eq!(api.auth_cookie().as_deref(),Some("test-secret.jwt-value"));assert!(!format!("{api:?}").contains("test-secret"));
         for token in ["","x; Domain=example.test","x\r\nAuthorization: bad"]{assert!(api.restore_auth_cookie(token).is_err());}
-        assert!(ApiClient::new("http://remote.test").unwrap().restore_auth_cookie("secret").is_err());
+        assert!(ApiClient::new("http://remote.test").is_err());
         assert!(ApiClient::new("http://localhost:8080").unwrap().restore_auth_cookie("secret").is_ok());
     }
     #[tokio::test]async fn saved_sessions_are_scoped_and_logout_removes_them(){

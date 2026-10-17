@@ -2,6 +2,8 @@
 #[cfg(test)]
 pub(crate) mod tests;
 mod edit_mentions;
+mod participants;
+#[cfg(test)]pub(crate) use participants::exercise as exercise_participants;
 pub(crate) mod pins;
 #[cfg(test)]pub(crate) use edit_mentions::exercise as exercise_edit_mentions;
 use super::*;
@@ -39,7 +41,7 @@ pub(super) struct Actions {
     picker: Option<(gtk::Window, emoji::Picker, Uuid)>,
     pub(super) composer_picker:Option<(gtk::Window,emoji::Picker)>,
     pub(super) embed_editor:Option<(gtk::Window,super::embed_editor::Editors,gtk::Label)>,
-    participants: Option<(gtk::Window, gtk::Box, Uuid)>,
+    participants: Option<participants::View>,
     manager: Option<EmojiManager>,
     pub navigation: Option<Uuid>,
     pub highlight: Option<Uuid>,
@@ -69,6 +71,7 @@ pub enum ActionMsg {
     PinFinished { epoch: Uuid, id: Uuid, result: anyhow::Result<()> },
     Navigate(Uuid), CancelNavigation,
     OpenPicker(Uuid), OpenParticipants(Uuid), Reconcile(Uuid),HoverReactions(Uuid),
+    SelectParticipants{token:Uuid,key:participants::Key}, MoreParticipants(Uuid), ParticipantsClosed(Uuid),
     ToggleReaction { id: Uuid, emoji_id: Option<Uuid>, unicode: Option<String> },
     ReactionsLoaded { epoch: Uuid, token: Uuid, id: Uuid, mutation: bool, result: anyhow::Result<Vec<ReactionGroup>> },
     OpenEmojiManager, ReloadEmojis,
@@ -137,7 +140,7 @@ impl Actions {
         if let Some((w, _, _)) = self.picker.take() { w.close(); }
         if let Some((w,_))=self.composer_picker.take(){w.close();}
         if let Some((w,_,_))=self.embed_editor.take(){w.close();}
-        if let Some((w, _, _)) = self.participants.take() { w.close(); }
+        self.participants.take();
     }
 }
 impl Drop for Actions {
@@ -400,14 +403,17 @@ impl ChatModel {
             }
             ActionMsg::OpenParticipants(id) => {
                 if !self.access.read { return; }
-                let (w, outer) = window(root, "Quem reagiu"); let list = scroll_box(&outer);
-                list.append(&label("Carregando reações…"));
-                outer.append(&button("Atualizar reações", sender, move || ActionMsg::Reconcile(id)));
-                if let Some((old, _, _)) = self.actions.participants.replace((w.clone(), list, id)) { old.close(); }
-                self.request_reactions(id, sender); w.present();
+                if let Some(view)=self.actions.participants.as_ref().filter(|v|v.id==id&&v.window.is_visible()){view.window.present();return;}
+                self.actions.participants=Some(participants::View::new(root,id,sender));
+                self.render_participants(sender);
+                if !self.actions.reaction_requests.contains_key(&id)&&!self.actions.busy.contains(&id){self.request_reactions(id,sender);}
+                self.actions.participants.as_ref().unwrap().window.present();
             }
+            ActionMsg::ParticipantsClosed(token)=>{if self.actions.participants.as_ref().is_some_and(|v|v.token==token){self.actions.participants.take();}},
+            ActionMsg::SelectParticipants{token,key}=>{if let Some(view)=self.actions.participants.as_mut().filter(|v|v.token==token){view.select(key);}self.render_participants(sender);},
+            ActionMsg::MoreParticipants(token)=>{if let Some(view)=self.actions.participants.as_mut().filter(|v|v.token==token){view.more();}self.render_participants(sender);},
             ActionMsg::HoverReactions(id)=>{if !self.actions.reaction_groups.contains_key(&id)&&!self.actions.reaction_requests.contains_key(&id)&&!self.actions.busy.contains(&id){self.request_reactions(id,sender);}},
-            ActionMsg::Reconcile(id) => {self.actions.reaction_hints.borrow_mut().retain(|(message,_,_),_|*message!=id);self.request_reactions(id, sender);},
+            ActionMsg::Reconcile(id) => {self.actions.reaction_hints.borrow_mut().retain(|(message,_,_),_|*message!=id);if let Some(view)=self.actions.participants.as_mut().filter(|v|v.id==id){view.retry();}self.render_participants(sender);self.request_reactions(id, sender);},
             ActionMsg::ToggleReaction { id, emoji_id, unicode } => {
                 if !self.access.read || self.actions.busy.contains(&id) { return; }
                 let (Some(api), Some(user), Some(channel)) = (self.actions.api.clone(), self.user_id, self.active_channel.as_ref().map(|c| c.id())) else { return; };
@@ -437,10 +443,10 @@ impl ChatModel {
                         // Do not briefly overwrite a newer event with an older read snapshot.
                         if !mutation && self.actions.reaction_dirty.remove(&id) { self.request_reactions(id, sender); return; }
                         self.history.apply(Change::Reactions(id, groups.clone(), self.user_id.unwrap_or_default()));
-                        self.actions.reaction_groups.insert(id, groups);self.refresh_reaction_hints();root.trigger_tooltip_query(); self.render_participants(id);
+                        self.actions.reaction_groups.insert(id, groups);if let Some(view)=self.actions.participants.as_ref().filter(|v|v.id==id){view.loaded();}self.refresh_reaction_hints();root.trigger_tooltip_query(); self.render_participants(sender);
                         if self.actions.reaction_dirty.remove(&id) { self.request_reactions(id, sender); }
                     }
-                    Err(error) => { if current { if let Some((_, list, target)) = &self.actions.participants { if *target == id { clear(list); list.append(&label(&format!("Não foi possível carregar: {error}"))); } } } self.action_error(error, sender, current);
+                    Err(error) => { if current { if let Some(view)=self.actions.participants.as_ref().filter(|v|v.id==id){view.error(&format!("Não foi possível carregar: {error}"));} } self.action_error(error, sender, current);
                         if current && self.actions.reaction_dirty.remove(&id) { self.request_reactions(id, sender); }
                     }
                     _ => {}
@@ -466,7 +472,7 @@ impl ChatModel {
                 for (id,image) in images{self.actions.install_emoji(id,image);}
                 for e in emojis{if let Some(old)=self.actions.emojis.iter_mut().find(|old|old.id==e.id){*old=e;}else{self.actions.emojis.push(e);}}
                 self.actions.emoji_names=self.actions.emojis.iter().map(|e|(e.name.clone(),e.id)).collect();
-                self.render_picker(sender);self.render_manager(sender);self.render_pins(sender);
+                self.render_picker(sender);self.render_manager(sender);self.render_pins(sender);self.render_participants(sender);
             },
             ActionMsg::EmojisLoaded { token, result } => {
                 let current = self.actions.emojis_request == Some(token); if current { self.actions.emojis_request = None; }
@@ -480,7 +486,7 @@ impl ChatModel {
                             e.image_blob = None;
                         }
                         self.actions.emojis_loaded = Some(std::time::Instant::now());
-                        self.actions.emojis = emojis; self.actions.emoji_names=self.actions.emojis.iter().map(|e|(e.name.clone(),e.id)).collect(); self.render_picker(sender); self.render_manager(sender); self.render_pins(sender);
+                        self.actions.emojis = emojis; self.actions.emoji_names=self.actions.emojis.iter().map(|e|(e.name.clone(),e.id)).collect(); self.render_picker(sender); self.render_manager(sender); self.render_pins(sender);self.render_participants(sender);
                     }
                     Err(error) => { if current { if let Some(m) = &self.actions.manager { m.error.set_text(&error.to_string()); } if let Some((_,picker,_))=&self.actions.picker{picker.show_error(&format!("Emojis personalizados indisponíveis: {error}"));}if let Some((_,picker))=&self.actions.composer_picker{picker.show_error(&format!("Emojis personalizados indisponíveis: {error}"));} } self.action_error(error, sender, current); }
                     _ => {}
@@ -590,18 +596,13 @@ impl ChatModel {
             hints.insert((*message,group.emoji_id,group.unicode.clone()),text);
         }}
     }
-    fn render_participants(&self, id: Uuid) {
-        let Some((_, list, target)) = &self.actions.participants else { return; }; if *target != id { return; } clear(list);
-        let Some(groups) = self.actions.reaction_groups.get(&id) else { return; };
-        if groups.is_empty() { list.append(&label("Nenhuma reação.")); }
-        for group in groups {
-            let name = group.unicode.clone().or_else(|| group.emoji_id.and_then(|id| self.actions.emojis.iter().find(|e| e.id == id).map(|e| format!(":{}:", e.name)))).unwrap_or("Emoji removido".into());
-            list.append(&label(&format!("{name} — {}", group.users.len())));
-            for u in &group.users {
-                let name = self.users_map.get(&u.user_id).map(|u| u.display_name().to_owned()).unwrap_or_else(|| u.user_id.to_string());
-                list.append(&label(&format!("  {name}{}", if Some(u.user_id) == self.user_id { " (você)" } else { "" })));
-            }
-        }
+    pub(super) fn render_participants(&mut self,sender:&ComponentSender<Self>) {
+        let Some(mut view)=self.actions.participants.take()else{return;};
+        if !view.window.is_visible()&&view.window.is_realized(){self.actions.participants=Some(view);return;}
+        let groups=self.actions.reaction_groups.get(&view.id).map(Vec::as_slice);
+        let ids=view.render(groups,&self.users_map,&self.avatars,&self.actions,self.user_id,sender);
+        self.actions.participants=Some(view);
+        if !ids.is_empty(){if let Some(channel)=self.active_channel.as_ref(){let _=sender.output(ChatOutput::AuthorMetadata{channel:channel.id(),ids});}}
     }
     pub(super) fn render_manager(&self, sender: &ComponentSender<Self>) {
         let Some(m) = &self.actions.manager else { return; }; clear(&m.list);

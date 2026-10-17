@@ -1,5 +1,9 @@
 # Crash analysis — 2026-10-13
 
+Archived evidence from the original investigation. This report does not describe
+a verified current reproduction or a confirmed fix. See [Follow-ups](../FOLLOW_UPS.md)
+for the remaining investigation and the current testing guides.
+
 Papo crashed at **21:41:22 America/Sao_Paulo**, PID **198435**, with
 **SIGSEGV (11)**. The fault occurred in a native GStreamer player cleanup
 thread, rather than a Rust panic. An invalid object pointer is consistent with
@@ -40,13 +44,13 @@ background player thread faulted; it was not the thread receiving SIGSEGV.
 The user closed a fullscreen video and then jumped to the latest messages.
 That sequence corresponds to:
 
-1. [`Fullscreen::restore`](src/ui/chat/video/fullscreen.rs) returning the same
+1. [`Fullscreen::restore`](../../src/ui/chat/video/fullscreen.rs) returning the same
    player to its chat row and resuming it if it had been playing.
-2. [`ChatMsg::Latest`](src/ui/chat/mod.rs) moving to the bottom and enabling
+2. [`ChatMsg::Latest`](../../src/ui/chat/mod.rs) moving to the bottom and enabling
    history trimming.
-3. [`release_offscreen_playback`](src/ui/chat/transfers.rs) removing a player
+3. [`release_offscreen_playback`](../../src/ui/chat/transfers.rs) removing a player
    outside the retained messages once it is no longer fullscreen.
-4. [`Playback::drop`](src/ui/chat/transfers.rs) muting/pausing, closing fullscreen,
+4. [`Playback::drop`](../../src/ui/chat/transfers.rs) muting/pausing, closing fullscreen,
    detaching the video stream and clearing the media file. Clearing a media file
    reaches GTK's native player teardown; see the
    [GTK media backend](https://github.com/GNOME/gtk/blob/main/gtk/media/gtkgstmediafile.c).

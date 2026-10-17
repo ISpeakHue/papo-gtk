@@ -16,7 +16,8 @@ impl ApiClient {
     async fn security_response(response: reqwest::Response) -> Result<()> {
         let status = response.status();
         if status.is_success() { Self::check_non_json_response(response).await?; return Ok(()); }
-        let body: serde_json::Value = response.json().await.unwrap_or_default();
+        let bytes=body::read(response,body::ERROR_LIMIT).await.map_err(|_|ApiError{status,code:None,message:"Resposta de segurança grande demais.".into()})?;
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap_or_default();
         let code = body["type"].as_str().and_then(|s| s.rsplit('/').next()).unwrap_or("");
         let (code, message) = match code {
             "reset-link-invalid" => (Some("reset-link-invalid"), "Link inválido, expirado ou já utilizado."),

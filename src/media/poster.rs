@@ -2,8 +2,8 @@
 use std::{path::Path,time::Duration};
 
 pub async fn extract(path:&Path)->anyhow::Result<Vec<u8>> {
-    let mut command=super::runtime::python();
-    command.args(["-u","-c",include_str!("poster.py")]).arg(path).env("GST_DEBUG","0").kill_on_drop(true);
+    let checked=path.to_owned();tokio::task::spawn_blocking(move||super::container::validate(&checked)).await??;
+    let mut command=super::sandbox::command(path,include_str!("poster.py"))?;
     let output=tokio::time::timeout(Duration::from_secs(9),command.output()).await??;
     anyhow::ensure!(output.status.success(),"Não foi possível gerar a prévia do vídeo");
     tokio::task::spawn_blocking(move ||encode(&output.stdout)).await?

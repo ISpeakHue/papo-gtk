@@ -128,6 +128,9 @@ mod tests {
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("status-viewer"){crate::ui::status::exercise(&context);crate::ui::user_list::exercise_corrections(&context);crate::ui::chat::transfers::exercise_viewer(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("attachment-media"){crate::ui::chat::transfers::exercise_attachments(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("media-cache"){crate::ui::chat::transfers::exercise_cache(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("security-icons"){crate::ui::main_window::administration::exercise_icon_security(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("syntax-highlighting"){crate::ui::chat::exercise_syntax(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("reaction-participants"){crate::ui::chat::actions::exercise_participants(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("draft-previews"){crate::ui::chat::exercise_draft_previews(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("clipboard"){crate::ui::chat::clipboard::exercise(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("retention"){crate::ui::chat::transfers::exercise_retention(&context);window.close();return;}

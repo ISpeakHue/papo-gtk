@@ -59,7 +59,7 @@ fn build(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions,open:Option
     let tag=gtk::TextTag::builder().foreground("#3584e4").underline(pango::Underline::Single).build();buffer.tag_table().add(&tag);
     let mention=gtk::TextTag::builder().name("papo-mention").background("#3584e4").foreground("#ffffff").build();buffer.tag_table().add(&mention);
     let mut spoilers=HashMap::<usize,Target>::new();
-    let mut tags=HashMap::<markdown::Style,gtk::TextTag>::new();let mut registered=std::collections::HashSet::new();
+    let mut tags=HashMap::<markdown::Style,gtk::TextTag>::new();let mut registered=std::collections::HashSet::new();let mut code_blocks=Vec::new();
     let shade=if adw::StyleManager::default().is_dark(){"#29292d"}else{"#dddde1"};
     for run in markdown::parse(text){
         let begin=iter.offset();let mut hidden_images=Vec::new();
@@ -93,6 +93,7 @@ fn build(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions,open:Option
             },
         }}
         let end=iter.offset();
+        if let Some(language)=run.style.code_language.as_ref(){code_blocks.push(super::syntax::Block{language:language.clone(),text:run.text.clone(),start:begin});}
         if let Some(url)=&run.style.link{buffer.apply_tag(&tag,&buffer.iter_at_offset(begin),&buffer.iter_at_offset(end));targets.push((begin,end,Target::Link(url.clone())));}
         let mut style=run.style.clone();style.spoiler=false;style.spoiler_group=0;
         let style_tag=tags.entry(style.clone()).or_insert_with(||markdown_tag(&style,shade)).clone();
@@ -107,6 +108,7 @@ fn build(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions,open:Option
             targets.push((begin,end,spoiler.clone()));
         }
     }
+    if !code_blocks.is_empty(){super::syntax::attach(&view,code_blocks,tags.iter().filter(|(style,_)|style.code).map(|(_,tag)|tag.clone()).collect());}
     let emoji_popup=emoji_details::connect(&view);
     install_targets(&view,targets,move |view,target|match target{
         Target::Emoji{offset,details}=>emoji_details::show(view,*offset,details,&emoji_popup),

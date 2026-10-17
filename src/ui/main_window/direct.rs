@@ -194,9 +194,9 @@ pub(crate) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::Mai
     assert!(!main.model().channels.iter().any(|c|c.id==dm));assert!(!main.model().access.contains_key(&dm));
     composer().set_text("DM test");pump(context);main.model().chat.emit(ChatMsg::SendClicked);
     until(context,||descendants(main.model().chat.widget().upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::TextView>()).any(|v|v.buffer().text(&v.buffer().start_iter(),&v.buffer().end_iter(),false)=="DM test"));
-    until(context,||descendants(main.model().chat.widget().upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::Button>()).any(|b|b.label().as_deref()==Some("Fixar")&&b.is_sensitive()));
-    find_button(main.model().chat.widget().upcast_ref(),"Fixar").emit_clicked();until(context,||descendants(main.model().chat.widget().upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::Button>()).any(|b|b.label().as_deref()==Some("Desafixar")&&b.is_sensitive()));
-    find_button(main.model().chat.widget().upcast_ref(),"Desafixar").emit_clicked();until(context,||descendants(main.model().chat.widget().upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::Button>()).any(|b|b.label().as_deref()==Some("Fixar")&&b.is_sensitive()));
+    until(context,||descendants(main.model().chat.widget().upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::Button>()).any(|b|b.tooltip_text().as_deref()==Some("Fixar")&&b.is_sensitive()));
+    find_button(main.model().chat.widget().upcast_ref(),"Fixar").emit_clicked();until(context,||descendants(main.model().chat.widget().upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::Button>()).any(|b|b.tooltip_text().as_deref()==Some("Desafixar")&&b.is_sensitive()));
+    find_button(main.model().chat.widget().upcast_ref(),"Desafixar").emit_clicked();until(context,||descendants(main.model().chat.widget().upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::Button>()).any(|b|b.tooltip_text().as_deref()==Some("Fixar")&&b.is_sensitive()));
     composer().set_text("DM draft");pump(context);
     main.emit(MainWindowMsg::ChannelSelected(public.clone()));pump(context);assert_eq!(composer().text(),"server draft");
     main.emit(MainWindowMsg::Direct(DirectMsg::Select(dm,None)));until(context,||main.model().active_channel_id==Some(dm)&&composer().text()=="DM draft");

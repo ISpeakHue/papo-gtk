@@ -33,19 +33,18 @@ impl ApiClient {
             return Some(self.url(&format!("/webhooks/{id}/avatar")));
         }
         let url = Url::parse(value).ok()?;
-        if url.origin()==self.base.origin() && url.query().is_none() && url.fragment().is_none(){
+        if url.origin()==self.base.origin(){
+            if url.query().is_some()||url.fragment().is_some(){return None;}
             if let Some(id)=url.path().strip_prefix(self.base.path()).and_then(|p|p.strip_prefix("webhooks/")).and_then(|p|p.strip_suffix("/avatar")).and_then(|p|p.parse::<Uuid>().ok()){
                 if url==self.url(&format!("/webhooks/{id}/avatar")){return Some(url);}
             }
+            return None;
         }
-        if url.scheme() != "https" || !url.username().is_empty() || url.password().is_some() || url.fragment().is_some() { return None; }
+        if url.scheme() != "https" || !url.username().is_empty() || url.password().is_some() || url.fragment().is_some() || url.port_or_known_default()!=Some(443) { return None; }
         let host = url.host_str()?;
         if host == "localhost" || host.ends_with(".localhost") || host.ends_with(".local") { return None; }
         if let Ok(ip) = host.trim_matches(['[',']']).parse::<std::net::IpAddr>() {
-            let public = match ip {
-                std::net::IpAddr::V4(ip) => !ip.is_private() && !ip.is_loopback() && !ip.is_link_local() && !ip.is_unspecified() && !ip.is_multicast() && !ip.is_broadcast(),
-                std::net::IpAddr::V6(_) => false,
-            };
+            let public = public_dns::public(ip);
             if !public { return None; }
         }
         Some(url)
@@ -57,9 +56,12 @@ impl ApiClient {
         use futures_util::StreamExt;
         let url = self.external_avatar_url(value).ok_or(AvatarFailure::Invalid)?;
         // No redirects, ambient proxy credentials, cookies, or Authorization.
-        static PUBLIC: std::sync::LazyLock<std::result::Result<Client,reqwest::Error>> = std::sync::LazyLock::new(|| Client::builder().redirect(reqwest::redirect::Policy::none()).no_proxy().timeout(Duration::from_secs(12)).build());
-        let client = PUBLIC.as_ref().map_err(|_|AvatarFailure::Transient)?;
         let same_server = url.origin() == self.base.origin();
+        static PUBLIC: std::sync::LazyLock<std::result::Result<Client,reqwest::Error>> = std::sync::LazyLock::new(|| Client::builder().dns_resolver(Arc::new(public_dns::Resolver)).redirect(reqwest::redirect::Policy::none()).no_proxy().timeout(Duration::from_secs(12)).build());
+        static BACKEND: std::sync::LazyLock<std::result::Result<Client,reqwest::Error>> = std::sync::LazyLock::new(|| Client::builder().resolve_to_addrs("localhost",&[
+            std::net::SocketAddr::new(std::net::Ipv4Addr::LOCALHOST.into(),0),std::net::SocketAddr::new(std::net::Ipv6Addr::LOCALHOST.into(),0),
+        ]).redirect(reqwest::redirect::Policy::none()).no_proxy().timeout(Duration::from_secs(12)).build());
+        let client = (if same_server{&*BACKEND}else{&*PUBLIC}).as_ref().map_err(|_|AvatarFailure::Transient)?;
         let budget=requests::avatar_origin(&url.origin().ascii_serialization());
         let response=client.get(url).send_paced(if same_server{&self.requests}else{&budget}).await.map_err(|_|AvatarFailure::Transient)?;
         match response.status(){

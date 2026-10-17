@@ -24,6 +24,8 @@ pub(crate) mod clipboard;
 mod viewport;
 mod text;
 mod markdown;
+mod syntax;
+#[cfg(test)]pub(crate) use syntax::exercise as exercise_syntax;
 mod moderation;
 #[cfg(test)]pub(crate) use moderation::exercise as exercise_moderation;
 mod emoji;
@@ -849,7 +851,7 @@ impl Component for ChatModel {
             ChatMsg::Action(action) => {
                 let highlight=self.actions.highlight;
                 let navigate=matches!(&action,ActionMsg::Navigate(_));
-                render_history=!matches!(&action,ActionMsg::Reconcile(_)|ActionMsg::Reload|ActionMsg::ReloadEmojis|ActionMsg::HoverReactions(_)|ActionMsg::OpenPicker(_)|ActionMsg::OpenParticipants(_)|ActionMsg::OpenEdit(_)|ActionMsg::EditMentions(_)|ActionMsg::OpenEditMentions(_)|ActionMsg::DismissEditMentions(_)|ActionMsg::EditMentionSelected(..)|ActionMsg::ConfirmDelete(_)|ActionMsg::OpenPins|ActionMsg::OpenEmojiManager);
+                render_history=!matches!(&action,ActionMsg::Reconcile(_)|ActionMsg::Reload|ActionMsg::ReloadEmojis|ActionMsg::HoverReactions(_)|ActionMsg::OpenPicker(_)|ActionMsg::OpenParticipants(_)|ActionMsg::SelectParticipants{..}|ActionMsg::MoreParticipants(_)|ActionMsg::ParticipantsClosed(_)|ActionMsg::OpenEdit(_)|ActionMsg::EditMentions(_)|ActionMsg::OpenEditMentions(_)|ActionMsg::DismissEditMentions(_)|ActionMsg::EditMentionSelected(..)|ActionMsg::ConfirmDelete(_)|ActionMsg::OpenPins|ActionMsg::OpenEmojiManager);
                 if let ActionMsg::ReactionsLoaded{id,..}|ActionMsg::ToggleReaction{id,..}=&action{self.history.mark_dirty(*id);}
                 let emoji_state=matches!(&action,ActionMsg::EmojiPage{..}|ActionMsg::EmojisLoaded{..}).then(||(self.actions.emoji_names.clone(),self.actions.textures.len()));
                 self.handle_action(action, &sender, root);
@@ -1061,11 +1063,11 @@ impl Component for ChatModel {
             }
             ChatMsg::SetAvatars(avatars) => {
                 crate::media::update_member_avatars(widgets.messages_list.upcast_ref(),&self.avatars,&avatars);
-                crate::media::update_member_avatars(widgets.mention_choices.upcast_ref(),&self.avatars,&avatars);self.avatars=avatars;self.render_pins(&sender);
+                crate::media::update_member_avatars(widgets.mention_choices.upcast_ref(),&self.avatars,&avatars);self.avatars=avatars;self.render_pins(&sender);self.render_participants(&sender);
             }
             ChatMsg::ServerName(name)=>{*self.actions.emoji_source.borrow_mut()=name.clone();self.server_name=name;self.render_picker(&sender);self.render_pins(&sender);},
             ChatMsg::SetUsers(users) => {
-                let users:HashMap<_,_>=users.into_iter().map(|u| (u.id, u)).collect();render_history=self.users_map.len()!=users.len()||users.iter().any(|(id,u)|self.users_map.get(id).is_none_or(|old|old.display_name()!=u.display_name()||old.roles!=u.roles));self.users_map=users;self.refresh_reaction_hints();self.render_pins(&sender);
+                let users:HashMap<_,_>=users.into_iter().map(|u| (u.id, u)).collect();render_history=self.users_map.len()!=users.len()||users.iter().any(|(id,u)|self.users_map.get(id).is_none_or(|old|old.display_name()!=u.display_name()||old.roles!=u.roles));self.users_map=users;self.refresh_reaction_hints();self.render_pins(&sender);self.render_participants(&sender);
                 self.composer.refresh_names(&widgets.message_entry,&self.users_map);
             }
             ChatMsg::UserTyping { user_id, is_typing } => {
@@ -1334,6 +1336,23 @@ fn refresh_row_actions(row:&gtk::ListBoxRow,message:&Message,actions:&Actions,ac
     }visit(row.upcast_ref(),actions.busy.contains(&message.id),actions.pins_ready,access);
 }
 
+fn message_action_button(label: &str, icon: &str) -> gtk::Button {
+    let button = gtk::Button::new();
+    button.add_css_class("flat");
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    let image = gtk::Image::from_icon_name(icon);
+    image.set_pixel_size(16);
+    content.append(&image);
+    let text = gtk::Label::new(Some(label));
+    text.set_xalign(0.0);
+    text.set_hexpand(true);
+    content.append(&text);
+    button.set_child(Some(&content));
+    button.set_tooltip_text(Some(label));
+    button.update_property(&[gtk::accessible::Property::Label(label)]);
+    button
+}
+
 fn rebuild_messages_view(
     list_box: &gtk::ListBox,
     rendered:&mut HashMap<String,(String,gtk::ListBoxRow)>,
@@ -1536,24 +1555,24 @@ fn rebuild_messages_view(
         add_react_btn.set_tooltip_text(Some("Adicionar reação"));
         add_react_btn.add_css_class("flat"); add_react_btn.set_sensitive(access.send && !actions.busy.contains(&msg.id));
         let s = sender.clone(); add_react_btn.connect_clicked(move |_| s.input(ChatMsg::Action(ActionMsg::OpenPicker(msg_id)))); toolbar.append(&add_react_btn);
-        let add=gtk::Button::with_label("Adicionar reação");add.set_widget_name("message-react");add.add_css_class("flat");add.set_sensitive(access.send&&!actions.busy.contains(&msg.id));let input=sender.input_sender().clone();add.connect_clicked(move |_|{let _=input.send(ChatMsg::Action(ActionMsg::OpenPicker(msg_id)));});message_actions.append(&add);
-        if media.external.failed(msg){let retry=gtk::Button::with_label("Tentar carregar o avatar novamente");retry.add_css_class("flat");let s=sender.clone();retry.connect_clicked(move |_|s.input(ChatMsg::Transfer(TransferMsg::RetryExternalAvatar(msg_id))));message_actions.append(&retry);}
-        let who = gtk::Button::with_label("Quem reagiu"); who.add_css_class("flat"); who.set_sensitive(access.read);
+        let add=message_action_button("Adicionar reação", "face-smile-symbolic");add.set_widget_name("message-react");add.set_sensitive(access.send&&!actions.busy.contains(&msg.id));let input=sender.input_sender().clone();add.connect_clicked(move |_|{let _=input.send(ChatMsg::Action(ActionMsg::OpenPicker(msg_id)));});message_actions.append(&add);
+        if media.external.failed(msg){let retry=message_action_button("Tentar carregar o avatar novamente", "view-refresh-symbolic");let s=sender.clone();retry.connect_clicked(move |_|s.input(ChatMsg::Transfer(TransferMsg::RetryExternalAvatar(msg_id))));message_actions.append(&retry);}
+        let who = message_action_button("Quem reagiu", "system-users-symbolic"); who.set_sensitive(access.read);
         let s = sender.clone(); who.connect_clicked(move |_| s.input(ChatMsg::Action(ActionMsg::OpenParticipants(msg_id)))); message_actions.append(&who);
-        let reply=gtk::Button::with_label("Responder");reply.add_css_class("flat");reply.set_sensitive(access.send);let s=sender.clone();let message=msg.clone();reply.connect_clicked(move |_|s.input(ChatMsg::SetReply(Some(message.clone()))));message_actions.append(&reply);
-        if let Some(text)=text{let copy=gtk::Button::with_label("Copiar texto");copy.add_css_class("flat");let s=sender.clone();copy.connect_clicked(move |_|s.input(ChatMsg::CopyMessage(text.clone())));message_actions.append(&copy);}
+        let reply=message_action_button("Responder", "mail-reply-sender-symbolic");reply.set_sensitive(access.send);let s=sender.clone();let message=msg.clone();reply.connect_clicked(move |_|s.input(ChatMsg::SetReply(Some(message.clone()))));message_actions.append(&reply);
+        if let Some(text)=text{let copy=message_action_button("Copiar texto", "edit-copy-symbolic");let s=sender.clone();copy.connect_clicked(move |_|s.input(ChatMsg::CopyMessage(text.clone())));message_actions.append(&copy);}
         if let Some(user) = user_id.filter(|_|!actions.pinned_view) {
             if access.can_edit(user, msg.author_id) {
-                let edit = gtk::Button::with_label("Editar");edit.set_widget_name("message-mutate"); edit.add_css_class("flat"); edit.set_sensitive(!actions.busy.contains(&msg.id));
+                let edit = message_action_button("Editar", "document-edit-symbolic");edit.set_widget_name("message-mutate"); edit.set_sensitive(!actions.busy.contains(&msg.id));
                 let s = sender.clone(); let m = msg.clone(); edit.connect_clicked(move |_| s.input(ChatMsg::Action(ActionMsg::OpenEdit(m.clone())))); message_actions.append(&edit);
             }
             if access.can_delete(user, msg.author_id) {
-                let delete = gtk::Button::with_label("Excluir");delete.set_widget_name("message-mutate"); delete.add_css_class("flat");delete.add_css_class("papo-destructive"); delete.set_sensitive(!actions.busy.contains(&msg.id));
+                let delete = message_action_button("Excluir", "edit-delete-symbolic");delete.set_widget_name("message-mutate"); delete.add_css_class("papo-destructive"); delete.set_sensitive(!actions.busy.contains(&msg.id));
                 let s = sender.clone(); let m = msg.clone(); delete.connect_clicked(move |_| s.input(ChatMsg::Action(ActionMsg::ConfirmDelete(m.clone())))); message_actions.append(&delete);
             }
         }
         if access.pin {
-            let pin = gtk::Button::with_label(if pinned.contains(&msg.id) { "Desafixar" } else { "Fixar" });pin.set_widget_name("message-pin"); pin.add_css_class("flat");
+            let pin = message_action_button(if pinned.contains(&msg.id) { "Desafixar" } else { "Fixar" }, "view-pin-symbolic");pin.set_widget_name("message-pin");
             pin.set_sensitive(actions.pins_ready && !actions.busy.contains(&msg.id));
             let s = sender.clone(); pin.connect_clicked(move |_| s.input(ChatMsg::Action(ActionMsg::Pin(msg_id)))); message_actions.append(&pin);
         }

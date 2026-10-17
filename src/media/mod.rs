@@ -2,11 +2,9 @@
 //! EN: Manages image processing, bounded memory decoding, thumbnail downscaling, and GDK texture generation for UI display.
 //! PT-BR: Utilitários de mídia — decodificação em memória limitada, miniaturas, geração de texturas GDK e manipulação de avatares/anexos.
 
-use base64::prelude::*;
 use gtk::gdk::Texture;
 use gtk::glib::Bytes;
 use gtk::prelude::*;
-use tracing::warn;
 
 pub mod avatars;
 pub mod sound;
@@ -18,6 +16,8 @@ pub mod emoji;
 pub mod giphy;
 pub mod gif_links;
 pub mod poster;
+pub mod container;
+mod sandbox;
 
 /// Bound encoded input, dimensions and decoded cache size before creating a texture.
 /// EN: Decodes image bytes into a GDK texture, constraining bounds to a default 512x512 box.
@@ -109,52 +109,6 @@ pub fn set_avatar(image: &adw::Avatar, texture: Option<&Texture>) {
     image.set_custom_image(texture);
 }
 
-/// Decodes base64 image data and creates a `gdk::Texture`.
-pub fn texture_from_base64(b64: &str) -> Option<Texture> {
-    // Strip data URL scheme if present (e.g. "data:image/png;base64,...")
-    let clean_b64 = if let Some(idx) = b64.find(',') {
-        &b64[idx + 1..]
-    } else {
-        b64
-    };
-
-    match BASE64_STANDARD.decode(clean_b64.trim()) {
-        Ok(bytes) => texture_from_bytes(&bytes),
-        Err(e) => {
-            warn!("Failed to decode base64 image: {e}");
-            None
-        }
-    }
-}
-
-/// Creates a `gdk::Texture` from raw image bytes.
-pub fn texture_from_bytes(bytes: &[u8]) -> Option<Texture> {
-    let glib_bytes = Bytes::from(bytes);
-    match Texture::from_bytes(&glib_bytes) {
-        Ok(texture) => Some(texture),
-        Err(e) => {
-            // GDK guarantees PNG/JPEG/TIFF support, while the backend also
-            // accepts GIF and WebP avatars. Decode their first frame in Rust.
-            use gtk::prelude::*;
-            match image::load_from_memory(bytes) {
-                Ok(image) => {
-                    let image = image.to_rgba8();
-                    let width = i32::try_from(image.width()).ok()?;
-                    let height = i32::try_from(image.height()).ok()?;
-                    let stride = image.width() as usize * 4;
-                    let bytes = Bytes::from_owned(image.into_raw());
-                    Some(gtk::gdk::MemoryTexture::new(width, height,
-                        gtk::gdk::MemoryFormat::R8g8b8a8, &bytes, stride).upcast())
-                }
-                Err(decode_error) => {
-                    warn!("Failed to decode image: {decode_error} (GDK: {e})");
-                    None
-                }
-            }
-        }
-    }
-}
-
 /// Formats a byte size into a human-readable string (e.g. "1.2 MB").
 pub fn format_file_size(bytes: i64) -> String {
     let bytes = bytes.max(0);
@@ -185,10 +139,6 @@ mod tests {
         assert_eq!(format_file_size(2 * 1024 * 1024 * 1024), "2.00 GB");
     }
 
-    #[test]
-    fn test_texture_from_invalid_base64() {
-        assert!(texture_from_base64("!!!invalid-base-64!!!").is_none());
-    }
 }
 
 #[cfg(test)]

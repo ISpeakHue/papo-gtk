@@ -32,16 +32,24 @@ fn owns_text_or_popup(mut focus:Option<gtk::Widget>)->bool{
         focus=widget.parent();
     }false
 }
-pub(crate) fn type_to_focus(view:&gtk::TextView){
+pub(crate) fn type_to_focus(view:&gtk::TextView,scroll:&gtk::ScrolledWindow,composer:composer::Composer,input:relm4::Sender<ChatMsg>){
     use std::{rc::Rc,cell::RefCell};
     // Install on the actual window so typing after a sidebar click also works.
     // Detach on reparenting; the window never holds a strong composer reference.
     let installed=Rc::new(RefCell::new(None::<(gtk::glib::WeakRef<gtk::Window>,gtk::EventControllerKey)>));
+    let scroll=scroll.downgrade();
     let refresh=move |view:&gtk::TextView|{
         if let Some((window,keys))=installed.borrow_mut().take(){if let Some(window)=window.upgrade(){window.remove_controller(&keys);}}
         let Some(window)=view.root().and_downcast::<gtk::Window>()else{return;};
-        let keys=gtk::EventControllerKey::new();keys.set_propagation_phase(gtk::PropagationPhase::Capture);let weak=view.downgrade();
+        let keys=gtk::EventControllerKey::new();keys.set_propagation_phase(gtk::PropagationPhase::Capture);let weak=view.downgrade();let scroll=scroll.clone();let composer=composer.clone();let input=input.clone();
         keys.connect_key_pressed(move |controller,key,_,mods|{
+            if mods.is_empty()&&matches!(key,gtk::gdk::Key::Page_Up|gtk::gdk::Key::Page_Down|gtk::gdk::Key::End)&&!composer.is_composing(){
+                if let (Some(view),Some(scroll))=(weak.upgrade(),scroll.upgrade()){
+                    let focus=view.root().and_downcast::<gtk::Window>().and_then(|w|gtk::prelude::RootExt::focus(&w));
+                    let in_chat=focus.as_ref().is_some_and(|f|f==view.upcast_ref::<gtk::Widget>()||f.is_ancestor(&scroll));
+                    if in_chat&&scroll.is_mapped(){let _=input.send(match key{gtk::gdk::Key::End=>ChatMsg::Latest,gtk::gdk::Key::Page_Up=>ChatMsg::Page(-1),_=>ChatMsg::Page(1)});return gtk::glib::Propagation::Stop;}
+                }
+            }
             if !typing_key(key,mods){return gtk::glib::Propagation::Proceed;}
             let Some(view)=weak.upgrade().filter(|v|v.is_mapped()&&v.is_sensitive()&&v.is_editable())else{return gtk::glib::Propagation::Proceed;};
             let Some(window)=view.root().and_downcast::<gtk::Window>()else{return gtk::glib::Propagation::Proceed;};

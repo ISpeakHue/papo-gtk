@@ -94,8 +94,8 @@ request reuse and memory bounds independently of elapsed timings.
   inactive with a healthy socket. Per-session jitter avoids identical retry phases.
   Permission events and reconnect still request authoritative snapshots.
 - Media: the active 64-texture/64 MiB and 48 MiB animation limits remain.
-  The follow-up recent-preview policy below adds a 128 MiB/256-entry resident
-  cache and raises compressed retention to 96 MiB/512 entries. No blanket
+  The follow-up recent-preview policy below adds a 192 MiB/256-entry resident
+  cache and raises compressed retention to 192 MiB/512 entries. No blanket
   loading delay was added.
 
 ## Conditional work
@@ -174,14 +174,16 @@ Their media prefetches after visible resources using the existing paced requests
 and four download slots. Only media is prefetched; offscreen member/webhook
 avatars and author-only cards continue to follow viewport demand.
 
-Recent thumbnails, posters and GIF first frames share a 128 MiB/256-entry resident
+Recent thumbnails, posters and GIF first frames share a 192 MiB/256-entry resident
 cache across up to eight channels. Existing active preview limits still apply;
 common texture references are shared rather than copied. Full animations and
 players are not retained across channel switches. Offscreen prefetched GIFs
 prepare only a first frame; entering the viewport promotes them to animation.
-Decoded older pictures have a 30-message scroll margin, then unload normally.
+Older pictures leave active rows after a 30-message scroll margin; their static
+previews remain in the bounded resident LRU so a short return does not decode
+them again. Full animations and playback still unload offscreen.
 
-The compressed cache grows from 32 MiB/256 entries to 96 MiB/512 entries and
+The compressed cache grows from 32 MiB/256 entries to 192 MiB/512 entries and
 prefers recent opening batches over older scroll history. Both caches enforce
 hard ceilings, so an exceptionally large batch can still cause eviction. They
 allocate on demand and clear on access revocation or session reset; deletion and
@@ -275,3 +277,28 @@ demand and row recycling remain in place.
 Validation: warning-free all-target compilation; the extended `avatar-viewport`
 case passed for 100 and 5,000 members. The shared chat implementation also passed
 the `scroll-media` and `smooth-updates` GTK regressions on the private display.
+
+## Recent-media retention and dated navigation (2026-10-19)
+
+Static previews now remain in a 192 MiB/256-entry LRU across eight recently
+visited channels, including pictures viewed outside the opening batch. The
+latest 30-message batches have eviction priority; advancing that batch does not
+immediately discard a just-viewed image. Compressed input has a separate
+192 MiB/512-entry budget and permits individual images up to 25 MiB instead of
+silently rejecting everything above 5 MiB. These limits allocate on demand;
+active images share texture references with resident entries. GIF animations
+and players retain their existing offscreen teardown and memory limits.
+Revoked access, logout, deletion and moderation still invalidate media.
+
+Search result navigation uses the exact message timestamp and UUID with the
+backend's `since`/`last_id` cursor: one descending page includes the target and
+one ascending page provides following context. This costs two reads regardless
+of how old the result is. The temporary history range is kept separate from the
+cached channel head; **Mais recentes** restores and revalidates the actual head.
+Live messages update that head without creating a gap in the older range.
+Unknown-date targets retain the existing history fallback. Ordinary search
+pagination and explicit date filters continue to run on the backend.
+
+Search input and filter changes debounce for 350 ms; changing or closing the
+query aborts prior work and rejects stale responses. Result widgets stay
+recycled while using the chat's shared emoji-aware renderer.

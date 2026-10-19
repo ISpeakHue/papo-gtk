@@ -66,7 +66,7 @@ fn build(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions,open:Option
         let parts=if run.style.code{vec![Part::Text(run.text.clone())]}else{parts_index(&run.text,&actions.emoji_names)};
         for part in parts{match part{
             Part::Text(value)=>{
-                let displayed=if run.style.code{mentions::DisplayText{text:value,spans:vec![]}}else{mentions::DisplayText::read(&value,users)};
+                let displayed=if run.style.code{mentions::DisplayText{text:value,..Default::default()}}else{mentions::DisplayText::read(&value,users)};
                 let value=&displayed.text;let offset=iter.offset();buffer.insert(&mut iter,value);
                 for span in displayed.spans{
                     let start=offset+value[..span.start].chars().count() as i32;let end=offset+value[..span.end].chars().count() as i32;
@@ -187,9 +187,15 @@ fn target_at(view:&gtk::TextView,targets:&[(i32,i32,Target)],x:f64,y:f64)->Optio
     targets.iter().filter(hit).find(|(_,_,target)|matches!(target,Target::Spoiler{shown,..} if !shown.get()))
         .or_else(||targets.iter().filter(hit).find(|(_,_,target)|!matches!(target,Target::Spoiler{..}))).map(|(_,_,target)|target.clone())
 }
+pub(super) fn compact(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions)->gtk::ScrolledWindow{
+    let view=widget(&excerpt(text),users,actions);view.set_widget_name("reply-preview-text");view.set_wrap_mode(gtk::WrapMode::None);view.set_can_target(false);view.set_focusable(false);
+    view.set_height_request(-1);
+    let metrics=view.pango_context().metrics(None,None);let height=((metrics.ascent()+metrics.descent())/pango::SCALE+6).max(26);
+    let scroll=gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::External).vscrollbar_policy(gtk::PolicyType::External).height_request(height).hexpand(true).child(&view).build();
+    scroll.set_can_target(false);scroll.set_overflow(gtk::Overflow::Hidden);scroll
+}
 pub(super) fn excerpt(text:&str)->String{
-    let mut text=text.split_whitespace().collect::<Vec<_>>().join(" ");
-    if text.chars().count()>160{text=text.chars().take(160).collect();text.push('…');}text
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 #[cfg(test)]mod tests{
@@ -201,8 +207,8 @@ pub(super) fn excerpt(text:&str)->String{
         for literal in ["`:gambiarra:`","```\n:gambiarra:\n```","https://example.test/:gambiarra:","<b>literal</b>","incomplete :gambiarra"]{assert_eq!(parts(literal,&list),vec![Part::Text(literal.into())]);}
         assert_eq!(parts(":gambiarra:",&[]),vec![Part::Text(":gambiarra:".into())]);
     }
-    #[test]fn reply_excerpts_are_single_line_and_bounded_by_unicode_characters(){
-        assert_eq!(excerpt("  first\nsecond\tthird  "),"first second third");let long="🐈".repeat(200);assert_eq!(excerpt(&long).chars().count(),161);
+    #[test]fn reply_excerpts_keep_all_unicode_for_width_based_clipping(){
+        assert_eq!(excerpt("  first\nsecond\tthird  "),"first second third");let long="🐈".repeat(200);assert_eq!(excerpt(&long),long);
     }
 }
 

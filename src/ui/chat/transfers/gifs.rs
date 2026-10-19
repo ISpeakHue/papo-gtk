@@ -16,7 +16,7 @@ pub(super) fn source(media:&Transfers,message:Uuid,key:Uuid,messages:&[Message])
     }
     media.giphy.iter().find(|(_,id)|**id==key).map(|(url,_)|if url.starts_with("https://"){url.clone()}else{format!("https://giphy.com/gifs/{url}")})
 }
-pub(super) fn separate_animation(embed:&Embed)->bool{embed.animated_link()&&embed.has_video()}
+pub(super) fn separate_animation(embed:&Embed)->bool{embed.animated_link()&&embed.has_video()&&embed.fetch_method!="gif"}
 fn info(embed:Option<&Embed>,source:Option<&str>)->gtk::Box{
     let body=gtk::Box::new(gtk::Orientation::Vertical,6);body.set_margin_start(12);body.set_margin_end(12);body.set_margin_top(10);body.set_margin_bottom(10);
     if let Some(title)=embed.and_then(|p|p.title.as_deref()).filter(|s|!s.is_empty()){

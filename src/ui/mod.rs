@@ -8,6 +8,7 @@ pub mod chat;
 pub mod user_list;
 pub mod status;
 mod smooth_scroll;
+mod dialogs;
 
 
 pub mod style;

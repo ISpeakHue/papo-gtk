@@ -111,6 +111,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     assert!(!requests().iter().any(|(_,path,_)|path=="/auth/connected_devices"));
     let (save,scroll)={let model=main.model();let v=model.account.profile.as_ref().unwrap();(v.save.as_ref().unwrap().clone(),v.body.ancestor(gtk::ScrolledWindow::static_type()).unwrap().downcast::<gtk::ScrolledWindow>().unwrap())};
     until(context,||save.height()>0&&scroll.vadjustment().upper()>scroll.vadjustment().page_size());
+    wait_profile_layout(&main,&window,context);
     main.model().account.profile.as_ref().unwrap().hero.as_ref().unwrap().check_layout(&window,true);
     let y=save.compute_bounds(&window).unwrap().y();assert!(y>window.height() as f32-90.0);
     scroll.vadjustment().set_value(scroll.vadjustment().upper()-scroll.vadjustment().page_size());
@@ -146,6 +147,11 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     // Accepted profile writes retain the mounted form, preserving the window,
     // the currently selected tab and an unsaved preferences draft.
     let old=main.model().account.profile.as_ref().unwrap().token;
+    main.emit(MainWindowMsg::Account(AccountMsg::Profile(main.model().current_user.id)));
+    until(context,||main.model().account.profile.as_ref().is_some_and(|v|!v.embedded&&!v.loading));
+    assert!(main.model().account.parked_profile.as_ref().is_some_and(|v|v.token==old),"preview preserves the mounted editor and unsaved draft");
+    main.model().account.profile.as_ref().unwrap().window.close();until(context,||main.model().account.profile.as_ref().is_some_and(|v|v.embedded&&v.token==old));
+    assert_eq!(main.model().account.profile.as_ref().unwrap().fields.as_ref().unwrap().nickname.text(),"Tabbed nickname");
     find_button(window.upcast_ref(),"Salvar perfil").emit_clicked();until(context,||main.model().account.profile.as_ref().is_some_and(|v|!v.pending&&v.error.text().contains("Profile failed")));
     find_button(window.upcast_ref(),"Salvar perfil").emit_clicked();tabs.set_visible_child_name("preferences");
     until(context,||main.model().account.profile.as_ref().is_some_and(|v|v.token==old&&v.fields.is_some()&&!v.pending&&v.reconcile.is_none()&&v.error.text()=="Salvo."));
@@ -165,16 +171,19 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     find_button(window.upcast_ref(),"Remover banner").emit_clicked();
     until(context,||main.model().account.profile.as_ref().is_some_and(|v|!v.pending&&v.reconcile.is_none()&&v.error.text()=="Salvo.")&&backend.lock().unwrap().profile["banner_media"].is_null());
     until(context,||main.model().account.profile.as_ref().unwrap().hero.as_ref().unwrap().widget.height()<144);
+    wait_profile_layout(&main,&window,context);
     {let model=main.model();let v=model.account.profile.as_ref().unwrap();v.hero.as_ref().unwrap().check_layout(&window,false);assert_eq!(v.token,token);assert_eq!(profile_values(v.fields.as_ref().unwrap())[2],"Draft entered during reconciliation","image changes preserve the mounted profile draft");}
     tabs.set_visible_child_name("security");pump(context);super::super::security::exercise_controls(&main,context);
     passwords[0].set_text("Clear on close");passwords[1].set_text("Clear on close");
     window.set_default_size(390,650);until(context,||window.width()<=420);
     tabs.set_visible_child_name("profile");crate::ui::main_window::layout::tests::preview(&window,"account-settings-profile-narrow",context);
+    wait_profile_layout(&main,&window,context);
     {let model=main.model();let v=model.account.profile.as_ref().unwrap();v.hero.as_ref().unwrap().check_layout(&window,false);let bounds=v.save.as_ref().unwrap().compute_bounds(&window).unwrap();assert!(bounds.y()>window.height() as f32-90.0&&bounds.y()+bounds.height()<=window.height() as f32,"the narrow profile keeps Save visible");}
     tabs.set_visible_child_name("preferences");
     until(context,||main.model().account.preferences.as_ref().unwrap().toggles.iter().all(|row|row.compute_bounds(&window).is_some_and(|b|b.width()>0.0&&b.x()>=0.0&&b.x()+b.width()<=window.width() as f32)));
     crate::ui::main_window::layout::tests::preview(&window,"account-settings-preferences-narrow",context);
     tabs.set_visible_child_name("security");crate::ui::main_window::layout::tests::preview(&window,"account-settings-narrow",context);
+    until(context,||passwords.iter().all(|entry|entry.compute_bounds(&window).is_some_and(|b|b.width()>0.0&&b.x()>=0.0&&b.x()+b.width()<=window.width() as f32)));
     for entry in &passwords{let bounds=entry.compute_bounds(&window).unwrap();assert!(bounds.x()>=0.0&&bounds.x()+bounds.width()<=window.width() as f32,"password fields must fit the narrow settings window");assert!(entry.shows_peek_icon());}
     window.close();pump(context);let native=window.downcast_ref::<adw::Window>().unwrap();until(context,||native.visible_dialog().is_some());
     find_button(native.visible_dialog().unwrap().upcast_ref(),"Descartar").emit_clicked();until(context,||!window.is_visible());assert!(passwords.iter().all(|p|p.text().is_empty()));
@@ -196,6 +205,11 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     assert_ne!(main.model().account.profile.as_ref().unwrap().fields.as_ref().unwrap().nickname.text(),"Keep my draft");
     main.model().account.profile.as_ref().unwrap().fields.as_ref().unwrap().nickname.set_text("Save before closing");pump(context);final_window.close();until(context,||final_native.visible_dialog().is_some());find_button(final_native.visible_dialog().unwrap().upcast_ref(),"Salvar").emit_clicked();
     until(context,||!final_window.is_visible());assert_eq!(main.model().current_user.nickname.as_deref(),Some("Save before closing"));
+    find_button(main.widget().upcast_ref(),"Meu perfil").emit_clicked();
+    until(context,||main.model().account.profile.as_ref().is_some_and(|v|!v.loading&&!v.embedded));
+    {let model=main.model();let preview=model.account.profile.as_ref().unwrap();assert!(preview.fields.is_none()&&preview.save.is_none(),"footer opens a read-only own profile, editing stays in settings");
+    assert!(!descendants(preview.window.upcast_ref()).iter().any(|w|w.downcast_ref::<gtk::Button>().is_some_and(|b|b.label().as_deref()==Some("Mensagem direta"))),"never offer DM to self");
+    preview.window.close();}
     host.set_content(None::<&gtk::Widget>);host.close();drop(main);server.abort();pump(context);
 }
 #[cfg(test)]
@@ -218,12 +232,13 @@ pub(super) fn watch_preferences(v:&PreferencesView,sender:&ComponentSender<MainW
     for toggle in &v.toggles{let s=sender.clone();toggle.connect_active_notify(move |_|s.input(MainWindowMsg::Account(AccountMsg::Dirty)));}
 }
 impl Account {
-    fn profile_dirty(&self)->bool{self.profile.as_ref().is_some_and(|v|v.embedded&&v.fields.as_ref().is_some_and(|f|profile_values(f)!=v.baseline))}
+    fn profile_dirty(&self)->bool{self.profile.as_ref().filter(|v|v.embedded).or(self.parked_profile.as_ref()).is_some_and(|v|v.embedded&&v.fields.as_ref().is_some_and(|f|profile_values(f)!=v.baseline))}
     fn preferences_dirty(&self)->bool{self.preferences.as_ref().is_some_and(|v|v.embedded&&preferences_values(v)!=v.baseline)}
-    fn pending(&self)->bool{self.mutation.is_some()||self.settings_pending||self.profile.as_ref().is_some_and(|v|v.reconcile.is_some())}
+    fn pending(&self)->bool{self.mutation.is_some()||self.settings_pending||self.profile.as_ref().is_some_and(|v|v.reconcile.is_some())||self.parked_profile.as_ref().is_some_and(|v|v.reconcile.is_some())}
 }
 impl MainWindowModel {
     pub(super) fn open_settings_at(&mut self,tab:Tab,root:&gtk::Box,sender:&ComponentSender<Self>){
+        self.restore_profile_editor();
         self.open_settings(root,sender);
         if let Some(v)=&self.account.settings{v.tabs.set_visible_child_name(tab.name());}
         self.select_settings(tab,sender);
@@ -233,6 +248,7 @@ impl MainWindowModel {
         if let Some(v)=&self.account.preferences{v.save.set_sensitive(!v.pending&&preferences_values(v)!=v.baseline);}
     }
     pub(super) fn request_settings_close(&mut self,sender:&ComponentSender<Self>){
+        self.restore_profile_editor();
         let Some(v)=self.account.settings.as_ref().filter(|v|v.window.is_visible())else{return;};
         if self.account.pending(){return;}
         if !self.account.profile_dirty()&&!self.account.preferences_dirty(){v.allow_close.set(true);v.window.close();return;}
@@ -257,4 +273,9 @@ impl MainWindowModel {
             self.account.close_after_save=false;if let Some(v)=&self.account.settings{v.allow_close.set(true);v.window.close();}
         }
     }
+}
+
+#[cfg(test)]
+fn wait_profile_layout(main:&Controller<MainWindowModel>,window:&gtk::Window,context:&gtk::glib::MainContext){
+    crate::ui::chat::actions::tests::until(context,||main.model().account.profile.as_ref().unwrap().hero.as_ref().unwrap().widget.compute_bounds(window).is_some_and(|b|b.width()>0.0&&b.x()>=0.0&&b.x()+b.width()<=window.width() as f32));
 }

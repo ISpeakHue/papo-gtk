@@ -61,7 +61,7 @@ fn budgets() {
     let messages = HashSet::from([message]);
     cache.select(channel,&HashMap::new());
     let first = Uuid::new_v4(); cache.insert(channel,first,&messages,&texture);
-    for _ in 0..128 { cache.insert(channel,Uuid::new_v4(),&messages,&texture); }
+    for _ in 0..192 { cache.insert(channel,Uuid::new_v4(),&messages,&texture); }
     assert!(!cache.contains(channel,first),"the resident byte budget evicts least-recent previews");
     let key = Uuid::new_v4();let second = Uuid::new_v4();
     cache.insert(channel,key,&HashSet::from([message,second]),&texture);

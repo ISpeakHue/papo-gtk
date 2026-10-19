@@ -7,7 +7,7 @@ mod author;
 mod external;
 #[cfg(test)]pub(crate) use external::exercise as exercise_external;
 mod encoded;
-mod resident;
+pub(super) mod resident;
 #[cfg(test)]mod recent_tests;
 #[cfg(test)]pub(crate) use recent_tests::exercise as exercise_recent;
 mod loading;
@@ -75,7 +75,7 @@ pub(super) struct Transfers {
     pub notice:Option<(Uuid,String)>,
     pub(super) resident:resident::Cache,
     recent_channel:Option<Uuid>,
-    recent_keys:HashMap<Uuid,HashSet<Uuid>>,
+    recent_keys:HashMap<Uuid,HashSet<Uuid>>,preview_owners:HashMap<Uuid,HashSet<Uuid>>,
     visible_keys:HashSet<Uuid>,
     static_previews:HashSet<Uuid>,
     pub(super) encoded:encoded::Cache,
@@ -168,7 +168,7 @@ fn dismiss_image(window:&gtk::Window,picture:&gtk::Picture){
 impl Default for Transfers {
     fn default() -> Self {
         Self {
-            notice:None,encoded:Default::default(),resident:Default::default(),recent_channel:None,recent_keys:Default::default(),visible_keys:Default::default(),static_previews:Default::default(),
+            notice:None,encoded:Default::default(),resident:Default::default(),recent_channel:None,recent_keys:Default::default(),preview_owners:Default::default(),visible_keys:Default::default(),static_previews:Default::default(),
             decode_limiter:std::sync::Arc::new(tokio::sync::Semaphore::new(2)),
             animation_limiter:std::sync::Arc::new(tokio::sync::Semaphore::new(1)),
             poster_limiter:std::sync::Arc::new(tokio::sync::Semaphore::new(1)),poster_attempted:Default::default(),
@@ -637,7 +637,7 @@ impl ChatModel {
                 // without metadata remains readable until message_embeds arrives.
                 let Some(embed)=embed else{continue;};
                 let key=embed.id;self.transfers.giphy.insert(id,key);
-                if embed.has_video(){
+                if gifs::separate_animation(embed){
                     self.transfers.wanted.insert(key);
                     if gif_videos.len()+self.transfers.video_requests.len()<2&&self.transfers.request_gif(key){candidates+=1;gif_videos.push((m.id,key));}
                 }
@@ -681,7 +681,7 @@ impl ChatModel {
                     // One owner for an animated link: a backend rendition beats
                     // a blocked provider page and a static thumbnail cannot race it.
                     self.transfers.wanted.insert(p.id);
-                    if candidates<24&&p.has_video()&&gif_videos.len()+self.transfers.video_requests.len()<2&&self.transfers.request_gif(p.id){candidates+=1;gif_videos.push((m.id,p.id));}
+                    if candidates<24&&gifs::separate_animation(p)&&gif_videos.len()+self.transfers.video_requests.len()<2&&self.transfers.request_gif(p.id){candidates+=1;gif_videos.push((m.id,p.id));}
                     if !author_needed&&gifs::separate_animation(p)&&(p.has_video()||!p.fetch_method.is_empty()||self.transfers.resolved.contains(&p.id)){continue;}
                 }
                 if p.has_video()&&p.thumbnail.is_none()&&!p.fetch_method.is_empty()&&!author_needed&&!p.animated_link(){
@@ -706,6 +706,7 @@ impl ChatModel {
                 }else if !author_needed&&(!self.transfers.textures.contains_key(&p.id)||(self.transfers.static_previews.contains(&p.id)&&self.transfers.visible_keys.contains(&p.id)))&&self.transfers.encoded.contains(p.id){
                     if self.transfers.request(p.id){candidates+=1;if let Some(bytes)=self.transfers.encoded.get(p.id){queue_image(&mut self.transfers,sender,m.id,p.id,ImageInput::Shared(bytes));}}
                 }else if self.transfers.request_embed(p.id,author_needed){
+                    if p.fetch_method=="gif"{self.transfers.gif_requested.insert(p.id);}
                     candidates+=1;
                     let api = api.clone();
                     let s = sender.clone();
@@ -808,12 +809,17 @@ impl ChatModel {
                         if gifs::separate_animation(&preview){self.transfers.requested.remove(&key);self.transfers.resolved.insert(key);}
                         else if let Some(data)=image_data{queue_image(&mut self.transfers,sender,message,key,ImageInput::Base64(data));}
                         else if preview.has_video()&&!preview.animated_link(){if let Some(api)=self.actions.api.clone(){queue_poster(&mut self.transfers,api,sender,message,key,true,false);}}
-                        else{self.transfers.requested.remove(&key);self.transfers.resolved.insert(key);}
+                        else{self.transfers.requested.remove(&key);self.transfers.resolved.insert(key);if preview.fetch_method=="gif"{self.transfers.gif_requested.remove(&key);self.transfers.failed(key);}}
                         self.transfers.remember_preview(preview.clone());
                         let ids:Vec<_>=self.history.messages.iter().filter(|m|m.embeds.iter().flatten().any(|p|p.id==key)).map(|m|m.id).collect();
                         for id in ids{self.history.apply(Change::Preview(id,preview.clone()));}
+                        if preview.fetch_method=="gif"&&self.transfers.failed.contains_key(&key){self.gif_fallback(key,sender);}
                     },
-                    Err(error)=>{self.transfers.failed(key);if crate::api::is_session_error(&error){let _=sender.output(ChatOutput::ActionError(error));}},_=>{self.transfers.failed(key);},
+                    Err(error)=>{
+                        self.transfers.gif_requested.remove(&key);self.transfers.failed(key);
+                        if crate::api::is_session_error(&error){let _=sender.output(ChatOutput::ActionError(error));}
+                        else if !crate::api::is_permission_error(&error){self.gif_fallback(key,sender);}
+                    },_=>{self.transfers.gif_requested.remove(&key);self.transfers.failed(key);},
                 }
             },
             TransferMsg::DismissImages=>{
@@ -1447,6 +1453,7 @@ pub(super) fn update_media_box(container:&gtk::Box,message:&Message,media:&Trans
     for preview in message.embeds.iter().flatten(){let name=format!("preview-{}-{}-{}-{}",state(preview.id),media.authors.textures.get(&preview.id).map_or(0,|t|t.as_ptr() as usize),media.video_requests.contains_key(&(message.id,preview.id)),super::rich::display_signature(preview,users,actions));let widget=existing.remove(&name).unwrap_or_else(||preview_widget(&gifs::attribution(preview,message),message.id,media,users,actions,sender).upcast());widget.set_widget_name(&name);ordered.push(widget);}
     for widget in existing.into_values(){container.remove(&widget);}
     let mut previous=None;for widget in ordered{if widget.parent().is_none(){container.insert_child_after(&widget,previous.as_ref());}else if widget.prev_sibling()!=previous{container.reorder_child_after(&widget,previous.as_ref());}previous=Some(widget);}
+    container.set_visible(container.first_child().is_some());
 }
 
 #[cfg(test)]
@@ -1477,7 +1484,7 @@ pub(crate) fn exercise_retention(context:&gtk::glib::MainContext){
     let (media_job,background_job)={let mut state=chat.state().get_mut();let media=tokio::spawn(std::future::pending::<()>());let handle=media.abort_handle();state.model.transfers.media_job(keys[1],media);let background=tokio::spawn(std::future::pending::<()>());let background_handle=background.abort_handle();state.model.transfers.jobs.push(background);(handle,background_handle)};
     chat.emit(ChatMsg::Action(ActionMsg::Navigate(messages[100].id)));settle(context);
     assert!(chat.model().rendered.contains_key(&format!("message-{}",messages[7].id)),"this check must retain the row while releasing its picture");
-    assert!(old_texture.upgrade().is_none()&&old_animation.upgrade().is_none(),"distant GTK pictures must not pin decoded media within the same row window");
+    assert!(old_texture.upgrade().is_some()&&old_animation.upgrade().is_none(),"bounded residency keeps a static preview while distant animations unload");assert!(!chat.model().transfers.textures.contains_key(&keys[1])&&!chat.model().transfers.animations.contains_key(&keys[0]),"distant rows must release active media ownership");
     until(context,||media_job.is_finished());assert!(!background_job.is_finished(),"evicting media must not cancel history or other background work");
     chat.emit(ChatMsg::Action(ActionMsg::Navigate(messages[5].id)));settle(context);
     let(old_texture,old_animation)={let mut state=chat.state().get_mut();state.model.transfers.cache_image(keys[1],image());state.model.transfers.cache_animation(keys[0],crate::media::animation::PreparedAnimation{frames:vec![(image(),std::time::Duration::from_millis(60)),(image(),std::time::Duration::from_millis(60))]});let texture=state.model.transfers.textures[&keys[1]].downgrade();let animation=state.model.transfers.animations[&keys[0]].0.downgrade();let render=Uuid::new_v4();state.model.media_render_pending=Some(render);chat.emit(ChatMsg::RenderMedia(render));(texture,animation)};settle(context);
@@ -1485,7 +1492,7 @@ pub(crate) fn exercise_retention(context:&gtk::glib::MainContext){
     let adjustment=scroll.vadjustment();adjustment.set_value((adjustment.upper()-adjustment.page_size()).max(0.0));
     until(context,||chat.model().history.messages.len()==cache::MESSAGE_LIMIT);settle(context);
     assert_eq!(chat.model().history.messages[0].id,messages[400].id);assert!(chat.model().has_more);
-    assert!(old_texture.upgrade().is_none()&&old_animation.upgrade().is_none(),"GTK pictures and GIF timers must release their paintables too");
+    assert!(old_texture.upgrade().is_some()&&old_animation.upgrade().is_none(),"only the bounded static LRU survives releasing older rows and GIF timers");assert!(!chat.model().transfers.textures.contains_key(&keys[1]));
     assert!((adjustment.upper()-adjustment.page_size()-adjustment.value()).abs()<2.0);
     chat.emit(ChatMsg::Transfer(TransferMsg::ImageReady{epoch,key:keys[2],token,result:Some(image())}));pump(context);assert!(!chat.model().transfers.textures.contains_key(&keys[2]),"late decoding must not refill released media");
     // Released pages remain available through normal pagination.
@@ -1494,7 +1501,7 @@ pub(crate) fn exercise_retention(context:&gtk::glib::MainContext){
     chat.emit(ChatMsg::HistoryLoaded{request_id:request,append:true,result:Ok(MessageListResponse{channel_id:a,messages:messages[200..400].to_vec(),has_more:true})});settle(context);assert_eq!(chat.model().history.messages.len(),400);
     chat.emit(ChatMsg::Action(ActionMsg::Navigate(messages[205].id)));settle(context);
     let (texture,row)={let mut state=chat.state().get_mut();state.model.transfers.cache_image(keys[2],image());let texture=state.model.transfers.textures[&keys[2]].downgrade();let row=state.model.rendered[&format!("message-{}",messages[205].id)].1.downgrade();let render=Uuid::new_v4();state.model.media_render_pending=Some(render);chat.emit(ChatMsg::RenderMedia(render));(texture,row)};settle(context);
-    chat.emit(ChatMsg::SetChannel(channel(b)));settle(context);assert!(texture.upgrade().is_none()&&row.upgrade().is_none(),"inactive row caches must not keep older pages alive");
+    chat.emit(ChatMsg::SetChannel(channel(b)));settle(context);assert!(texture.upgrade().is_some()&&row.upgrade().is_none(),"older rows unload on channel switch; their static preview belongs only to the bounded LRU");
     assert!(chat.model().transfers.textures.is_empty()&&chat.model().transfers.animations.is_empty()&&chat.model().transfers.video_files.is_empty());
     chat.emit(ChatMsg::SetChannel(channel(a)));settle(context);assert_eq!(chat.model().history.messages.len(),200);assert_eq!(chat.model().history.messages[0].id,messages[400].id);
     // A normalized embed used by a nearby message must survive another owner's eviction.

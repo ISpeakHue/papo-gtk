@@ -95,7 +95,7 @@ impl Picker {
                     let button=gtk::Button::new();button.add_css_class("flat");button.add_css_class("papo-emoji-cell");button.set_size_request(44,44);button.set_halign(gtk::Align::Center);button.set_valign(gtk::Align::Center);button.set_tooltip_text(Some(&format!(":{}:",choice.name)));button.update_property(&[gtk::accessible::Property::Label(&choice.name)]);
                     if let Some(paintable)=choice.id.and_then(|id|data.animations.get(&id).map(|a|a.clone().upcast::<gtk::gdk::Paintable>()).or_else(||data.textures.get(&id).map(|t|t.clone().upcast()))) {
                         let image=gtk::Image::from_paintable(Some(&paintable));image.set_pixel_size(28);if let Some(animation)=choice.id.and_then(|id|data.animations.get(&id)){animation.watch(&image,None);}button.set_child(Some(&image));
-                    }else{button.set_label(if choice.id.is_none(){&choice.text}else{"◌"});}
+                    }else{let label=gtk::Label::new(Some(if choice.id.is_none(){&choice.text}else{"◌"}));label.add_css_class("papo-unicode-emoji");button.set_child(Some(&label));}
                     let select=select.clone();button.connect_clicked(move |_|select(choice.clone()));grid.insert(&button,-1);
                 }
                 *keys=signatures;

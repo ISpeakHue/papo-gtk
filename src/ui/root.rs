@@ -21,6 +21,18 @@ enum View {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // Settings tests exercise persistence, but must never load remembered real
+    // sessions or write animation preferences into the developer's app config.
+    struct IsolatedConfig { path:std::path::PathBuf, previous:Option<std::ffi::OsString> }
+    impl IsolatedConfig {
+        fn new()->Self{
+            let path=std::env::temp_dir().join(format!("papo-gui-config-{}",uuid::Uuid::new_v4()));
+            std::fs::create_dir(&path).unwrap();let previous=std::env::var_os("XDG_CONFIG_HOME");std::env::set_var("XDG_CONFIG_HOME",&path);Self{path,previous}
+        }
+    }
+    impl Drop for IsolatedConfig {
+        fn drop(&mut self){if let Some(previous)=&self.previous{std::env::set_var("XDG_CONFIG_HOME",previous);}else{std::env::remove_var("XDG_CONFIG_HOME");}let _=std::fs::remove_dir_all(&self.path);}
+    }
 
     fn descendants(widget: &gtk::Widget) -> Vec<gtk::Widget> {
         let mut widgets = vec![widget.clone()];
@@ -35,6 +47,7 @@ mod tests {
     #[test]
     #[ignore = "requires a GTK display; CI runs this under Xvfb"]
     fn ui_smoke_window_has_header_controls_and_server_password() {
+        let _config=IsolatedConfig::new();
         let _report=crate::performance::Report;
         adw::init().unwrap();
         let runtime = tokio::runtime::Runtime::new().unwrap();
@@ -81,6 +94,8 @@ mod tests {
         }
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("notification-window"){crate::ui::main_window::notifications::exercise_page_window(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("recovery"){crate::ui::main_window::recovery::exercise(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("report11"){crate::ui::chat::composer::exercise_inline(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("report10"){crate::ui::chat::polish_tests::exercise(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("search-recycling"){crate::ui::main_window::search::exercise_recycling(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("avatar-viewport"){crate::ui::user_list::exercise_viewport(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("perf-baseline"){crate::ui::chat::performance::exercise_corrections(&context);window.close();return;}

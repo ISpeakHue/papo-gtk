@@ -2,6 +2,7 @@
 #[cfg(test)]
 pub(crate) mod tests;
 mod edit_mentions;
+mod edit_emojis;
 mod participants;
 #[cfg(test)]pub(crate) use participants::exercise as exercise_participants;
 pub(crate) mod pins;
@@ -49,7 +50,7 @@ pub(super) struct Actions {
 }
 
 struct EditView {
-    token: Uuid, message: Message, window: gtk::Window, mentions: edit_mentions::Mentions,
+    token: Uuid, message: Message, window: gtk::Window, mentions: edit_mentions::Mentions, emojis:edit_emojis::Completion,
     save: gtk::Button, error: gtk::Label, text: gtk::TextView, pending: bool,
 }
 struct EmojiManager {
@@ -63,13 +64,14 @@ pub enum ActionMsg {
     Reload,
     OpenEdit(Message), SaveEdit(Uuid), CancelEdit(Uuid),
     EditMentions(Uuid), OpenEditMentions(Uuid), DismissEditMentions(Uuid), EditMentionSelected(Uuid,Option<Uuid>),
+    OpenEditEmojis(Uuid), CloseEditEmojis(Uuid), EditEmojiSelected(Uuid,String,bool),
     EditFinished { epoch: Uuid, token: Uuid, result: anyhow::Result<Message> },
     ConfirmDelete(Message), DeleteConfirmed { epoch: Uuid, id: Uuid },
     DeleteFinished { epoch: Uuid, id: Uuid, result: anyhow::Result<()> },
     Pin(Uuid), PinEvent { id: Uuid, pinned: bool }, OpenPins, PinsClosed(String),
     PinsLoaded { epoch: Uuid, token: Uuid, result: anyhow::Result<Vec<Message>> },
     PinFinished { epoch: Uuid, id: Uuid, result: anyhow::Result<()> },
-    Navigate(Uuid), CancelNavigation,
+    Navigate(Uuid), NavigateAt(MessageCursor), CancelNavigation,
     OpenPicker(Uuid), OpenParticipants(Uuid), Reconcile(Uuid),HoverReactions(Uuid),
     SelectParticipants{token:Uuid,key:participants::Key}, MoreParticipants(Uuid), ParticipantsClosed(Uuid),
     ToggleReaction { id: Uuid, emoji_id: Option<Uuid>, unicode: Option<String> },
@@ -197,6 +199,10 @@ impl ChatModel {
             sender.input(ChatMsg::Action(ActionMsg::EmojisLoaded { token, result }));
         });
     }
+    pub(super) fn refresh_composer_emojis(&mut self,entry:&gtk::TextView){
+        self.composer.set_emojis(entry,&self.actions);
+        if let Some(edit)=&self.actions.edit{edit.mentions.composer.set_emojis(&edit.text,&self.actions);if let Some((_,picker))=&edit.emojis.picker{picker.update(&self.server_name,&self.actions.emojis,&self.actions.textures,&self.actions.animations);}}
+    }
     fn request_reactions(&mut self, id: Uuid, sender: &ComponentSender<Self>) {
         let (Some(api), Some(channel)) = (self.actions.api.clone(), self.active_channel.as_ref().map(|c| c.id())) else { return; };
         if !self.access.read { return; }
@@ -228,47 +234,52 @@ impl ChatModel {
                 super::input::configure_im(&text);
                 outer.append(&gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).min_content_height(72).max_content_height(160).propagate_natural_height(true).vexpand(true).child(&text).build());
                 let mentions=edit_mentions::Mentions::new(&text,&outer,token,sender);
+                mentions.composer.set_emojis(&text,&self.actions);
+                let emojis=edit_emojis::Completion::new(&text,&outer);
                 mentions.composer.set_wire(&text,message.content.as_deref().unwrap_or(""),&self.users_map);
                 let error = label(""); error.add_css_class("error");error.set_visible(false);outer.append(&error);
                 error.connect_notify_local(Some("label"),move |label,_|label.set_visible(!label.text().is_empty()));
                 let controls=gtk::Box::new(gtk::Orientation::Horizontal,8);
-                let mention=gtk::Button::with_label("@");mention.set_tooltip_text(Some("Mencionar membro (digite @ para filtrar)"));
+                let mention=gtk::Button::with_label("@");mention.set_visible(self.active_channel.as_ref().is_some_and(|c|!c.is_direct()));mention.set_tooltip_text(Some("Mencionar membro (digite @ para filtrar)"));
                 let output=sender.input_sender().clone();mention.connect_clicked(move |_|{let _=output.send(ChatMsg::Action(ActionMsg::OpenEditMentions(token)));});controls.append(&mention);
+                let emoji=gtk::Button::from_icon_name("face-smile-symbolic");emoji.set_tooltip_text(Some("Inserir emoji"));
+                let output=sender.input_sender().clone();emoji.connect_clicked(move |_|{let _=output.send(ChatMsg::Action(ActionMsg::OpenEditEmojis(token)));});controls.append(&emoji);
                 let spacer=gtk::Box::new(gtk::Orientation::Horizontal,0);spacer.set_hexpand(true);controls.append(&spacer);
                 controls.append(&button("Cancelar edição",sender,move ||ActionMsg::CancelEdit(token)));
                 let save=button("Salvar edição",sender,move ||ActionMsg::SaveEdit(token));save.add_css_class("suggested-action");controls.append(&save);outer.append(&controls);
-                let composing=mentions.composer.clone();let panel=mentions.panel.downgrade();
+                let composing=mentions.composer.clone();let panel=mentions.panel.downgrade();let emoji_panel=emojis.panel.downgrade();
                 let keys=gtk::EventControllerKey::new();keys.set_propagation_phase(gtk::PropagationPhase::Capture);let weak=text.downgrade();let output=sender.input_sender().clone();
                 keys.connect_key_pressed(move |controller,key,_,mods|{
                     if composing.is_composing(){return gtk::glib::Propagation::Proceed;}
                     let unmodified=!mods.intersects(gtk::gdk::ModifierType::SHIFT_MASK|gtk::gdk::ModifierType::CONTROL_MASK|gtk::gdk::ModifierType::ALT_MASK|gtk::gdk::ModifierType::SUPER_MASK|gtk::gdk::ModifierType::META_MASK|gtk::gdk::ModifierType::HYPER_MASK);
-                    if unmodified&&panel.upgrade().is_some_and(|p|p.is_visible()){
+                    let active_panel=emoji_panel.upgrade().filter(|p|p.is_visible()).or_else(||panel.upgrade().filter(|p|p.is_visible()));
+                    if unmodified&&active_panel.is_some(){
                         if matches!(key,gtk::gdk::Key::Return|gtk::gdk::Key::KP_Enter|gtk::gdk::Key::Tab){
                             if let(Some(text),Some(event))=(weak.upgrade(),controller.current_event()){if text.im_context_filter_keypress(&event){return gtk::glib::Propagation::Stop;}}
-                            if let Some(button)=panel.upgrade().and_then(|p|first_mention_button(p.upcast_ref())){button.emit_clicked();}
+                            if let Some(button)=active_panel.as_ref().and_then(|p|first_mention_button(p.upcast_ref())){button.emit_clicked();}
                             return gtk::glib::Propagation::Stop;
                         }
-                        if key==gtk::gdk::Key::Down{if let Some(panel)=panel.upgrade(){panel.child_focus(gtk::DirectionType::TabForward);}return gtk::glib::Propagation::Stop;}
+                        if key==gtk::gdk::Key::Down{if let Some(panel)=active_panel{panel.child_focus(gtk::DirectionType::TabForward);}return gtk::glib::Propagation::Stop;}
                     }
                     if matches!(key,gtk::gdk::Key::Return|gtk::gdk::Key::KP_Enter)&&!mods.intersects(gtk::gdk::ModifierType::SHIFT_MASK|gtk::gdk::ModifierType::CONTROL_MASK|gtk::gdk::ModifierType::ALT_MASK|gtk::gdk::ModifierType::SUPER_MASK){
                         if let(Some(text),Some(event))=(weak.upgrade(),controller.current_event()){if text.im_context_filter_keypress(&event){return gtk::glib::Propagation::Stop;}}
                         let _=output.send(ChatMsg::Action(ActionMsg::SaveEdit(token)));return gtk::glib::Propagation::Stop;
                     }gtk::glib::Propagation::Proceed
                 });text.add_controller(keys);
-                let keys=gtk::EventControllerKey::new();let output=sender.input_sender().clone();let panel=mentions.panel.downgrade();let composing=mentions.composer.clone();keys.connect_key_pressed(move |_,key,_,_|{if composing.is_composing(){return gtk::glib::Propagation::Proceed;}if key==gtk::gdk::Key::Escape{let action=if panel.upgrade().is_some_and(|p|p.is_visible()){ActionMsg::DismissEditMentions(token)}else{ActionMsg::CancelEdit(token)};let _=output.send(ChatMsg::Action(action));gtk::glib::Propagation::Stop}else{gtk::glib::Propagation::Proceed}});w.add_controller(keys);
+                let keys=gtk::EventControllerKey::new();let output=sender.input_sender().clone();let panel=mentions.panel.downgrade();let emoji_panel=emojis.panel.downgrade();let composing=mentions.composer.clone();keys.connect_key_pressed(move |_,key,_,_|{if composing.is_composing(){return gtk::glib::Propagation::Proceed;}if key==gtk::gdk::Key::Escape{let action=if panel.upgrade().is_some_and(|p|p.is_visible())||emoji_panel.upgrade().is_some_and(|p|p.is_visible()){ActionMsg::DismissEditMentions(token)}else{ActionMsg::CancelEdit(token)};let _=output.send(ChatMsg::Action(action));gtk::glib::Propagation::Stop}else{gtk::glib::Propagation::Proceed}});w.add_controller(keys);
                 let output=sender.input_sender().clone();w.connect_close_request(move |_|{let _=output.send(ChatMsg::Action(ActionMsg::CancelEdit(token)));gtk::glib::Propagation::Proceed});
-                self.actions.edit = Some(EditView { token, message, window: w.clone(), mentions, save, error, text, pending: false });
+                self.actions.edit = Some(EditView { token, message, window: w.clone(), mentions, emojis, save, error, text, pending: false });
                 w.present();if let Some(edit)=self.actions.edit.as_mut(){edit.text.grab_focus();edit.text.buffer().place_cursor(&edit.text.buffer().end_iter());edit.mentions.dismiss(&edit.text);}
             }
             ActionMsg::EditMentions(token) => {
                 if self.actions.edit.as_ref().is_some_and(|e|e.token==token){self.refresh_edit_mentions();}
             }
             ActionMsg::OpenEditMentions(token) => {
-                if let Some(edit)=self.actions.edit.as_mut().filter(|e|e.token==token&&!e.pending){edit.mentions.open();edit.text.grab_focus();}
+                if let Some(edit)=self.actions.edit.as_mut().filter(|e|e.token==token&&!e.pending){edit.emojis.dismiss(&edit.text,&edit.mentions.composer);edit.mentions.open();edit.text.grab_focus();}
                 self.refresh_edit_mentions();
             }
             ActionMsg::DismissEditMentions(token) => {
-                if let Some(edit)=self.actions.edit.as_mut().filter(|e|e.token==token){edit.mentions.dismiss(&edit.text);edit.text.grab_focus();}
+                if let Some(edit)=self.actions.edit.as_mut().filter(|e|e.token==token){edit.mentions.dismiss(&edit.text);edit.emojis.dismiss(&edit.text,&edit.mentions.composer);edit.text.grab_focus();}
             }
             ActionMsg::EditMentionSelected(token,id) => {
                 if !self.actions.edit.as_ref().is_some_and(|e|e.token==token&&!e.pending){return;}
@@ -279,6 +290,26 @@ impl ChatModel {
                     if self.user_id.is_some_and(|u|self.access.can_edit(u,edit.message.author_id)){edit.mentions.select(&edit.text,id,&self.users_map);}
                 }
             }
+            ActionMsg::OpenEditEmojis(token)=>{
+                let Some(edit)=self.actions.edit.as_mut().filter(|e|e.token==token&&!e.pending)else{return;};
+                if !self.user_id.is_some_and(|u|self.access.can_edit(u,edit.message.author_id)){return;}
+                if let Some((window,_))=&edit.emojis.picker{window.present();return;}
+                edit.mentions.dismiss(&edit.text);edit.emojis.dismiss(&edit.text,&edit.mentions.composer);
+                let (window,body)=window(root,"Emojis");window.set_transient_for(Some(&edit.window));window.set_default_size(420,440);
+                let input=sender.input_sender().clone();
+                let picker=emoji::Picker::new(&body,&self.unicode_emojis,move |choice|{let _=input.send(ChatMsg::Action(ActionMsg::EditEmojiSelected(token,choice.text,false)));});
+                picker.update(&self.server_name,&self.actions.emojis,&self.actions.textures,&self.actions.animations);
+                let input=sender.input_sender().clone();window.connect_close_request(move |_|{let _=input.send(ChatMsg::Action(ActionMsg::CloseEditEmojis(token)));gtk::glib::Propagation::Proceed});
+                edit.emojis.picker=Some((window.clone(),picker));window.present();
+            }
+            ActionMsg::CloseEditEmojis(token)=>{if let Some(edit)=self.actions.edit.as_mut().filter(|e|e.token==token){edit.emojis.picker.take();}}
+            ActionMsg::EditEmojiSelected(token,value,replace)=>{
+                let Some(edit)=self.actions.edit.as_mut().filter(|e|e.token==token&&!e.pending)else{return;};
+                if !self.user_id.is_some_and(|u|self.access.can_edit(u,edit.message.author_id)){return;}
+                let caret=edit.mentions.composer.emoji(&edit.text,&value,replace);
+                edit.mentions.composer.focus_after_completion(&edit.text,caret);edit.mentions.dismiss(&edit.text);edit.emojis.dismiss(&edit.text,&edit.mentions.composer);
+                if let Some((window,_))=edit.emojis.picker.take(){window.close();}
+            }
             ActionMsg::CancelEdit(token) => {
                 if self.actions.edit.as_ref().is_some_and(|e| e.token == token) { self.actions.edit.take().unwrap().window.close(); }
             }
@@ -288,7 +319,7 @@ impl ChatModel {
                 if !self.access.can_edit(user, edit.message.author_id) { edit.error.set_text("Sem permissão para editar esta mensagem."); return; }
                 let text = edit.mentions.composer.wire_text();
                 if text.chars().count() > 8192 { edit.error.set_text("Use até 8192 caracteres."); return; }
-                edit.mentions.dismiss(&edit.text);edit.pending = true; edit.text.set_sensitive(false); edit.save.set_sensitive(false); edit.error.set_text("Salvando…");
+                edit.mentions.dismiss(&edit.text);edit.emojis.dismiss(&edit.text,&edit.mentions.composer);edit.pending = true; edit.text.set_sensitive(false); edit.save.set_sensitive(false); edit.error.set_text("Salvando…");
                 let id = edit.message.id; let epoch = self.actions.epoch; let sender = sender.clone();
                 tokio::spawn(async move { let result = api.edit_message(id, &text).await;
                     sender.input(ChatMsg::Action(ActionMsg::EditFinished { epoch, token, result })); });
@@ -386,12 +417,24 @@ impl ChatModel {
                 }
                 if current && std::mem::take(&mut self.actions.pins_again) { self.request_pins(sender); }
             }
+            ActionMsg::NavigateAt(target)=>{
+                if self.history.messages.iter().any(|m|m.id==target.id){sender.input(ChatMsg::Action(ActionMsg::Navigate(target.id)));return;}
+                if !self.access.read{return;}
+                let(Some(api),Some(channel))=(self.actions.api.clone(),self.active_channel.as_ref().map(|c|c.id()))else{return;};
+                if !self.history_detached&&self.history_ready{self.conversations.store(channel,std::mem::take(&mut self.history),self.has_more);}
+                self.reconcile_request=None;self.initial_read=None;self.history_detached=true;self.history_ready=false;self.history.select(channel);
+                let request=Uuid::new_v4();self.history.begin(request);self.history_error=None;
+                self.actions.navigation=Some(target.id);self.actions.highlight=None;
+                let epoch=self.actions.epoch;let input=sender.input_sender().clone();
+                self.transfers.jobs.push(tokio::spawn(async move{let result=api.messages_around(channel,target).await;let _=input.send(ChatMsg::JumpLoaded{epoch,request,id:target.id,result});}));
+            }
             ActionMsg::Navigate(id) => {
                 if !self.access.read { return; }
+                if !self.history.messages.iter().any(|m|m.id==id){if let Some(message)=self.actions.pinned.iter().find(|m|m.id==id){sender.input(ChatMsg::Action(ActionMsg::NavigateAt(MessageCursor::from(message))));return;}}
                 self.actions.navigation = Some(id); self.actions.highlight = None; self.actions.navigation_cursor = None;
                 self.continue_navigation(sender);
             }
-            ActionMsg::CancelNavigation => { self.actions.navigation = None; self.actions.highlight = None; }
+            ActionMsg::CancelNavigation => { self.actions.navigation = None; self.actions.highlight = None;if self.history_detached{sender.input(ChatMsg::Latest);} }
             ActionMsg::OpenPicker(id) => {
                 let _ = sender.output(ChatOutput::RefreshAccess);
                 if !self.access.send { return; }

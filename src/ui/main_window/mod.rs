@@ -449,7 +449,7 @@ impl Component for MainWindowModel {
                 match result {
                     Ok(profiles) => {
                         if self.avatars.finish(request_id, &ids, profiles) {
-                            self.publish_avatars();self.render_inbox(&sender);
+                            self.publish_avatars();self.render_inbox(&sender);self.render_search(&sender);
                         }
                     }
                     Err(error) => {
@@ -476,7 +476,7 @@ impl Component for MainWindowModel {
                         // Same queue: selection/history begins before navigation.
                         sender.input(MainWindowMsg::ChannelSelected(channel));
                         sender.input(MainWindowMsg::Navigate { channel_id, message_id });
-                    } else { self.chat.emit(ChatMsg::Action(crate::ui::chat::actions::ActionMsg::Navigate(message_id))); }
+                    } else { self.chat.emit(ChatMsg::Action(self.navigation_action(channel_id,message_id))); }
                 } else { self.chat.emit(ChatMsg::OperationError("Canal não disponível ou sem permissão.".into())); }
             }
             MainWindowMsg::OperationFailed(error) => {

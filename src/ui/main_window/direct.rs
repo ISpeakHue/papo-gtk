@@ -122,7 +122,7 @@ impl MainWindowModel {
                         if self.active_channel_id!=Some(id){self.active_channel_id=Some(id);self.preview_requests.clear();self.chat.emit(ChatMsg::SelectTarget{target:crate::models::ConversationTarget::Direct(dm),user_id:self.current_user.id,access:self.direct_access()});self.load_history(id,None,sender.clone());}
                         else{self.chat.emit(ChatMsg::SetAccess{user_id:self.current_user.id,access:self.direct_access()});}
                         self.sidebar.emit(SidebarMsg::SetSelection(id));
-                        if let Some(message_id)=message{self.chat.emit(ChatMsg::Action(crate::ui::chat::actions::ActionMsg::Navigate(message_id)));}
+                        if let Some(message_id)=message{self.chat.emit(ChatMsg::Action(self.navigation_action(id,message_id)));}
                     }
                     Err(e)=>{self.profile_action_status(&e.to_string());if crate::api::is_permission_error(&e){self.direct_denied(sender.clone());}sender.input(MainWindowMsg::OperationFailed(e));}
                 }

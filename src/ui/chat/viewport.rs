@@ -192,6 +192,12 @@ impl Viewport {
             gtk::glib::Propagation::Proceed
         });scroll.add_controller(keys);
     }
+    pub fn page(&self,scroll:&gtk::ScrolledWindow,direction:i32){
+        self.pending.borrow_mut().take();self.generation.set(self.generation.get().wrapping_add(1));
+        self.last_motion.set(Some(Instant::now()));
+        let size=scroll.vadjustment().page_size().max(1.0);
+        animate_wheel(scroll,&self.wheel,f64::from(direction)*0.9*size.powf(1.0/3.0));
+    }
     pub fn capture(&self,scroll:&gtk::ScrolledWindow,list:&gtk::ListBox)->Position{
         if let Some(position)=self.pending.borrow().clone(){return position;}
         let value=scroll.vadjustment().value();let mut child=list.first_child();

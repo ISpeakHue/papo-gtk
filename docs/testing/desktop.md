@@ -135,3 +135,36 @@ It also retains the existing Opus/VP8, font/input-client and image-loader checks
 On a tester's machine, the same runtime check reports the registered hardware
 video decoders; it does not require them to exist or claim that a particular
 chat video selected one. See [APPIMAGE.md](../../APPIMAGE.md#hardware-video-decoding).
+
+## Desktop text size and high-density displays
+
+Chat and auxiliary rich-text views now use relative text sizes (small 0.9em,
+medium 1em, large 1.3em), inheriting the desktop font instead of forcing a pixel
+size. Unicode picker cells use 1.8em glyphs. GTK keeps control of monitor and
+fractional scaling; the app does not force a global GDK scale.
+
+Test a 3840×2160 display at the desktop's preferred scale, increase the desktop
+text size, then move windows between monitors. Check search, profiles, reply
+previews and the emoji picker as well as chat. A focused synthetic check can use
+`GDK_SCALE=2 PAPO_UI_CASE=report10` with the GUI command from the testing index;
+this is a test override, not a required launch option. Mixed-monitor fractional
+scaling still requires real GNOME/KDE acceptance.
+
+The GUI smoke harness uses a temporary `XDG_CONFIG_HOME` for every process,
+so remembered sessions and device-local animation settings cannot leak into
+fixtures or be changed by them. The previous environment is restored afterward.
+
+
+## Notification activation
+
+Desktop notifications retain their channel/message destination independently of
+inbox pagination. Activation uses the desktop's Wayland activation token before
+presenting the app, then navigates to the notified message. The target survives
+a short close/read synchronization race; permissions are checked again on click,
+and logout or access revocation discards it immediately.
+
+The `account-notices` GUI case uses a private D-Bus notification service. It
+covers activation tokens, a close signal preceding the click, inbox-row eviction,
+read synchronization and immediate access revocation, without sending a real
+notification. Also verify a background/minimized Papo on GNOME and KDE: click a
+notification for another channel and confirm that the app opens that message.

@@ -5,7 +5,7 @@
 .papo-rail button:checked { background: @accent_bg_color; color: @accent_fg_color; border-radius: 14px; }
 .papo-rail button:hover { border-radius: 14px; }
 .papo-rail separator { margin: 4px 8px; }
-.papo-notification-count { background: @accent_bg_color; color: @accent_fg_color; border-radius: 12px; padding: 1px 5px; font-size: 10px; font-weight: bold; }
+.papo-notification-count { background: @error_bg_color; color: @error_fg_color; border-radius: 12px; padding: 1px 5px; font-size: .75em; font-weight: bold; }
 .papo-channel-panel { background: @sidebar_bg_color; color: @sidebar_fg_color; }
 .papo-server-heading { padding: 8px 12px; min-height: 40px; border-bottom: 1px solid alpha(@window_fg_color, .08); }
 .papo-server-heading > button { padding: 0; }
@@ -84,12 +84,13 @@
 .papo-media-play { border-radius: 50%; min-width: 48px; min-height: 48px; }
 
 .papo-reply-banner { background: alpha(@accent_bg_color, .16); border-left: 3px solid @accent_bg_color; border-radius: 6px; padding: 6px 10px; }
+.papo-unicode-emoji { font-size: 1.8em; }
 .papo-emoji-cell { padding: 2px; min-width: 40px; min-height: 40px; }
 
 .papo-unread-divider { color: @accent_color; margin: 8px 16px; }
 .papo-unread-divider separator { background: @accent_color; min-height: 1px; }
 
-.papo-direct-indicator { background: #e01b24; color: white; border: 2px solid @window_bg_color; border-radius: 10px; min-width: 12px; min-height: 12px; padding: 0 3px; font-size: 9px; font-weight: bold; }
+.papo-direct-indicator { background: #e01b24; color: white; border: 2px solid @window_bg_color; border-radius: 10px; min-width: 12px; min-height: 12px; padding: 0 3px; font-size: .7em; font-weight: bold; }
 
 /* Account settings follow the window theme while retaining the supplied layout. */
 .papo-settings-navigation { background: @headerbar_bg_color; padding: 4px 12px 10px; border-bottom: 1px solid alpha(@window_fg_color, .12); }
@@ -118,8 +119,10 @@
 .papo-profile-description textview, .papo-profile-description textview text { background: @window_bg_color; }
 .papo-call-actions { padding: 12px 32px 16px; }
 .papo-call-actions button { padding: 8px 18px; }
-.papo-emoji-category { min-width: 24px; min-height: 32px; padding: 2px; font-size: 16px; }
+.papo-emoji-category { min-width: 24px; min-height: 32px; padding: 2px; font-size: 1.2em; }
 .papo-emoji-category:checked { background: alpha(@accent_bg_color, .18); color: @accent_color; }
 .papo-draft-attachment { border: 1px solid alpha(@window_fg_color, .12); border-radius: 10px; background: alpha(@window_fg_color, .04); }
 .papo-draft-thumbnail { border-radius: 10px; }
 .papo-draft-thumbnail button { min-width: 24px; min-height: 24px; padding: 0; }
+
+.papo-search-result { padding: 14px 16px; min-height: 64px; }

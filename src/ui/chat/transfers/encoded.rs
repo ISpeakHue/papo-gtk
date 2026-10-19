@@ -3,7 +3,7 @@ use std::{collections::{HashMap,HashSet,VecDeque},sync::Arc};
 use uuid::Uuid;
 use crate::ui::chat::state::Change;
 
-const BYTE_LIMIT:usize=96<<20;
+const BYTE_LIMIT:usize=192<<20;
 const ENTRY_LIMIT:usize=512;
 struct Entry {channel:Uuid,message:Uuid,bytes:Arc<[u8]>,video:bool}
 #[derive(Default)]
@@ -31,7 +31,7 @@ impl Cache {
         self.insert_kind(key,channel,message,bytes,true);
     }
     fn insert_kind(&mut self,key:Uuid,channel:Uuid,message:Uuid,bytes:Arc<[u8]>,video:bool) {
-        self.remove(key);if bytes.is_empty()||bytes.len()>5<<20{return;}
+        self.remove(key);if bytes.is_empty()||bytes.len()>25<<20{return;}
         self.bytes+=bytes.len();self.entries.insert(key,Entry{channel,message,bytes,video});self.order.push_back(key);crate::performance::record("encoded_cache_bytes",self.bytes as u64);
         while self.bytes>BYTE_LIMIT||self.entries.len()>ENTRY_LIMIT {
             let Some(old)=self.order.iter().find(|id|!self.recent.values().any(|keys|keys.contains(id))).or_else(||self.order.front()).copied()else{break;};self.remove(old);
@@ -59,6 +59,9 @@ impl Cache {
 
 #[cfg(test)]mod tests {
     use super::*;
+    #[test]fn retains_larger_recent_images_without_a_second_download(){
+        let mut cache=Cache::default();let key=Uuid::new_v4();let bytes:Arc<[u8]>=vec![1;8<<20].into();cache.insert(key,Uuid::new_v4(),Uuid::new_v4(),bytes.clone());assert!(Arc::ptr_eq(&bytes,&cache.get(key).unwrap()));
+    }
     #[test]fn video_renditions_share_the_budget_but_never_enter_the_image_decoder(){
         let mut cache=Cache::default();let key=Uuid::new_v4();let channel=Uuid::new_v4();let message=Uuid::new_v4();
         cache.insert_video(key,channel,message,Arc::from([1u8]));assert!(cache.contains(key));assert!(cache.get(key).is_none());assert!(cache.get_video(key).is_some());

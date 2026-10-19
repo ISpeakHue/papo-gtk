@@ -14,7 +14,7 @@ pub enum AccountMsg {
     ChangeStatus(Option<UserStatus>),
     StatusSaved { token:Uuid, status:Option<UserStatus>, result:anyhow::Result<()> },
     EmojisChanged, DescriptionChanged(Uuid), FitProfile(Uuid),
-    Profile(Uuid), RefreshProfile(Uuid), ProfileRefreshReady{token:Uuid,id:Uuid}, Preferences, ChannelPreferences, ProfileLoaded {
+    PreviewClosed(Uuid), Profile(Uuid), RefreshProfile(Uuid), ProfileRefreshReady{token:Uuid,id:Uuid}, Preferences, ChannelPreferences, ProfileLoaded {
         token: Uuid, result: anyhow::Result<(UserProfile, Option<Vec<u8>>)>
     }, ProfilePrepared{token:Uuid,result:anyhow::Result<(UserProfile,Option<Vec<u8>>,Option<crate::media::PreparedImage>)>}, SaveProfile(Uuid), Image {
         token: Uuid, banner: bool, remove: bool
@@ -36,7 +36,7 @@ pub enum AccountMsg {
 pub(super) struct Account {
     settings:Option<settings::View>,
     close_after_save:bool,
-    profile: Option<ProfileView>, preferences: Option<PreferencesView>, channel: Option<(Uuid, gtk::Window, gtk::Box, gtk::Label)>, jobs: Vec<tokio::task::JoinHandle<()>>, mutation: Option<Uuid>, settings_pending: bool, channel_pending: bool, pub config: UserConfig, css: Option<gtk::CssProvider>,
+    parked_profile:Option<ProfileView>,profile: Option<ProfileView>, preferences: Option<PreferencesView>, channel: Option<(Uuid, gtk::Window, gtk::Box, gtk::Label)>, jobs: Vec<tokio::task::JoinHandle<()>>, mutation: Option<Uuid>, settings_pending: bool, channel_pending: bool, pub config: UserConfig, css: Option<gtk::CssProvider>,
 }
 struct ProfileView {
     baseline:Vec<String>,reconcile:Option<Uuid>,identity:Option<(adw::Avatar,gtk::Label)>,banner:Option<gtk::Picture>,
@@ -60,6 +60,7 @@ impl Drop for Account {
             j.abort();
         }
         if let Some(v)=self.settings.take(){v.force_close();}
+        if let Some(v)=self.parked_profile.take(){v.window.close();}
         if let Some(v) = self.profile.take() {
             v.window.close();
         }
@@ -105,7 +106,7 @@ impl MainWindowModel {
         if profile.fields.is_none(){fit_profile(profile);}
     }
     pub(super) fn profile_action_status(&self,text:&str){if let Some(v)=&self.account.profile{if v.window.is_visible(){v.error.set_text(text);}}}
-    pub(super) fn close_profile_for_direct(&mut self,peer:Uuid){if self.account.profile.as_ref().is_some_and(|v|v.id==peer){if let Some(v)=self.account.profile.take(){v.window.close();}}}
+    pub(super) fn close_profile_for_direct(&mut self,peer:Uuid){if self.account.profile.as_ref().is_some_and(|v|v.id==peer){if let Some(v)=self.account.profile.take(){v.window.close();}self.account.profile=self.account.parked_profile.take();}}
 
     pub(super) fn apply_config(&mut self, root: &gtk::Box) {
         use adw::prelude::*;
@@ -118,16 +119,30 @@ impl MainWindowModel {
         self.sidebar.emit(SidebarMsg::SetConfig(config.clone()));
         self.user_list.emit(UserListMsg::SetConfig(config.clone()));
         let font = match config.display.as_ref().and_then(|d|d.font_size.as_ref()) {
-            Some(FontSize::Small) => 12, Some(FontSize::Huge) => 18, _ => 14
+            Some(FontSize::Small) => "0.9em", Some(FontSize::Huge) => "1.3em", _ => "1em"
         };
         root.add_css_class("papo-app");
         let css = self.account.css.get_or_insert_with(gtk::CssProvider::new);
-        css.load_from_string(&format!(".papo-app .papo-message-text {{font-size: {font}px;}}"));
+        css.load_from_string(&format!(".papo-message-text {{font-size: {font};}}"));
         if let Some(display) = gtk::gdk::Display::default() {
             gtk::style_context_add_provider_for_display(&display, css, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
         }
     }
-    pub(super) fn account_event(&mut self, msg: AccountMsg, sender: &ComponentSender<Self>, root: &gtk::Box) {
+    pub(super) fn restore_profile_editor(&mut self){
+        if let Some(editor)=self.account.parked_profile.take(){if let Some(preview)=self.account.profile.take(){preview.window.close();}self.account.profile=Some(editor);}
+    }
+    pub(super) fn account_event(&mut self,msg:AccountMsg,sender:&ComponentSender<Self>,root:&gtk::Box){
+        // Profile previews and the mounted editor have independent lifetimes.
+        // Route in-flight form results by token while a preview is on top.
+        let token=match &msg{
+            AccountMsg::ProfileLoaded{token,..}|AccountMsg::ProfilePrepared{token,..}|AccountMsg::ProfileAccepted{token,..}|AccountMsg::ProfileSaved{token,..}|AccountMsg::ProfileRefreshReady{token,..}|AccountMsg::Image{token,..}|AccountMsg::ImageSelected{token,..}|AccountMsg::OwnUpdated{token,..}=>Some(*token),
+            AccountMsg::SaveProfile(token)|AccountMsg::DescriptionChanged(token)|AccountMsg::FitProfile(token)=>Some(*token),_=>None};
+        let parked=token.is_some_and(|token|self.account.parked_profile.as_ref().is_some_and(|v|v.token==token));
+        if parked{std::mem::swap(&mut self.account.profile,&mut self.account.parked_profile);}
+        self.account_event_for_profile(msg,sender,root);
+        if parked{std::mem::swap(&mut self.account.profile,&mut self.account.parked_profile);}
+    }
+    fn account_event_for_profile(&mut self, msg: AccountMsg, sender: &ComponentSender<Self>, root: &gtk::Box) {
         self.account.jobs.retain(|j|!j.is_finished());
         match msg {
             AccountMsg::Dirty=>self.settings_dirty(),
@@ -163,8 +178,8 @@ impl MainWindowModel {
                 self.settings_dirty();self.finish_settings_close();
             },
             AccountMsg::Preferences=>{self.open_settings_at(settings::Tab::Preferences,root,sender);},
-            AccountMsg::Profile(id) if id==self.current_user.id=>{self.open_settings_at(settings::Tab::Profile,root,sender);},
-            AccountMsg::Settings=>self.open_settings(root,sender),
+            AccountMsg::Settings=>{self.restore_profile_editor();self.open_settings(root,sender);},
+            AccountMsg::PreviewClosed(token)=>{if self.account.profile.as_ref().is_some_and(|v|!v.embedded&&v.token==token){self.account.profile.take();self.account.profile=self.account.parked_profile.take();}},
             AccountMsg::SettingsTab(tab)=>self.select_settings(tab,sender),
             AccountMsg::ChangeStatus(status)=>{
                 if self.account.mutation.is_some()||status==self.current_user.status {
@@ -209,7 +224,7 @@ impl MainWindowModel {
                     }
                 }
             }
-            AccountMsg::EmojisChanged=>self.refresh_profile_text(sender),
+            AccountMsg::EmojisChanged=>{self.refresh_profile_text(sender);self.render_search(sender);},
             AccountMsg::DescriptionChanged(token)=>{
                 let Some(v)=self.account.profile.as_mut().filter(|v|v.token==token&&v.window.is_visible())else{return;};
                 let Some(fields)=&v.fields else{return;};let buffer=&fields.description;let value=buffer.text(&buffer.start_iter(),&buffer.end_iter(),false).to_string();for text in &mut v.text{if text.preview{text.value=value.clone();}}
@@ -242,10 +257,10 @@ impl MainWindowModel {
                 let id=if let AccountMsg::Profile(id)=msg{id}else{self.current_user.id};
                 if embedded&&self.settings_mount(settings::Tab::Profile).is_none(){return;}
                 if let Some(v) = self.account.profile.take() {
-                    if v.embedded{self.clear_settings_tab(settings::Tab::Profile,&v.window);}else{v.window.close();}
+                    if v.embedded&&!embedded{self.account.parked_profile=Some(v);}else if v.embedded{self.clear_settings_tab(settings::Tab::Profile,&v.window);}else{v.window.close();}
                 }
                 let token = Uuid::new_v4();
-                let own=id==self.current_user.id;
+                let own=embedded;
                 let mount=embedded.then(||self.settings_mount(settings::Tab::Profile).unwrap());
                 let w:gtk::Window=mount.as_ref().map(|(w,_)|w.clone()).unwrap_or_else(||adw::Window::builder().title(if own{"Editar perfil"}else{"Perfil"}).default_width(if own{620}else{460}).default_height(if own{780}else{-1}).modal(true).build().upcast());
                 if !embedded{if let Some(parent)=root.root().and_downcast::<gtk::Window>(){w.set_transient_for(Some(&parent));}}
@@ -270,6 +285,7 @@ impl MainWindowModel {
                 error.set_wrap(true);
                 error.connect_notify_local(Some("label"),|label,_|label.set_visible(!label.text().is_empty()));
                 if embedded{error.set_xalign(0.0);let status=gtk::Box::new(gtk::Orientation::Vertical,0);status.set_hexpand(true);status.set_valign(gtk::Align::Center);status.append(&error);actions.prepend(&status);}else{body.append(&error);}
+                if !embedded{let input=sender.input_sender().clone();w.connect_close_request(move |_|{let _=input.send(MainWindowMsg::Account(AccountMsg::PreviewClosed(token)));gtk::glib::Propagation::Proceed});}
                 w.present();
                 self.account.profile = Some(ProfileView {
                     baseline:vec![],reconcile:None,identity:None,banner:None,embedded,hero:None,
@@ -336,10 +352,7 @@ impl MainWindowModel {
                             }
                             if badges.first_child().is_some(){v.body.append(&badges);}
                         }
-                        if p.id!=self.current_user.id{v.body.append(&gtk::Label::new(Some(&format!("Presença manual: {}", match p.status {
-                            Some(UserStatus::Away) => "Ausente", Some(UserStatus::Busy) => "Ocupado", None => "Automática"
-                        }))));}
-                        if p.id==self.current_user.id {
+                        if v.embedded {
                             let appearance=adw::PreferencesGroup::new();appearance.set_title("Imagem do perfil");v.body.append(&appearance);
                             for (title,banner) in [("Avatar",false),("Banner",true)]{
                                 let row=adw::ActionRow::builder().title(title).subtitle(if banner{"Imagem no topo do seu perfil"}else{"Sua imagem nas mensagens e na lista de membros"}).build();
@@ -374,11 +387,11 @@ impl MainWindowModel {
 
                         }
                         else {
-                            for (label,action) in [("Mensagem direta",0),("Bloquear usuário",1)] {
+                            for (label,action) in [("Mensagem direta",0),("Bloquear usuário",1)].into_iter().filter(|_|p.id!=self.current_user.id) {
                                 let b=gtk::Button::with_label(label);let s=sender.clone();let id=p.id;
                                 b.connect_clicked(move |_|s.input(MainWindowMsg::Direct(if action==0{super::direct::DirectMsg::Open(id)}else{super::direct::DirectMsg::Block(id,true)})));v.body.append(&b);
                             }
-                            for text in [p.description, p.status_message, p.typing].into_iter().flatten().filter(|text|!text.trim().is_empty()) {
+                            for text in [p.description, p.status_message].into_iter().flatten().filter(|text|!text.trim().is_empty()) {
                                 let container=gtk::Box::new(gtk::Orientation::Vertical,0);v.body.append(&container);
                                 v.text.push(ProfileText{container,value:text,preview:false});
                             }
@@ -838,7 +851,7 @@ pub(crate) fn exercise_profile_emojis(context:&gtk::glib::MainContext){
     assert_eq!(profile_requests(),requests,"emoji availability must not refetch the profile");assert_eq!(main.model().account.profile.as_ref().unwrap().token,token);
     let buffer=view().unwrap().buffer();let plain=buffer.text(&buffer.start_iter(),&buffer.end_iter(),false);assert!(plain.contains("😄")&&plain.contains(":unknown:")&&!plain.contains(":ricardao:"));
     let w=main.model().account.profile.as_ref().unwrap().window.clone();crate::ui::main_window::layout::tests::preview(&w,"profile-emojis",context);
-    main.emit(MainWindowMsg::Account(AccountMsg::Profile(main.model().current_user.id)));until(context,||main.model().account.profile.as_ref().is_some_and(|v|v.fields.is_some()));
+    main.emit(MainWindowMsg::Account(AccountMsg::Settings));until(context,||main.model().account.profile.as_ref().is_some_and(|v|v.fields.is_some()));
     let raw="Editar :ricardao: 😄";let buffer=main.model().account.profile.as_ref().unwrap().fields.as_ref().unwrap().description.clone();buffer.set_text(raw);
     until(context,||view().is_some_and(|v|images(&v)==1));assert_eq!(buffer.text(&buffer.start_iter(),&buffer.end_iter(),false),raw);
     let w=main.model().account.profile.as_ref().unwrap().window.clone();crate::ui::main_window::layout::tests::preview(&w,"profile-emoji-editor",context);
@@ -858,7 +871,7 @@ pub(crate) fn exercise_preferences_and_profiles(main: &Controller<MainWindowMode
     use crate::ui::chat::actions::tests:: {
         find_button, pump, until, descendants
     };
-    find_button(main.widget().upcast_ref(), "Meu perfil").emit_clicked();
+    find_button(main.widget().upcast_ref(), "Configurações da conta").emit_clicked();
     until(context, ||main.model().account.profile.as_ref().is_some_and(|v|v.fields.is_some()));
     let profile=main.model().account.profile.as_ref().unwrap().window.clone();assert!(profile.default_height()>=720);crate::ui::main_window::layout::tests::preview(&profile,"profile",context);
     let image_button=find_button(profile.upcast_ref(),"Alterar avatar");until(context,||image_button.height()>0);

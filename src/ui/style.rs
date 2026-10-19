@@ -11,6 +11,7 @@ pub fn install() {
         let provider = gtk::CssProvider::new();
         provider.load_from_string(include_str!("style.css"));
         gtk::style_context_add_provider_for_display(&display, &provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
+        super::dialogs::install();
         installed.set(true);
     });
 }

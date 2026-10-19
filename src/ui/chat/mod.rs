@@ -12,6 +12,7 @@ mod draft_preview;
 #[cfg(test)]pub(crate) use draft_preview::exercise as exercise_draft_previews;
 pub(crate) mod mentions;
 #[cfg(test)]pub(crate) mod mention_background;
+#[cfg(test)]pub(crate) mod polish_tests;
 #[cfg(test)]pub(crate) mod multiline;
 pub(crate) mod composer;
 pub(crate) mod input;
@@ -91,7 +92,7 @@ pub struct ChatModel {
     render_window:window::RenderWindow,
     connection:Option<String>,
     visible_authors:std::collections::HashSet<Uuid>,
-    viewing_old:bool,
+    viewing_old:bool,history_detached:bool,
     trim_when_idle:bool,
     emoji_visible:bool,emoji_manual:bool,emoji_dismissed:bool,emoji_signature:String,unicode_emojis:Vec<emoji::Choice>,
     mention_visible:bool,mention_manual:bool,mention_signature:String,mention_dismissed:bool,
@@ -123,11 +124,12 @@ pub enum ChatMsg {
     RenderMedia(Uuid),
     EditLatest(u64),
     LatestOwn{epoch:u64,request:Uuid,result:anyhow::Result<Option<Message>>},
-    CancelInitialRead(u64),ViewportChanged(bool), MediaViewport, Latest,
+    CancelInitialRead(u64),ViewportChanged(bool), MediaViewport, Latest, Page(i32),
     CopyMessage(String), ContextMenu(Uuid), ContextAt{ id:Uuid,x:f64,y:f64 },
     AutoOlder, ExpireHighlight{epoch:Uuid,id:Uuid,generation:u64},
     Search, Notifications, NotificationCount{count:usize,more:bool},
     Action(ActionMsg),
+    JumpLoaded{epoch:Uuid,request:Uuid,id:Uuid,result:anyhow::Result<MessageListResponse>},
     DraftPreviewReady{token:Uuid,image:Option<crate::media::PreparedImage>},
     PinnedSnapshot,
     Transfer(TransferMsg),
@@ -348,9 +350,11 @@ impl Component for ChatModel {
                 #[name="reply_author"]
                 gtk::Label {
                     #[watch] set_text:model.draft.reply.as_ref().map(|m|m.sender_name(&model.users_map)).unwrap_or("Mensagem"),
-                    set_hexpand:true,set_xalign:0.0,set_ellipsize:pango::EllipsizeMode::End,add_css_class:"heading",
+                    set_xalign:0.0,set_max_width_chars:20,set_ellipsize:pango::EllipsizeMode::End,add_css_class:"heading",
                 },
 
+                #[name="reply_preview"]
+                gtk::Box {set_orientation:gtk::Orientation::Vertical,set_hexpand:true},
                 gtk::Button {
                     set_icon_name: "window-close-symbolic",
                     set_has_frame: false,
@@ -487,6 +491,7 @@ impl Component for ChatModel {
                 },
                 #[name="mention_button"]
                 gtk::Button {
+                    #[watch] set_visible: model.active_channel.as_ref().is_some_and(|c|!c.is_direct()),
                     set_valign:gtk::Align::End,
                     set_label: "@",
                     set_tooltip_text: Some("Mencionar membro (digite @ para filtrar)"),set_has_frame:false,
@@ -574,7 +579,7 @@ impl Component for ChatModel {
             has_more: false,
             history_error: None,
             error_timer:None,
-            retry_cursor: None,mention_visible:false,mention_manual:false,mention_signature:String::new(),mention_dismissed:false,older_requested:false,highlight_generation:0,viewport:Viewport::default(),rendered:HashMap::new(),viewing_old:false,trim_when_idle:false,unread_notifications:0,more_notifications:false,
+            retry_cursor: None,mention_visible:false,mention_manual:false,mention_signature:String::new(),mention_dismissed:false,older_requested:false,highlight_generation:0,viewport:Viewport::default(),rendered:HashMap::new(),viewing_old:false,history_detached:false,trim_when_idle:false,unread_notifications:0,more_notifications:false,
         };
 
         model.actions.pinned_view=init.pinned;
@@ -589,8 +594,10 @@ impl Component for ChatModel {
         let controller=outside.clone();root.connect_root_notify(move |root|{if let Some(parent)=root.root().and_downcast::<gtk::Window>(){if controller.widget().is_none(){parent.add_controller(controller.clone());}}else if let Some(parent)=controller.widget(){parent.remove_controller(&controller);}});
 
         model.composer.connect(&widgets.message_entry,&sender);
+        model.composer.set_emojis(&widgets.message_entry,&model.actions);
         input::configure_im(&widgets.message_entry);
-        if !model.actions.pinned_view{input::shortcuts::type_to_focus(&widgets.message_entry);}
+        widgets.message_entry.bind_property("top-margin",&widgets.composer_placeholder,"margin-top").sync_create().build();
+        if !model.actions.pinned_view{input::shortcuts::type_to_focus(&widgets.message_entry,&widgets.scrolled_window,model.composer.clone(),sender.input_sender().clone());}
         let placeholder=widgets.composer_placeholder.downgrade();let composing=model.composer.clone();
         widgets.message_entry.connect_preedit_changed(move |view,text|{
             if let Some(placeholder)=placeholder.upgrade(){placeholder.set_visible(text.is_empty()&&!composing.is_composing()&&view.buffer().char_count()==0);}
@@ -695,11 +702,13 @@ impl Component for ChatModel {
         let update_emojis=matches!(&message,ChatMsg::OpenEmojis|ChatMsg::CloseEmojis|ChatMsg::EmojiSelected(_)|ChatMsg::InputChanged(_)|ChatMsg::MentionCursorChanged|ChatMsg::SetTarget(_)|ChatMsg::ClearChannel|ChatMsg::SetAccess{..}|ChatMsg::SendClicked|ChatMsg::SendFinished{..}|ChatMsg::OpenMentions|ChatMsg::Action(ActionMsg::EmojiPage{..}|ActionMsg::EmojisLoaded{..}));
         let update_edit_mentions=matches!(&message,ChatMsg::SetUsers(_)|ChatMsg::SetAvatars(_)|ChatMsg::SetConfig(_)|ChatMsg::SetAccess{..});
         let update_mentions=matches!(&message,ChatMsg::OpenMentions|ChatMsg::MentionCursorChanged|ChatMsg::CloseMentions|ChatMsg::SendClicked|ChatMsg::SendFinished{..}|ChatMsg::InputChanged(_)|ChatMsg::MentionSelected(_)|ChatMsg::SetUsers(_)|ChatMsg::SetConfig(_)|ChatMsg::SetAccess{..}|ChatMsg::SetTarget(_)|ChatMsg::ClearChannel);
+        let update_reply=matches!(&message,ChatMsg::SetReply(_)|ChatMsg::SetUsers(_)|ChatMsg::SetConfig(_)|ChatMsg::SetTarget(_)|ChatMsg::ClearChannel|ChatMsg::Action(ActionMsg::EmojiPage{..}|ActionMsg::EmojisLoaded{..}));
         let update_files=matches!(&message,ChatMsg::SetAccess{..}|ChatMsg::SetTarget(_)|ChatMsg::ClearChannel|ChatMsg::SendClicked|ChatMsg::SendFinished{..}|ChatMsg::Transfer(TransferMsg::Selected{..}|TransferMsg::PasteReady{..}|TransferMsg::Remove(_)|TransferMsg::Cancel));
         let following=self.viewport.following();let mut position=None;let mut render_history=false;let mut restore_avatars=false;
         // Keep inactive snapshots current without rebuilding the active chat.
         match &message {
-            ChatMsg::ApplyChange(change) => {self.conversations.apply(change);self.transfers.encoded.apply(change);self.transfers.resident.apply(change);},
+            ChatMsg::ApplyChange(change) => {
+                if self.history_detached&&matches!(&change,Change::Upsert(m) if !self.history.messages.iter().any(|old|old.id==m.id)){return;}self.conversations.apply(change);self.transfers.encoded.apply(change);self.transfers.resident.apply(change);},
             ChatMsg::DeleteMessage(id) => {self.conversations.apply(&Change::Delete(*id));self.transfers.encoded.apply(&Change::Delete(*id));self.transfers.resident.apply(&Change::Delete(*id));},
             _ => {},
         }
@@ -781,7 +790,7 @@ impl Component for ChatModel {
                 }
             },
             ChatMsg::CancelInitialRead(epoch)=>{if self.viewport.input_epoch()==epoch{self.initial_read=None;self.viewport.cancel_open(&widgets.scrolled_window);}},
-            ChatMsg::ViewportChanged(old)=>{if self.viewing_old&&!old{self.trim_when_idle=true;}if old{self.trim_when_idle=false;}self.viewing_old=old;if widgets.scrolled_window.vadjustment().value()<=120.0{sender.input(ChatMsg::AutoOlder);}},
+            ChatMsg::ViewportChanged(old)=>{if self.viewing_old&&!old{self.trim_when_idle=true;}if old{self.trim_when_idle=false;}self.viewing_old=old||self.history_detached;if widgets.scrolled_window.vadjustment().value()<=120.0{sender.input(ChatMsg::AutoOlder);}},
             ChatMsg::MediaViewport=>{
                 let adj=widgets.scrolled_window.vadjustment();let mut scope=std::collections::HashSet::new();let mut priority=HashMap::new();
                 let mut row=widgets.messages_list.first_child();
@@ -805,7 +814,10 @@ impl Component for ChatModel {
             },
             ChatMsg::AutoOlder=>{if self.initial_read.is_none()&&self.has_more&&!self.history.loading()&&!self.older_requested&&self.history_error.is_none()&&self.actions.navigation.is_none()&&self.access.read&&widgets.scrolled_window.is_mapped()&&widgets.scrolled_window.vadjustment().value()<=120.0{sender.input(ChatMsg::LoadOlder);}},
             ChatMsg::ExpireHighlight{epoch,id,generation}=>{if self.actions.epoch==epoch&&self.highlight_generation==generation&&self.actions.highlight==Some(id){self.actions.highlight=None;render_history=true;}},
-            ChatMsg::Latest=>{self.trim_when_idle=true;self.initial_read=None;self.actions.navigation=None;self.actions.highlight=None;render_history=true;position=Some(Position::Bottom);},
+            ChatMsg::Page(direction)=>{if self.access.read{self.initial_read=None;self.viewport.page(&widgets.scrolled_window,direction);}},
+            ChatMsg::Latest=>{
+                self.restore_recent_history(&sender);
+                self.trim_when_idle=true;self.initial_read=None;self.actions.navigation=None;self.actions.highlight=None;render_history=true;position=Some(Position::Bottom);},
             ChatMsg::CopyMessage(text)=>{if let Some(display)=gtk::gdk::Display::default(){display.clipboard().set_text(&text);}},
             ChatMsg::ContextMenu(id)=>{let mut row=widgets.messages_list.first_child();while let Some(w)=row{if w.widget_name()==format!("message-{id}"){show_context_menu(&w,None);break;}row=w.next_sibling();}},
             ChatMsg::ContextAt{id,x,y}=>{let mut row=widgets.messages_list.first_child();while let Some(w)=row{if w.widget_name()==format!("message-{id}"){
@@ -840,7 +852,7 @@ impl Component for ChatModel {
                 if self.user_id!=Some(user_id) { self.conversations.clear();self.surfaces.clear();self.transfers.reset(); }
                 self.user_id = Some(user_id); self.access = access;
                 if !self.access.read {
-                    self.initial_read=None;self.viewport.cancel_open(&widgets.scrolled_window);
+                    self.history_detached=false;self.initial_read=None;self.viewport.cancel_open(&widgets.scrolled_window);
                     self.conversations.clear();self.surfaces.clear();
                     self.actions.reset_channel(); self.transfers.reset();self.edit_lookup=None;self.reconcile_request=None;
                     if let Some(channel)=self.active_channel.as_ref(){self.history.select(channel.id());}
@@ -851,13 +863,16 @@ impl Component for ChatModel {
             ChatMsg::Action(action) => {
                 let highlight=self.actions.highlight;
                 let navigate=matches!(&action,ActionMsg::Navigate(_));
-                render_history=!matches!(&action,ActionMsg::Reconcile(_)|ActionMsg::Reload|ActionMsg::ReloadEmojis|ActionMsg::HoverReactions(_)|ActionMsg::OpenPicker(_)|ActionMsg::OpenParticipants(_)|ActionMsg::SelectParticipants{..}|ActionMsg::MoreParticipants(_)|ActionMsg::ParticipantsClosed(_)|ActionMsg::OpenEdit(_)|ActionMsg::EditMentions(_)|ActionMsg::OpenEditMentions(_)|ActionMsg::DismissEditMentions(_)|ActionMsg::EditMentionSelected(..)|ActionMsg::ConfirmDelete(_)|ActionMsg::OpenPins|ActionMsg::OpenEmojiManager);
+                render_history=!matches!(&action,ActionMsg::Reconcile(_)|ActionMsg::Reload|ActionMsg::ReloadEmojis|ActionMsg::HoverReactions(_)|ActionMsg::OpenPicker(_)|ActionMsg::OpenParticipants(_)|ActionMsg::SelectParticipants{..}|ActionMsg::MoreParticipants(_)|ActionMsg::ParticipantsClosed(_)|ActionMsg::OpenEdit(_)|ActionMsg::EditMentions(_)|ActionMsg::OpenEditMentions(_)|ActionMsg::DismissEditMentions(_)|ActionMsg::EditMentionSelected(..)|ActionMsg::OpenEditEmojis(_)|ActionMsg::CloseEditEmojis(_)|ActionMsg::EditEmojiSelected(..)|ActionMsg::ConfirmDelete(_)|ActionMsg::OpenPins|ActionMsg::OpenEmojiManager);
                 if let ActionMsg::ReactionsLoaded{id,..}|ActionMsg::ToggleReaction{id,..}=&action{self.history.mark_dirty(*id);}
                 let emoji_state=matches!(&action,ActionMsg::EmojiPage{..}|ActionMsg::EmojisLoaded{..}).then(||(self.actions.emoji_names.clone(),self.actions.textures.len()));
                 self.handle_action(action, &sender, root);
                 if let Some((names,textures))=emoji_state {
                     if names==self.actions.emoji_names && textures==self.actions.textures.len() { render_history=false; }
-                    else {let _=sender.output(ChatOutput::EmojisChanged);}
+                    else {
+                        self.refresh_composer_emojis(&widgets.message_entry);
+                        self.refresh_edit_mentions();let _=sender.output(ChatOutput::EmojisChanged);
+                    }
                 }
                 if navigate{self.initial_read=None;}
                 if navigate||self.actions.highlight!=highlight{if let Some(id)=self.actions.highlight{position=Some(Position::Message(id));}}
@@ -872,7 +887,7 @@ impl Component for ChatModel {
                 let previous_surface=self.active_channel.as_ref().filter(|c|c.id()!=channel.id()&&self.history_ready&&self.access.read).map(|c|c.id());
                 let same_user=selection.as_ref().is_none_or(|(id,_)|self.user_id==Some(*id));
                 if !same_user{self.conversations.clear();self.surfaces.clear();}
-                if same_user && self.history_ready && self.access.read {
+                if same_user && self.history_ready && self.access.read && !self.history_detached {
                     if let Some(previous)=self.active_channel.as_ref().filter(|c| c.id()!=channel.id()) {
                         self.conversations.store(previous.id(),std::mem::take(&mut self.history),self.has_more);
                     }
@@ -901,7 +916,7 @@ impl Component for ChatModel {
                 self.history_error = None;
                 self.last_typing_sent = None;
                 self.unread_start=None;
-                self.history.select(channel.id());position=Some(Position::Bottom);self.viewing_old=false;
+                self.history.select(channel.id());position=Some(Position::Bottom);self.viewing_old=false;self.history_detached=false;
                 self.history_ready=false;self.media_render_pending=None;self.reconcile_request=None;
                 self.initial_read=Some(viewport::ReadBoundary::new(&channel));
                 if !self.access.read{self.initial_read=None;self.viewport.cancel_open(&widgets.scrolled_window);}
@@ -925,6 +940,7 @@ impl Component for ChatModel {
             }
             ChatMsg::UpdateChannel(channel) => {if self.active_channel.as_ref().is_some_and(|c|c.id()==channel.id){self.active_channel=Some(ConversationTarget::Channel(channel));}},
             ChatMsg::ClearChannel => {
+                self.history_detached=false;
                 self.trim_when_idle=false;
                 self.conversations.clear();self.surfaces.clear();
                 self.initial_read=None;self.viewport.cancel_open(&widgets.scrolled_window);
@@ -953,6 +969,7 @@ impl Component for ChatModel {
                 }
             }
             ChatMsg::ApplyChange(change) => {
+                if self.history_detached&&matches!(&change,Change::Upsert(m) if !self.history.messages.iter().any(|old|old.id==m.id)){return;}
                 if let Change::Moderation(message,attachment,status)=&change{
                     render_history=self.apply_moderation_change(*message,*attachment,status);
                 }else{
@@ -988,6 +1005,7 @@ impl Component for ChatModel {
             ChatMsg::OperationError(error) => self.draft.error = Some(error),
             ChatMsg::DismissError(token)=>{if self.error_timer.as_ref().is_some_and(|(current,_)|*current==token){self.error_timer.take();self.draft.error=None;}},
             ChatMsg::Resync=>{
+                if self.history_detached{return;}
                 if self.access.read&&self.reconcile_request.is_none(){
                     if let (Some(api),Some(channel))=(self.actions.api.clone(),self.active_channel.as_ref()){
                         let request=Uuid::new_v4();self.reconcile_request=Some(request);self.history.begin_snapshot(request);
@@ -1022,6 +1040,13 @@ impl Component for ChatModel {
             ChatMsg::BeginHistory { request_id, cursor } => {
                 self.older_requested=false;self.history.begin(request_id); self.history_error = None; self.retry_cursor = cursor;
             }
+            ChatMsg::JumpLoaded{epoch,request,id,result}=>{
+                if epoch!=self.actions.epoch||!self.history.is_pending(request)||self.actions.navigation!=Some(id){return;}
+                match result{
+                    Ok(page)=>{self.has_more=page.has_more;self.history.finish(request,page.messages,false);self.history_ready=true;self.actions.navigation=None;if self.history.messages.iter().any(|m|m.id==id){self.actions.highlight=Some(id);self.draft.error=None;render_history=true;position=Some(Position::Message(id));}else{self.draft.error=Some("A mensagem foi removida.".into());sender.input(ChatMsg::Latest);}},
+                    Err(error)=>{self.history.fail(request);self.actions.navigation=None;self.draft.error=Some(error.to_string());let _=sender.output(ChatOutput::ActionError(error));sender.input(ChatMsg::Latest);}
+                }
+            }
             ChatMsg::HistoryLoaded { request_id, result, append } => {
                 if !self.history.is_pending(request_id) { return; }
                 if !append { sender.input(ChatMsg::Action(ActionMsg::Reload)); let _=sender.output(ChatOutput::ConversationLoaded); }
@@ -1051,6 +1076,7 @@ impl Component for ChatModel {
                 }
             }
             ChatMsg::AddMessage(msg) => {
+                if self.history_detached&&!self.history.messages.iter().any(|m|m.id==msg.id){let own=self.draft.is_sending()&&msg.author_id==self.user_id;self.conversations.apply(&Change::Upsert(msg));if own{sender.input(ChatMsg::Latest);}return;}
                 if let Some(author) = msg.author_id { self.typing_users.remove(&author); }
                 let own_send=self.draft.is_sending()&&msg.author_id.is_some()&&msg.author_id==self.user_id&&msg.content.as_deref().unwrap_or("").trim()==self.draft.text.trim();
                 render_history=self.history.upsert(msg);
@@ -1079,10 +1105,11 @@ impl Component for ChatModel {
                 let now = Instant::now();
                 self.typing_users.retain(|_, last| now.duration_since(*last).as_secs() < 4);
             }
-            ChatMsg::OpenMentions=>{self.mention_manual=true;self.mention_dismissed=false;widgets.message_entry.grab_focus();},
+            ChatMsg::OpenMentions=>{if !self.active_channel.as_ref().is_some_and(|c|!c.is_direct()){return;}self.mention_manual=true;self.mention_dismissed=false;widgets.message_entry.grab_focus();},
             ChatMsg::MentionCursorChanged=>{},
             ChatMsg::CloseMentions=>{self.mention_dismissed=true;self.mention_manual=false;self.mention_visible=false;},
             ChatMsg::MentionSelected(id) => {
+                if !self.active_channel.as_ref().is_some_and(|c|!c.is_direct()){return;}
                 if !self.access.send || self.draft.is_sending() || (id.is_none()&&!self.access.everyone)||id.is_some_and(|id|self.users_map.get(&id).map_or(true,|u|u.banned)){return;}
                 self.mention_manual=false;self.mention_dismissed=true;self.mention_visible=false;
                 let caret=self.composer.mention(&widgets.message_entry,id,&self.users_map);
@@ -1123,6 +1150,7 @@ impl Component for ChatModel {
             ChatMsg::SendFinished { request_id, channel_id, result } => {
                 let outcome = result.as_ref().map(|_| ()).map_err(Clone::clone);
                 if let Ok(mut message) = result {if self.active_channel.as_ref().is_some_and(|c|c.id()==channel_id){
+                    self.restore_recent_history(&sender);
                     if self.draft.pending_id()==Some(request_id)&&!self.draft.files.is_empty()&&self.user_id.is_some()&&message.author_id==self.user_id{
                         let known=self.history.messages.iter().find(|m|m.id==message.id);
                         self.transfers.sent_attachments.extend(message.attachments.iter().flatten().filter(|a|
@@ -1154,7 +1182,7 @@ impl Component for ChatModel {
         if update_edit_mentions{self.refresh_edit_mentions();}
         if update_mentions{
             let entry_text=widgets.message_entry.text();let completion=mentions::completion(&entry_text,widgets.message_entry.position());
-            if self.active_channel.is_some()&&self.access.send&&!self.draft.is_sending()&&!self.mention_dismissed&&(self.mention_manual||completion.is_some()){
+            if self.active_channel.as_ref().is_some_and(|c|!c.is_direct())&&self.access.send&&!self.draft.is_sending()&&!self.mention_dismissed&&(self.mention_manual||completion.is_some()){
             let filter=if self.mention_manual{String::new()}else{completion.as_ref().map(|(_,_,f)|f.to_lowercase()).unwrap_or_default()};
             let mut members:Vec<_>=self.users_map.values().filter(|u|!u.banned&&(u.display_name().to_lowercase().contains(&filter)||u.username.to_lowercase().contains(&filter))).collect();members.sort_by_cached_key(|u|(u.display_name().to_lowercase(),u.username.to_lowercase(),u.id));
             let everyone=self.access.everyone&&"everyone".contains(&filter);
@@ -1198,11 +1226,11 @@ impl Component for ChatModel {
         if let Some(Position::Unread(id))=position.as_ref(){self.unread_start=Some(*id);}
         // Reserve the older-history banner's height before allocating the
         // opening rows, rather than shrinking the viewport after the reveal.
-        if let Some(position)=position.as_ref(){match position{Position::Unread(_)|Position::Message(_)=>self.viewing_old=true,Position::Bottom=>self.viewing_old=false,_=>{}}}
+        if let Some(position)=position.as_ref(){match position{Position::Unread(_)|Position::Message(_)=>self.viewing_old=true,Position::Bottom=>self.viewing_old=self.history_detached,_=>{}}}
         if self.viewport.open_ready((self.history_ready&&self.initial_read.is_none())||self.history_error.is_some())&&!render_history&&position.is_none(){
             position=Some(self.viewport.capture(&widgets.scrolled_window,&widgets.messages_list));
         }
-        if !self.actions.pinned_view&&self.trim_when_idle&&self.transfers.saving==0&&self.initial_read.is_none()&&self.history_ready&&!self.viewport.scrolling()&&(self.viewport.following()||matches!(position,Some(Position::Bottom))){
+        if !self.history_detached&&!self.actions.pinned_view&&self.trim_when_idle&&self.transfers.saving==0&&self.initial_read.is_none()&&self.history_ready&&!self.viewport.scrolling()&&(self.viewport.following()||matches!(position,Some(Position::Bottom))){
             if self.history.trim_recent(cache::MESSAGE_LIMIT){
                 self.transfers.trim_provider_ids(&self.history.messages);
                 self.has_more=true;self.older_requested=false;self.retry_cursor=None;self.history_error=None;
@@ -1239,6 +1267,7 @@ impl Component for ChatModel {
             let context=self.active_channel.as_ref().map(|c|(c.id(),self.user_id));
             self.draft_previews.render(&widgets.selected_files,&self.draft.files,context,self.access.send&&self.access.attachments,self.draft.is_sending(),&sender);
         }
+        if update_reply{while let Some(child)=widgets.reply_preview.first_child(){widgets.reply_preview.remove(&child);}if let Some(reply)=&self.draft.reply{widgets.reply_preview.append(&text::compact(reply.content.as_deref().unwrap_or("[Anexo]"),&self.users_map,&self.actions));}}
         widgets.reply_author.set_attributes(None);
         if let Some(roles)=self.draft.reply.as_ref().and_then(|m|m.author_id).and_then(|id|self.users_map.get(&id)).and_then(|u|u.roles.as_deref()){crate::ui::style::role_color(&widgets.reply_author,roles);}
         if render_history||update_moderation{self.schedule_moderation(&sender,root.is_mapped());}
@@ -1248,6 +1277,15 @@ impl Component for ChatModel {
 }
 
 impl ChatModel {
+    fn restore_recent_history(&mut self,sender:&ComponentSender<Self>){
+        if !self.history_detached{return;}
+        self.history_detached=false;self.reconcile_request=None;self.history_error=None;self.actions.navigation=None;self.actions.highlight=None;
+        if let Some(channel)=self.active_channel.as_ref().map(|c|c.id()){
+            self.history.select(channel);self.history_ready=false;
+            if let Some((history,more))=self.conversations.take(channel){self.history=history;self.has_more=more;self.history_ready=true;}
+            sender.input(ChatMsg::RequestHistory{channel_id:channel,cursor:None});
+        }
+    }
     fn schedule_error_timeout(&mut self,previous_error:Option<&str>,new_error:bool,sender:&ComponentSender<Self>){
         // Only temporary composer/action feedback expires. History failures
         // retain their Retry action, and connection status follows socket state.
@@ -1268,7 +1306,7 @@ impl ChatModel {
     pub(crate) fn read_candidate(&self)->Option<Message> {
         if self.actions.pinned_view || !self.access.read || !self.history_ready || self.history.loading()
             || self.reconcile_request.is_some() || self.initial_read.is_some()
-            || self.viewing_old || !self.viewport.read_ready() {
+            || self.viewing_old || self.history_detached || !self.viewport.read_ready() {
             return None;
         }
         let channel=self.active_channel.as_ref()?.id();
@@ -1276,6 +1314,13 @@ impl ChatModel {
             .max_by_key(|m|(m.created_at,m.id)).cloned()
     }
     pub(crate) fn profile_text(&self,value:&str)->gtk::TextView{text::widget(value,&self.users_map,&self.actions)}
+    pub(crate) fn text_renderer(&self,users:HashMap<Uuid,UserSummary>)->(u64,std::rc::Rc<dyn Fn(&str)->gtk::TextView>){
+        use std::hash::{Hash,Hasher};
+        let mut actions=Actions::default();actions.emoji_names=self.actions.emoji_names.clone();actions.textures=self.actions.textures.clone();actions.animations=self.actions.animations.clone();actions.emoji_source=self.actions.emoji_source.clone();
+        let mut hash=std::collections::hash_map::DefaultHasher::new();
+        let mut ids:Vec<_>=actions.emoji_names.iter().collect();ids.sort();for(name,id)in ids{name.hash(&mut hash);id.hash(&mut hash);actions.emoji_paintable(*id).map(|p|p.as_ptr() as usize).hash(&mut hash);}
+        (hash.finish(),std::rc::Rc::new(move |text|text::widget(text,&users,&actions)))
+    }
     // The editable profile already shows Unicode glyphs; its extra preview is only for custom images.
     pub(crate) fn has_profile_emoji(&self,value:&str)->bool{text::parts_index(value,&self.actions.emoji_names).iter().any(|p|matches!(p,text::Part::Emoji(..)))}
 }
@@ -1440,7 +1485,7 @@ fn rebuild_messages_view(
         FORMATTED_ROWS.with(|n|n.set(n.get()+1));
         let message_state=message_body_signature(msg);
         let signature=format!("{message_state}|{grouped}|{access:?}|{user_id:?}|{config:?}|{:?}|{}|{}",author.map(|u|(u.display_name(),&u.roles)),pinned.contains(&msg.id),msg.created_at.with_timezone(&chrono::Local).format("%H:%M"));
-        let inline=text::parts_index(msg.content.as_deref().unwrap_or(""),&actions.emoji_names);let inline_state:Vec<_>=inline.iter().filter_map(|p|if let text::Part::Emoji(id,name)=p{Some((*id,name,actions.textures.get(id).map_or(0,|t|t.as_ptr() as usize)))}else{None}).collect();
+        let inline=text::parts_index(&format!("{} {}",msg.content.as_deref().unwrap_or(""),reply_text.as_deref().unwrap_or("")),&actions.emoji_names);let inline_state:Vec<_>=inline.iter().filter_map(|p|if let text::Part::Emoji(id,name)=p{Some((*id,name,actions.textures.get(id).map_or(0,|t|t.as_ptr() as usize)))}else{None}).collect();
         let reply_author=msg.reply_to.and_then(|id|by_id.get(&id)).map(|m|m.sender_name(users_map));
         let signature=format!("{signature}|{:?}|{text:?}|{reply_text:?}|{reply_author:?}|{inline_state:?}|{mentioned}|{}",media.external.texture(msg).map(|t|t.as_ptr() as usize),media.external.failed(msg));
         let reaction_signature=format!("{:?}|{:?}|{emoji_state:?}",msg.reactions,msg.user_reactions);
@@ -1519,14 +1564,14 @@ fn rebuild_messages_view(
             let reply_button=gtk::Button::new();reply_button.add_css_class("flat");reply_button.add_css_class("papo-reply-reference");reply_button.set_halign(gtk::Align::Fill);reply_button.set_tooltip_text(Some("Ir para a mensagem respondida"));
             let line=gtk::Box::new(gtk::Orientation::Horizontal,6);line.append(&gtk::Image::from_icon_name("mail-reply-sender-symbolic"));
             let original=by_id.get(&reply);let name=gtk::Label::new(Some(original.map(|m|m.sender_name(users_map)).unwrap_or("Mensagem")));name.add_css_class("heading");name.add_css_class("caption");name.set_ellipsize(pango::EllipsizeMode::End);name.set_max_width_chars(20);if let Some(roles)=original.and_then(|m|m.author_id).and_then(|id|users_map.get(&id)).and_then(|u|u.roles.as_deref()){crate::ui::style::role_color(&name,roles);}line.append(&name);
-            let snippet=gtk::Label::new(Some(&text::excerpt(reply_text.as_deref().unwrap_or("Abrir mensagem respondida"))));snippet.add_css_class("caption");snippet.add_css_class("dim-label");snippet.set_xalign(0.0);snippet.set_hexpand(true);snippet.set_ellipsize(pango::EllipsizeMode::End);line.append(&snippet);reply_button.set_child(Some(&line));
+            let snippet=text::compact(reply_text.as_deref().unwrap_or("Abrir mensagem respondida"),users_map,actions);snippet.add_css_class("dim-label");line.append(&snippet);reply_button.set_child(Some(&line));
             reply_button.connect_clicked(move |_|{let _=s.output(ChatOutput::Navigate{channel_id,message_id:reply});});content_box.append(&reply_button);
         }
 
         if msg.content.is_some(){let raw=transfers::gifs::display_text(msg);if !raw.is_empty(){let input=sender.input_sender().clone();content_box.append(&text::with_profiles(&raw,users_map,actions,move |id|{let _=input.send(ChatMsg::OpenProfile(id));}));}}
 
         let media_box=gtk::Box::new(gtk::Orientation::Vertical,4);media_box.set_widget_name("message-media");
-        transfers::update_media_box(&media_box,msg,media,users_map,actions,sender);content_box.append(&media_box);
+        transfers::update_media_box(&media_box,msg,media,users_map,actions,sender);media_box.set_visible(media_box.first_child().is_some());content_box.append(&media_box);
 
         if actions.pinned_view{
             let open=gtk::Button::with_label("Abrir mensagem no histórico");open.add_css_class("flat");open.set_halign(gtk::Align::Start);
@@ -1542,7 +1587,7 @@ fn rebuild_messages_view(
         reactions_box.set_max_children_per_line(8);
         reactions_box.set_column_spacing(6);
         reactions_box.set_row_spacing(4);
-        reactions_box.set_margin_top(4);
+        reactions_box.set_margin_top(0);
 
         reactions_box.set_widget_name("message-reactions");render_reactions(&reactions_box,msg,actions,access,sender);
 

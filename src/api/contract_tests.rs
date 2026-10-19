@@ -664,3 +664,22 @@ async fn text_edits_preserve_stored_embeds_and_explicit_empty_lists_remain_disti
     assert_eq!(serde_json::from_str::<Value>(&requests[0].body).unwrap(),json!({"content":"Edited text"}));
     assert_eq!(serde_json::from_str::<Value>(&requests[1].body).unwrap(),json!({"content":"Edited text","embeds":[]}));
 }
+
+#[tokio::test]
+async fn dated_navigation_reads_two_pages_instead_of_walking_history(){
+    let target:Message=serde_json::from_value(message()).unwrap();
+    let mut older=message();older["id"]=json!(Uuid::from_u128(target.id.as_u128()-1));
+    let mut newer=message();newer["id"]=json!(Uuid::from_u128(target.id.as_u128()+1));
+    let (api,server)=mock(vec![
+        (200,json!({"channel_id":CHANNEL,"messages":[message(),older.clone()],"has_more":true})),
+        (200,json!({"channel_id":CHANNEL,"messages":[newer.clone()],"has_more":true}))
+    ]).await;
+    let page=api.messages_around(target.channel_id,MessageCursor::from(&target)).await.unwrap();
+    assert!(page.has_more);assert_eq!(page.messages.len(),3);assert_eq!(page.messages[1].id,target.id);
+    let requests=server.await.unwrap();assert_eq!(requests.len(),2);
+    for(index,request)in requests.iter().enumerate(){assert_eq!(request.method,"GET");assert_eq!(request.url.path(),format!("/channels/{CHANNEL}/messages"));
+        let query:std::collections::HashMap<_,_>=request.url.query_pairs().collect();assert_eq!(query["order"],if index==0{"desc"}else{"asc"});assert_eq!(query["limit"],"30");
+        assert_eq!(chrono::DateTime::parse_from_rfc3339(&query["since"]).unwrap(),target.created_at);
+        assert_eq!(query["last_id"],if index==0{Uuid::from_u128(target.id.as_u128()+1).to_string()}else{target.id.to_string()});
+    }
+}

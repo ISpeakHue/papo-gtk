@@ -85,7 +85,7 @@ impl Hero {
     #[cfg(test)]
     pub(super) fn check_layout(&self, window: &gtk::Window, with_banner: bool) {
         let bounds = self.widget.compute_bounds(window).unwrap();
-        assert!(bounds.x() >= 0.0 && bounds.x() + bounds.width() <= window.width() as f32);
+        assert!(bounds.x() >= 0.0 && bounds.x() + bounds.width() <= window.width() as f32,"hero bounds={bounds:?}, window={}x{}",window.width(),window.height());
         assert_eq!(self.banner.is_visible(), with_banner);
         let avatar = self.avatar.compute_bounds(window).unwrap();
         if with_banner {

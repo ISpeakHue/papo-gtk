@@ -29,6 +29,7 @@ pub struct SidebarModel {
     selected_voice_id:Option<Uuid>,
     direct_rows:std::collections::HashMap<Uuid,(String,gtk::Box)>,
     channel_rows:std::collections::HashMap<String,(String,gtk::ListBoxRow)>,
+    channel_counts:std::collections::HashMap<Uuid,usize>,
     pub unread_notifications: usize,
     pub more_notifications:bool,
     pub selected_channel_id: Option<Uuid>,
@@ -60,6 +61,7 @@ pub enum SidebarMsg {
     SetConfig(crate::models::UserConfig),
     Profile, Settings,
     UnreadNotifications{count:usize,more:bool},
+    ChannelCounts(std::collections::HashMap<Uuid,usize>),
     SetAvatar(Option<gtk::gdk::Texture>),
     SetChannels(Vec<Channel>),
     SelectChannel(Uuid),
@@ -246,7 +248,7 @@ impl Component for SidebarModel {
             server: init.server,
             channels: init.channels,voice_rooms:vec![],selected_voice_id:None,channel_rows:Default::default(),direct_rows:Default::default(),
             selected_channel_id: first_channel_id,
-            unread_notifications: 0,
+            channel_counts:Default::default(),unread_notifications: 0,
             more_notifications:false,
             direct:Vec::new(), access:Access::default(),setup:false,show_avatars:true,direct_mode:false,avatars:Default::default(),presence:Default::default(),
             icon_request:None,icon_job:None,logout_dialog:None,
@@ -259,7 +261,7 @@ impl Component for SidebarModel {
         // picture. Decoding it here duplicates that work on GTK's main thread.
         model.load_icon(&sender);
 
-        rebuild_channel_list(&widgets.channels_list, &model.channels, model.selected_channel_id, model.selected_voice_id, &model.voice_rooms,&model.avatars,model.show_avatars,&mut model.channel_rows,&sender);
+        rebuild_channel_list(&widgets.channels_list, &model.channels, model.selected_channel_id, model.selected_voice_id, &model.voice_rooms,&model.avatars,model.show_avatars,&model.channel_counts,&mut model.channel_rows,&sender);
 
         ComponentParts { model, widgets }
     }
@@ -277,7 +279,7 @@ impl Component for SidebarModel {
     ) {
         match message {
             SidebarMsg::VoiceDock(panel)=>{if panel.parent().is_none(){widgets.voice_slot.append(&panel);}},
-            SidebarMsg::VoiceRooms{rooms,selected}=>{if self.voice_rooms!=rooms||self.selected_voice_id!=selected{self.voice_rooms=rooms;self.selected_voice_id=selected;rebuild_channel_list(&widgets.channels_list,&self.channels,self.selected_channel_id,self.selected_voice_id,&self.voice_rooms,&self.avatars,self.show_avatars,&mut self.channel_rows,&sender);}},
+            SidebarMsg::VoiceRooms{rooms,selected}=>{if self.voice_rooms!=rooms||self.selected_voice_id!=selected{self.voice_rooms=rooms;self.selected_voice_id=selected;rebuild_channel_list(&widgets.channels_list,&self.channels,self.selected_channel_id,self.selected_voice_id,&self.voice_rooms,&self.avatars,self.show_avatars,&self.channel_counts,&mut self.channel_rows,&sender);}},
             SidebarMsg::OpenProfile(id)=>{let _=sender.output(SidebarOutput::Profile(id));},
             SidebarMsg::WatchVoice{user,kind}=>{let _=sender.output(SidebarOutput::WatchVoice{user,kind});},
             SidebarMsg::ShowChannels=>self.direct_mode=false,
@@ -293,8 +295,9 @@ impl Component for SidebarModel {
             SidebarMsg::PeerAvatars(avatars)=>{crate::media::update_member_avatars(widgets.direct_list.upcast_ref(),&self.avatars,&avatars);crate::media::update_member_avatars(widgets.channels_list.upcast_ref(),&self.avatars,&avatars);self.avatars=avatars;},
             SidebarMsg::Presence(presence)=>{if self.presence==presence{return;}self.presence=presence;self.rebuild_direct(&widgets.direct_list,&sender);},
             SidebarMsg::SetCurrentUser(user) => self.current_user=user,
-            SidebarMsg::SetConfig(config) => {self.show_avatars=config.display.as_ref().and_then(|d|d.show_avatars).unwrap_or(true);widgets.avatar_widget.set_visible(self.show_avatars);self.rebuild_direct(&widgets.direct_list,&sender);rebuild_channel_list(&widgets.channels_list,&self.channels,self.selected_channel_id,self.selected_voice_id,&self.voice_rooms,&self.avatars,self.show_avatars,&mut self.channel_rows,&sender);},
+            SidebarMsg::SetConfig(config) => {self.show_avatars=config.display.as_ref().and_then(|d|d.show_avatars).unwrap_or(true);widgets.avatar_widget.set_visible(self.show_avatars);self.rebuild_direct(&widgets.direct_list,&sender);rebuild_channel_list(&widgets.channels_list,&self.channels,self.selected_channel_id,self.selected_voice_id,&self.voice_rooms,&self.avatars,self.show_avatars,&self.channel_counts,&mut self.channel_rows,&sender);},
             SidebarMsg::Profile => {let _=sender.output(SidebarOutput::Profile(self.current_user.id));}
+            SidebarMsg::ChannelCounts(counts)=>{if self.channel_counts!=counts{self.channel_counts=counts;rebuild_channel_list(&widgets.channels_list,&self.channels,self.selected_channel_id,self.selected_voice_id,&self.voice_rooms,&self.avatars,self.show_avatars,&self.channel_counts,&mut self.channel_rows,&sender);}},
             SidebarMsg::UnreadNotifications{count,more}=>{self.unread_notifications=count;self.more_notifications=more;},
             SidebarMsg::Settings => {let _=sender.output(SidebarOutput::Settings);}
             SidebarMsg::SetAvatar(texture) => crate::media::set_avatar(&widgets.avatar_widget, texture.as_ref()),
@@ -309,9 +312,9 @@ impl Component for SidebarModel {
                     self.selected_channel_id = channels.iter().find(|channel| matches!(channel.channel_type, None | Some(ChannelType::Text))).map(|channel| channel.id);
                 }
                 self.channels = channels;
-                rebuild_channel_list(&widgets.channels_list, &self.channels, self.selected_channel_id, self.selected_voice_id, &self.voice_rooms,&self.avatars,self.show_avatars,&mut self.channel_rows,&sender);
+                rebuild_channel_list(&widgets.channels_list, &self.channels, self.selected_channel_id, self.selected_voice_id, &self.voice_rooms,&self.avatars,self.show_avatars,&self.channel_counts,&mut self.channel_rows,&sender);
             }
-            SidebarMsg::SetSelection(id)=>{self.direct_mode=self.direct.iter().any(|d|d.id==id);self.selected_channel_id=Some(id);self.rebuild_direct(&widgets.direct_list,&sender);rebuild_channel_list(&widgets.channels_list,&self.channels,self.selected_channel_id,self.selected_voice_id,&self.voice_rooms,&self.avatars,self.show_avatars,&mut self.channel_rows,&sender);}
+            SidebarMsg::SetSelection(id)=>{self.direct_mode=self.direct.iter().any(|d|d.id==id);self.selected_channel_id=Some(id);self.rebuild_direct(&widgets.direct_list,&sender);rebuild_channel_list(&widgets.channels_list,&self.channels,self.selected_channel_id,self.selected_voice_id,&self.voice_rooms,&self.avatars,self.show_avatars,&self.channel_counts,&mut self.channel_rows,&sender);}
             SidebarMsg::VoiceSelect(id)=>{if self.channels.iter().any(|c|c.id==id&&c.channel_type==Some(ChannelType::Voice)){let _=sender.output(SidebarOutput::VoiceSelect(id));}},
             SidebarMsg::SelectChannel(id) => {
                 self.direct_mode=false;
@@ -319,7 +322,7 @@ impl Component for SidebarModel {
                 if let Some(channel) = self.channels.iter().find(|c| c.id == id).cloned() {
                     let _ = sender.output(SidebarOutput::ChannelSelected(channel));
                 }
-                rebuild_channel_list(&widgets.channels_list, &self.channels, self.selected_channel_id, self.selected_voice_id, &self.voice_rooms,&self.avatars,self.show_avatars,&mut self.channel_rows,&sender);
+                rebuild_channel_list(&widgets.channels_list, &self.channels, self.selected_channel_id, self.selected_voice_id, &self.voice_rooms,&self.avatars,self.show_avatars,&self.channel_counts,&mut self.channel_rows,&sender);
                 self.rebuild_direct(&widgets.direct_list,&sender);
             }
             SidebarMsg::MarkChannelRead(id)=>{if self.channels.iter().any(|c|c.id==id&&!matches!(c.channel_type,Some(ChannelType::Category|ChannelType::Voice))){let _=sender.output(SidebarOutput::MarkChannelRead(id));}},
@@ -354,7 +357,7 @@ fn rebuild_channel_list(
     selected_id: Option<Uuid>,
     selected_voice_id: Option<Uuid>,
     rooms:&[VoiceRoom],avatars:&std::collections::HashMap<Uuid,gtk::gdk::Texture>,
-    show_avatars:bool,cache:&mut std::collections::HashMap<String,(String,gtk::ListBoxRow)>,
+    show_avatars:bool,counts:&std::collections::HashMap<Uuid,usize>,cache:&mut std::collections::HashMap<String,(String,gtk::ListBoxRow)>,
     sender: &ComponentSender<SidebarModel>,
 ) {
     let mut desired=Vec::new();
@@ -363,7 +366,7 @@ fn rebuild_channel_list(
         let is_category = matches!(channel.channel_type, Some(ChannelType::Category));
         let is_voice = matches!(channel.channel_type, Some(ChannelType::Voice));
 
-        let key=format!("channel-{}",channel.id);let signature=format!("{}|{:?}|{}",channel.name,channel.channel_type,channel.has_unread());
+        let key=format!("channel-{}",channel.id);let signature=format!("{}|{:?}|{:?}",channel.name,channel.channel_type,(channel.has_unread(),counts.get(&channel.id)));
         if let Some((old_signature,row))=cache.get(&key).filter(|(old,_)|*old==signature){
             desired.push((old_signature.clone(),row.clone()));
         } else {
@@ -409,13 +412,15 @@ fn rebuild_channel_list(
             box_row.append(&label);
 
             if channel.has_unread() {
-                let badge = gtk::Label::new(Some("●"));
+                let badge=gtk::Label::new(Some("●"));badge.add_css_class("accent");
                 badge.set_widget_name(&format!("unread-{}",channel.id));
-                badge.set_tooltip_text(Some("Novas mensagens"));
-                badge.set_width_request(8);
-                badge.set_height_request(8);
-                badge.set_valign(gtk::Align::Center);
-                badge.add_css_class("accent");
+                badge.set_tooltip_text(Some("Novas mensagens"));badge.set_valign(gtk::Align::Center);
+                box_row.append(&badge);
+            }
+            if let Some(count)=counts.get(&channel.id).filter(|n|**n>0){
+                let badge=gtk::Label::new(Some(&if *count>99{"99+".into()}else{count.to_string()}));
+                badge.add_css_class("papo-notification-count");badge.set_widget_name(&format!("notifications-{}",channel.id));
+                badge.set_tooltip_text(Some("Notificações não lidas neste canal"));badge.set_valign(gtk::Align::Center);
                 box_row.append(&badge);
             }
         }

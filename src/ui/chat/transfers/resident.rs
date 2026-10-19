@@ -1,7 +1,7 @@
 //! Bounded first-frame/thumbnail residency for the latest opening batch.
 use super::*;
 
-const BYTE_LIMIT: u64 = 128 << 20;
+const BYTE_LIMIT: u64 = 192 << 20;
 const ENTRY_LIMIT: usize = 256;
 const CHANNEL_LIMIT: usize = 8;
 struct Entry {
@@ -12,6 +12,7 @@ struct Entry {
 #[derive(Default)]
 pub(in crate::ui::chat) struct Cache {
     entries: HashMap<(Uuid, Uuid), Entry>,
+    recent: HashMap<Uuid,HashSet<Uuid>>,
     order: VecDeque<(Uuid, Uuid)>,
     channels: VecDeque<Uuid>,
     bytes: u64,
@@ -24,9 +25,7 @@ impl Cache {
         while self.channels.len() > CHANNEL_LIMIT {
             if let Some(old) = self.channels.pop_front() { self.invalidate_channel(old); }
         }
-        let removed: Vec<_> = self.entries.keys().copied()
-            .filter(|(id,key)| *id == channel && !keys.contains_key(key)).collect();
-        for key in removed { self.remove(key); }
+        self.recent.insert(channel,keys.keys().copied().collect());
         for (key,messages) in keys {
             if let Some(entry) = self.entries.get_mut(&(channel,*key)) { entry.messages = messages.clone(); }
         }
@@ -46,7 +45,7 @@ impl Cache {
         self.entries.insert((channel,key),Entry { texture:texture.clone(),messages:messages.clone(),bytes });
         self.order.push_back((channel,key));
         while self.bytes > BYTE_LIMIT || self.entries.len() > ENTRY_LIMIT {
-            let Some(key) = self.order.front().copied() else { break; };
+            let Some(key) = self.order.iter().find(|(channel,key)|!self.recent.get(channel).is_some_and(|keys|keys.contains(key))).or_else(||self.order.front()).copied() else { break; };
             self.remove(key);
         }
         crate::performance::record("resident_preview_bytes",self.bytes);
@@ -63,6 +62,7 @@ impl Cache {
         let keys: Vec<_> = self.entries.keys().copied().filter(|(id,_)| *id == channel).collect();
         for key in keys { self.remove(key); }
         self.channels.retain(|id| *id != channel);
+        self.recent.remove(&channel);
     }
     pub fn retain_channels(&mut self, allowed: &[Uuid]) {
         let removed: Vec<_> = self.channels.iter().copied().filter(|id| !allowed.contains(id)).collect();
@@ -94,7 +94,7 @@ impl Cache {
 impl Transfers {
     pub(super) fn select_recent(&mut self, channel: Uuid, messages: &[Message], range: std::ops::Range<usize>) {
         self.recent_channel = Some(channel);
-        self.recent_keys.clear();
+        self.recent_keys.clear();self.preview_owners.clear();
         self.visible_keys.clear();
         let mut animated = HashSet::new();
         let recent_start=messages.len().saturating_sub(crate::models::INITIAL_MESSAGE_LIMIT);
@@ -110,6 +110,7 @@ impl Transfers {
             let embeds = message.embeds.iter().flatten().map(|e|(e.id,e.animated_link()));
             let media:Vec<_> = attachments.chain(embeds).collect();
             for (key,gif) in media {
+                self.preview_owners.entry(key).or_default().insert(message.id);
                 if recent { self.recent_keys.entry(key).or_default().insert(message.id); }
                 if visible { self.visible_keys.insert(key); }
                 if gif { animated.insert(key); }
@@ -139,9 +140,7 @@ impl Transfers {
     }
     pub(super) fn remember_resident(&mut self, key: Uuid, texture: &gtk::gdk::Texture) {
         if let Some(channel) = self.recent_channel {
-            if let Some(messages) = self.recent_keys.get(&key) {
-                self.resident.insert(channel,key,messages,texture);
-            }
+            if let Some(messages)=self.preview_owners.get(&key){self.resident.insert(channel,key,messages,texture);}
         }
     }
 }

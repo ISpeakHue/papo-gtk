@@ -27,8 +27,9 @@ The clipboard check also runs in the complete GTK workflow.
 ## Multiline composer and native input methods
 
 Enter sends a message; Shift+Enter inserts a newline. The native text editor
-wraps at the available width and grows from 36 to 160 pixels, then scrolls
-vertically. Mentions retain their IDs, highlighting and caret position across
+wraps at the available width and grows from 40 to 160 pixels, then scrolls
+vertically. Multiline drafts use a 4-pixel top/bottom inset; shorter drafts stay
+centered in the toolbar's minimum height. Mentions retain their IDs, highlighting and caret position across
 multiline edits, failed sends and restored channel drafts. Input-method preedit
 and commit keys are handled by GTK before sending or autocomplete shortcuts.
 

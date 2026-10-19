@@ -22,7 +22,7 @@ pub(crate) struct Backend {
     pub(crate) peer_profile:Option<Value>,
     pub(crate) peer_banned:bool,pub(crate) fail_moderation:bool,pub(crate) fail_audit:bool,
     pub(crate) server_missing:bool, pub(crate) server_value:Value, pub(crate) admin_roles:Vec<Value>, pub(crate) admin_channels:Vec<Value>, pub(crate) dms:Vec<Value>, pub(crate) dm_messages:Vec<Value>, pub(crate) blocks:Vec<Value>, pub(crate) fail_role:bool, pub(crate) deny_dm:bool, pub(crate) fail_server:bool,
-    pub(crate) message: Value, old: Value, pub(crate) groups: Vec<Value>, pub(crate) emojis: Vec<Value>, pub(crate) pinned: bool,
+    pub(crate) message: Value, pub(crate) old: Value, pub(crate) groups: Vec<Value>, pub(crate) emojis: Vec<Value>, pub(crate) pinned: bool,
     pub(crate) profile:Value, config:Value, channel_setting:Value, pub(crate) fail_profile:bool, fail_settings:bool, fail_upload:bool,
     fail_password:bool, fail_recovery:bool, fail_search:bool, pub(crate) fail_read:bool, revoked:bool, dropped:Vec<String>, pub(crate) read_notices:Vec<Value>,
     fail_edit: bool, deny_edit: bool, fail_emoji: bool, pub(crate) requests: Vec<(String, String, Value)>, restricted: bool,

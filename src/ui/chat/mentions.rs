@@ -4,8 +4,10 @@ use std::collections::HashMap;
 use uuid::Uuid;
 #[derive(Clone,Debug,PartialEq,Eq)]
 pub(super) struct Span { pub start:usize, pub end:usize, pub id:Option<Uuid> }
+#[derive(Clone,Debug)]
+pub(super) struct InlineEmoji {pub start:usize,pub end:usize,pub code:String}
 #[derive(Clone,Debug,Default)]
-pub(super) struct DisplayText { pub text:String, pub spans:Vec<Span> }
+pub(super) struct DisplayText { pub text:String, pub spans:Vec<Span>, pub emojis:Vec<InlineEmoji> }
 impl DisplayText {
     /// Read-only text can link a plain nickname from another client without
     /// turning a typed draft into an outgoing mention or guessing duplicate names.
@@ -60,11 +62,11 @@ impl DisplayText {
         value.spans.sort_by_key(|s|s.start);value
     }
     pub fn wire_text(&self)->String {
+        let mut replacements:Vec<_>=self.spans.iter().map(|s|(s.start,s.end,s.id.map(|id|format!("@mention(<@{id}>)")).unwrap_or_else(||"@everyone".into())))
+            .chain(self.emojis.iter().map(|s|(s.start,s.end,s.code.clone()))).collect();
+        replacements.sort_by_key(|s|s.0);
         let mut text=String::new();let mut offset=0;
-        for span in &self.spans {
-            text.push_str(&self.text[offset..span.start]);
-            text.push_str(&span.id.map(|id|format!("@mention(<@{id}>)")).unwrap_or_else(||"@everyone".into()));offset=span.end;
-        }
+        for(start,end,wire) in replacements{text.push_str(&self.text[offset..start]);text.push_str(&wire);offset=end;}
         text.push_str(&self.text[offset..]);text
     }
     /// Exact editable offsets keep identically named members distinct.
@@ -73,6 +75,11 @@ impl DisplayText {
             if span.end<=start {return true;}
             if span.start>=end {span.start=span.start-end+start+text.len();span.end=span.end-end+start+text.len();return true;}
             // Editing any part of a mention turns that label into ordinary text.
+            false
+        });
+        self.emojis.retain_mut(|span|{
+            if span.end<=start{return true;}
+            if span.start>=end{span.start=span.start-end+start+text.len();span.end=span.end-end+start+text.len();return true;}
             false
         });
         self.text.replace_range(start..end,text);

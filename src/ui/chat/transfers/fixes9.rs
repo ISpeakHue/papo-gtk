@@ -89,7 +89,7 @@ pub(crate) fn exercise_backend_gifs(context:&gtk::glib::MainContext){
     use base64::Engine;
     let(api,backend,server)=tokio::runtime::Handle::current().block_on(mock());
     let user=Uuid::new_v4();let channel=Uuid::new_v4();let now=chrono::Utc::now();
-    let urls=["https://klipy.com/gifs/halloween-scary-22","https://giphy.com/gifs/cat-abc","https://tenor.com/view/cat-123"];
+    let urls=["https://klipy.com/gifs/halloween-scary-22","https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExYnlmcjdvMHN1a2p2aDBiajlyYmtpMjczMnptMTFyamdtdjh2MThuMCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/okfvUCpgArv3y/giphy.gif","https://tenor.com/view/cat-123"];
     let target:Channel=serde_json::from_value(serde_json::json!({"id":channel,"name":"Backend GIF media","created_at":now})).unwrap();
     let mut messages:Vec<Message>=urls.iter().map(|url|serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"channel_id":channel,"author_id":user,"content":url,"created_at":now})).unwrap()).collect();
     let chat=ChatModel::builder().launch(ChatInit{api:Some(api),active_channel:Some(target.clone()),messages:messages.clone(),user_id:Some(user),..Default::default()}).detach();
@@ -102,6 +102,9 @@ pub(crate) fn exercise_backend_gifs(context:&gtk::glib::MainContext){
         let mut bytes=crate::media::animation::fixture();
         if index==0{bytes.resize((4<<20)+32,0);}
         let mut value=serde_json::json!({"id":key,"source_type":"link","fetch_method":"gif","provider":(["KLIPY","GIPHY","Tenor"][index]),"url":urls[index],"title":"GIF from backend","thumbnail":{"mime_type":"image/gif","width":8,"height":8},"created_at":now});
+        // Resolved Klipy/Giphy embeds can carry both renditions. The GIF
+        // bytes must win without a relay request or a video player.
+        if index<2{value["video"]=serde_json::json!({"url":"https://example.test/fallback.mp4","mime_type":"video/mp4"});}
         let data=base64::engine::general_purpose::STANDARD.encode(bytes);
         if index==2{value["image_data"]=data.into();}else{let mut response=value.clone();response["image_data"]=data.into();backend.lock().unwrap().embed_values.insert(key.to_string(),response);}
         message.embeds=Some(vec![serde_json::from_value(value).unwrap()]);
@@ -116,6 +119,15 @@ pub(crate) fn exercise_backend_gifs(context:&gtk::glib::MainContext){
     let mut other=target.clone();other.id=Uuid::new_v4();chat.emit(ChatMsg::SetChannel(other));pump(context);chat.emit(ChatMsg::SetChannel(target));
     until(context,||keys.iter().all(|key|chat.model().transfers.animations.contains_key(key))&&chat.model().media_render_pending.is_none());
     assert_eq!(backend.lock().unwrap().requests.iter().filter(|(_,p,_)|p.starts_with("/embeds/")).count(),before,"returning to the channel reuses GIF bytes");
+    // An invalid primary image can still use an authorized video rendition,
+    // without turning the bare GIF surface into a video player.
+    let fallback=Uuid::new_v4();let fallback_message=Uuid::new_v4();
+    let value=serde_json::json!({"id":fallback,"source_type":"link","fetch_method":"gif","provider":"KLIPY","url":"https://klipy.com/gifs/fallback-test","thumbnail":{"mime_type":"image/gif"},"video":{"url":"https://example.test/fallback.webm","mime_type":"video/webm"},"created_at":now});
+    {let mut b=backend.lock().unwrap();let mut response=value.clone();response["image_data"]=base64::engine::general_purpose::STANDARD.encode(b"invalid image").into();b.embed_values.insert(fallback.to_string(),response);b.attachment_thumbnails.insert(format!("/embeds/{fallback}/video"),include_bytes!("../../../../tests/fixtures/chat-video.webm").to_vec());}
+    let message=serde_json::from_value(serde_json::json!({"id":fallback_message,"channel_id":channel,"author_id":user,"content":"https://klipy.com/gifs/fallback-test","created_at":now+chrono::Duration::seconds(1),"embeds":[value]})).unwrap();
+    chat.emit(ChatMsg::AddMessage(message));until(context,||chat.model().transfers.animations.contains_key(&fallback));
+    assert!(chat.model().transfers.videos.is_empty());
+    assert_eq!(backend.lock().unwrap().requests.iter().filter(|(_,p,_)|p==&format!("/embeds/{fallback}/video")).count(),1);
     let composer=super::super::composer::field(chat.widget().upcast_ref());composer.set_text("Keep this draft");pump(context);
     chat.emit(ChatMsg::OperationError("First temporary failure".into()));pump(context);let old=chat.model().error_timer.as_ref().unwrap().0;
     // Simulate an already-finished source whose dismissal is still queued.

@@ -211,3 +211,63 @@ The local fixture covers two reaction filters, animated custom emoji previews,
 filter switches, live nicknames/role colors/avatars, profile activation, narrow
 layouts, removed/empty reactions, errors, Escape and stale-close events. It uses
 synthetic accounts only and never opens a saved session.
+
+## Replies, search, profile previews and dialogs
+
+`PAPO_UI_CASE=report10` covers rich one-line reply previews in both the composer
+and message references: Unicode/custom emoji, preservation of text beyond 160
+characters, and clipping to the resized window. It also checks dated-history
+jumps, returning to the recent head, disabled mention completion in DMs,
+retention/invalidation of recently viewed previews, numeric channel notification
+badges, and Escape closing a
+transient window while leaving its root open.
+
+`search-recycling` additionally checks substring matching for author/mention
+filters, member-avatar factories, a single search after a typing burst, and
+stable model objects when loading overlapping result pages. Results use rich
+text and more spacious cards. `account-settings` verifies that the footer's
+own-profile button opens a read-only preview, while the gear retains editing
+and unsaved editor drafts survive opening/closing a preview.
+`notification-filters` exercises per-channel notification counts and read state.
+
+Reactions should sit directly below message content: messages without media
+must not reserve an empty media row. Escape follows normal close handlers,
+including unsaved-change prompts; focused completion/popovers and fullscreen
+retain their own Escape behavior.
+
+Author and mention dropdowns batch avatar work only for bound cells through the
+shared profile loader; opening search does not fetch every server member's
+portrait. Cached/fresh/in-flight profiles are reused, and late portraits update
+visible cells without a new search.
+
+
+## Inline draft emojis and keyboard navigation
+
+Custom emojis in the composer and message editor use inline paintables. Drafts,
+copied selections and requests retain their `:name:` codes and canonical mention
+IDs. Complete codes typed or pasted become emojis after the native input method
+commits; code spans, URLs and unknown names stay literal. The editor has an emoji
+picker and the same `:name` suggestions, Enter/Tab completion and continued typing
+as the composer. Choosing an emoji never submits the message or saves an edit.
+
+`PAPO_UI_CASE=report11` checks inline insertion, Unicode offsets, deletion,
+copy/cut/paste, rich undo/redo, draft restoration, independent editor completion, reopening the
+picker, failed-save retries and exact request content. It also checks Page Up,
+Page Down and End from the composer: pages move the chat with overlap, and End
+returns to the recent head. Modified shortcuts and other windows keep native
+editing behavior.
+
+Channel rows retain a blue unread dot and show notification counts separately
+in red. Author/mention filters use a searchable, recycled list: typing filters
+choices without selecting one, and clearing restores the complete list from its
+first row. The `search-recycling` case exercises the actual popup and clear path.
+
+The `backend-gifs` case includes the reported Klipy page and Giphy CDN URL.
+Backend `fetch_method: gif` embeds can carry both GIF data and video metadata;
+the GIF bytes take priority and video is a fallback. Fixtures verify one GIF
+request per embed, bare animated surfaces and cached channel returns, with no
+frontend provider scraping. Public-provider availability remains server-owned.
+
+Draft undo/redo retains emoji images and mention identities in a bounded history
+(128 snapshots, 512 KiB). Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y and the context menu share
+this history; it clears when the composer switches conversations or resets.

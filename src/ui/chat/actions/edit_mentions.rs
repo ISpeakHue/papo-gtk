@@ -10,7 +10,7 @@ pub(super) struct Mentions {
     range: Option<(usize,usize)>,
     signature: String,
     token: Uuid,
-    input: relm4::Sender<ChatMsg>,
+    pub(super) input: relm4::Sender<ChatMsg>,
 }
 impl Mentions {
     pub fn new(text:&gtk::TextView,outer:&gtk::Box,token:Uuid,sender:&ComponentSender<ChatModel>)->Self {
@@ -65,8 +65,9 @@ impl Mentions {
 }
 impl ChatModel {
     pub(in crate::ui::chat) fn refresh_edit_mentions(&mut self){
+        self.refresh_edit_emojis();
         if let Some(edit)=self.actions.edit.as_mut(){
-            let allowed=!edit.pending&&self.user_id.is_some_and(|u|self.access.can_edit(u,edit.message.author_id));
+            let allowed=!edit.emojis.panel.is_visible()&&self.active_channel.as_ref().is_some_and(|c|!c.is_direct())&&!edit.pending&&self.user_id.is_some_and(|u|self.access.can_edit(u,edit.message.author_id));
             edit.mentions.refresh(&edit.text,&self.users_map,&self.avatars,&self.config,allowed,self.access.everyone);
         }
     }

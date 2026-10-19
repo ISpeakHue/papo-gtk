@@ -73,8 +73,9 @@ other devices automatically.
 
 ## Emoji rendering in profiles
 
-Profile descriptions, status messages and typing text use the chat's emoji renderer
-and cached server emoji catalog. Unicode emoji display normally; known custom codes
+Profile previews show descriptions and status messages using the chat's emoji renderer
+and cached server emoji catalog. Typing text and manual presence are omitted from
+these previews. Unicode emoji display normally; known custom codes
 such as `:ricardao:` display inline images, while unknown codes remain readable text.
 The description editor shows a live preview when it contains known custom emoji
 and preserves the original codes when saving. An open profile updates when the

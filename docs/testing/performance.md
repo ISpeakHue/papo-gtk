@@ -20,7 +20,7 @@ disk or reused by another login.
 
 Lightweight media metadata, learned dimensions and recent first-frame previews survive
 channel switches. A separate resident cache retains the latest 30-message batch
-for up to eight channels, with a 128 MiB/256-entry bound. The active cache holds up to 64 image textures
+for up to eight channels, with a 192 MiB/256-entry bound. The active cache holds up to 64 image textures
 with a 64 MiB RGBA-pixel budget. GIF animation has a separate budget. Known
 image dimensions size placeholders. When dimensions are unknown, the first
 decoded image replaces the guessed frame ratio immediately, without requiring
@@ -330,7 +330,7 @@ priority, then the rest of the latest 30 messages prefetches without scrolling.
 Recent static previews and video posters remain resident for up to eight channels
 (128 MiB/256 entries globally). Full GIF frames and video players remain scoped
 to the active view; prefetched GIFs prepare just a first frame and resume full
-animation when brought into view. The separate 96 MiB/512-entry compressed cache
+animation when brought into view. The separate 192 MiB/512-entry compressed cache
 evicts older scroll history before recent opening batches, within its hard bound.
 These are demand-allocated ceilings, not memory reserved at startup.
 

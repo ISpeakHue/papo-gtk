@@ -66,7 +66,7 @@ pub(crate) trait InputExt {
 }
 fn iter(buffer:&gtk::TextBuffer,position:i32)->gtk::TextIter{buffer.iter_at_offset(if position<0{buffer.char_count()}else{position.min(buffer.char_count())})}
 impl InputExt for gtk::TextView {
-    fn text(&self)->gtk::glib::GString{let b=self.buffer();b.text(&b.start_iter(),&b.end_iter(),false)}
+    fn text(&self)->gtk::glib::GString{let b=self.buffer();b.slice(&b.start_iter(),&b.end_iter(),false)}
     fn set_text(&self,text:&str){self.buffer().set_text(text);}
     fn position(&self)->i32{self.buffer().cursor_position()}
     fn set_position(&self,position:i32){let b=self.buffer();b.place_cursor(&iter(&b,position));self.scroll_mark_onscreen(&b.get_insert());}
@@ -92,7 +92,15 @@ pub(super) fn connect_size(view:&gtk::TextView,scroll:&gtk::ScrolledWindow){
             pending.set(false);let(Some(view),Some(scroll))=(weak.upgrade(),weak_scroll.upgrade())else{return;};
             if view.width()<=0{return;}
             let end=view.buffer().end_iter();let(y,height)=view.line_yrange(&end);
-            let content=y+height+view.top_margin()+view.bottom_margin();
+            let text_height=y+height;
+            // Wrapped lines need only a small inset. Keep short drafts centered
+            // in the toolbar's minimum height without adding that padding to
+            // every multiline draft as well.
+            let content=text_height+8;
+            let padding=(40-text_height).max(8);
+            let top=padding/2;let bottom=padding-top;
+            if view.top_margin()!=top{view.set_top_margin(top);}
+            if view.bottom_margin()!=bottom{view.set_bottom_margin(bottom);}
             let policy=if content>160{gtk::PolicyType::Automatic}else{gtk::PolicyType::External};
             if scroll.vscrollbar_policy()!=policy{scroll.set_vscrollbar_policy(policy);}
             let height=content.clamp(40,160);

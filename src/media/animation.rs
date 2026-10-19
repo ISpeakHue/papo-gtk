@@ -109,7 +109,7 @@ impl Animation{
     pub fn watch(&self,widget:&impl IsA<gtk::Widget>,offset:Option<i32>){
         let widget=widget.as_ref();
         let already_watched={let mut consumers=self.imp().consumers.borrow_mut();consumers.retain(|(w,_)|w.upgrade().is_some());
-            let existing=consumers.iter().any(|(w,_)|w.upgrade().as_ref()==Some(widget));consumers.push((widget.downgrade(),offset));existing};
+            let existing=consumers.iter().any(|(w,_)|w.upgrade().as_ref()==Some(widget));if !consumers.iter().any(|(w,o)|w.upgrade().as_ref()==Some(widget)&&*o==offset){consumers.push((widget.downgrade(),offset));}existing};
         if already_watched{return;}
         let weak=self.downgrade();widget.connect_map(move |widget|{let mut parent=widget.parent();while let Some(ancestor)=parent{if let Some(scroll)=ancestor.downcast_ref::<gtk::ScrolledWindow>(){watch_scroll(scroll);}parent=ancestor.parent();}if let Some(animation)=weak.upgrade(){schedule(&animation);}});
         let weak=self.downgrade();widget.connect_unmap(move |_|{if let Some(animation)=weak.upgrade(){

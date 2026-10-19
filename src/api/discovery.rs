@@ -1,6 +1,17 @@
 use super::*;
 
 impl ApiClient {
+    pub async fn messages_around(&self,channel:Uuid,target:MessageCursor)->Result<MessageListResponse>{
+        let inclusive=if let Some(id)=target.id.as_u128().checked_add(1){MessageCursor{created_at:target.created_at,id:Uuid::from_u128(id)}}else{MessageCursor{created_at:target.created_at.checked_add_signed(chrono::Duration::microseconds(1)).context("Data fora do intervalo")?,id:Uuid::nil()}};
+        let mut before=self.message_page(channel,Some(inclusive),30).await?;
+        let mut url=self.url(&format!("/channels/{channel}/messages"));
+        url.query_pairs_mut().append_pair("order","asc").append_pair("limit","30").append_pair("since",&target.created_at.to_rfc3339()).append_pair("last_id",&target.id.to_string());
+        let after:MessageListResponse=Self::decode(self.inner.get(url).send_paced(&self.requests).await?,"messages").await?;
+        anyhow::ensure!(after.channel_id==channel,"Mensagens retornadas para outro canal");
+        anyhow::ensure!(before.messages.iter().any(|m|m.id==target.id),"A mensagem foi removida ou não está mais acessível");
+        before.messages.extend(after.messages);before.messages.sort_by_key(|m|(m.created_at,m.id));before.messages.dedup_by_key(|m|m.id);Ok(before)
+    }
+
     /// Small, read-only page including the pending message. The successor UUID
     /// makes the exclusive descending cursor inclusive without skipping ties.
     pub async fn moderation_messages(&self, channel:Uuid, message:&Message)->Result<MessageListResponse>{

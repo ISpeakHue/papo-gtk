@@ -1,9 +1,13 @@
-//! Readable mention labels in the native multiline composer; IDs stay in draft/request text.
+//! Inline emojis and readable mention labels in the native multiline composer; IDs stay in draft/request text.
 use super::*;
 use mentions::{DisplayText,Span};
+mod inline;
+mod history;
+#[cfg(test)] mod inline_tests;
+#[cfg(test)] pub(crate) use inline_tests::exercise as exercise_inline;
 use std::{cell::{Cell,RefCell},rc::Rc};
 #[derive(Clone,Default)]
-pub(super) struct Composer { value:Rc<RefCell<DisplayText>>, updating:Rc<Cell<bool>>, composing:Rc<Cell<bool>> }
+pub(super) struct Composer { value:Rc<RefCell<DisplayText>>, updating:Rc<Cell<bool>>, composing:Rc<Cell<bool>>, catalog:Rc<RefCell<inline::Catalog>>, pending:Rc<Cell<bool>>, history:Rc<RefCell<history::History>> }
 fn byte(text:&str,position:i32)->usize {
     if position<0{text.len()}else{text.char_indices().nth(position as usize).map_or(text.len(),|(i,_)|i)}
 }
@@ -116,28 +120,30 @@ impl Composer {
         self.connect_changed(entry,move |text|{let _=input.send(ChatMsg::InputChanged(text));});
     }
     pub fn connect_changed(&self,entry:&gtk::TextView,changed:impl Fn(String)+'static) {
+        self.connect_history(entry);
         let buffer=entry.buffer();
-        let composer=self.clone();buffer.connect_insert_text(move |_,at,text|{
-            if !composer.updating.get(){let mut value=composer.value.borrow_mut();let start=byte(&value.text,at.offset());value.replace(start,start,text);}
+        let composer=self.clone();let weak=entry.downgrade();buffer.connect_insert_text(move |_,at,text|{
+            if !composer.updating.get(){if let Some(entry)=weak.upgrade(){composer.remember(&entry,if text.contains(char::is_whitespace){history::Kind::Atomic}else{history::Kind::Insert},at.offset()+text.chars().count() as i32);}let mut value=composer.value.borrow_mut();let start=byte(&value.text,at.offset());value.replace(start,start,text);}
         });
-        let composer=self.clone();buffer.connect_delete_range(move |_,start,end|{
-            if !composer.updating.get(){let mut value=composer.value.borrow_mut();let(start,end)=(byte(&value.text,start.offset()),byte(&value.text,end.offset()));value.replace(start,end,"");}
+        let composer=self.clone();let weak=entry.downgrade();buffer.connect_delete_range(move |_,start,end|{
+            if !composer.updating.get(){if let Some(entry)=weak.upgrade(){composer.remember(&entry,if entry.buffer().has_selection(){history::Kind::Atomic}else{history::Kind::Delete},start.offset());}let mut value=composer.value.borrow_mut();let(start,end)=(byte(&value.text,start.offset()),byte(&value.text,end.offset()));value.replace(start,end,"");}
         });
         let composer=self.clone();let weak=entry.downgrade();buffer.connect_changed(move |_|{
             if composer.updating.get(){return;}
             let Some(entry)=weak.upgrade()else{return;};
-            if composer.value.borrow().text!=entry.text().as_str(){*composer.value.borrow_mut()=DisplayText{text:entry.text().into(),spans:vec![]};}
-            composer.highlight(&entry);changed(composer.wire_text());
+            if composer.value.borrow().text!=entry.text().as_str(){*composer.value.borrow_mut()=DisplayText{text:entry.text().into(),..Default::default()};}
+            composer.recover_emojis(&entry);composer.highlight(&entry);changed(composer.wire_text());composer.schedule_emojis(&entry);
         });
         // Native composition is transient GTK state, not a draft edit. Avoid
         // rebuilding the component while the input method owns the preedit.
-        let composing=self.composing.clone();entry.connect_preedit_changed(move |_,text|composing.set(!text.is_empty()));
+        let composer=self.clone();entry.connect_preedit_changed(move |entry,text|{composer.composing.set(!text.is_empty());if text.is_empty(){composer.schedule_emojis(entry);}});
+        self.connect_clipboard(entry);
     }
     pub fn is_composing(&self)->bool{self.composing.get()}
     pub fn wire_text(&self)->String {self.value.borrow().wire_text()}
     pub fn refresh_names(&self,entry:&gtk::TextView,users:&HashMap<Uuid,UserSummary>) {
         let old=self.value.borrow();if old.spans.is_empty(){return;}
-        let next=DisplayText::parse(&old.wire_text(),users);if old.text==next.text{return;}
+        let mut next=DisplayText::parse(&old.wire_text(),users);self.collapse(&mut next,0);if old.text==next.text{return;}
         let position=entry.position();let mut caret=position;
         for(before,after) in old.spans.iter().zip(&next.spans){
             let start=old.text[..before.start].chars().count() as i32;let end=old.text[..before.end].chars().count() as i32;
@@ -149,10 +155,10 @@ impl Composer {
         drop(old);*self.value.borrow_mut()=next;self.refresh(entry);entry.set_position(caret);
     }
     pub fn set_wire(&self,entry:&gtk::TextView,text:&str,users:&HashMap<Uuid,UserSummary>) {
-        *self.value.borrow_mut()=DisplayText::parse(text,users);self.refresh(entry);
+        *self.value.borrow_mut()=DisplayText::parse(text,users);self.clear_history();self.refresh(entry);
     }
     fn refresh(&self,entry:&gtk::TextView) {
-        self.updating.set(true);entry.set_text(&self.value.borrow().text);self.updating.set(false);self.highlight(entry);
+        self.refresh_at(entry,entry.position());
     }
     fn highlight(&self,entry:&gtk::TextView) {
         let buffer=entry.buffer();let tag=buffer.tag_table().lookup("papo-composer-mention").unwrap_or_else(||{
@@ -171,6 +177,7 @@ impl Composer {
         value.spans.iter().find(|s|s.start<=at&&at<s.end).map(|s|(s.start,s.end))
     }
     pub fn mention_in(&self,entry:&gtk::TextView,id:Option<Uuid>,users:&HashMap<Uuid,UserSummary>,range:Option<(usize,usize)>)->i32 {
+        self.remember(entry,history::Kind::Atomic,entry.position());
         let mut value=self.value.borrow_mut();
         let(start,end)=range.or_else(||mentions::completion(&value.text,entry.position()).map(|(s,e,_)|(s,e))).unwrap_or_else(||{
             let end=value.text.len();let gap=if end==0||value.text.ends_with(char::is_whitespace){""}else{" "};value.replace(end,end,gap);(value.text.len(),value.text.len())
@@ -181,13 +188,15 @@ impl Composer {
         let inserted=format!("{label}{gap}");
         value.replace(start,end,&inserted);value.spans.push(Span{start,end:start+label.len(),id});value.spans.sort_by_key(|s|s.start);
         let trailing=if gap.is_empty(){value.text[start+inserted.len()..].chars().next().filter(|c|c.is_whitespace()).map_or(0,char::len_utf8)}else{0};
-        let caret=value.text[..start+inserted.len()+trailing].chars().count() as i32;drop(value);self.refresh(entry);caret
+        let caret=value.text[..start+inserted.len()+trailing].chars().count() as i32;drop(value);self.refresh_at(entry,caret)
     }
     pub fn emoji(&self,entry:&gtk::TextView,value:&str,replace:bool)->i32 {
+        self.remember(entry,history::Kind::Atomic,entry.position());
         let mut text=self.value.borrow_mut();let end=byte(&text.text,entry.position());
-        let(start,mut end)=if replace{emoji::completion(&text.text,entry.position()).map_or((end,end),|(s,e,_)|(s,e))}else{(end,end)};
-        if replace&&text.text[end..].starts_with(':'){end+=1;}
-        text.replace(start,end,&format!("{value} "));let caret=text.text[..start+value.len()+1].chars().count() as i32;drop(text);self.refresh(entry);caret
+        let selection=entry.buffer().selection_bounds().map(|(a,b)|(byte(&text.text,a.offset()),byte(&text.text,b.offset())));
+        let(start,mut end)=selection.unwrap_or_else(||if replace{emoji::completion(&text.text,entry.position()).map_or((end,end),|(s,e,_)|(s,e))}else{(end,end)});
+        if replace&&selection.is_none()&&text.text[end..].starts_with(':'){end+=1;}
+        text.replace(start,end,&format!("{value} "));let caret=text.text[..start+value.len()+1].chars().count() as i32;drop(text);self.refresh_at(entry,caret)
     }
 }
 

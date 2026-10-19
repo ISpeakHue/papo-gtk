@@ -14,6 +14,7 @@ pub enum NoticeMsg {
     Loaded{token:Uuid,cursor:Option<MessageCursor>,result:anyhow::Result<NotificationList>},
     Marked{id:Uuid,result:anyhow::Result<u32>},
     MarkedBatch{ids:Vec<Uuid>,result:anyhow::Result<u32>},
+    DesktopAction{notice:Uuid,channel:Uuid,message:Uuid,observed:Option<crate::models::MessageObservation>,token:Option<String>},
     DesktopReady(Result<gtk::gio::DBusProxy,gtk::glib::Error>),
 }
 #[derive(Default)]
@@ -123,6 +124,14 @@ impl MainWindowModel {
                     sender.input(MainWindowMsg::Notification(NoticeMsg::Open));if let Some(v)=&self.notifications.view{v.status.set_text("Localizando mensagem… Se o canal estiver indisponível, a notificação permanecerá aqui.");}
                 }
             }
+            NoticeMsg::DesktopAction{notice,channel,message,observed,token}=>{
+                if !self.can_read_target(channel){return;}
+                if let Some(window)=root.root().and_downcast::<gtk::Window>(){if let Some(token)=token{window.set_startup_id(&token);}window.present();}
+                if let Some(observed)=observed{if !self.notifications.inbox.messages.contains_key(&message){self.notifications.inbox.observe(observed);}}
+                if self.notifications.inbox.rows.contains_key(&notice){sender.input(MainWindowMsg::Notification(NoticeMsg::Mark(notice)));}
+                if let Some(v)=&self.notifications.view{v.window.set_visible(false);}
+                sender.input(MainWindowMsg::Navigate{channel_id:channel,message_id:message});
+            }
             NoticeMsg::DesktopReady(result)=>{self.notifications.desktop.ready(result,sender.input_sender().clone());self.deliver_notices(sender);}
         }
     }
@@ -170,8 +179,8 @@ impl MainWindowModel {
                 send.push((n.id,crate::ui::chat::mentions::render(&body,&users),sound));
             }n.pending_desktop=false;
         }
-        for (id,body,sound)in send{self.notifications.desktop.send(id,body,sound);}
-        let allowed=self.notifications.inbox.rows.values().filter(|n|state::delivery(n,&self.account.config,&channels,self.current_user.id,&self.notifications.inbox.messages).is_some()).map(|n|n.id).collect();self.notifications.desktop.revoke(&allowed);
+        let allowed=self.notifications.inbox.rows.values().filter(|n|state::delivery(n,&self.account.config,&channels,self.current_user.id,&self.notifications.inbox.messages).is_some()).map(|n|n.id).collect();let readable=channels.iter().map(|c|c.id).collect();self.notifications.desktop.revoke(&allowed,&readable);
+        for (id,body,sound)in send{if let Some(n)=self.notifications.inbox.rows.get(&id){let observed=self.notifications.inbox.messages.get(&n.message_id).cloned();self.notifications.desktop.send(n,observed,body,sound);}}
     }
     fn load_notice_authors(&mut self,sender:&ComponentSender<Self>){
         if !self.notifications.view.as_ref().is_some_and(|v|v.window.is_visible()){return;}
@@ -185,6 +194,8 @@ impl MainWindowModel {
         let channels=self.notification_channels();
         let unread=self.notifications.inbox.unread(&channels);
         self.sidebar.emit(SidebarMsg::UnreadNotifications{count:unread,more:self.notifications.more});
+        let mut counts=HashMap::new();for n in self.notifications.inbox.rows.values().filter(|n|!n.read){if let Some(id)=n.channel_id.filter(|id|self.channels.iter().any(|c|c.id==*id)&&self.can_read_target(*id)){*counts.entry(id).or_insert(0)+=1;}}
+        self.sidebar.emit(SidebarMsg::ChannelCounts(counts));
         self.chat.emit(ChatMsg::NotificationCount{count:unread,more:self.notifications.more});
         let Some(v)=self.notifications.view.as_ref().filter(|v|v.window.is_visible())else{return;};
         let channel_index:HashMap<_,_>=channels.iter().map(|c|(c.id,c)).collect();

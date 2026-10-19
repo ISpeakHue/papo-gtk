@@ -22,8 +22,8 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
         entry.grab_focus();entry.set_text(prefix);entry.set_position(-1);pump(context);
         let panel=descendants(chat.widget().upcast_ref()).into_iter().find(|w|w.widget_name()==panel_name).unwrap();until(context,||panel.is_mapped());
         let buttons:Vec<_>=descendants(&panel).into_iter().filter_map(|w|w.downcast::<gtk::Button>().ok()).collect();assert!(buttons.len()>=2);
-        assert!(press(entry.upcast_ref(),gtk::gdk::Key::Down));pump(context);assert!(buttons[0].has_focus());
-        assert!(press(&panel,gtk::gdk::Key::Down));pump(context);assert!(buttons[1].has_focus());
+        until(context,||buttons[0].is_mapped());assert!(press(entry.upcast_ref(),gtk::gdk::Key::Down));until(context,||buttons[0].has_focus());
+        assert!(press(&panel,gtk::gdk::Key::Down));until(context,||buttons[1].has_focus());
         let selected=if prefix.starts_with('@'){format!("@{} ",users[1].display_name())}else{String::new()};
         assert!(press(&panel,gtk::gdk::Key::Tab));pump(context);
         assert!(entry.has_focus()&&entry.selection_bounds().is_none());

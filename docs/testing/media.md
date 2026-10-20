@@ -349,3 +349,32 @@ These checks cover image dimensions, GIF/video thumbnails, non-media/corrupt
 fallbacks, duplicate attachments, caption editing, removal, failed-send retries,
 successful-send cleanup and stale completions during channel switches. The
 clipboard workflow exercises pasted images and temporary-file cleanup.
+
+## MOV / QuickTime attachments
+
+Received MOV files use the normal inline video preview, play button, controls,
+fullscreen view and context-menu download. QuickTime MIME types are recognized;
+when the backend reports unknown binary data (`application/octet-stream`), a
+case-insensitive `.mov` extension also selects the video path. Explicit image,
+text and document MIME types retain their existing behavior. This classification
+does not bypass moderation or downloaded-container validation.
+
+The backend's Go MIME sniffer recognizes MP4 brands but can return generic binary
+data for QuickTime's `qt  ` brand. No upload-header or backend change is required
+for the frontend fallback. Posters keep the existing bounded range requests,
+network-isolated helper and recent-media caching; playback remains explicit.
+
+GStreamer's [QuickTime demuxer](https://gstreamer.freedesktop.org/documentation/isomp4/qtdemux.html)
+handles MOV containers. The codecs inside must also have suitable GStreamer
+decoders. The AppImage packaging already includes the Good plug-ins containing
+`qtdemux` and the libav codec plug-in; a development launch uses system plug-ins.
+No automatic transcoding or extra full-file background download is introduced.
+
+```sh
+GTK_A11Y=none G_DEBUG=fatal-warnings PAPO_UI_CASE=mov-media dbus-run-session -- xvfb-run -a cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+```
+
+This case uses a silent original H.264 MOV and a local mock server. It verifies
+real posters and advancing native playback for both QuickTime and generic MIME
+metadata, bounded player-file reuse, blocked-media handling and permission-loss
+cleanup. FFmpeg is needed only to regenerate the committed fixture.

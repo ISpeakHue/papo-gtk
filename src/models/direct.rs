@@ -19,6 +19,7 @@ impl ConversationTarget {
     pub fn id(&self)->Uuid { match self {Self::Channel(c)=>c.id,Self::Direct(d)=>d.id} }
     pub fn name(&self)->&str {match self{Self::Channel(c)=>&c.name,Self::Direct(d)=>d.user.display_name()}}
     pub fn topic(&self)->Option<&str>{match self{Self::Channel(c)=>c.topic.as_deref(),Self::Direct(_)=>Some("Mensagem direta")}}
+    pub fn is_voice(&self)->bool{matches!(self,Self::Channel(c) if c.channel_type==Some(ChannelType::Voice))}
     pub fn is_direct(&self)->bool{matches!(self,Self::Direct(_))}
 }
 impl Access {

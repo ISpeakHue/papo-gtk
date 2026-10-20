@@ -41,3 +41,15 @@ ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=size=160x96:rate=24 -f 
 
 This fixture contains no downloaded or personal media and is distributed under
 this repository's GPL-3.0 license.
+
+`chat-video.mov` remuxes only the video track of `chat-h264.mp4` into a genuine
+QuickTime container (`qt  ` brand). It has no audio, so the native MOV playback
+regression cannot emit sound. It is original fixture media under the same
+GPL-3.0 license. Regenerate without re-encoding:
+
+```sh
+ffmpeg -v error -i tests/fixtures/chat-h264.mp4 -map 0:v:0 -an -c:v copy -f mov -n tests/fixtures/chat-video.mov
+```
+
+The MOV fixture tests content validation, poster extraction, playback and cache
+reuse when the backend reports either `video/quicktime` or generic binary data.

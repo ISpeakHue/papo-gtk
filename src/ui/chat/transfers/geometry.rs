@@ -58,3 +58,22 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
         window.set_content(None::<&gtk::Widget>);window.close();drop(chat);pump(context);
     }
 }
+
+pub(crate) fn exercise_metadata(context:&gtk::glib::MainContext){
+    let channel=Uuid::new_v4();let user=Uuid::new_v4();let photo=Uuid::new_v4();let video=Uuid::new_v4();let message=Uuid::new_v4();let now=chrono::Utc::now();
+    let target=serde_json::from_value(serde_json::json!({"id":channel,"name":"Server geometry","created_at":now})).unwrap();
+    let msg=serde_json::from_value(serde_json::json!({"id":message,"channel_id":channel,"author_id":user,"created_at":now,"attachments":[
+        {"id":photo,"mime_type":"image/png","original_file_name":"photo.png","thumbnail_id":Uuid::new_v4(),"thumbnail_width":600,"thumbnail_height":120,"size_bytes":100,"created_at":now},
+        {"id":video,"mime_type":"video/mp4","original_file_name":"clip.mp4","thumbnail_id":Uuid::new_v4(),"thumbnail_width":160,"thumbnail_height":240,"size_bytes":100,"created_at":now}
+    ]})).unwrap();
+    let chat=ChatModel::builder().launch(ChatInit{active_channel:Some(target),messages:vec![msg],user_id:Some(user),..Default::default()}).detach();
+    chat.emit(ChatMsg::SetAccess{user_id:user,access:crate::models::Access::direct()});
+    let host=adw::Window::builder().default_width(1000).default_height(800).content(chat.widget()).build();host.present();performance::settle(context);
+    let geometry=|key|{let card=descendants(chat.widget().upcast_ref()).into_iter().find(|w|w.widget_name().starts_with(&format!("attachment-{key}-"))).unwrap();let frame=descendants(&card).into_iter().find(|w|w.type_().name()=="PapoMediaFrame").unwrap();(frame.width(),frame.height())};
+    assert_eq!(geometry(photo),(600,120),"the server ratio reserves space before any image bytes arrive");assert_eq!(geometry(video),(160,240),"video posters also use server thumbnail geometry");
+    let mut png=std::io::Cursor::new(Vec::new());image::DynamicImage::new_rgba8(600,120).write_to(&mut png,image::ImageFormat::Png).unwrap();
+    chat.emit(ChatMsg::Transfer(TransferMsg::Bytes{epoch:chat.model().transfers.epoch,message,key:photo,token:None,result:Ok(png.into_inner())}));until(context,||chat.model().transfers.textures.contains_key(&photo));performance::settle(context);
+    assert_eq!(geometry(photo),(600,120),"decoding cannot replace the reserved ratio with a guessed frame");
+    host.set_default_size(400,800);performance::settle(context);let(w,h)=geometry(photo);assert!(w<600&&(w-5*h).abs()<=3);
+    host.set_content(None::<&gtk::Widget>);host.close();drop(chat);pump(context);
+}

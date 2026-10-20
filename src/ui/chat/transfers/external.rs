@@ -65,8 +65,9 @@ impl Avatars {
         let mut row=list.first_child();while let Some(widget)=row{row=widget.next_sibling();if let Some(image)=images.get(widget.widget_name().as_str()){author(&widget,image);}}
     }
     pub(in crate::ui::chat) fn texture(&self,message:&Message)->Option<&gtk::gdk::Texture>{
-        self.entries.get(&key(&message.external()?.avatar_url))?.1.as_ref()
+        self.texture_url(&message.external()?.avatar_url)
     }
+    pub(in crate::ui::chat) fn texture_url(&self,url:&str)->Option<&gtk::gdk::Texture>{self.entries.get(&key(url))?.1.as_ref()}
     fn fresh(&self,key:&str)->bool{
         if let Some((_,until))=self.failures.get(key){return *until>std::time::Instant::now();}
         self.entries.get(key).is_some_and(|(at,image)|at.elapsed().as_secs()<if image.is_some(){3600}else{60})
@@ -81,9 +82,12 @@ impl Avatars {
         message.external().is_some_and(|a|key(&a.avatar_url)==value)
     }
     pub(in crate::ui::chat) fn request<'a>(&mut self,messages:impl Iterator<Item=&'a Message>,api:&crate::api::ApiClient,sender:&ComponentSender<ChatModel>){
+        self.request_authors(messages.filter_map(Message::external),api,sender);
+    }
+    pub(in crate::ui::chat) fn request_authors<'a>(&mut self,authors:impl Iterator<Item=&'a crate::models::ExternalAuthor>,api:&crate::api::ApiClient,sender:&ComponentSender<ChatModel>){
         let mut seen=HashSet::new();
-        for message in messages{
-            let Some(author)=message.external()else{continue;};let url=&author.avatar_url;
+        for author in authors{
+            let url=&author.avatar_url;
             if api.external_avatar_url(url).is_none(){continue;}
             let key=key(url);if !seen.insert(key.clone()){continue;}
             if self.fresh(&key){crate::performance::record("external_avatar_hits",1);self.order.retain(|k|k!=&key);self.order.push_back(key);continue;}

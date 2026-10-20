@@ -70,6 +70,9 @@ pub struct Channel {
 }
 
 impl Channel {
+    /// Voice rooms share the normal message history and composer.
+    pub fn supports_messages(&self)->bool{matches!(self.channel_type,None|Some(ChannelType::Text|ChannelType::Voice))}
+
     /// Returns true if this channel has unread messages.
     pub fn has_unread(&self) -> bool {
         match (&self.last_message, &self.last_read_message) {

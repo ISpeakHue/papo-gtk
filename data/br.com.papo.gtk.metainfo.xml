@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>br.com.papo.gtk</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <name>Papo</name>
+  <summary>Chat with your community</summary>
+  <description><p>A native GTK client for Papo community servers, with text messages, direct messages, media, voice calls, camera and screen sharing.</p></description>
+  <launchable type="desktop-id">br.com.papo.gtk.desktop</launchable>
+  <developer id="io.github.ispeakhue"><name>Papo Contributors</name></developer>
+  <url type="homepage">https://github.com/ISpeakHue/papo-gtk</url>
+  <url type="bugtracker">https://github.com/ISpeakHue/papo-gtk/issues</url>
+  <url type="vcs-browser">https://github.com/ISpeakHue/papo-gtk</url>
+  <provides><binary>papo-gtk</binary></provides>
+  <content_rating type="oars-1.1"/>
+  <releases><release version="1.0.0" date="2026-10-20"><description><p>Voice-channel text chat, improved media caching and rendering, updated backend integration, and modern Linux packages.</p></description></release></releases>
+</component>

@@ -10,6 +10,7 @@ import shutil
 import ssl
 import subprocess
 import sys
+import tomllib
 import sysconfig
 
 from media_policy import HARDWARE_PLUGINS, HOST_DRIVER
@@ -169,6 +170,7 @@ def main():
     for binary in (APPDIR / 'AppRun', APPDIR / 'usr/bin/papo-gtk', APPDIR / 'usr/bin/python3'):
         binary.chmod(0o755)
     (APPDIR / 'usr/share/papo-gtk/build-info.json').write_text(json.dumps({
+        'version': tomllib.loads((PROJECT / 'Cargo.toml').read_text())['package']['version'],
         'baseline': 'Fedora 44, x86_64', 'glibc_minimum': '2.43',
         'gtk': version('gtk4'), 'libadwaita': version('libadwaita-1'),
         'pango': version('pango'), 'fontconfig_build_version': version('fontconfig'),

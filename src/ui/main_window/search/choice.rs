@@ -12,6 +12,30 @@ pub(super) struct Choice {
     pub avatars:Option<Rc<RefCell<HashMap<Uuid,gtk::gdk::Texture>>>>,
     render:Rc<RefCell<Render>>,
 }
+
+#[cfg(test)]
+pub(super) fn exercise_scroll_reset(context:&gtk::glib::MainContext,input:relm4::Sender<MainWindowMsg>){
+    use crate::ui::chat::{actions::tests::descendants,performance::settle};
+    let users:Vec<UserSummary>=(0..100).map(|i|serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"username":format!("member{i:03}"),"nickname":format!("Member {i:03}"),"created_at":"2026-10-19T00:00:00Z"})).unwrap()).collect();
+    let choice=Choice::members("Qualquer autor",&users,&HashMap::new(),input,Uuid::new_v4());choice.set_active(Some(8));
+    let original:Vec<_>=(0..choice.labels.n_items()).map(|i|choice.labels.string(i).unwrap()).collect();let selected=choice.selection.selected();
+    let window=adw::Window::builder().default_width(360).default_height(100).content(&choice.widget).build();window.present();settle(context);choice.widget.popup();settle(context);
+    let popup=choice.widget.popover().unwrap();let widgets=descendants(popup.upcast_ref());
+    let query=widgets.iter().find_map(|w|w.downcast_ref::<gtk::SearchEntry>()).unwrap();
+    let scroll=widgets.iter().find_map(|w|w.downcast_ref::<gtk::ScrolledWindow>()).unwrap();let adjustment=scroll.vadjustment();
+    for filter in ["member073","member018","no-such-member","member098"]{
+        choice.list.scroll_to(70,gtk::ListScrollFlags::NONE,None);settle(context);assert!(adjustment.value()>300.0);
+        query.set_text(filter);settle(context);
+        assert_eq!(choice.list.model().unwrap().n_items(),u32::from(filter!="no-such-member"));
+        query.set_text("");settle(context);
+        let actual:Vec<_>=(0..choice.list.model().unwrap().n_items()).map(|i|choice.list.model().unwrap().item(i).and_downcast::<gtk::StringObject>().unwrap().string()).collect();
+        assert_eq!(actual,original,"clearing preserves the source ordering");
+        assert!(adjustment.value()<1.0,"clearing {filter} must reveal the start after layout, scroll={}",adjustment.value());
+        assert_eq!(choice.selection.selected(),selected,"filtering must not change the committed author");
+        assert!(gtk::prelude::RootExt::focus(&window).is_some_and(|w|w.is_ancestor(query)),"resetting the list must keep typing focus in its search field");
+    }
+    choice.widget.popdown();window.set_content(None::<&gtk::Widget>);window.close();settle(context);
+}
 impl Choice {
     pub fn new()->Self {
         let labels=gtk::StringList::new(&[]);
@@ -39,8 +63,13 @@ impl Choice {
             while let Some(child)=header.first_child(){header.remove(&child);}
             if let Some(value)=selection.selected_item().and_downcast::<gtk::StringObject>(){rows.borrow()(&header,&value.string());}
         });
-        let filter_changed=filter.clone();query.connect_changed(move |query|{
-            filter_changed.set_search(Some(&query.text()));scroll.vadjustment().set_value(0.0);
+        let filter_changed=filter.clone();let weak_list=list.downgrade();query.connect_changed(move |query|{
+            filter_changed.set_search(Some(&query.text()));
+            // Reset the list's anchor, not just today's adjustment value: GTK
+            // otherwise restores the matching row's offset during allocation.
+            if let Some(list)=weak_list.upgrade().filter(|l|l.model().is_some_and(|m|m.n_items()>0)){
+                list.scroll_to(0,gtk::ListScrollFlags::NONE,None);
+            }else{scroll.vadjustment().set_value(0.0);}
         });
         let weak_list=list.downgrade();query.connect_activate(move |_|{
             if let Some(list)=weak_list.upgrade().filter(|l|l.model().is_some_and(|m|m.n_items()>0)){list.emit_by_name::<()>("activate",&[&0u32]);}

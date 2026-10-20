@@ -4,6 +4,36 @@ Commands run from the repository root. See [Testing](../../TESTING.md) for setup
 Dated validation results describe their original fixture runs, rather than a
 current guarantee for every server, desktop or driver.
 
+## Text chat in voice channels
+
+The chat icon beside a voice channel opens its message history in the main chat
+area without joining a call or opening the microphone. With voice permission,
+the channel name keeps opening the call controls; **Entrar na chamada** remains
+explicit. Without voice permission, the name opens the allowed text chat. Text chats
+can be switched while a call stays connected, including chats in other rooms.
+The chat header identifies the voice channel and the selected message target
+is independent of the call-control highlight.
+
+Voice chats use the same message APIs, media rendering, replies, reactions,
+typing, history cache, unread markers and read acknowledgements as text channels.
+Search results and notifications can navigate directly to their messages.
+`read_channel` controls chat visibility, `send_messages` controls the composer,
+and `connect_voice` controls the call. Chat-only and connect-only channels remain
+available for their allowed purpose. Revoking one permission does not revoke the
+other; deletion and permission updates reconcile both views.
+
+```sh
+PAPO_UI_CASE=voice-chat dbus-run-session -- xvfb-run -a cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+PAPO_UI_CASE=voice-controls dbus-run-session -- xvfb-run -a cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+```
+
+The `voice-chat` fixture uses synthetic local messages and a test voice engine.
+It checks history, actual composer submission, live message delivery, navigation,
+read-only/connect-only access, call preservation and independent permission
+revocation. It does not open a microphone or connect to a real server.
+Validated on 2026-10-19: warning-free all-target compilation, 280 automated tests
+passed, and both focused GUI cases passed with GTK warnings treated as fatal.
+
 ## Moderation and voice acceptance
 
 Owners and members with `manage_server` can open **Moderação e auditoria**.

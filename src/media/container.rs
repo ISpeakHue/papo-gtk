@@ -45,7 +45,7 @@ fn webm(file:&mut File,length:u64)->Result<()>{
 #[cfg(test)]mod tests{
     use super::*;
     #[test]fn permits_fixtures_and_rejects_playlists_and_external_mp4_references(){
-        for path in ["tests/fixtures/chat-h264.mp4","tests/fixtures/chat-video.webm"]{validate(Path::new(path)).unwrap();}
+        for path in ["tests/fixtures/chat-h264.mp4","tests/fixtures/chat-video.webm","tests/fixtures/chat-video.mov"]{validate(Path::new(path)).unwrap();}
         let file=crate::api::features::TemporaryFile(std::env::temp_dir().join(format!("papo-container-{}",uuid::Uuid::new_v4())));
         std::fs::write(&file.0,b"#EXTM3U\nhttp://127.0.0.1/private\n").unwrap();assert!(validate(&file.0).is_err());
         let mut bytes=Vec::new();for (kind,data) in [(b"ftyp",b"isom0000".as_slice()),(b"url ",b"\0\0\0\0http://host".as_slice()),(b"mdat",b"data".as_slice())]{bytes.extend_from_slice(&(data.len() as u32+8).to_be_bytes());bytes.extend_from_slice(kind);bytes.extend_from_slice(data);}

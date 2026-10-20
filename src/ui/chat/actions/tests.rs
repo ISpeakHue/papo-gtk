@@ -11,19 +11,21 @@ const OLDER: &str = "12345678-1234-4234-8234-123456789abf";
 const EMOJI: &str = "12345678-1234-4234-8234-123456789ac0";
 pub(super) const DATE: &str = "2026-10-03T12:00:00Z";
 pub(crate) struct Backend {
+    pub(crate) discovery_notifications:Option<Vec<Value>>,pub(crate) search_results:Option<Vec<Value>>,
     pub(crate) webhooks:Vec<Value>,pub(crate) fail_webhooks:bool,
     pub(crate) range_media:bool,
     pub(crate) media_ranges:Vec<(String,String)>,
     pub(crate) fail_status:bool,
     pub(crate) attachment_thumbnails:std::collections::HashMap<String,Vec<u8>>,
     pub(crate) fail_channel_read:bool,
+    pub(crate) paged_messages:Vec<Value>,pub(crate) fail_newer:bool,
     pub(crate) channel_messages:std::collections::HashMap<String,Vec<Value>>,
     pub(crate) embed_values:std::collections::HashMap<String,Value>,
     pub(crate) peer_profile:Option<Value>,
     pub(crate) peer_banned:bool,pub(crate) fail_moderation:bool,pub(crate) fail_audit:bool,
     pub(crate) server_missing:bool, pub(crate) server_value:Value, pub(crate) admin_roles:Vec<Value>, pub(crate) admin_channels:Vec<Value>, pub(crate) dms:Vec<Value>, pub(crate) dm_messages:Vec<Value>, pub(crate) blocks:Vec<Value>, pub(crate) fail_role:bool, pub(crate) deny_dm:bool, pub(crate) fail_server:bool,
     pub(crate) message: Value, pub(crate) old: Value, pub(crate) groups: Vec<Value>, pub(crate) emojis: Vec<Value>, pub(crate) pinned: bool,
-    pub(crate) profile:Value, config:Value, channel_setting:Value, pub(crate) fail_profile:bool, fail_settings:bool, fail_upload:bool,
+    pub(crate) profile:Value, config:Value, channel_setting:Value, pub(crate) fail_profile:bool, fail_settings:bool, pub(crate) fail_upload:bool,
     fail_password:bool, fail_recovery:bool, fail_search:bool, pub(crate) fail_read:bool, revoked:bool, dropped:Vec<String>, pub(crate) read_notices:Vec<Value>,
     fail_edit: bool, deny_edit: bool, fail_emoji: bool, pub(crate) requests: Vec<(String, String, Value)>, restricted: bool,
 }
@@ -45,8 +47,8 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let api = ApiClient::new(&format!("http://{}", listener.local_addr().unwrap())).unwrap();
     let state = Arc::new(Mutex::new(Backend {
-        webhooks:vec![],fail_webhooks:false,range_media:false,media_ranges:vec![],attachment_thumbnails:Default::default(),
-        fail_status:false,fail_channel_read:false,channel_messages:Default::default(),
+        discovery_notifications:None,search_results:None,webhooks:vec![],fail_webhooks:false,range_media:false,media_ranges:vec![],attachment_thumbnails:Default::default(),
+        paged_messages:vec![],fail_newer:false,fail_status:false,fail_channel_read:false,channel_messages:Default::default(),
         embed_values:Default::default(),
         peer_banned:false,fail_moderation:true,fail_audit:false,
         server_missing:false,server_value:json!({"id":CHANNEL,"name":"Test","owner_id":USER,"public":true,"created_at":DATE}),admin_roles:vec![],admin_channels:vec![json!({"id":CHANNEL,"name":"general","type":"text","position":1,"created_at":DATE}),json!({"id":"12345678-1234-4234-8234-123456789ac2","name":"other","type":"text","position":2,"created_at":DATE})],dms:vec![],dm_messages:vec![],blocks:vec![],fail_role:true,deny_dm:false,fail_server:true,
@@ -113,6 +115,8 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
                         if b.fail_password{b.fail_password=false;(400,json!({"type":"https://test/invalid-param","detail":"password rejected"}))}else{(200,json!({"response":"saved"}))}
                     } else if route == "/auth/connected_devices" {(200,json!({"connections":([USER,EMOJI].into_iter().filter(|id|!b.dropped.iter().any(|d|d==id)).map(|id|json!({"id":id,"created_at":DATE,"expires_at":"2027-01-01T00:00:00Z"})).collect::<Vec<_>>())}))}
                     else if route == "/auth/drop_connection" {let id=body["connection_id"].as_str().unwrap().to_owned();b.revoked=id==USER||id=="ALL";b.dropped.push(id);(200,json!({"dropped":1}))}
+                    else if route == "/search"&&b.search_results.is_some(){(200,json!({"results":b.search_results,"has_more":false}))}
+                    else if route == format!("/users/{USER}/notifications")&&b.discovery_notifications.is_some(){(200,json!({"notifications":b.discovery_notifications,"has_more":false}))}
                     else if route == "/search" {
                         if b.fail_search{b.fail_search=false;(500,json!({"detail":"Search failed"}))}else{
                             let item=|message:&Value|json!({"type":"message","id":message["id"],"content":message["content"],"channel_id":CHANNEL,"channel_name":"general","author_id":USER,"author_username":"alice","created_at":message["created_at"]});
@@ -127,7 +131,9 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
                         if b.fail_channel_read{b.fail_channel_read=false;(500,json!({"detail":"Channel read failed"}))}
                         else{(204,Value::Null)}
                     } else if route == "/messages" && method=="POST" {
-                        if b.fail_upload{b.fail_upload=false;(500,json!({"detail":"Upload failed"}))}else{let mut message=b.message.clone();message["id"]=json!("12345678-1234-4234-8234-123456789ac1");if body.as_str().is_some_and(|s|s.contains("12345678-1234-4234-8234-123456789ac3")){message["channel_id"]=json!("12345678-1234-4234-8234-123456789ac3");message["content"]=json!("DM test");b.dm_messages.push(message.clone());}(201,message)}
+                        if b.fail_upload{b.fail_upload=false;(500,json!({"detail":"Upload failed"}))}else{let mut message=b.message.clone();message["id"]=json!("12345678-1234-4234-8234-123456789ac1");if body.as_str().is_some_and(|s|s.contains("12345678-1234-4234-8234-123456789ac3")){message["channel_id"]=json!("12345678-1234-4234-8234-123456789ac3");message["content"]=json!("DM test");b.dm_messages.push(message.clone());}
+                        if let Some(target)=b.channel_messages.keys().find(|id|body.as_str().is_some_and(|s|s.contains(id.as_str()))).cloned(){message["channel_id"]=json!(target);message["content"]=json!("Voice sent fixture");b.channel_messages.get_mut(&target).unwrap().push(message.clone());}
+                        (201,message)}
                     } else if route == "/users/settings" && method=="PUT" {
                         if b.fail_settings{b.fail_settings=false;(500,json!({"detail":"Settings failed"}))}else{b.config=body["config"].clone();(200,json!({"user_id":USER,"version":1,"config":b.config,"updated_at":DATE}))}
                     } else if route == format!("/users/{USER}/profile") {(200,b.profile.clone())}
@@ -166,8 +172,25 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
                         if b.deny_dm||!b.blocks.is_empty(){(403,json!({"type":"https://test/dm-blocked","detail":"DM blocked"}))}else{(200,json!({"channel_id":"12345678-1234-4234-8234-123456789ac3","messages":b.dm_messages,"has_more":false}))}
                     }
                     else if b.attachment_thumbnails.contains_key(route){(200,Value::Null)}
+                    else if route.ends_with("/messages")&&!b.paged_messages.is_empty(){
+                        let url=reqwest::Url::parse(&format!("http://local{path}")).unwrap();let q:std::collections::HashMap<_,_>=url.query_pairs().collect();
+                        let ascending=q.get("order").is_some_and(|v|v=="asc");
+                        if ascending&&b.fail_newer{(500,json!({"detail":"Synthetic forward failure"}))}else{
+                            let cursor=q.get("since").map(|at|(chrono::DateTime::parse_from_rfc3339(at).unwrap().with_timezone(&chrono::Utc),Uuid::parse_str(q.get("last_id").unwrap()).unwrap()));
+                            let key=|m:&Value|(chrono::DateTime::parse_from_rfc3339(m["created_at"].as_str().unwrap()).unwrap().with_timezone(&chrono::Utc),Uuid::parse_str(m["id"].as_str().unwrap()).unwrap());
+                            let mut page:Vec<_>=b.paged_messages.iter().filter(|m|cursor.is_none_or(|c|if ascending{key(m)>c}else{key(m)<c})).cloned().collect();
+                            page.sort_by_key(key);if !ascending{page.reverse();}
+                            let limit=q.get("limit").and_then(|v|v.parse::<usize>().ok()).unwrap_or(30);let more=page.len()>limit;page.truncate(limit);
+                            (200,json!({"channel_id":route.split('/').nth(2).unwrap(),"messages":page,"has_more":more}))
+                        }
+                    }
                     else if route.ends_with("/messages")&&b.channel_messages.contains_key(route.split('/').nth(2).unwrap_or("")){
                         let id=route.split('/').nth(2).unwrap();(200,json!({"channel_id":id,"messages":b.channel_messages[id],"has_more":false}))
+                    }
+                    else if route.ends_with("/messages")&&path.contains("order=asc"){
+                        let start=chrono::DateTime::parse_from_rfc3339(b.old["created_at"].as_str().unwrap()).unwrap();
+                        let following:Vec<_>=(1..=30).map(|i|{let mut m=b.old.clone();m["id"]=json!(Uuid::from_u128(1000+i));m["created_at"]=json!(start+chrono::Duration::seconds(i as i64));m}).collect();
+                        (200,json!({"channel_id":CHANNEL,"messages":following,"has_more":true}))
                     }
                     else if route.ends_with("/messages") {
                         (200,json!({"channel_id":CHANNEL,"messages":if path.contains("last_id") {vec![b.old.clone()]} else {vec![b.message.clone()]},"has_more":!path.contains("last_id")}))

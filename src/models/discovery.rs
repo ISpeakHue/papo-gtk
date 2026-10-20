@@ -49,6 +49,8 @@ pub struct SearchResult {
     pub channel_name: String,
     pub author_id: Option<Uuid>,
     pub author_username: Option<String>,
+    pub webhook_id:Option<Uuid>,
+    pub external_author:Option<super::ExternalAuthor>,
     pub created_at: DateTime<Utc>,
     #[expect(dead_code, reason = "Retained search score; result ordering comes from the backend.")]
     pub score: Option<f64>,
@@ -62,6 +64,8 @@ pub struct NotificationSummary {
     pub message_id: Uuid,
     pub channel_id: Uuid,
     pub author_id: Option<Uuid>,
+    pub webhook_id:Option<Uuid>,
+    pub external_author:Option<super::ExternalAuthor>,
     pub message_content: String,
     pub read: bool,
     pub created_at: DateTime<Utc>,
@@ -77,4 +81,8 @@ pub struct NotificationEvent {
     pub user_id: Option<Uuid>,
     pub message_id: Uuid,
     pub message_content: String,
+}
+
+impl SearchResult {
+    pub fn external(&self)->Option<&super::ExternalAuthor>{if self.author_id.is_none()&&self.webhook_id.is_some(){self.external_author.as_ref()}else{None}}
 }

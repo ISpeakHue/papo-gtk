@@ -80,14 +80,15 @@ Later builds reuse the container and `target/appimage-fedora44` Cargo cache.
 The AppImage builder 1.9.1 and type-2 runtime are checksum verified. No GTK or
 libadwaita downgrade or source rebuild is performed.
 
-The UTC build date distinguishes the new package from earlier preview builds.
-Set `PAPO_BUILD_LABEL` to another letters/numbers/underscore/hyphen label if needed.
-Outputs in ignored `dist/` are:
+Versioned release outputs in ignored `dist/` are:
 
-- `Papo-0.1.0-preview-<date>-x86_64.AppImage`
+- `Papo-1.0.0-x86_64.AppImage`
 - Its `.sha256` checksum
-- `papo-gtk-0.1.0-preview-<date>-source.tar.gz`
-- `Papo-0.1.0-<date>-README.txt`, instructions for testers
+- `papo-gtk-1.0.0-source.tar.gz`
+- `Papo-1.0.0-AppImage-README.txt`, installation and runtime notes
+
+Version 1.0.0 is available from [GitHub Releases](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.0.0).
+The package retains the modern desktop/font policy described above.
 
 The AppDir is assembled under `target/appimage-fedora44/AppDir`, containing only
 build outputs and selected builder resources. Personal settings, caches, tokens
@@ -99,9 +100,9 @@ system Python interpreter; the AppImage sets its own `PAPO_PYTHON`.
 Make the new AppImage executable and run:
 
 ```sh
-./Papo-0.1.0-preview-<date>-x86_64.AppImage --runtime-check
-./Papo-0.1.0-preview-<date>-x86_64.AppImage --font-check
-./Papo-0.1.0-preview-<date>-x86_64.AppImage
+./Papo-1.0.0-x86_64.AppImage --runtime-check
+./Papo-1.0.0-x86_64.AppImage --font-check
+./Papo-1.0.0-x86_64.AppImage
 ```
 
 The runtime check uses synthetic audio/video and validates imports, codecs,
@@ -112,12 +113,19 @@ sample window and reports the backend, font match, renderer and scale; add
 `--snapshot /tmp/papo-fonts.png` to save its rendering.
 
 When FUSE is unavailable, put `--appimage-extract-and-run` before app arguments.
-Share the dated AppImage, checksum, tester instructions and matching source
+Share the versioned AppImage, checksum, tester instructions and matching source
 archive. Testers enter their own backend URL and credentials. A backend is not
 included. Real calls/devices and the friends' GNOME/KDE setups need their own
 checks; desktop configuration and graphics drivers can still affect rendering.
 
 ## Validation
+
+Version 1.0.0 (2026-10-20): 280 regular tests and six packaging checks passed.
+The package passed bundled runtime checks and actual isolated MP4/MOV/WebM
+poster/animation conversion. Native Wayland startup and font rendering passed
+on a private display with temporary settings. The upstream type-2 runtime was
+refreshed and checksum verified for this release.
+
 
 Validation for the 2026-10-12 build: 186 release tests passed in the Fedora builder.
 Mapped mention, avatar, clipboard and chat regressions passed with the bundle.

@@ -91,7 +91,7 @@ jobs:
         run: PAPO_UI_CASE=backend-gifs dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
       - name: Check viewport avatars, recycled search, motion and reconnect recovery
         run: |
-          for scenario in avatar-viewport search-recycling emoji-notifications notification-window recovery media-loading recent-media; do
+          for scenario in backend-contracts voice-chat avatar-viewport search-recycling emoji-notifications notification-window recovery media-loading recent-media; do
             PAPO_UI_CASE="$scenario" dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
           done
       - name: Check staged attachment previews and clipboard uploads

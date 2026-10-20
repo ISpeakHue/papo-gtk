@@ -12,13 +12,14 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let mut reply=latest.clone();reply.id=Uuid::new_v4();reply.reply_to=Some(latest.id);reply.content=Some("Reply".into());reply.created_at+=chrono::Duration::seconds(1);
     let chat=ChatModel::builder().launch(ChatInit{api:Some(api.clone()),active_channel:Some(target),messages:vec![latest.clone(),reply.clone()],user_id:Some(user),..Default::default()}).detach();
     chat.emit(ChatMsg::SetAccess{user_id:user,access:crate::models::Access::direct()});
-    let texture=crate::media::PreparedImage{width:24,height:24,pixels:vec![255;24*24*4]}.texture();
+    let texture=crate::media::PreparedImage{width:64,height:32,pixels:vec![255;64*32*4]}.texture();
     {let mut state=chat.state().get_mut();state.model.actions.emoji_names.insert("dance".into(),emoji);state.model.actions.textures.insert(emoji,texture.clone());}
     let host=adw::Window::builder().default_width(960).default_height(680).content(chat.widget()).build();host.present();
     chat.emit(ChatMsg::SetReply(Some(latest.clone())));performance::settle(context);
     let previews:Vec<_>=descendants(host.upcast_ref()).into_iter().filter_map(|w|w.downcast::<gtk::TextView>().ok()).filter(|v|v.widget_name()=="reply-preview-text").collect();
     assert_eq!(previews.len(),2,"composer and message reference both use rich previews");
-    for preview in &previews{let b=preview.buffer();assert!(b.slice(&b.start_iter(),&b.end_iter(),true).ends_with(" end"),"available width, not a character cutoff, controls clipping");let mut iter=b.start_iter();let mut paints=0;loop{paints+=usize::from(iter.paintable().is_some());if !iter.forward_char(){break;}}assert_eq!(paints,1);assert!(b.text(&b.start_iter(),&b.end_iter(),false).contains("😄"));}
+    for preview in &previews{let b=preview.buffer();assert!(b.slice(&b.start_iter(),&b.end_iter(),true).ends_with(" end"),"available width, not a character cutoff, controls clipping");let mut iter=b.start_iter();let mut paints=0;loop{paints+=usize::from(iter.paintable().is_some());if let Some(p)=iter.paintable(){let metrics=preview.pango_context().metrics(None,None);let height=(metrics.ascent()+metrics.descent()+pango::SCALE-1)/pango::SCALE;assert!(p.intrinsic_height()<=height);let next=iter.clone();let rect=preview.iter_location(&next);assert!(rect.height()<=preview.parent().unwrap().height(),"emoji and adjacent glyphs fit the single-line preview");}if !iter.forward_char(){break;}}assert_eq!(paints,1);assert!(b.text(&b.start_iter(),&b.end_iter(),false).contains("😄"));}
+    assert_eq!(texture.height(),32,"compact previews must not resize the shared chat texture");
     let before=previews[0].parent().unwrap().width();host.set_default_size(600,680);until(context,||host.width()<700);assert!(previews[0].parent().unwrap().width()<before);
     // Recently viewed images outside the opening batch survive a visit elsewhere.
     let mut resident=transfers::resident::Cache::default();let key=Uuid::new_v4();let owners=std::collections::HashSet::from([latest.id]);

@@ -422,7 +422,7 @@ impl ChatModel {
                 if !self.access.read{return;}
                 let(Some(api),Some(channel))=(self.actions.api.clone(),self.active_channel.as_ref().map(|c|c.id()))else{return;};
                 if !self.history_detached&&self.history_ready{self.conversations.store(channel,std::mem::take(&mut self.history),self.has_more);}
-                self.reconcile_request=None;self.initial_read=None;self.history_detached=true;self.history_ready=false;self.history.select(channel);
+                self.newer=Default::default();self.reconcile_request=None;self.initial_read=None;self.history_detached=true;self.history_ready=false;self.history.select(channel);
                 let request=Uuid::new_v4();self.history.begin(request);self.history_error=None;
                 self.actions.navigation=Some(target.id);self.actions.highlight=None;
                 let epoch=self.actions.epoch;let input=sender.input_sender().clone();

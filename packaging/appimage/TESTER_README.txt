@@ -1,11 +1,11 @@
-Papo GTK — modern Linux x86_64 test build
+Papo GTK @VERSION@ — modern Linux x86_64 release
 
-File: Papo-@VERSION@-preview-@BUILD@-x86_64.AppImage
+File: Papo-@VERSION@-x86_64.AppImage
 
 1. Make the file executable in Properties/Permissions, or run:
-   chmod +x Papo-@VERSION@-preview-@BUILD@-x86_64.AppImage
+   chmod +x Papo-@VERSION@-x86_64.AppImage
 2. Double-click it, or run:
-   ./Papo-@VERSION@-preview-@BUILD@-x86_64.AppImage
+   ./Papo-@VERSION@-x86_64.AppImage
 3. Enter the backend API URL, for example https://api.cyberasilo.online,
    and your own account/server credentials.
 
@@ -39,13 +39,13 @@ adds a line break. Long text wraps and expands the editor before scrolling
 vertically. Enter should commit an active input-method candidate before sending.
 
 Without FUSE:
-   ./Papo-@VERSION@-preview-@BUILD@-x86_64.AppImage --appimage-extract-and-run
+   ./Papo-@VERSION@-x86_64.AppImage --appimage-extract-and-run
 
 Runtime check (no microphone, camera or screen picker):
-   ./Papo-@VERSION@-preview-@BUILD@-x86_64.AppImage --runtime-check
+   ./Papo-@VERSION@-x86_64.AppImage --runtime-check
 Font/backend/scaling diagnostics (brief sample window):
-   ./Papo-@VERSION@-preview-@BUILD@-x86_64.AppImage --font-check
-   ./Papo-@VERSION@-preview-@BUILD@-x86_64.AppImage --font-check --snapshot /tmp/papo-fonts.png
+   ./Papo-@VERSION@-x86_64.AppImage --font-check
+   ./Papo-@VERSION@-x86_64.AppImage --font-check --snapshot /tmp/papo-fonts.png
 Use --appimage-extract-and-run before these arguments when FUSE is unavailable.
 
 If fonts still look blurry, report the --font-check output, desktop version,
@@ -54,6 +54,6 @@ Please also test login, messages, embeds, images, clipboard uploads, voice,
 cameras and screen sharing using your own accounts.
 
 The frontend is GPL-3.0-only. Matching source is in
-papo-gtk-@VERSION@-preview-@BUILD@-source.tar.gz. Runtime licenses, exact Fedora/RPM
+papo-gtk-@VERSION@-source.tar.gz. Runtime licenses, exact Fedora/RPM
 Fusion package versions and build information are inside usr/share/licenses and
 usr/share/papo-gtk. Source links and the build recipe are in APPIMAGE.md.

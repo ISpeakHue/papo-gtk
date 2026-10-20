@@ -1,15 +1,25 @@
 use super::*;
 
 impl ApiClient {
-    pub async fn messages_around(&self,channel:Uuid,target:MessageCursor)->Result<MessageListResponse>{
+    pub async fn messages_around(&self,channel:Uuid,target:MessageCursor)->Result<(MessageListResponse,bool)>{
         let inclusive=if let Some(id)=target.id.as_u128().checked_add(1){MessageCursor{created_at:target.created_at,id:Uuid::from_u128(id)}}else{MessageCursor{created_at:target.created_at.checked_add_signed(chrono::Duration::microseconds(1)).context("Data fora do intervalo")?,id:Uuid::nil()}};
         let mut before=self.message_page(channel,Some(inclusive),30).await?;
-        let mut url=self.url(&format!("/channels/{channel}/messages"));
-        url.query_pairs_mut().append_pair("order","asc").append_pair("limit","30").append_pair("since",&target.created_at.to_rfc3339()).append_pair("last_id",&target.id.to_string());
-        let after:MessageListResponse=Self::decode(self.inner.get(url).send_paced(&self.requests).await?,"messages").await?;
-        anyhow::ensure!(after.channel_id==channel,"Mensagens retornadas para outro canal");
+        let after=self.newer_page(channel,target,30).await?;
+        let has_newer=after.has_more;
         anyhow::ensure!(before.messages.iter().any(|m|m.id==target.id),"A mensagem foi removida ou não está mais acessível");
-        before.messages.extend(after.messages);before.messages.sort_by_key(|m|(m.created_at,m.id));before.messages.dedup_by_key(|m|m.id);Ok(before)
+        before.messages.extend(after.messages);before.messages.sort_by_key(|m|(m.created_at,m.id));before.messages.dedup_by_key(|m|m.id);Ok((before,has_newer))
+    }
+
+    pub async fn messages_after(&self,channel:Uuid,cursor:MessageCursor)->Result<MessageListResponse>{
+        self.newer_page(channel,cursor,100).await
+    }
+    async fn newer_page(&self,channel:Uuid,cursor:MessageCursor,limit:u32)->Result<MessageListResponse>{
+        let mut url=self.url(&format!("/channels/{channel}/messages"));
+        url.query_pairs_mut().append_pair("order","asc").append_pair("limit",&limit.to_string()).append_pair("since",&cursor.created_at.to_rfc3339()).append_pair("last_id",&cursor.id.to_string());
+        let page:MessageListResponse=Self::decode(self.inner.get(url).send_paced(&self.requests).await?,"messages").await?;
+        anyhow::ensure!(page.channel_id==channel&&page.messages.iter().all(|m|m.channel_id==channel&&(m.created_at,m.id)>(cursor.created_at,cursor.id)),"Página de mensagens seguintes inválida");
+        anyhow::ensure!(!page.has_more||!page.messages.is_empty(),"Página de mensagens seguintes sem progresso");
+        Ok(page)
     }
 
     /// Small, read-only page including the pending message. The successor UUID

@@ -302,3 +302,40 @@ pagination and explicit date filters continue to run on the backend.
 Search input and filter changes debounce for 350 ms; changing or closing the
 query aborts prior work and rejects stale responses. Result widgets stay
 recycled while using the chat's shared emoji-aware renderer.
+
+## Historical-window retention and forward paging (2026-10-19)
+
+Dated search jumps now retain both pagination directions. Approaching the bottom
+fetches the next ascending page with an exclusive timestamp/UUID cursor. Requests
+are serialized with older-page loads, stale window responses are rejected, and a
+failed page exposes an explicit retry. Reaching the live head reconciles changes
+received while browsing the older range. The reading anchor stays in place when
+pages append; **Mais recentes** still restores the cached head immediately.
+
+Active history keeps a contiguous window around the reader: at most 600 message
+records and a target of 16 MiB of accounted metadata. A single oversized record
+can exceed that target. Removed ranges can be fetched again in either direction.
+The latest head is saved separately before releasing newer records; the existing
+200-record/eight-channel/16 MiB conversation-cache limits remain. Dropped records
+also release associated geometry, failure and provider bookkeeping.
+
+Recent opening batches keep priority in the existing bounded media caches.
+Historical decoded previews have an additional shared 32 MiB/64-entry allowance
+and expire after two minutes without cache use. Historical compressed input has
+a 64 MiB/192-entry allowance and expires after five minutes. Regular maintenance
+also releases expired entries while the app is idle. The overall 192 MiB limits
+remain ceilings for each cache, including protected recent batches; they are
+allocated on demand. Head priority follows the actual channel head, rather than
+the end of a temporary historical search window. Full animations and players
+keep their existing offscreen teardown rules. No private media is persisted.
+
+These are ownership/accounting bounds, not a guarantee about process RSS: active
+widgets, open viewers, decoder work, GTK and the graphics allocator also use
+memory. Synthetic tests check contiguous bidirectional paging, retry/stale-result
+handling, metadata bounds, historical cache expiry and recent-channel reuse.
+
+Validation: all-target compilation passed without warnings; 276 automated tests
+passed (four native/display tests skipped by that command). Seven GTK cases
+passed on a private display: history-navigation, report10, recent-media,
+retention, channel-cache, search-recycling and recovery. These use synthetic
+messages and media, rather than a live-server RSS benchmark.

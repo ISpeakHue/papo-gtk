@@ -11,7 +11,7 @@ use crate::models::{Channel, ChannelType, DirectConversation, Access, Server, Us
 #[derive(Debug,Clone,PartialEq,Eq)]
 pub struct VoiceParticipant{pub id:Uuid,pub name:String,pub muted:bool,pub speaking:bool,pub camera:bool,pub screen:bool}
 #[derive(Debug,Clone,PartialEq,Eq)]
-pub struct VoiceRoom{pub id:Uuid,pub members:Vec<VoiceParticipant>}
+pub struct VoiceRoom{pub id:Uuid,pub can_chat:bool,pub can_connect:bool,pub members:Vec<VoiceParticipant>}
 
 #[derive(Debug, Clone)]
 pub struct SidebarInit {
@@ -241,7 +241,7 @@ impl Component for SidebarModel {
     }
 
     fn init(init: Self::Init, root: Self::Root, sender: ComponentSender<Self>) -> ComponentParts<Self> {
-        let first_channel_id = init.channels.iter().find(|channel| matches!(channel.channel_type, None | Some(ChannelType::Text))).map(|c| c.id);
+        let first_channel_id = init.channels.iter().find(|channel| channel.supports_messages()).map(|c| c.id);
 
         let mut model = SidebarModel {
             current_user: init.current_user,
@@ -309,14 +309,15 @@ impl Component for SidebarModel {
             SidebarMsg::IconReady{request,image}=>{if self.icon_request==Some(request){self.icon_request=None;self.icon_job=None;if let Some(image)=image{widgets.server_icon.set_paintable(Some(&image.texture()));}else{widgets.server_icon.set_icon_name(Some("network-server-symbolic"));}}},
             SidebarMsg::SetChannels(channels) => {
                 if !channels.iter().any(|channel| Some(channel.id) == self.selected_channel_id) && !self.direct.iter().any(|d|Some(d.id)==self.selected_channel_id) {
-                    self.selected_channel_id = channels.iter().find(|channel| matches!(channel.channel_type, None | Some(ChannelType::Text))).map(|channel| channel.id);
+                    self.selected_channel_id = channels.iter().find(|channel| channel.supports_messages()).map(|channel| channel.id);
                 }
                 self.channels = channels;
                 rebuild_channel_list(&widgets.channels_list, &self.channels, self.selected_channel_id, self.selected_voice_id, &self.voice_rooms,&self.avatars,self.show_avatars,&self.channel_counts,&mut self.channel_rows,&sender);
             }
             SidebarMsg::SetSelection(id)=>{self.direct_mode=self.direct.iter().any(|d|d.id==id);self.selected_channel_id=Some(id);self.rebuild_direct(&widgets.direct_list,&sender);rebuild_channel_list(&widgets.channels_list,&self.channels,self.selected_channel_id,self.selected_voice_id,&self.voice_rooms,&self.avatars,self.show_avatars,&self.channel_counts,&mut self.channel_rows,&sender);}
-            SidebarMsg::VoiceSelect(id)=>{if self.channels.iter().any(|c|c.id==id&&c.channel_type==Some(ChannelType::Voice)){let _=sender.output(SidebarOutput::VoiceSelect(id));}},
+            SidebarMsg::VoiceSelect(id)=>{if let Some(room)=self.voice_rooms.iter().find(|r|r.id==id){if room.can_connect{let _=sender.output(SidebarOutput::VoiceSelect(id));}else if room.can_chat{sender.input(SidebarMsg::SelectChannel(id));}}rebuild_channel_list(&widgets.channels_list,&self.channels,self.selected_channel_id,self.selected_voice_id,&self.voice_rooms,&self.avatars,self.show_avatars,&self.channel_counts,&mut self.channel_rows,&sender);},
             SidebarMsg::SelectChannel(id) => {
+                if !self.channels.iter().any(|c|c.id==id&&c.supports_messages())||self.voice_rooms.iter().any(|r|r.id==id&&!r.can_chat){return;}
                 self.direct_mode=false;
                 self.selected_channel_id = Some(id);
                 if let Some(channel) = self.channels.iter().find(|c| c.id == id).cloned() {
@@ -325,7 +326,7 @@ impl Component for SidebarModel {
                 rebuild_channel_list(&widgets.channels_list, &self.channels, self.selected_channel_id, self.selected_voice_id, &self.voice_rooms,&self.avatars,self.show_avatars,&self.channel_counts,&mut self.channel_rows,&sender);
                 self.rebuild_direct(&widgets.direct_list,&sender);
             }
-            SidebarMsg::MarkChannelRead(id)=>{if self.channels.iter().any(|c|c.id==id&&!matches!(c.channel_type,Some(ChannelType::Category|ChannelType::Voice))){let _=sender.output(SidebarOutput::MarkChannelRead(id));}},
+            SidebarMsg::MarkChannelRead(id)=>{if self.channels.iter().any(|c|c.id==id&&c.supports_messages()&&!self.voice_rooms.iter().any(|r|r.id==id&&!r.can_chat)){let _=sender.output(SidebarOutput::MarkChannelRead(id));}},
             SidebarMsg::LogoutClicked => {
                 if let Some(dialog)=&self.logout_dialog {
                     dialog.present(Some(_root));
@@ -366,7 +367,8 @@ fn rebuild_channel_list(
         let is_category = matches!(channel.channel_type, Some(ChannelType::Category));
         let is_voice = matches!(channel.channel_type, Some(ChannelType::Voice));
 
-        let key=format!("channel-{}",channel.id);let signature=format!("{}|{:?}|{:?}",channel.name,channel.channel_type,(channel.has_unread(),counts.get(&channel.id)));
+        let room=rooms.iter().find(|r|r.id==channel.id);let can_chat=!is_voice||room.is_some_and(|r|r.can_chat);let can_connect=is_voice&&room.is_some_and(|r|r.can_connect);
+        let key=format!("channel-{}",channel.id);let signature=format!("{}|{:?}|{:?}|{can_chat}|{can_connect}",channel.name,channel.channel_type,(channel.has_unread(),counts.get(&channel.id)));
         if let Some((old_signature,row))=cache.get(&key).filter(|(old,_)|*old==signature){
             desired.push((old_signature.clone(),row.clone()));
         } else {
@@ -374,9 +376,9 @@ fn rebuild_channel_list(
         row.set_widget_name(&format!("channel-{}",channel.id));
         if is_voice{row.add_css_class("papo-voice-channel");}
         row.set_activatable(!is_category);
-        row.set_selectable(!is_category && !is_voice);
+        row.set_selectable(!is_category && can_chat);
         if channel.has_unread() {row.add_css_class("papo-channel-unread");}
-        if is_voice { row.set_tooltip_text(Some("Abrir controles de voz")); }
+        if is_voice { row.set_tooltip_text(Some(if can_connect{"Abrir controles de voz"}else{"Abrir chat da chamada"})); }
 
         let box_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         box_row.set_margin_top(6);
@@ -425,9 +427,13 @@ fn rebuild_channel_list(
             }
         }
 
+        if is_voice&&can_chat{
+            let chat=gtk::Button::from_icon_name("chat-bubbles-text-symbolic");chat.add_css_class("flat");chat.set_widget_name(&format!("voice-chat-{}",channel.id));chat.set_tooltip_text(Some("Abrir chat da chamada"));chat.update_property(&[gtk::accessible::Property::Label("Abrir chat da chamada")]);
+            let input=sender.input_sender().clone();let id=channel.id;chat.connect_clicked(move |_|{let _=input.send(SidebarMsg::SelectChannel(id));});box_row.append(&chat);
+        }
         row.set_child(Some(&box_row));
 
-        if !is_category&&!is_voice{
+        if !is_category&&can_chat{
             let click=gtk::GestureClick::new();click.set_button(3);let weak=row.downgrade();let input=sender.input_sender().clone();let id=channel.id;
             click.connect_pressed(move |gesture,_,x,y|{
                 let Some(row)=weak.upgrade()else{return;};gesture.set_state(gtk::EventSequenceState::Claimed);
@@ -537,7 +543,7 @@ Abra o perfil de um membro para enviar uma mensagem."));empty.set_wrap(true);emp
     drop(permit);until(context,||sidebar.model().icon_request.is_none());let texture=icon.paintable().and_downcast::<gtk::gdk::Texture>().unwrap();assert!(texture.width()<=64&&texture.height()<=64,"a 2048-pixel source must not remain a full-size texture");
     sidebar.emit(SidebarMsg::SetServer(server.clone()));pump(context);let pending=sidebar.model().icon_request.unwrap();let mut removal=server;removal.icon_blob=None;sidebar.emit(SidebarMsg::SetServer(removal));pump(context);sidebar.emit(SidebarMsg::IconReady{request:pending,image:Some(crate::media::PreparedImage{width:1,height:1,pixels:vec![0;4]})});pump(context);assert_eq!(icon.icon_name().as_deref(),Some("network-server-symbolic"));
     let peers:Vec<Uuid>=(0..8).map(|_|Uuid::new_v4()).collect();let dms=peers.iter().enumerate().map(|(i,id)|serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"user":{"id":id,"username":format!("peer-{i}"),"created_at":created},"created_at":created,"unread_count":0})).unwrap()).collect();
-    sidebar.emit(SidebarMsg::SetDirect(dms));sidebar.emit(SidebarMsg::VoiceRooms{selected:None,rooms:vec![VoiceRoom{id:voice,members:peers.iter().enumerate().map(|(i,id)|VoiceParticipant{id:*id,name:format!("peer-{i}"),muted:false,speaking:false,camera:false,screen:false}).collect()}]});pump(context);
+    sidebar.emit(SidebarMsg::SetDirect(dms));sidebar.emit(SidebarMsg::VoiceRooms{selected:None,rooms:vec![VoiceRoom{id:voice,can_chat:true,can_connect:true,members:peers.iter().enumerate().map(|(i,id)|VoiceParticipant{id:*id,name:format!("peer-{i}"),muted:false,speaking:false,camera:false,screen:false}).collect()}]});pump(context);
     let before:Vec<_>=descendants(sidebar.widget().upcast_ref()).into_iter().filter(|w|(w.is::<gtk::Button>()&&w.widget_name().starts_with("dm-"))||(w.is::<gtk::ListBoxRow>()&&w.widget_name().starts_with("voice-member-"))).collect();assert_eq!(before.len(),16);
     let textures=peers.iter().map(|id|(*id,crate::media::PreparedImage{width:8,height:8,pixels:vec![255;256]}.texture())).collect();sidebar.emit(SidebarMsg::PeerAvatars(textures));pump(context);
     let after:Vec<_>=descendants(sidebar.widget().upcast_ref()).into_iter().filter(|w|(w.is::<gtk::Button>()&&w.widget_name().starts_with("dm-"))||(w.is::<gtk::ListBoxRow>()&&w.widget_name().starts_with("voice-member-"))).collect();assert_eq!(before,after,"avatar batches preserve DM and voice rows");

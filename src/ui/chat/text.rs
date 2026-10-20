@@ -34,13 +34,13 @@ pub(super) fn parts_index(text:&str,names:&HashMap<String,Uuid>)->Vec<Part>{
 }
 
 pub(super) fn widget(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions)->gtk::TextView{
-    build(text,users,actions,None)
+    build(text,users,actions,None,false)
 }
 pub(super) fn with_profiles(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions,open:impl Fn(Uuid)+'static)->gtk::TextView{
-    build(text,users,actions,Some(std::rc::Rc::new(open)))
+    build(text,users,actions,Some(std::rc::Rc::new(open)),false)
 }
 #[derive(Clone)]enum Target {Link(String),Profile(Uuid),Emoji{offset:i32,details:emoji_details::Details},Spoiler{tag:gtk::TextTag,shown:std::rc::Rc<std::cell::Cell<bool>>,images:std::rc::Rc<std::cell::RefCell<Vec<(i32,gtk::gdk::Paintable,Option<crate::media::animation::Animation>)>>>}}
-fn build(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions,open:Option<std::rc::Rc<dyn Fn(Uuid)>>)->gtk::TextView{
+fn build(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions,open:Option<std::rc::Rc<dyn Fn(Uuid)>>,compact:bool)->gtk::TextView{
     let view=gtk::TextView::new();view.set_editable(false);view.set_cursor_visible(false);view.set_accepts_tab(false);
     view.set_wrap_mode(gtk::WrapMode::WordChar);view.set_vexpand(false);
     view.add_css_class("papo-message-text");
@@ -48,6 +48,7 @@ fn build(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions,open:Option
     // grouped, newly appended row otherwise gives it zero pixels, so validation
     // and its natural-height update wait until the next scroll/input event.
     let metrics=view.pango_context().metrics(None,None);
+    let emoji_size=compact.then(||((metrics.ascent()+metrics.descent()+pango::SCALE-1)/pango::SCALE).max(1));
     view.set_height_request(((metrics.ascent()+metrics.descent()+pango::SCALE-1)/pango::SCALE).max(1));
     // WidgetPaintable observes allocation changes, including width changes on
     // resize. GtkTextView's own layout manager bypasses a size_allocate override.
@@ -81,6 +82,7 @@ fn build(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions,open:Option
             Part::Emoji(id,name)=>{
                 let start=iter.offset();let details=emoji_details::Details::custom(id,name.clone(),actions);
                 if let Some(paintable)=actions.emoji_paintable(id){
+                    let paintable=emoji_size.map_or_else(||paintable.clone(),|size|crate::media::inline::fit(&paintable,size));
                     let offset=iter.offset();let animation=actions.animations.get(&id);
                     if run.style.spoiler{
                         let(w,h)=(paintable.intrinsic_width().clamp(1,128),paintable.intrinsic_height().clamp(1,128));let color=gtk::gdk::RGBA::parse(shade).unwrap();
@@ -188,7 +190,7 @@ fn target_at(view:&gtk::TextView,targets:&[(i32,i32,Target)],x:f64,y:f64)->Optio
         .or_else(||targets.iter().filter(hit).find(|(_,_,target)|!matches!(target,Target::Spoiler{..}))).map(|(_,_,target)|target.clone())
 }
 pub(super) fn compact(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions)->gtk::ScrolledWindow{
-    let view=widget(&excerpt(text),users,actions);view.set_widget_name("reply-preview-text");view.set_wrap_mode(gtk::WrapMode::None);view.set_can_target(false);view.set_focusable(false);
+    let view=build(&excerpt(text),users,actions,None,true);view.set_widget_name("reply-preview-text");view.set_wrap_mode(gtk::WrapMode::None);view.set_can_target(false);view.set_focusable(false);
     view.set_height_request(-1);
     let metrics=view.pango_context().metrics(None,None);let height=((metrics.ascent()+metrics.descent())/pango::SCALE+6).max(26);
     let scroll=gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::External).vscrollbar_policy(gtk::PolicyType::External).height_request(height).hexpand(true).child(&view).build();

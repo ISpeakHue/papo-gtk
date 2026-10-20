@@ -4,10 +4,13 @@ use super::*;
 const BYTE_LIMIT: u64 = 192 << 20;
 const ENTRY_LIMIT: usize = 256;
 const CHANNEL_LIMIT: usize = 8;
+const OLD_BYTES:u64=32<<20;
+const OLD_ENTRIES:usize=64;
 struct Entry {
     texture: gtk::gdk::Texture,
     messages: HashSet<Uuid>,
     bytes: u64,
+    touched:Instant,
 }
 #[derive(Default)]
 pub(in crate::ui::chat) struct Cache {
@@ -26,12 +29,13 @@ impl Cache {
             if let Some(old) = self.channels.pop_front() { self.invalidate_channel(old); }
         }
         self.recent.insert(channel,keys.keys().copied().collect());
+        self.maintain();
         for (key,messages) in keys {
             if let Some(entry) = self.entries.get_mut(&(channel,*key)) { entry.messages = messages.clone(); }
         }
     }
     pub fn get(&mut self, channel: Uuid, key: Uuid) -> Option<gtk::gdk::Texture> {
-        let texture = self.entries.get(&(channel,key))?.texture.clone();
+        let entry=self.entries.get_mut(&(channel,key))?;entry.touched=Instant::now();let texture=entry.texture.clone();
         self.order.retain(|id| *id != (channel,key));
         self.order.push_back((channel,key));
         crate::performance::record("resident_preview_hits",1);
@@ -42,13 +46,24 @@ impl Cache {
         let bytes = texture.width() as u64 * texture.height() as u64 * 4;
         if bytes > BYTE_LIMIT { return; }
         self.bytes += bytes;
-        self.entries.insert((channel,key),Entry { texture:texture.clone(),messages:messages.clone(),bytes });
+        self.entries.insert((channel,key),Entry { texture:texture.clone(),messages:messages.clone(),bytes,touched:Instant::now() });
         self.order.push_back((channel,key));
         while self.bytes > BYTE_LIMIT || self.entries.len() > ENTRY_LIMIT {
             let Some(key) = self.order.iter().find(|(channel,key)|!self.recent.get(channel).is_some_and(|keys|keys.contains(key))).or_else(||self.order.front()).copied() else { break; };
             self.remove(key);
         }
+        self.maintain();
         crate::performance::record("resident_preview_bytes",self.bytes);
+    }
+    pub fn maintain(&mut self){
+        let old:Vec<_>=self.order.iter().copied().filter(|(channel,key)|!self.recent.get(channel).is_some_and(|keys|keys.contains(key))).collect();
+        let mut bytes:u64=old.iter().filter_map(|key|self.entries.get(key)).map(|e|e.bytes).sum();let mut count=old.len();
+        for key in old{
+            let Some(entry)=self.entries.get(&key)else{continue;};
+            if bytes>OLD_BYTES||count>OLD_ENTRIES||entry.touched.elapsed().as_secs()>=120{
+                bytes-=entry.bytes;count-=1;self.remove(key);
+            }
+        }
     }
     fn remove(&mut self, key: (Uuid,Uuid)) {
         if let Some(entry) = self.entries.remove(&key) { self.bytes -= entry.bytes; }
@@ -92,9 +107,10 @@ impl Cache {
 }
 
 impl Transfers {
-    pub(super) fn select_recent(&mut self, channel: Uuid, messages: &[Message], range: std::ops::Range<usize>) {
+    pub(super) fn select_recent(&mut self, channel: Uuid, messages: &[Message], range: std::ops::Range<usize>, head:bool) {
+        if head||self.recent_channel!=Some(channel){self.recent_keys.clear();}
         self.recent_channel = Some(channel);
-        self.recent_keys.clear();self.preview_owners.clear();
+        self.preview_owners=self.recent_keys.clone();
         self.visible_keys.clear();
         let mut animated = HashSet::new();
         let recent_start=messages.len().saturating_sub(crate::models::INITIAL_MESSAGE_LIMIT);
@@ -102,7 +118,7 @@ impl Transfers {
         let records=messages[start..end].iter().enumerate().map(|(i,m)|(start+i,m))
             .chain(messages[recent_start..].iter().enumerate().map(|(i,m)|(recent_start+i,m)));
         for (index,message) in records {
-            let recent = index >= messages.len().saturating_sub(crate::models::INITIAL_MESSAGE_LIMIT);
+            let recent = head && index >= messages.len().saturating_sub(crate::models::INITIAL_MESSAGE_LIMIT);
             let visible = self.scope.contains(&message.id);
             if !recent && !visible { continue; }
             let attachments = message.attachments.iter().flatten().filter(|a|self.visible(a))

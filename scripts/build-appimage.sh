@@ -21,7 +21,7 @@ if [[ ! -f "$PAPO_RUNTIME" ]]; then
     curl --fail --location --retry 3 --output "$PAPO_RUNTIME" \
         https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64
 fi
-printf '%s  %s\n' 156f4bdbde9c52d01814600013e0a273f0118dc2de98975f3c8c63427ec79074 "$PAPO_RUNTIME" | sha256sum --check
+printf '%s  %s\n' 617aa77314d57c8b8e4fae9c3f0b35af7b30d5529cb69e98f64f92510ed98a46 "$PAPO_RUNTIME" | sha256sum --check
 if [[ ! -d target/appimage-tools/stable-tool ]]; then
     (cd target/appimage-tools; "$PAPO_TOOL" --appimage-extract >/dev/null; mv squashfs-root stable-tool)
 fi
@@ -37,14 +37,12 @@ podman run --rm "${PAPO_MOUNTS[@]}" --env XDG_CACHE_HOME=/tmp/papo-bundle-cache 
     papo-appimage-builder:fedora44 target/appimage-fedora44/AppDir/AppRun --runtime-check
 
 PAPO_VERSION=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')
-PAPO_BUILD_LABEL="${PAPO_BUILD_LABEL:-$(date -u +%Y%m%d)}"
-[[ "$PAPO_BUILD_LABEL" =~ ^[a-zA-Z0-9_-]+$ ]] || { echo 'Invalid build label' >&2; exit 1; }
-PAPO_IMAGE="$PAPO_PROJECT/dist/Papo-${PAPO_VERSION}-preview-${PAPO_BUILD_LABEL}-x86_64.AppImage"
-LC_ALL=C.UTF-8 LANG=C.UTF-8 ARCH=x86_64 VERSION="$PAPO_VERSION-preview" \
+PAPO_IMAGE="$PAPO_PROJECT/dist/Papo-${PAPO_VERSION}-x86_64.AppImage"
+LC_ALL=C.UTF-8 LANG=C.UTF-8 ARCH=x86_64 VERSION="$PAPO_VERSION" \
     target/appimage-tools/stable-tool/AppRun --no-appstream --runtime-file target/appimage-tools/runtime-x86_64 \
     target/appimage-fedora44/AppDir "$PAPO_IMAGE"
 (cd dist; sha256sum "$(basename "$PAPO_IMAGE")") > "$PAPO_IMAGE.sha256"
-python3 packaging/appimage/source-archive.py "$PAPO_VERSION" "$PAPO_BUILD_LABEL"
-sed -e "s/@VERSION@/$PAPO_VERSION/g" -e "s/@BUILD@/$PAPO_BUILD_LABEL/g" \
-    packaging/appimage/TESTER_README.txt > "dist/Papo-${PAPO_VERSION}-${PAPO_BUILD_LABEL}-README.txt"
+python3 packaging/appimage/source-archive.py "$PAPO_VERSION"
+sed -e "s/@VERSION@/$PAPO_VERSION/g" \
+    packaging/appimage/TESTER_README.txt > "dist/Papo-${PAPO_VERSION}-AppImage-README.txt"
 ls -lh "$PAPO_IMAGE"

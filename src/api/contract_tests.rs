@@ -674,7 +674,8 @@ async fn dated_navigation_reads_two_pages_instead_of_walking_history(){
         (200,json!({"channel_id":CHANNEL,"messages":[message(),older.clone()],"has_more":true})),
         (200,json!({"channel_id":CHANNEL,"messages":[newer.clone()],"has_more":true}))
     ]).await;
-    let page=api.messages_around(target.channel_id,MessageCursor::from(&target)).await.unwrap();
+    let (page,has_newer)=api.messages_around(target.channel_id,MessageCursor::from(&target)).await.unwrap();
+    assert!(has_newer);
     assert!(page.has_more);assert_eq!(page.messages.len(),3);assert_eq!(page.messages[1].id,target.id);
     let requests=server.await.unwrap();assert_eq!(requests.len(),2);
     for(index,request)in requests.iter().enumerate(){assert_eq!(request.method,"GET");assert_eq!(request.url.path(),format!("/channels/{CHANNEL}/messages"));
@@ -682,4 +683,37 @@ async fn dated_navigation_reads_two_pages_instead_of_walking_history(){
         assert_eq!(chrono::DateTime::parse_from_rfc3339(&query["since"]).unwrap(),target.created_at);
         assert_eq!(query["last_id"],if index==0{Uuid::from_u128(target.id.as_u128()+1).to_string()}else{target.id.to_string()});
     }
+}
+
+#[tokio::test]
+async fn forward_history_uses_exclusive_tie_cursor_and_rejects_nonprogress(){
+    let target:Message=serde_json::from_value(message()).unwrap();
+    let mut next=message();next["id"]=json!(Uuid::from_u128(target.id.as_u128()+1));
+    let(api,server)=mock(vec![(200,json!({"channel_id":CHANNEL,"messages":[next],"has_more":false}))]).await;
+    let page=api.messages_after(target.channel_id,MessageCursor::from(&target)).await.unwrap();assert_eq!(page.messages.len(),1);assert!(!page.has_more);
+    let requests=server.await.unwrap();let q:std::collections::HashMap<_,_>=requests[0].url.query_pairs().collect();assert_eq!(q["order"],"asc");assert_eq!(q["limit"],"100");assert_eq!(q["last_id"],target.id.to_string());
+    for response in [
+        json!({"channel_id":CHANNEL,"messages":[message()],"has_more":true}),
+        json!({"channel_id":CHANNEL,"messages":[],"has_more":true}),
+        json!({"channel_id":Uuid::new_v4(),"messages":[],"has_more":false})
+    ]{
+        let(api,server)=mock(vec![(200,response)]).await;
+        assert!(api.messages_after(target.channel_id,MessageCursor::from(&target)).await.is_err());server.await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn updated_backend_retains_thumbnail_geometry_and_webhook_discovery_identity(){
+    let id:Uuid=ID.parse().unwrap();let channel:Uuid=CHANNEL.parse().unwrap();let hook=Uuid::new_v4();
+    let external=json!({"source":"webhook","id":hook.to_string(),"name":"Relay sender","avatar_url":format!("/webhooks/{hook}/avatar"),"profile_url":""});
+    let mut msg=message();msg["attachments"]=json!([{"id":Uuid::new_v4(),"mime_type":"image/png","original_file_name":"photo.png","size_bytes":128,"thumbnail_id":Uuid::new_v4(),"thumbnail_width":600,"thumbnail_height":120,"created_at":"2026-10-19T12:00:00Z"}]);
+    let(api,server)=mock(vec![
+        (200,json!({"channel_id":channel,"messages":[msg],"has_more":false})),
+        (200,json!({"results":[{"type":"message","id":id,"channel_id":channel,"channel_name":"chat","author_id":null,"author_username":"Relay sender","webhook_id":hook,"external_author":external,"content":"hello","created_at":"2026-10-19T12:00:00Z"}],"has_more":false})),
+        (200,json!({"notifications":[{"id":Uuid::new_v4(),"message_id":id,"channel_id":channel,"author_id":null,"webhook_id":hook,"external_author":external,"message_content":"hello","read":false,"created_at":"2026-10-19T12:00:00Z"}],"has_more":false}))
+    ]).await;
+    let page=api.list_messages(channel,None).await.unwrap();assert_eq!(page.messages[0].attachments.as_ref().unwrap()[0].thumbnail_dimensions(),Some((600,120)));
+    let result=api.search(&SearchRequest{text:"hello".into(),..Default::default()},None).await.unwrap();assert_eq!(result.results[0].external().unwrap().name,"Relay sender");assert_eq!(result.results[0].webhook_id,Some(hook));
+    let notices=api.notifications(Uuid::new_v4(),None).await.unwrap();assert_eq!(notices.notifications[0].webhook_id,Some(hook));assert_eq!(notices.notifications[0].external_author.as_ref().unwrap().name,"Relay sender");
+    assert_eq!(server.await.unwrap().len(),3);
 }

@@ -64,6 +64,13 @@ on the installed codecs; a backend configured for voice is required for calls.
 Video preview/animation helpers require Bubblewrap and working user namespaces.
 See [SECURITY_REVIEW.md](SECURITY_REVIEW.md) for media isolation and supported containers.
 
+## Downloads
+
+[Version 1.0.0](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.0.0) provides
+an x86_64 AppImage and Flatpak bundle, SHA-256 checksums and matching source.
+See [APPIMAGE.md](APPIMAGE.md) for the modern Fedora/Arch baseline and
+[FLATPAK.md](FLATPAK.md) for installation and runtime details.
+
 ## Tests
 
 For a self-contained Linux test build to share with others, see

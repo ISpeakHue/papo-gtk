@@ -16,8 +16,48 @@ pub struct Attachment {
     pub original_file_name: String,
     pub size_bytes: i64,
     pub thumbnail_id: Option<Uuid>,
+    pub thumbnail_width:Option<i32>,
+    pub thumbnail_height:Option<i32>,
     pub created_at: DateTime<Utc>,
     pub moderation_status: Option<String>,
+}
+
+impl Attachment {
+    pub fn thumbnail_dimensions(&self)->Option<(i32,i32)>{self.thumbnail_width.zip(self.thumbnail_height).filter(|(w,h)|(1..=16384).contains(w)&&(1..=16384).contains(h))}
+
+    /// Preview classification only; downloaded bytes still pass container validation.
+    pub fn is_video(&self)->bool{
+        let mime=self.mime_type.split(';').next().unwrap_or("").trim();
+        if mime.get(..6).is_some_and(|prefix|prefix.eq_ignore_ascii_case("video/")){return true;}
+        if ["application/quicktime","application/x-quicktimeplayer"].iter().any(|kind|mime.eq_ignore_ascii_case(kind)){return true;}
+        // The backend's Go content sniffer reports QuickTime's `qt  ` brand as
+        // generic binary data. Use its filename only for such unknown types.
+        let unknown=mime.is_empty()||["application/octet-stream","binary/octet-stream"].iter().any(|kind|mime.eq_ignore_ascii_case(kind));
+        unknown&&std::path::Path::new(&self.original_file_name).extension().is_some_and(|ext|ext.eq_ignore_ascii_case("mov"))
+    }
+}
+
+#[cfg(test)]mod attachment_tests{
+    use super::*;
+    #[test]fn thumbnail_geometry_is_optional_and_requires_two_valid_dimensions(){
+        for (w,h,expected) in [(Some(640),Some(120),Some((640,120))),(None,None,None),(Some(640),None,None),(Some(0),Some(10),None),(Some(-1),Some(10),None),(Some(i32::MAX),Some(1),None)]{
+            let a:Attachment=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"mime_type":"image/png","original_file_name":"photo.png","size_bytes":1,"thumbnail_width":w,"thumbnail_height":h,"created_at":"2026-10-19T12:00:00Z"})).unwrap();assert_eq!(a.thumbnail_dimensions(),expected);
+        }
+    }
+    #[test]fn recognizes_quicktime_when_backend_reports_generic_binary(){
+        for (mime,name,expected) in [
+            ("video/quicktime","clip.mov",true),("VIDEO/QUICKTIME; codecs=avc1","clip",true),
+            ("application/octet-stream","phone.MOV",true),("application/octet-stream; charset=binary","phone.mov",true),
+            ("binary/octet-stream","clip.mov",true),("","clip.mov",true),
+            ("application/quicktime","clip",true),("application/x-quicktimeplayer","clip.mov",true),
+            ("video/mp4","clip.mp4",true),("video/webm","clip.webm",true),
+            ("application/octet-stream","notes.pdf",false),("application/octet-stream","clip.mov.exe",false),
+            ("image/png","clip.mov",false),("text/plain","clip.mov",false)
+        ]{
+            let a:Attachment=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"mime_type":mime,"original_file_name":name,"size_bytes":1,"created_at":"2026-10-19T12:00:00Z"})).unwrap();
+            assert_eq!(a.is_video(),expected,"{mime}: {name}");
+        }
+    }
 }
 
 // ── Reactions ────────────────────────────────────────────────────────────────

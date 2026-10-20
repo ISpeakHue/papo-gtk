@@ -37,6 +37,28 @@ impl History {
         self.messages.retain(|m|ids.contains(&m.id));self.dirty.retain(|id|ids.contains(id));
         self.media_revision=self.media_revision.wrapping_add(1);
     }
+    pub(super) fn retention_range(&self,center:usize,limit:usize,byte_limit:usize)->std::ops::Range<usize>{
+        let mut start=center.saturating_sub(limit/2).min(self.messages.len().saturating_sub(limit));
+        let mut end=(start+limit).min(self.messages.len());
+        let weights:Vec<_>=self.messages[start..end].iter().map(|m|Self::message_bytes(m)+std::mem::size_of::<Message>()).collect();
+        let origin=start;let mut bytes:usize=weights.iter().sum();
+        // Keep at least the anchor itself, even if one server record is huge.
+        while bytes>byte_limit&&end-start>1{
+            if center-start>=end-1-center{bytes-=weights[start-origin];start+=1;}else{end-=1;bytes-=weights[end-origin];}
+        }
+        start..end
+    }
+    pub(super) fn recent_copy(&self,limit:usize)->Self{
+        let mut copy=Self{channel_id:self.channel_id,..Self::default()};
+        copy.messages=self.messages[self.messages.len().saturating_sub(limit)..].to_vec();
+        copy.prepare_cache(limit);copy
+    }
+    pub(super) fn retain_range(&mut self,range:std::ops::Range<usize>){
+        debug_assert!(!self.loading());
+        self.messages.truncate(range.end);self.messages.drain(..range.start);self.messages.shrink_to_fit();
+        let ids:HashSet<_>=self.messages.iter().map(|m|m.id).collect();self.dirty.retain(|id|ids.contains(id));
+        self.media_revision=self.media_revision.wrapping_add(1);
+    }
     pub(super) fn trim_recent(&mut self,limit:usize)->bool {
         if self.messages.len()<=limit{return false;}
         self.messages.drain(..self.messages.len()-limit);self.messages.shrink_to_fit();
@@ -58,10 +80,13 @@ impl History {
     pub(super) fn cache_bytes(&self) -> usize {
         // Account for allocated capacities without serializing messages on the
         // GTK thread when the user switches channels.
+        self.early_moderation.capacity()*std::mem::size_of::<(Uuid,Uuid,String)>()+self.early_moderation.iter().map(|(_,_,status)|status.capacity()).sum::<usize>()+
+        self.deleted.capacity()*std::mem::size_of::<Uuid>() + self.messages.capacity()*std::mem::size_of::<Message>() + self.messages.iter().map(Self::message_bytes).sum::<usize>()
+    }
+    fn message_bytes(m:&Message)->usize{
         let string=|s:&Option<String>|s.as_ref().map_or(0,String::capacity);
         let media=|m:&Option<crate::models::EmbedMedia>|m.as_ref().map_or(0,|m|string(&m.url)+string(&m.mime_type));
-        self.early_moderation.capacity()*std::mem::size_of::<(Uuid,Uuid,String)>()+self.early_moderation.iter().map(|(_,_,status)|status.capacity()).sum::<usize>()+
-        self.deleted.capacity()*std::mem::size_of::<Uuid>() + self.messages.capacity()*std::mem::size_of::<Message>() + self.messages.iter().map(|m| {
+
             m.external_author.as_ref().map_or(0,|a|a.source.capacity()+a.id.capacity()+a.name.capacity()+a.avatar_url.capacity()+a.profile_url.capacity()) + string(&m.content)
                 + m.attachments.as_ref().map_or(0,|items|items.capacity()*std::mem::size_of::<crate::models::Attachment>() + items.iter().map(|a|a.mime_type.capacity()+a.original_file_name.capacity()+string(&a.moderation_status)).sum::<usize>())
                 + m.embeds.as_ref().map_or(0,|items|items.capacity()*std::mem::size_of::<Embed>() + items.iter().map(|e| {
@@ -73,7 +98,7 @@ impl History {
                 }).sum::<usize>())
                 + m.reactions.as_ref().map_or(0,|items|items.capacity()*std::mem::size_of::<MessageReactionSummary>()+items.iter().map(|r|string(&r.unicode)).sum::<usize>())
                 + m.user_reactions.as_ref().map_or(0,|items|items.capacity()*std::mem::size_of::<crate::models::MessageUserReaction>()+items.iter().map(|r|string(&r.unicode)).sum::<usize>())
-        }).sum::<usize>()
+
     }
     pub fn media_revision(&self)->u64{self.media_revision}
     pub fn mark_dirty(&mut self,id:Uuid){self.dirty.insert(id);}
@@ -374,6 +399,17 @@ mod tests {
     use super::*;
     fn with_attachment(channel:Uuid,status:&str)->Message{
         let mut m=message(channel,1);m.attachments=Some(vec![serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"mime_type":"image/png","original_file_name":"test.png","size_bytes":1,"created_at":m.created_at,"moderation_status":status})).unwrap()]);m
+    }
+    #[test]
+    fn historical_windows_bound_metadata_around_the_reader_and_keep_the_true_head(){
+        let channel=Uuid::new_v4();let mut history=History::default();history.select(channel);
+        for i in 0..1000{history.messages.push(serde_json::from_value(serde_json::json!({"id":Uuid::from_u128(i+1),"channel_id":channel,"created_at":chrono::DateTime::from_timestamp(i as i64,0),"content":"x".repeat(4096)})).unwrap());}
+        let recent=history.recent_copy(200);assert_eq!(recent.messages[0].id,Uuid::from_u128(801));
+        let anchor=history.messages[400].id;
+        let range=history.retention_range(400,600,128<<10);assert!(range.contains(&400));assert!(range.len()<40);
+        history.retain_range(range);assert!(history.messages.iter().any(|m|m.id==anchor));assert!(history.cache_bytes()<=128<<10);
+        assert!(history.messages.windows(2).all(|m|m[1].id.as_u128()==m[0].id.as_u128()+1));
+        assert_eq!(recent.messages.last().unwrap().id,Uuid::from_u128(1000));
     }
     #[test]fn completed_moderation_survives_delayed_send_echo(){
         for status in ["","clean","sensitive","failed"]{

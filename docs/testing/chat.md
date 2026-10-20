@@ -260,7 +260,10 @@ editing behavior.
 Channel rows retain a blue unread dot and show notification counts separately
 in red. Author/mention filters use a searchable, recycled list: typing filters
 choices without selecting one, and clearing restores the complete list from its
-first row. The `search-recycling` case exercises the actual popup and clear path.
+first row. The `search-recycling` case exercises the actual popup and clear path,
+including 100 members, matches near the end, empty results and repeated clearing.
+It checks the visible scroll position after layout as well as source ordering,
+while preserving the committed filter and search-field focus.
 
 The `backend-gifs` case includes the reported Klipy page and Giphy CDN URL.
 Backend `fetch_method: gif` embeds can carry both GIF data and video metadata;
@@ -271,3 +274,25 @@ frontend provider scraping. Public-provider availability remains server-owned.
 Draft undo/redo retains emoji images and mention identities in a bounded history
 (128 snapshots, 512 KiB). Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y and the context menu share
 this history; it clears when the composer switches conversations or resets.
+
+`PAPO_UI_CASE=history-navigation` exercises an old search jump across 1,250
+synthetic messages with repeated timestamps. It checks forward-page retry,
+contiguous bounded history, reaching the live head and rejection of stale pages.
+The `report10` case additionally checks that custom reply-preview emojis fit
+within the single-line text height without changing shared chat textures.
+
+## Embed measurement warnings
+
+The `embeds` workflow covers rich and bot cards, long inline fields, narrow/wide
+resizing, delayed thumbnails and cached cards. To make GTK sizing warnings fail
+the run, use a private display and enable fatal warnings for the test process:
+
+```sh
+GTK_A11Y=none G_DEBUG=fatal-warnings PAPO_UI_CASE=embeds dbus-run-session -- xvfb-run -a cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+```
+
+The embed's width clamp aligns to the start on both axes, so GTK negotiates its
+width before measuring its wrapped height. Filling vertically previously caused
+width measurements constrained by a height smaller than the card's reported
+minimum, emitting repeated `Trying to measure embed-…` warnings. This check keeps
+normal GTK diagnostics enabled.

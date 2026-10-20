@@ -5,7 +5,7 @@ use crate::models::{SearchRequest, SearchResponse, SearchResult};
 mod rows;
 
 #[derive(Debug)]
-pub enum SearchMsg { Open, MemberVisible{view:Uuid,id:Uuid}, AvatarBatch{view:Uuid,batch:Uuid}, Changed, Debounced(Uuid), Submit, More, Cancel(Uuid), Loaded { token: Uuid, result: anyhow::Result<SearchResponse> }, Navigate(Uuid, Uuid) }
+pub enum SearchMsg { ExternalVisible{view:Uuid,channel:Uuid,author:crate::models::ExternalAuthor}, Open, MemberVisible{view:Uuid,id:Uuid}, AvatarBatch{view:Uuid,batch:Uuid}, Changed, Debounced(Uuid), Submit, More, Cancel(Uuid), Loaded { token: Uuid, result: anyhow::Result<SearchResponse> }, Navigate(Uuid, Uuid) }
 mod choice;
 use choice::Choice;
 #[derive(Default)]
@@ -31,6 +31,7 @@ impl MainWindowModel {
 
     pub(super) fn search_event(&mut self, msg: SearchMsg, root: &gtk::Box, sender: ComponentSender<Self>) {
         match msg {
+            SearchMsg::ExternalVisible{view,channel,author}=>{if self.can_read_target(channel)&&self.search.view.as_ref().is_some_and(|v|v.token==view&&v.window.is_visible()){self.chat.emit(ChatMsg::ExternalAvatars(vec![author]));}},
             SearchMsg::Open => {
                 if let Some(v)=self.search.view.as_ref().filter(|v|v.window.is_visible()){v.window.present();return;}
                 if let Some((_,timer))=self.search.debounce.take(){if let Some(source)=gtk::glib::MainContext::default().find_source_by_id(&timer){source.destroy();}}
@@ -54,7 +55,7 @@ impl MainWindowModel {
                 let actions=gtk::Box::new(gtk::Orientation::Horizontal,8);
                 for (label,submit) in [("Pesquisar",true),("Cancelar pesquisa",false)]{let b=gtk::Button::with_label(label);if submit{b.add_css_class("suggested-action");}let input=sender.input_sender().clone();b.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Search(if submit{SearchMsg::Submit}else{SearchMsg::Cancel(view_token)}));});actions.append(&b);}body.append(&actions);
                 let status=gtk::Label::new(Some("Digite um termo ou escolha filtros para pesquisar."));status.set_wrap(true);status.set_xalign(0.0);status.add_css_class("dim-label");body.append(&status);
-                let(results,result_view)=rows::view(&sender);let scroll=gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).child(&result_view).build();scroll.set_widget_name("message-search-results");body.append(&scroll);
+                let(results,result_view)=rows::view(&sender,view_token);let scroll=gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).child(&result_view).build();scroll.set_widget_name("message-search-results");body.append(&scroll);
                 let more=gtk::Button::with_label("Mais resultados");more.set_visible(false);let input=sender.input_sender().clone();more.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Search(SearchMsg::More));});body.append(&more);
                 let keys=gtk::EventControllerKey::new();keys.set_propagation_phase(gtk::PropagationPhase::Capture);let weak=window.downgrade();
                 keys.connect_key_pressed(move |_,key,_,_|{if key==gtk::gdk::Key::Escape{if let Some(window)=weak.upgrade(){window.close();}gtk::glib::Propagation::Stop}else{gtk::glib::Propagation::Proceed}});window.add_controller(keys);
@@ -117,8 +118,8 @@ impl MainWindowModel {
         let users:HashMap<_,_>=self.users.iter().map(|u|(u.id,u.clone())).collect();
         let (revision,renderer)=self.chat.model().text_renderer(users.clone());
         let desired=self.search.rows.iter().filter(|r|self.can_read_target(r.channel_id)).map(|r|rows::Row{
-            id:r.id,channel:r.channel_id,revision,renderer:renderer.clone(),display:crate::ui::chat::mentions::render(r.content.as_deref().unwrap_or("[Anexo]"),&users),
-            heading:format!("#{} · {} · {}",r.channel_name,r.author_username.as_deref().unwrap_or("Usuário removido"),r.created_at.with_timezone(&chrono::Local).format("%d/%m/%Y %H:%M")),
+            external:r.external().cloned(),avatar:r.external().and_then(|a|self.chat.model().external_avatar(a)),id:r.id,channel:r.channel_id,revision,renderer:renderer.clone(),display:crate::ui::chat::mentions::render(r.content.as_deref().unwrap_or("[Anexo]"),&users),
+            heading:format!("#{} · {} · {}",r.channel_name,r.external().map(|a|a.name.as_str()).or(r.author_username.as_deref()).unwrap_or(if r.webhook_id.is_some(){"Webhook"}else{"Usuário removido"}),r.created_at.with_timezone(&chrono::Local).format("%d/%m/%Y %H:%M")),
             text:r.content.as_deref().unwrap_or("[Anexo]").to_owned(),
         }).collect();rows::update(&v.results,desired);
     }
@@ -162,6 +163,7 @@ pub(crate) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::Mai
     let current_user=api.clone();let user=tokio::runtime::Handle::current().block_on(current_user.whoami()).unwrap();
     let main=MainWindowModel::builder().launch(MainWindowInit{current_user:user,api_client:api}).detach();
     let host=adw::Window::builder().default_width(1000).default_height(720).content(main.widget()).build();host.present();until(context,||main.model().background_started&&main.model().access_request.is_none());
+    choice::exercise_scroll_reset(context,main.sender().clone());
     exercise(&main,context);
     main.emit(MainWindowMsg::Search(SearchMsg::Open));pump(context);
     let baseline=backend.lock().unwrap().requests.iter().filter(|(_,path,_)|path.starts_with("/search")).count();
@@ -199,4 +201,41 @@ pub(crate) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::Mai
     let buffer=rich.buffer();assert!(buffer.text(&buffer.start_iter(),&buffer.end_iter(),false).contains("😄"));let mut iter=buffer.start_iter();let mut painted=false;loop{painted|=iter.paintable().is_some();if !iter.forward_char(){break;}}assert!(painted,"search results render custom emoji rather than colon codes");
     let object=store.item(0).and_downcast::<gtk::glib::BoxedAnyObject>().unwrap();assert!(!object.borrow::<rows::Row>().display.contains("@mention("));
     w.close();host.set_content(None::<&gtk::Widget>);host.close();drop(main);server.abort();pump(context);
+}
+
+#[cfg(test)]pub(crate) fn exercise_backend_identity(context:&gtk::glib::MainContext){
+    use crate::ui::chat::actions::tests::{mock,pump,until,descendants};
+    let(api,backend,server)=tokio::runtime::Handle::current().block_on(mock());
+    let hook=Uuid::new_v4();let message=Uuid::new_v4();let notice=Uuid::new_v4();let channel:Uuid=backend.lock().unwrap().message["channel_id"].as_str().unwrap().parse().unwrap();
+    let url=format!("/webhooks/{hook}/avatar");let name="Bridge sender";
+    let external=serde_json::json!({"source":"webhook","id":hook.to_string(),"name":name,"avatar_url":url});
+    let author:crate::models::ExternalAuthor=serde_json::from_value(external.clone()).unwrap();
+    let mut png=std::io::Cursor::new(Vec::new());image::DynamicImage::new_rgb8(32,32).write_to(&mut png,image::ImageFormat::Png).unwrap();
+    {let mut b=backend.lock().unwrap();b.attachment_thumbnails.insert(url.clone(),png.into_inner());
+        b.search_results=Some(vec![serde_json::json!({"type":"message","id":message,"channel_id":channel,"channel_name":"general","author_id":null,"webhook_id":hook,"external_author":external,"author_username":"fallback","content":"Metadata result","created_at":"2026-10-19T12:00:00Z"})]);
+        b.discovery_notifications=Some(vec![serde_json::json!({"id":notice,"message_id":message,"channel_id":channel,"author_id":null,"webhook_id":hook,"external_author":external,"message_content":"Metadata notice","read":false,"created_at":"2026-10-19T12:00:00Z"})]);
+    }
+    let own=tokio::runtime::Handle::current().block_on(api.whoami()).unwrap();
+    let main=MainWindowModel::builder().launch(MainWindowInit{current_user:own,api_client:api}).detach();
+    let host=adw::Window::builder().default_width(1000).default_height(720).content(main.widget()).build();host.present();until(context,||main.model().background_started&&main.model().access_request.is_none());
+    main.emit(MainWindowMsg::Search(SearchMsg::Open));pump(context);let window=main.model().search.view.as_ref().unwrap().window.clone();
+    main.model().search.view.as_ref().unwrap().fields[0].set_text("Metadata");main.emit(MainWindowMsg::Search(SearchMsg::Submit));until(context,||main.model().search.rows.len()==1);
+    until(context,||main.model().chat.model().external_avatar(&author).is_some());crate::ui::chat::performance::settle(context);
+    let avatars=|root:&gtk::Widget|descendants(root).into_iter().filter_map(|w|w.downcast::<adw::Avatar>().ok()).filter(|a|a.text().as_deref()==Some(name)).collect::<Vec<_>>();
+    assert!(avatars(window.upcast_ref()).iter().any(|a|a.custom_image().is_some()),"search binds the REST identity and avatar without opening its channel");
+    assert!(descendants(window.upcast_ref()).iter().any(|w|w.downcast_ref::<gtk::Label>().is_some_and(|l|l.text().contains(name))));
+    let count=||backend.lock().unwrap().requests.iter().filter(|(_,p,_)|p==&url).count();assert_eq!(count(),1);
+    main.emit(MainWindowMsg::Notification(super::notifications::NoticeMsg::Open));
+    until(context,||main.model().notifications.inbox.rows.contains_key(&notice));
+    assert!(!main.model().notifications.inbox.messages.contains_key(&message),"this identity must come from the REST notice, not observed chat history");
+    let inbox=||gtk::Window::list_toplevels().into_iter().filter_map(|w|w.downcast::<gtk::Window>().ok()).find(|w|w.is_visible()&&w.title().as_deref()==Some("Notificações"));
+    until(context,||inbox().is_some());let inbox=inbox().unwrap();
+    let group=||descendants(inbox.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Expander>().ok().filter(|w|w.widget_name()==format!("notification-channel-{channel}")));
+    until(context,||group().is_some());group().unwrap().set_expanded(true);crate::ui::chat::performance::settle(context);
+    assert!(avatars(inbox.upcast_ref()).iter().any(|a|a.custom_image().is_some()),"notices reuse the already decoded search avatar");assert_eq!(count(),1);
+    assert!(descendants(inbox.upcast_ref()).iter().any(|w|w.downcast_ref::<gtk::Label>().is_some_and(|l|l.text()==name)));
+    window.close();main.emit(MainWindowMsg::Search(SearchMsg::Open));pump(context);main.model().search.view.as_ref().unwrap().fields[0].set_text("Metadata");main.emit(MainWindowMsg::Search(SearchMsg::Submit));until(context,||main.model().search.rows.len()==1);crate::ui::chat::performance::settle(context);assert_eq!(count(),1,"reopening discovery views cannot refetch the same picture");
+    {main.state().get_mut().model.access.insert(channel,crate::models::Access::default());}main.emit(MainWindowMsg::ExternalAvatarsChanged);pump(context);
+    assert_eq!(main.model().search.view.as_ref().unwrap().results.n_items(),0);assert!(!descendants(inbox.upcast_ref()).iter().any(|w|w.downcast_ref::<gtk::Label>().is_some_and(|l|l.text()==name)),"revoked channels cannot expose cached external identities");
+    inbox.close();main.model().search.view.as_ref().unwrap().window.close();host.set_content(None::<&gtk::Widget>);host.close();drop(main);server.abort();pump(context);
 }

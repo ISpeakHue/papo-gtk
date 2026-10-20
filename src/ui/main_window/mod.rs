@@ -118,6 +118,7 @@ pub enum MainWindowMsg {
     Webhook(WebhookMsg),
     Account(AccountMsg),
     Security(SecurityMsg),
+    ExternalAvatarsChanged,
     Search(SearchMsg),
     Notification(NoticeMsg),
     HistoryObserved{channel_id:Uuid,messages:Vec<crate::models::MessageObservation>,latest:bool},
@@ -201,6 +202,7 @@ impl Component for MainWindowModel {
         let chat = ChatModel::builder()
             .launch(ChatInit { api: Some(init.api_client.clone()), user_id: Some(init.current_user.id), ..ChatInit::default() })
             .forward(sender.input_sender(), |output| match output {
+                ChatOutput::ExternalAvatarsChanged=>MainWindowMsg::ExternalAvatarsChanged,
                 ChatOutput::ConversationLoaded=>MainWindowMsg::ConversationLoaded,
                 ChatOutput::EmojisChanged=>MainWindowMsg::Account(AccountMsg::EmojisChanged),
                 ChatOutput::Search=>MainWindowMsg::Search(SearchMsg::Open),
@@ -322,6 +324,7 @@ impl Component for MainWindowModel {
     fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>, root: &Self::Root) {
         if matches!(&message,MainWindowMsg::ChannelSelected(_)|MainWindowMsg::Direct(DirectMsg::Select(_, _))){self.layout.dismiss_navigation();}
         match message {
+            MainWindowMsg::ExternalAvatarsChanged=>{self.render_search(&sender);self.render_inbox(&sender);},
             MainWindowMsg::StartLoading => self.start_loading(sender),
             MainWindowMsg::ConversationLoaded => {
                 if !self.background_started {
@@ -408,7 +411,7 @@ impl Component for MainWindowModel {
                             // A slow DM open owns navigation until it completes.
                             // Auto-selection here would cancel its request token.
                             if !self.direct_selection_pending() {
-                                if let Some(channel) = self.channels.iter().find(|c| matches!(c.channel_type, None | Some(crate::models::ChannelType::Text))).cloned() {
+                                if let Some(channel) = self.channels.iter().find(|c| c.supports_messages()).cloned() {
                                     self.select_channel(channel, sender.clone());
                                 }
                             }
@@ -468,7 +471,7 @@ impl Component for MainWindowModel {
                 if self.direct.items.iter().any(|d|d.id==channel_id){sender.input(MainWindowMsg::Direct(DirectMsg::Select(channel_id,Some(message_id))));return;}
                 if !self.access.get(&channel_id).is_some_and(|a|a.read){self.chat.emit(ChatMsg::OperationError("Canal não disponível ou sem permissão.".into()));return;}
                 if let Some(channel) = self.channels.iter().find(|c| c.id == channel_id).cloned() {
-                    if !matches!(channel.channel_type, None | Some(crate::models::ChannelType::Text)) {
+                    if !channel.supports_messages() {
                         self.chat.emit(ChatMsg::OperationError("Este canal não possui uma visualização de mensagens disponível.".into()));
                         return;
                     }
@@ -664,7 +667,7 @@ impl MainWindowModel {
     }
 
     fn select_channel(&mut self, channel: Channel, sender: ComponentSender<Self>) {
-        if !matches!(channel.channel_type, None | Some(crate::models::ChannelType::Text)) { return; }
+        if !channel.supports_messages() { return; }
         let channel_id = channel.id;
         let Some(access) = self.access.get(&channel_id).filter(|a| a.read).cloned() else { return; };
         if self.active_channel_id == Some(channel_id) { self.chat.emit(ChatMsg::SetAccess { user_id: self.current_user.id, access });return; }

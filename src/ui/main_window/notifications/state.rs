@@ -4,8 +4,12 @@ use uuid::Uuid;
 #[derive(Debug,Clone)]
 pub struct Notice {
     pub id:Uuid,pub message_id:Uuid,pub channel_id:Option<Uuid>,pub author_id:Option<Uuid>,
+    pub webhook_id:Option<Uuid>,pub external_author:Option<ExternalAuthor>,
     pub content:String,pub read:bool,pub persisted:bool,pub created_at:chrono::DateTime<chrono::Utc>,
     pub pending_desktop:bool, pub seen_event:bool,
+}
+impl Notice {
+    pub fn external(&self)->Option<&ExternalAuthor>{if self.author_id.is_none()&&self.webhook_id.is_some(){self.external_author.as_ref()}else{None}}
 }
 #[derive(Default)]
 pub struct Inbox {
@@ -20,7 +24,7 @@ impl Inbox {
         if self.deleted.contains(&event.message_id){return;}
         if let Some(row)=self.rows.get_mut(&event.id){if !row.seen_event{row.seen_event=true;row.pending_desktop=!row.read;}return;}
         let channel_id=self.messages.get(&event.message_id).map(|m|m.channel_id);
-        self.rows.insert(event.id,Notice{id:event.id,message_id:event.message_id,channel_id,author_id:event.user_id,content:event.message_content,read:false,persisted:false,created_at:chrono::Utc::now(),pending_desktop:true,seen_event:true});
+        self.rows.insert(event.id,Notice{id:event.id,message_id:event.message_id,channel_id,webhook_id:self.messages.get(&event.message_id).and_then(|m|m.webhook_id),external_author:self.messages.get(&event.message_id).and_then(|m|m.external()).cloned(),author_id:event.user_id,content:event.message_content,read:false,persisted:false,created_at:chrono::Utc::now(),pending_desktop:true,seen_event:true});
         // Ephemeral events cannot be paged later; keep session memory bounded.
         let mut ephemeral:Vec<_>=self.rows.values().filter(|n|!n.persisted).map(|n|(n.created_at,n.id)).collect();ephemeral.sort();
         let excess=ephemeral.len().saturating_sub(500);for (_,id) in ephemeral.into_iter().take(excess){self.rows.remove(&id);}
@@ -36,13 +40,13 @@ impl Inbox {
             let pending=self.rows.get(&n.id).is_some_and(|r|r.pending_desktop);
             let seen_event=self.rows.get(&n.id).is_some_and(|r|r.seen_event);
             let read=n.read||self.read.contains(&n.id)||self.rows.get(&n.id).is_some_and(|r|r.read);
-            self.rows.insert(n.id,Notice{id:n.id,message_id:n.message_id,channel_id:Some(n.channel_id),author_id:n.author_id,content:n.message_content,read,persisted:true,created_at:n.created_at,pending_desktop:pending,seen_event});
+            self.rows.insert(n.id,Notice{id:n.id,message_id:n.message_id,channel_id:Some(n.channel_id),webhook_id:n.webhook_id,external_author:n.external_author,author_id:n.author_id,content:n.message_content,read,persisted:true,created_at:n.created_at,pending_desktop:pending,seen_event});
         }
     }
     pub fn observe(&mut self,m:impl Into<MessageObservation>){
         let m=m.into();
         if self.deleted.contains(&m.id){return;}
-        for n in self.rows.values_mut().filter(|n|n.message_id==m.id){n.channel_id=Some(m.channel_id);n.author_id=m.author_id;}
+        for n in self.rows.values_mut().filter(|n|n.message_id==m.id){n.channel_id=Some(m.channel_id);n.author_id=m.author_id;n.webhook_id=m.webhook_id;n.external_author=m.external().cloned();}
         if !self.messages.contains_key(&m.id){self.message_order.push_back(m.id);}self.messages.insert(m.id,m);
         while self.message_order.len()>512||self.messages.values().map(MessageObservation::bytes).sum::<usize>()>4<<20 {if let Some(id)=self.message_order.pop_front(){self.messages.remove(&id);}else{break;}}
     }
@@ -107,6 +111,14 @@ impl ReadJournal {
 }
 #[cfg(test)] mod tests {
     use super::*;
+    #[test]fn rest_webhook_identity_survives_without_observed_chat_history(){
+        let hook=Uuid::new_v4();let id=Uuid::new_v4();let msg=Uuid::new_v4();let channel=Uuid::new_v4();
+        let row:NotificationSummary=serde_json::from_value(serde_json::json!({"id":id,"message_id":msg,"channel_id":channel,"author_id":null,"webhook_id":hook,"external_author":{"source":"webhook","id":hook.to_string(),"name":"Relay","avatar_url":"/avatar"},"message_content":"hello","read":false,"created_at":"2026-10-19T12:00:00Z"})).unwrap();
+        let mut inbox=Inbox::default();inbox.merge(vec![row.clone()]);assert!(inbox.messages.is_empty());assert_eq!(inbox.rows[&id].external().unwrap().name,"Relay");
+        inbox.mark(id);inbox.merge(vec![row]);assert!(inbox.rows[&id].read);assert_eq!(inbox.rows[&id].external().unwrap().avatar_url,"/avatar");
+        let mut human=message(channel,msg,1);human.author_id=Some(Uuid::new_v4());inbox.observe(human);assert!(inbox.rows[&id].external().is_none());
+        inbox.delete(msg);assert!(inbox.rows.is_empty());
+    }
     #[test]fn observations_drop_rich_payloads_and_enforce_a_metadata_budget(){
         let mut inbox=Inbox::default();let mut m=message(Uuid::new_v4(),Uuid::new_v4(),1);
         m.embeds=Some(vec![serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"source_type":"custom","created_at":m.created_at,"image_data":"x".repeat(2<<20)})).unwrap()]);
@@ -123,7 +135,7 @@ impl ReadJournal {
         let mut inbox=Inbox::default();
         let messages=[first.clone(),next.clone(),message(other,Uuid::new_v4(),0)];
         let ids:Vec<_>=messages.iter().map(|m|{
-            let id=Uuid::new_v4();inbox.merge(vec![NotificationSummary{id,message_id:m.id,channel_id:m.channel_id,author_id:None,message_content:"preview".into(),read:false,created_at:chrono::Utc::now()}]);inbox.observe(m.clone());id
+            let id=Uuid::new_v4();inbox.merge(vec![NotificationSummary{webhook_id:None,external_author:None,id,message_id:m.id,channel_id:m.channel_id,author_id:None,message_content:"preview".into(),read:false,created_at:chrono::Utc::now()}]);inbox.observe(m.clone());id
         }).collect();
         let unknown=Uuid::new_v4();inbox.event(event(unknown,Uuid::new_v4()));inbox.rows.get_mut(&unknown).unwrap().channel_id=Some(channel);
         inbox.mark_through(&first);assert!(inbox.rows[&ids[0]].read);assert!(!inbox.rows[&ids[1]].read);assert!(!inbox.rows[&ids[2]].read);assert!(!inbox.rows[&unknown].read);
@@ -131,9 +143,9 @@ impl ReadJournal {
     }
     #[test] fn event_rest_echo_resolves_once_and_stale_unread_cannot_undo_success(){
         let(id,msg,ch)=(Uuid::new_v4(),Uuid::new_v4(),Uuid::new_v4());let mut inbox=Inbox::default();inbox.event(event(id,msg));inbox.event(event(id,msg));assert_eq!(inbox.rows.len(),1);assert_eq!(inbox.rows[&id].channel_id,None);assert!(!inbox.rows[&id].persisted);
-        let row=NotificationSummary{id,message_id:msg,channel_id:ch,author_id:None,message_content:"hello".into(),read:false,created_at:chrono::Utc::now()};inbox.merge(vec![row.clone()]);assert_eq!(inbox.rows.len(),1);assert!(inbox.rows[&id].persisted);assert_eq!(inbox.rows[&id].channel_id,Some(ch));inbox.mark(id);inbox.merge(vec![row]);assert!(inbox.rows[&id].read);
+        let row=NotificationSummary{webhook_id:None,external_author:None,id,message_id:msg,channel_id:ch,author_id:None,message_content:"hello".into(),read:false,created_at:chrono::Utc::now()};inbox.merge(vec![row.clone()]);assert_eq!(inbox.rows.len(),1);assert!(inbox.rows[&id].persisted);assert_eq!(inbox.rows[&id].channel_id,Some(ch));inbox.mark(id);inbox.merge(vec![row]);assert!(inbox.rows[&id].read);
         inbox.delete(msg);inbox.event(event(id,msg));assert!(inbox.rows.is_empty());
-        let id2=Uuid::new_v4();let msg2=Uuid::new_v4();let rest=NotificationSummary{id:id2,message_id:msg2,channel_id:ch,author_id:None,message_content:"late WS".into(),read:false,created_at:chrono::Utc::now()};inbox.merge(vec![rest]);assert!(!inbox.rows[&id2].pending_desktop);inbox.event(event(id2,msg2));assert!(inbox.rows[&id2].pending_desktop);inbox.rows.get_mut(&id2).unwrap().pending_desktop=false;inbox.event(event(id2,msg2));assert!(!inbox.rows[&id2].pending_desktop);inbox.merge_head(vec![]);assert!(inbox.rows.is_empty());
+        let id2=Uuid::new_v4();let msg2=Uuid::new_v4();let rest=NotificationSummary{webhook_id:None,external_author:None,id:id2,message_id:msg2,channel_id:ch,author_id:None,message_content:"late WS".into(),read:false,created_at:chrono::Utc::now()};inbox.merge(vec![rest]);assert!(!inbox.rows[&id2].pending_desktop);inbox.event(event(id2,msg2));assert!(inbox.rows[&id2].pending_desktop);inbox.rows.get_mut(&id2).unwrap().pending_desktop=false;inbox.event(event(id2,msg2));assert!(!inbox.rows[&id2].pending_desktop);inbox.merge_head(vec![]);assert!(inbox.rows.is_empty());
     }
     #[test] fn missed_message_has_no_destination_and_ephemeral_dismissal_has_no_persisted_id(){let mut inbox=Inbox::default();let(id,msg,ch)=(Uuid::new_v4(),Uuid::new_v4(),Uuid::new_v4());inbox.event(event(id,msg));assert_eq!(inbox.rows[&id].channel_id,None);inbox.observe(message(ch,msg,1));assert_eq!(inbox.rows[&id].channel_id,Some(ch));inbox.mark(id);assert!(!inbox.rows[&id].persisted);assert!(!inbox.read.contains(&id));}
     #[test] fn desktop_preferences_and_permissions_hide_content(){
@@ -164,7 +176,7 @@ impl ReadJournal {
 #[cfg(test)]mod page_window_tests{
     use super::*;
     #[test]fn resetting_pages_is_recoverable_and_preserves_pending_read_precedence(){
-        let mut inbox=Inbox::default();let channel=Uuid::new_v4();let id=Uuid::new_v4();let row=NotificationSummary{id,message_id:Uuid::new_v4(),channel_id:channel,author_id:None,message_content:"preview".into(),read:false,created_at:chrono::Utc::now()};
+        let mut inbox=Inbox::default();let channel=Uuid::new_v4();let id=Uuid::new_v4();let row=NotificationSummary{webhook_id:None,external_author:None,id,message_id:Uuid::new_v4(),channel_id:channel,author_id:None,message_content:"preview".into(),read:false,created_at:chrono::Utc::now()};
         inbox.merge(vec![row.clone()]);inbox.mark(id);inbox.reset_pages();assert!(inbox.rows.is_empty());inbox.merge(vec![row]);assert!(inbox.rows[&id].read,"a stale page cannot undo a read across a paging reset");assert!(!inbox.rows[&id].pending_desktop,"paging cannot replay desktop alerts");
     }
 }

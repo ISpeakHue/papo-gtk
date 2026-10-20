@@ -93,7 +93,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let select=|id:Option<Uuid>|{let index={let model=main.model();let ids=model.notifications.view.as_ref().unwrap().channel_filter.ids.borrow();ids.iter().position(|current|*current==id).unwrap()};filter.set_selected(index as u32);pump(context);};
     select(Some(a));
     let a1=Uuid::new_v4();let a2=Uuid::new_v4();let b1=Uuid::new_v4();let dm1=Uuid::new_v4();let dm2=Uuid::new_v4();let dm3=Uuid::new_v4();
-    let notice=|id,channel,author,second:i64|NotificationSummary{id,message_id:Uuid::new_v4(),channel_id:channel,author_id:Some(author),message_content:"Filter fixture".into(),read:false,created_at:chrono::DateTime::from_timestamp(1791028800+second,0).unwrap()};
+    let notice=|id,channel,author,second:i64|NotificationSummary{webhook_id:None,external_author:None,id,message_id:Uuid::new_v4(),channel_id:channel,author_id:Some(author),message_content:"Filter fixture".into(),read:false,created_at:chrono::DateTime::from_timestamp(1791028800+second,0).unwrap()};
     {let mut state=main.state().get_mut();state.model.notifications.inbox=Inbox::default();state.model.notifications.inbox.merge(vec![notice(a1,a,peer_a,0),notice(a2,a,peer_a,1),notice(b1,b,peer_b,2),notice(dm1,dm_a,peer_a,3),notice(dm2,dm_a,peer_a,4),notice(dm3,dm_b,peer_b,5)]);}
     let baseline=backend.lock().unwrap().requests.len();main.emit(MainWindowMsg::Notification(NoticeMsg::FilterChanged));pump(context);
     let contains=|root:&gtk::Box,id|{

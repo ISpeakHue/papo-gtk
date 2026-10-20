@@ -4,6 +4,52 @@ Commands run from the repository root. See [Testing](../../TESTING.md) for setup
 Dated validation results describe their original fixture runs, rather than a
 current guarantee for every server, desktop or driver.
 
+## Backend contract review (2026-10-19, `e9cbcd1`)
+
+The local backend checkout matches GitHub's `main` at
+`e9cbcd1bfa31953c8482e48b2d7bec0b90aab3d7`. Reviewed model/OpenAPI additions,
+message services, search/notification queries, media maintenance and session
+revocation changes since the preceding GIF integration.
+
+- Attachments now expose nullable `thumbnail_width` and `thumbnail_height`.
+  Image/GIF placeholders and video posters reserve that aspect ratio before
+  downloading media. The server geometry stays authoritative when a GIF uses
+  original bytes. Missing, partial or invalid dimensions use the established
+  learned-size/fallback path. Existing inline size limits and adaptive resizing
+  still apply, including pinned chat views.
+- Search results and REST notifications now carry optional `webhook_id` and
+  `external_author`. Sender names, avatars and APP badges render independently
+  of observed chat history. Bound search rows and expanded notification groups
+  request pictures through the chat's bounded, deduplicated avatar queue/cache;
+  public transport isolation and permission filtering remain in force.
+- WebSocket notification events keep their earlier shape; older servers can omit
+  all new fields. Native users keep their existing attribution and role colors.
+- Webhook-avatar garbage collection is a server repair with no new client route.
+  Same-IP ban/session revocation closes sockets and invalidates sessions through
+  the existing authentication errors; the frontend already handles those errors
+  and clears session state. GIF resolution remains backend-provided. External
+  role colors were not added to the contract.
+
+```sh
+cargo check --locked --offline --all-targets
+cargo test --locked --offline -- --test-threads=2
+GTK_A11Y=none G_DEBUG=fatal-warnings PAPO_UI_CASE=backend-contracts dbus-run-session -- xvfb-run -a cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
+```
+
+The new private-display case checks media geometry before/after bytes arrive,
+responsive resizing, metadata-only webhook search/notices, one shared avatar
+request across views, cache reuse and revoked-channel concealment. It uses a
+mock server and generated images, without reading a real session.
+
+Validation: all-target compilation was warning-free and 280 automated tests
+passed (four desktop/device tests remain opt-in). The focused `backend-contracts`,
+`search-recycling`, `notification-window` and `webhook-chat` GUI cases passed with
+GTK warnings treated as fatal. The existing `image-geometry` resize case exposed
+a horizontal GtkBox measurement inconsistency; using a two-column grid for the
+message avatar/body preserves the layout and passes that strict resize case.
+The `embeds` and `media-cache` cases also passed with fatal GTK warnings after
+the layout correction. The new backend case is included in CI.
+
 ## Updated backend contract (2026-10-13, `b015f18`)
 
 The adjacent `papo-backend` update adds explicit channel read acknowledgements,

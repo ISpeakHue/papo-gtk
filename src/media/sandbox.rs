@@ -1,7 +1,30 @@
 //! File-media converters get no network, home, desktop sockets or writable source.
 use std::path::Path;
-pub(super) fn command(path:&Path,script:&str)->anyhow::Result<tokio::process::Command>{
+pub(super) struct Command{process:tokio::process::Command,input:Option<std::path::PathBuf>}
+impl Command{pub async fn output(&mut self)->std::io::Result<std::process::Output>{self.process.output().await}}
+impl Drop for Command{fn drop(&mut self){if let Some(path)=&self.input{let _=std::fs::remove_file(path);}}}
+pub(super) fn command(path:&Path,script:&str)->anyhow::Result<Command>{
     let source=path.canonicalize()?;
+    if Path::new("/.flatpak-info").is_file(){
+        // Nested user namespaces are denied by Flatpak's seccomp policy. Its
+        // portal starts a tighter copy of this app, never a host command.
+        // Instance-private /tmp paths cannot be handed to another sandbox.
+        // Stage just this input in the portal's documented exposure directory.
+        let home=dirs::home_dir().ok_or_else(||anyhow::anyhow!("Diretório do aplicativo indisponível"))?;
+        let directory=home.join(".var/app").join(crate::app::APP_ID).join("sandbox");std::fs::create_dir_all(&directory)?;
+        let name=format!("papo-media-{}",uuid::Uuid::new_v4());let input=directory.join(&name);
+        let mut wrapper=Command{process:tokio::process::Command::new("/usr/bin/flatpak-spawn"),input:Some(input.clone())};
+        #[cfg(unix)]{use std::os::unix::fs::PermissionsExt;std::fs::set_permissions(&directory,std::fs::Permissions::from_mode(0o700))?;}
+        std::fs::copy(&source,&input)?;
+        let cmd=&mut wrapper.process;
+        cmd.args(["--sandbox","--no-network","--watch-bus","--clear-env","--directory=/","--unset-env=DBUS_SESSION_BUS_ADDRESS","--unset-env=PULSE_SERVER"])
+            .arg(format!("--sandbox-expose-ro={name}"))
+            .args(["--env=PATH=/app/bin:/usr/bin","--env=LANG=C.UTF-8","--env=GST_DEBUG=0","--env=XDG_CACHE_HOME=/tmp/cache","--env=GST_REGISTRY_1_0=/tmp/registry.bin"]);
+        for key in ["GI_TYPELIB_PATH","GST_PLUGIN_SYSTEM_PATH","GST_PLUGIN_SYSTEM_PATH_1_0","LD_LIBRARY_PATH"]{
+            if let Some(value)=std::env::var_os(key){let mut arg=std::ffi::OsString::from(format!("--env={key}="));arg.push(value);cmd.arg(arg);}
+        }
+        cmd.args(["/usr/bin/python3","-s","-u","-c",script]).arg(input).kill_on_drop(true);return Ok(wrapper);
+    }
     let app=std::env::var_os("PAPO_APPDIR").map(std::path::PathBuf::from);
     let binary=app.as_ref().map_or_else(||"/usr/bin/bwrap".into(),|p|p.join("usr/libexec/bwrap.real"));
     anyhow::ensure!(binary.is_file(),"Instale bubblewrap para gerar prévias de vídeo com segurança.");
@@ -16,7 +39,7 @@ pub(super) fn command(path:&Path,script:&str)->anyhow::Result<tokio::process::Co
         }
     }
     let python=std::env::var_os("PAPO_PYTHON").filter(|v|!v.is_empty()).unwrap_or_else(||"/usr/bin/python3".into());
-    cmd.arg("--").arg(python).args(["-s","-u","-c",script,"/input/media"]).kill_on_drop(true);Ok(cmd)
+    cmd.arg("--").arg(python).args(["-s","-u","-c",script,"/input/media"]).kill_on_drop(true);Ok(Command{process:cmd,input:None})
 }
 
 #[cfg(test)]mod tests{

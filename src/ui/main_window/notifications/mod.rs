@@ -189,6 +189,10 @@ impl MainWindowModel {
         for ids in missing.chunks(50){self.fetch_members(ids.to_vec(),sender.clone());}
 
     }
+    pub(super) fn notice_external<'a>(&'a self,n:&'a state::Notice)->Option<&'a crate::models::ExternalAuthor>{
+        if n.author_id.is_some(){return None;}
+        n.external().or_else(||self.notifications.inbox.messages.get(&n.message_id).and_then(|m|m.external()))
+    }
     pub(super) fn render_inbox(&self,sender:&ComponentSender<Self>){
         let _timing=crate::performance::timer("inbox_update_us");
         let channels=self.notification_channels();
@@ -229,8 +233,9 @@ impl MainWindowModel {
                 present.insert(n.id);let channel=n.channel_id.and_then(|id|channel_index.get(&id).copied());
                 let author=channel.and_then(|_|self.notice_author(n));
                 let translated=if preview{crate::ui::chat::mentions::render(&n.content,&users)}else{String::new()};
-                let external_name=self.notifications.inbox.messages.get(&n.message_id).and_then(|m|m.external()).map(|a|a.name.as_str());
-                let signature=format!("{n:?}|{preview}|{translated}|{external_name:?}|{:?}|{:?}|{:?}|{}|{}|{}",channel.map(|c|&c.name),author.map(|a|(a.display_name(),&a.roles)),n.author_id.and_then(|id|self.avatars.textures.get(&id)).map(|t|t.as_ptr()),self.notifications.failed_marks.contains(&n.id),self.notifications.marks.contains(&n.id),self.notifications.seen_events.contains(&n.id));
+                let external=channel.and_then(|_|self.notice_external(n));
+                let external_name=external.map(|a|a.name.as_str());let external_texture=external.and_then(|a|self.chat.model().external_avatar(a));
+                let signature=format!("{:?}|{n:?}|{preview}|{translated}|{external_name:?}|{:?}|{:?}|{:?}|{}|{}|{}",external_texture.as_ref().map(|t|t.as_ptr()),channel.map(|c|&c.name),author.map(|a|(a.display_name(),&a.roles)),n.author_id.and_then(|id|self.avatars.textures.get(&id)).map(|t|t.as_ptr()),self.notifications.failed_marks.contains(&n.id),self.notifications.marks.contains(&n.id),self.notifications.seen_events.contains(&n.id));
                 if let Some((_,row))=group.rows.get(&n.id).filter(|(old,_)|*old==signature){order.push(row.clone().upcast());continue;}
                 crate::performance::record("notification_rows_built",1);
             let label=if let Some(channel)=channel{format!("{}{}{} · {}\n{}",if n.read{""}else{"● "},if personal{""}else{"#"},channel.name,n.created_at.format("%d/%m/%Y %H:%M"),if preview{translated}else{"Nova mensagem".into()})}else{"Nova notificação — mensagem não localizada ou canal indisponível".into()};
@@ -238,9 +243,9 @@ impl MainWindowModel {
             let content=gtk::Box::new(gtk::Orientation::Horizontal,10);let details=gtk::Box::new(gtk::Orientation::Vertical,4);
             if channel.is_some(){
                 let author=self.notice_author(n);
-                let name=author.map(|u|u.display_name()).or_else(||self.notifications.inbox.messages.get(&n.message_id).and_then(|m|m.external()).map(|a|a.name.as_str())).unwrap_or("Membro indisponível");
-                let avatar=crate::media::avatar_image(n.author_id.and_then(|id|self.avatars.textures.get(&id)),36);avatar.set_text(Some(name));avatar.set_valign(gtk::Align::Start);content.append(&avatar);
-                let heading=gtk::Label::new(Some(name));heading.set_xalign(0.0);heading.add_css_class("heading");if let Some(roles)=author.and_then(|u|u.roles.as_deref()){crate::ui::style::role_color(&heading,roles);}details.append(&heading);
+                let name=author.map(|u|u.display_name()).or_else(||self.notice_external(n).map(|a|a.name.as_str())).unwrap_or("Membro indisponível");
+                let avatar=crate::media::avatar_image(n.author_id.and_then(|id|self.avatars.textures.get(&id)).or(external_texture.as_ref()),36);avatar.set_text(Some(name));avatar.set_valign(gtk::Align::Start);content.append(&avatar);
+                let heading=gtk::Label::new(Some(name));heading.set_xalign(0.0);heading.add_css_class("heading");if let Some(roles)=author.and_then(|u|u.roles.as_deref()){crate::ui::style::role_color(&heading,roles);}let identity=gtk::Box::new(gtk::Orientation::Horizontal,6);identity.append(&heading);if external.is_some(){let badge=gtk::Label::new(Some("APP"));badge.add_css_class("accent");badge.add_css_class("caption");identity.append(&badge);}details.append(&identity);
             }
             let l=gtk::Label::new(Some(&label));l.set_wrap(true);l.set_xalign(0.0);details.append(&l);content.append(&details);open.set_child(Some(&content));let input=sender.input_sender().clone();let id=n.id;open.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Notification(NoticeMsg::OpenMessage(id)));});row.append(&open);
             if (!n.read||self.notifications.seen_events.contains(&id))&&(self.notifications.failed_marks.contains(&id)||channel.is_none()){let mark=gtk::Button::with_label(if n.persisted{"Marcar lida"}else{"Dispensar"});mark.set_sensitive(!self.notifications.marks.contains(&id));let input=sender.input_sender().clone();mark.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Notification(NoticeMsg::Mark(id)));});row.append(&mark);}
@@ -254,6 +259,8 @@ impl MainWindowModel {
         let displayed:HashSet<_>=groups.values().flat_map(|g|g.rows.keys().copied()).collect();
         let avatars=self.notifications.inbox.rows.values().filter(|n|displayed.contains(&n.id)).filter_map(|n|n.author_id).collect();
         sender.input(MainWindowMsg::VisibleAvatars(avatars));
+        let external=self.notifications.inbox.rows.values().filter(|n|displayed.contains(&n.id)&&n.channel_id.is_some_and(|id|self.can_read_target(id))).filter_map(|n|self.notice_external(n).cloned()).take(128).collect::<Vec<_>>();
+        if !external.is_empty(){self.chat.emit(ChatMsg::ExternalAvatars(external));}
         v.scope.set_text(if self.notifications.more{"Os contadores e filtros incluem só as notificações carregadas. Há mais páginas anteriores."}else{"Contadores e filtros das notificações carregadas."});
         v.more.set_sensitive(self.notifications.more&&self.notifications.request.is_none());
         v.more.set_label(if self.notifications.inbox.rows.len()>=NOTICE_WINDOW{"Carregar anteriores e liberar páginas atuais"}else{"Mais notificações"});
@@ -459,7 +466,7 @@ pub(crate) fn exercise_denied(main:&Controller<MainWindowModel>,context:&gtk::gl
     let main=MainWindowModel::builder().launch(MainWindowInit{current_user,api_client:api}).detach();let host=adw::Window::builder().default_width(1000).default_height(720).content(main.widget()).build();host.present();
     until(context,||main.model().background_started&&main.model().notifications.request.is_none());main.emit(MainWindowMsg::Notification(NoticeMsg::Open));until(context,||main.model().notifications.request.is_none()&&main.model().notifications.view.as_ref().is_some_and(|v|v.window.is_visible()));
     let channel=main.model().channels[0].id;
-    {let mut state=main.state().get_mut();let model=&mut state.model;model.notifications.inbox=Default::default();model.notifications.more=true;model.notifications.inbox.merge((0..NOTICE_WINDOW).map(|_|crate::models::NotificationSummary{id:Uuid::new_v4(),message_id:Uuid::new_v4(),channel_id:channel,author_id:None,message_content:"fixture".into(),read:false,created_at:chrono::Utc::now()}).collect());}
+    {let mut state=main.state().get_mut();let model=&mut state.model;model.notifications.inbox=Default::default();model.notifications.more=true;model.notifications.inbox.merge((0..NOTICE_WINDOW).map(|_|crate::models::NotificationSummary{webhook_id:None,external_author:None,id:Uuid::new_v4(),message_id:Uuid::new_v4(),channel_id:channel,author_id:None,message_content:"fixture".into(),read:false,created_at:chrono::Utc::now()}).collect());}
     main.emit(MainWindowMsg::Notification(NoticeMsg::TabChanged));pump(context);
     let w=main.model().notifications.view.as_ref().unwrap().window.clone();assert!(find_button(w.upcast_ref(),"Carregar anteriores e liberar páginas atuais").is_sensitive());assert!(find_button(w.upcast_ref(),"Voltar às notificações mais recentes").is_visible());
     assert!(main.model().notifications.view.as_ref().unwrap().groups.borrow().values().all(|g|g.rows.is_empty()),"one thousand collapsed notices do not create message widgets");

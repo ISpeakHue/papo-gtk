@@ -1,7 +1,8 @@
 # Webhook support
 
-The frontend follows papo-backend revision `b2f2c43` (including the persistent
-webhook identity added in `4179747`). No backend changes are required.
+The frontend follows papo-backend revision `e9cbcd1` (including persistent
+webhook identity and sender metadata in search and notification results).
+The new summary fields remain optional for compatibility with older servers.
 
 Open the server-name menu and choose **Webhooks**. The server owner and members
 with the independent **Gerenciar webhooks** role permission can:
@@ -61,9 +62,14 @@ therefore use the theme's normal text color. Native Papo users still use their
 role colors. Supporting external role colors requires that metadata in the
 backend contract; matching external names to native accounts would be ambiguous.
 
-The backend already supplies external sender names in search results and channel
-previews. Notifications use the sender metadata when their message is known;
-the notification REST/event contracts do not independently include that metadata.
+REST search and notification results supply `webhook_id` and `external_author`.
+Their views display the sender name, avatar and APP badge without requiring the
+message to be loaded in chat. Avatar demand follows bound search rows and
+expanded notification groups, sharing the chat cache, queue and request budgets.
+Live notification events still carry the minimal author/message fields; observed
+message metadata supplies attribution until the REST summary arrives. Missing
+fields from older servers retain the existing fallback labels. Channel previews
+continue to use the backend-provided sender name.
 Audit entries with `metadata.webhook_id` identify the machine rather than
 attributing its actions to the credential's creator. Legacy bot embeds continue
 to render through their existing path.

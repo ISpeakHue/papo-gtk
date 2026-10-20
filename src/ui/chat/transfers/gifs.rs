@@ -33,7 +33,7 @@ fn info(embed:Option<&Embed>,source:Option<&str>)->gtk::Box{
 pub(super) fn widget(embed:Option<&Embed>,source:Option<&str>,message:Uuid,key:Uuid,media:&Transfers,sender:&ComponentSender<ChatModel>)->gtk::Box{
     let container=gtk::Box::new(gtk::Orientation::Vertical,0);container.set_widget_name(&format!("gif-{key}"));container.set_halign(gtk::Align::Start);
     if let Some(picture)=media.picture(key){
-        let button=gtk::Button::new();button.set_has_frame(false);button.set_halign(gtk::Align::Start);button.add_css_class("papo-inline-image");button.set_tooltip_text(Some("Abrir GIF"));button.set_child(Some(&media.image_frame(key,&picture,true)));
+        let button=gtk::Button::new();button.set_has_frame(false);button.set_halign(gtk::Align::Start);button.add_css_class("papo-inline-image");button.set_tooltip_text(Some("Abrir GIF"));button.set_child(Some(&media.image_frame(key,&picture,true,None)));
         let input=sender.input_sender().clone();button.connect_clicked(move |_|{let _=input.send(ChatMsg::Transfer(TransferMsg::OpenImage{message,key}));});container.append(&button);
     }else{
         let placeholder=gtk::Box::new(gtk::Orientation::Vertical,6);placeholder.set_halign(gtk::Align::Center);placeholder.set_valign(gtk::Align::Center);

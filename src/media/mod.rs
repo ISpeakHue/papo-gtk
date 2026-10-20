@@ -10,6 +10,7 @@ pub mod avatars;
 pub mod sound;
 pub mod runtime;
 pub mod preview;
+pub mod inline;
 pub mod frame;
 pub mod animation;
 pub mod emoji;

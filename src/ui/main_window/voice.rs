@@ -63,7 +63,7 @@ impl MainWindowModel {
         let message=if self.voice.call.is_some(){"Conexão encerrada. Entre na voz novamente após reconectar.".into()}else{self.voice.status.text()};
         self.voice.connection=None;self.voice.pending_leave=None;self.voice.members.clear();self.voice.speakers.clear();self.voice.presence.clear();self.stop_voice(false,&message);}
     pub(super) fn publish_voice_channels(&self){
-        let mut channels=self.channels.clone();channels.retain(|c|c.channel_type!=Some(ChannelType::Voice)||self.voice_allowed(c.id));channels.extend(self.managed_channels.iter().filter(|c|self.voice_allowed(c.id)&&!channels.iter().any(|item|item.id==c.id)).cloned().collect::<Vec<_>>());channels.sort_by_key(|c|c.position.unwrap_or(0));self.sidebar.emit(SidebarMsg::SetChannels(channels));
+        let mut channels=self.channels.clone();channels.extend(self.managed_channels.iter().filter(|c|self.voice_allowed(c.id)&&!channels.iter().any(|item|item.id==c.id)).cloned().collect::<Vec<_>>());channels.sort_by_key(|c|c.position.unwrap_or(0));self.sidebar.emit(SidebarMsg::SetChannels(channels));
     }
     pub(super) fn sync_voice_access(&mut self){
         if self.voice.call.as_ref().is_some_and(|c|!self.voice_allowed(c.channel)){self.stop_voice(true,"Acesso à voz revogado ou canal excluído.");}
@@ -74,9 +74,9 @@ impl MainWindowModel {
     }
     pub(super) fn voice_allowed(&self,id:Uuid)->bool{self.access.get(&id).is_some_and(|a|a.voice)&&self.managed_channels.iter().any(|c|c.id==id&&c.channel_type==Some(ChannelType::Voice))}
     pub(super) fn render_voice(&self){
-        let rooms=self.managed_channels.iter().filter(|c|self.voice_allowed(c.id)).map(|channel|{
+        let rooms=self.managed_channels.iter().filter(|c|c.channel_type==Some(ChannelType::Voice)&&(self.voice_allowed(c.id)||self.access.get(&c.id).is_some_and(|a|a.read))).map(|channel|{
             let mut ids:HashSet<_>=self.voice.members.get(&channel.id).into_iter().flat_map(|m|m.keys().copied()).collect();ids.extend(self.voice.presence.iter().filter(|(_,channels)|channels.contains(&channel.id)).map(|(id,_)|*id));if self.voice.call.as_ref().is_some_and(|c|c.channel==channel.id){ids.insert(self.current_user.id);}let mut ids:Vec<_>=ids.into_iter().collect();ids.sort();
-            crate::ui::sidebar::VoiceRoom{id:channel.id,members:ids.into_iter().map(|id|{let state=self.voice.members.get(&channel.id).and_then(|m|m.get(&id));crate::ui::sidebar::VoiceParticipant{id,name:self.users.iter().find(|u|u.id==id).map(|u|u.display_name().to_owned()).unwrap_or_else(||id.to_string()),muted:if id==self.current_user.id{self.voice.call.as_ref().filter(|c|c.channel==channel.id).map_or(state.is_some_and(|m|m.muted),|c|c.muted)}else{state.is_some_and(|m|m.muted)},speaking:if id==self.current_user.id&&self.voice.call.as_ref().is_some_and(|c|c.channel==channel.id){self.voice.local_speaking&&self.voice.call.as_ref().is_some_and(|c|!c.muted)}else{self.voice.speakers.get(&channel.id).is_some_and(|s|s.contains(&id))},camera:id!=self.current_user.id&&state.is_some_and(|m|m.camera_on)&&self.voice.call.as_ref().is_some_and(|c|c.channel==channel.id&&c.phase==Phase::Connected),screen:id!=self.current_user.id&&state.is_some_and(|m|m.screen_sharing)&&self.voice.call.as_ref().is_some_and(|c|c.channel==channel.id&&c.phase==Phase::Connected)}}).collect()}
+            crate::ui::sidebar::VoiceRoom{id:channel.id,can_chat:self.access.get(&channel.id).is_some_and(|a|a.read),can_connect:self.voice_allowed(channel.id),members:ids.into_iter().map(|id|{let state=self.voice.members.get(&channel.id).and_then(|m|m.get(&id));crate::ui::sidebar::VoiceParticipant{id,name:self.users.iter().find(|u|u.id==id).map(|u|u.display_name().to_owned()).unwrap_or_else(||id.to_string()),muted:if id==self.current_user.id{self.voice.call.as_ref().filter(|c|c.channel==channel.id).map_or(state.is_some_and(|m|m.muted),|c|c.muted)}else{state.is_some_and(|m|m.muted)},speaking:if id==self.current_user.id&&self.voice.call.as_ref().is_some_and(|c|c.channel==channel.id){self.voice.local_speaking&&self.voice.call.as_ref().is_some_and(|c|!c.muted)}else{self.voice.speakers.get(&channel.id).is_some_and(|s|s.contains(&id))},camera:id!=self.current_user.id&&state.is_some_and(|m|m.camera_on)&&self.voice.call.as_ref().is_some_and(|c|c.channel==channel.id&&c.phase==Phase::Connected),screen:id!=self.current_user.id&&state.is_some_and(|m|m.screen_sharing)&&self.voice.call.as_ref().is_some_and(|c|c.channel==channel.id&&c.phase==Phase::Connected)}}).collect()}
         }).collect();
         let id=self.voice.call.as_ref().map(|c|c.channel).or(self.voice.selected);
         self.sidebar.emit(SidebarMsg::VoiceRooms{rooms,selected:id});
@@ -180,3 +180,5 @@ impl MainWindowModel {
 
 #[cfg(test)]
 pub(crate) mod tests;
+
+#[cfg(test)]pub(crate) mod chat_tests;

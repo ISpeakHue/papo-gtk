@@ -1,0 +1,32 @@
+{
+  "app-id": "br.com.papo.gtk",
+  "runtime": "org.gnome.Platform",
+  "runtime-version": "50",
+  "sdk": "org.gnome.Sdk",
+  "sdk-extensions": ["org.freedesktop.Sdk.Extension.rust-stable"],
+  "command": "papo-gtk",
+  "branch": "stable",
+  "finish-args": [
+    "--share=network", "--share=ipc", "--socket=wayland", "--socket=fallback-x11",
+    "--socket=pulseaudio", "--device=all", "--talk-name=org.freedesktop.secrets"
+  ],
+  "build-options": {
+    "append-path": "/usr/lib/sdk/rust-stable/bin",
+    "env": {"CARGO_BUILD_JOBS": "2", "CARGO_NET_OFFLINE": "true"}
+  },
+  "modules": [{
+    "name": "papo-gtk",
+    "buildsystem": "simple",
+    "build-commands": [
+      "cargo build --release --locked --offline",
+      "install -Dm755 target/release/papo-gtk /app/bin/papo-gtk",
+      "install -Dm644 data/br.com.papo.gtk.desktop /app/share/applications/br.com.papo.gtk.desktop",
+      "install -Dm644 data/br.com.papo.gtk.metainfo.xml /app/share/metainfo/br.com.papo.gtk.metainfo.xml",
+      "install -Dm644 assets/icons/hicolor/128x128/apps/br.com.papo.gtk.png /app/share/icons/hicolor/128x128/apps/br.com.papo.gtk.png",
+      "install -Dm644 assets/icons/hicolor/256x256/apps/br.com.papo.gtk.png /app/share/icons/hicolor/256x256/apps/br.com.papo.gtk.png",
+      "install -Dm644 LICENSE /app/share/licenses/papo-gtk/LICENSE",
+      "install -Dm755 packaging/flatpak/runtime-check.py /app/bin/papo-runtime-check"
+    ],
+    "sources": [{"type": "dir", "path": "../../target/flatpak/source"}]
+  }]
+}

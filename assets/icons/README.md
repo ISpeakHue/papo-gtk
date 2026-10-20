@@ -1,5 +1,16 @@
 # Pelican application icon
 
+## Control icons
+
+Application controls use the Adwaita SVGs in `symbolic/`, embedded in the
+executable through `papo.gresource.xml` under `papo-*-symbolic` names. Their
+availability and artwork do not depend on the host desktop's icon theme. This
+also covers AppImage and Flatpak builds; GTK supplies the foreground colors.
+Attribution, original paths and upstream license notices are in
+[`symbolic/licenses/`](symbolic/licenses/README.md).
+
+## Application artwork
+
 The application uses the approved head-and-neck artwork. Its 128px and 256px
 PNG exports are in `hicolor/`, named `br.com.papo.gtk.png` to match the app ID.
 They are embedded through [the resource manifest](../papo.gresource.xml) and used

@@ -148,6 +148,7 @@ def main():
     certificate_file = ssl.get_default_verify_paths().cafile or '/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem'
     copy(certificate_file, APPDIR / 'usr/share/papo-gtk/ca-certificates.crt')
     copy(PROJECT / 'LICENSE', APPDIR / 'usr/share/licenses/papo-gtk/LICENSE')
+    tree(PROJECT / 'assets/icons/symbolic/licenses', APPDIR / 'usr/share/licenses/papo-gtk/symbolic-icons')
     tree('/usr/share/licenses', APPDIR / 'usr/share/licenses/fedora')
     manifest = subprocess.check_output(['rpm', '-qa', '--qf', '%{NAME}\t%{VERSION}-%{RELEASE}\t%{ARCH}\t%{SOURCERPM}\t%{LICENSE}\n'], text=True)
     (APPDIR / 'usr/share/papo-gtk/fedora-packages.tsv').write_text(''.join(sorted(manifest.splitlines(keepends=True))))

@@ -18,7 +18,7 @@ impl Kind {
         let mime=gtk::gio::content_type_get_mime_type(&kind);
         match mime.as_deref(){Some(v) if v.starts_with("image/")=>Self::Image,Some(v) if v.starts_with("video/")=>Self::Video,_=>Self::File}
     }
-    fn icon(self)->&'static str{match self{Self::Image=>"image-x-generic-symbolic",Self::Video=>"video-x-generic-symbolic",Self::File=>"text-x-generic-symbolic"}}
+    fn icon(self)->&'static str{match self{Self::Image=>"papo-image-x-generic-symbolic",Self::Video=>"papo-video-x-generic-symbolic",Self::File=>"papo-text-x-generic-symbolic"}}
 }
 struct Entry {
     token:Uuid,texture:Option<gtk::gdk::Texture>,job:Option<tokio::task::JoinHandle<()>>,
@@ -68,8 +68,8 @@ impl Previews {
             let fallback=gtk::Image::from_icon_name(kind.icon());fallback.set_pixel_size(32);fallback.set_halign(gtk::Align::Center);fallback.set_valign(gtk::Align::Center);
             if let Some(entry)=self.entries.get_mut(&key){picture.set_paintable(entry.texture.as_ref());fallback.set_visible(entry.texture.is_none());entry.views.push((picture.downgrade(),fallback.downgrade()));}
             preview.set_child(Some(&picture));preview.add_overlay(&fallback);
-            if kind==Kind::Video{let play=gtk::Image::from_icon_name("media-playback-start-symbolic");play.set_halign(gtk::Align::Start);play.set_valign(gtk::Align::End);play.set_margin_start(6);play.set_margin_bottom(4);play.add_css_class("osd");preview.add_overlay(&play);}
-            let remove=gtk::Button::from_icon_name("window-close-symbolic");remove.set_widget_name(&format!("remove-draft-attachment-{index}"));remove.add_css_class("circular");remove.add_css_class("osd");remove.set_halign(gtk::Align::End);remove.set_valign(gtk::Align::Start);remove.set_margin_end(4);remove.set_margin_top(4);remove.set_sensitive(!sending);
+            if kind==Kind::Video{let play=gtk::Image::from_icon_name("papo-media-playback-start-symbolic");play.set_halign(gtk::Align::Start);play.set_valign(gtk::Align::End);play.set_margin_start(6);play.set_margin_bottom(4);play.add_css_class("osd");preview.add_overlay(&play);}
+            let remove=gtk::Button::from_icon_name("papo-window-close-symbolic");remove.set_widget_name(&format!("remove-draft-attachment-{index}"));remove.add_css_class("circular");remove.add_css_class("osd");remove.set_halign(gtk::Align::End);remove.set_valign(gtk::Align::Start);remove.set_margin_end(4);remove.set_margin_top(4);remove.set_sensitive(!sending);
             remove.set_tooltip_text(Some(&format!("Remover {}",file.name)));let input=sender.input_sender().clone();remove.connect_clicked(move |_|{let _=input.send(ChatMsg::Transfer(TransferMsg::Remove(index)));});preview.add_overlay(&remove);card.append(&preview);
             let name=gtk::Label::new(Some(&file.name));name.set_max_width_chars(16);name.set_ellipsize(pango::EllipsizeMode::Middle);name.add_css_class("caption");name.set_margin_bottom(4);card.append(&name);root.append(&card);
         }

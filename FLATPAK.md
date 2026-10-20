@@ -2,14 +2,17 @@
 
 Papo's x86_64 Flatpak uses the GNOME 50 runtime (GTK 4.22 and libadwaita 1.9).
 It works on GNOME and KDE desktops through Flatpak's runtime and desktop portals.
+Application control icons are embedded in the executable with Papo-specific
+names; they remain available when the desktop selects a theme absent from the
+Flatpak runtime. GTK applies the active foreground colors to the symbolic SVGs.
 
-## Install version 1.0.1
+## Install version 1.0.2
 
-Download `Papo-1.0.1-x86_64.flatpak` from
-[GitHub Releases](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.0.1), then:
+Download `Papo-1.0.2-x86_64.flatpak` from
+[GitHub Releases](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.0.2), then:
 
 ```sh
-flatpak install --user ./Papo-1.0.1-x86_64.flatpak
+flatpak install --user ./Papo-1.0.2-x86_64.flatpak
 flatpak run br.com.papo.gtk
 ```
 
@@ -67,6 +70,15 @@ devices still need desktop acceptance testing.
 [Flatpak bundles](https://docs.flatpak.org/en/latest/single-file-bundles.html)
 and [sandbox permissions](https://docs.flatpak.org/en/latest/sandbox-permissions.html)
 describe the distribution format and permission model.
+
+## Version 1.0.2 validation (2026-10-20)
+
+The installed versioned bundle reports 1.0.2 and passed its runtime check with
+38 media elements and isolated MP4/MOV/WebM conversion. All 47 embedded control
+icons resolved and decoded with Adwaita, Breeze and an unavailable desktop theme
+selected, at 1x/2x scale. Private Wayland startup passed with separate test
+settings and fatal GTK warnings. See [desktop testing](docs/testing/desktop.md#bundled-control-icons)
+for source checks and the pre-existing broader GUI-test limitations.
 
 ## Version 1.0.1 validation (2026-10-20)
 

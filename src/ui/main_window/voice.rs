@@ -29,12 +29,12 @@ impl Voice {
         let panel=gtk::Box::new(gtk::Orientation::Vertical,4);panel.add_css_class("papo-voice-dock");panel.set_visible(false);
         let heading=gtk::Box::new(gtk::Orientation::Horizontal,4);let title=gtk::Label::new(None);title.set_xalign(0.0);title.set_hexpand(true);title.set_ellipsize(gtk::pango::EllipsizeMode::End);title.add_css_class("caption-heading");heading.append(&title);panel.append(&heading);
         fn button(icon:&str,label:&str,s:&ComponentSender<MainWindowModel>,f:impl Fn()->VoiceMsg+'static)->gtk::Button{let w=if icon.is_empty(){gtk::Button::with_label(label)}else{gtk::Button::from_icon_name(icon)};w.set_tooltip_text(Some(label));let s=s.clone();w.connect_clicked(move |_|s.input(MainWindowMsg::Voice(f())));w}
-        let close=button("window-close-symbolic","Fechar voz",s,||VoiceMsg::Close);close.add_css_class("flat");heading.append(&close);
+        let close=button("papo-window-close-symbolic","Fechar voz",s,||VoiceMsg::Close);close.add_css_class("flat");heading.append(&close);
         let controls=gtk::Box::new(gtk::Orientation::Horizontal,4);panel.append(&controls);
         let join=button("","Entrar na chamada",s,||VoiceMsg::Join);join.add_css_class("suggested-action");join.set_hexpand(true);controls.append(&join);
-        let mute=gtk::ToggleButton::new();mute.set_icon_name("microphone-disabled-symbolic");mute.set_tooltip_text(Some("Microfone silenciado"));mute.set_active(true);let s2=s.clone();mute.connect_toggled(move |_|s2.input(MainWindowMsg::Voice(VoiceMsg::Mute)));controls.append(&mute);
-        let settings_button=button("emblem-system-symbolic","Configurar chamada",s,||VoiceMsg::Settings);settings_button.add_css_class("flat");controls.append(&settings_button);
-        let leave=button("call-stop-symbolic","Sair da voz",s,||VoiceMsg::Leave);leave.add_css_class("flat");controls.append(&leave);
+        let mute=gtk::ToggleButton::new();mute.set_icon_name("papo-microphone-disabled-symbolic");mute.set_tooltip_text(Some("Microfone silenciado"));mute.set_active(true);let s2=s.clone();mute.connect_toggled(move |_|s2.input(MainWindowMsg::Voice(VoiceMsg::Mute)));controls.append(&mute);
+        let settings_button=button("papo-emblem-system-symbolic","Configurar chamada",s,||VoiceMsg::Settings);settings_button.add_css_class("flat");controls.append(&settings_button);
+        let leave=button("papo-call-stop-symbolic","Sair da voz",s,||VoiceMsg::Leave);leave.add_css_class("flat");controls.append(&leave);
         let status=gtk::Label::new(None);status.set_visible(false);status.connect_notify_local(Some("label"),|label,_|label.set_visible(!label.text().is_empty()));status.set_xalign(0.0);status.set_ellipsize(gtk::pango::EllipsizeMode::End);status.add_css_class("caption");status.add_css_class("dim-label");panel.append(&status);
         let settings::Controls{window:settings,body,devices,gain}=settings::new(s);
         let video=VideoControls::new(&body,&controls,s);
@@ -88,7 +88,7 @@ impl MainWindowModel {
         self.voice.panel.set_visible(true);self.voice.join.set_visible(self.voice.call.is_none());self.voice.leave.set_visible(self.voice.call.is_some());self.voice.mute.set_visible(self.voice.call.is_some());self.voice.video.screen.set_visible(self.voice.call.is_some());self.voice.settings_button.set_sensitive(self.voice_allowed(id));
         self.voice.leave.set_sensitive(self.voice.call.is_some());self.voice.mute.set_sensitive(self.voice.call.as_ref().is_some_and(|c|matches!(c.phase,Phase::Negotiating|Phase::Connected)));
         if let Some(call)=&self.voice.call{if self.voice.mute.is_active()!=call.muted{self.voice.mute.set_active(call.muted);}}
-        self.voice.mute.set_icon_name(if self.voice.mute.is_active(){"microphone-disabled-symbolic"}else{"microphone-sensitivity-high-symbolic"});
+        self.voice.mute.set_icon_name(if self.voice.mute.is_active(){"papo-microphone-disabled-symbolic"}else{"papo-microphone-sensitivity-high-symbolic"});
         self.voice.mute.set_tooltip_text(Some(if self.voice.mute.is_active(){"Ativar microfone"}else{"Silenciar microfone"}));
         self.voice.status.set_tooltip_text(Some(&self.voice.status.text()));
         let mut ids:HashSet<_>=self.voice.members.get(&id).into_iter().flat_map(|m|m.keys().copied()).collect();

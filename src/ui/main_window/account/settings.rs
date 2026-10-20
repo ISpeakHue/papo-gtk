@@ -48,7 +48,7 @@ impl MainWindowModel {
         let switcher=gtk::Box::new(gtk::Orientation::Horizontal,8);switcher.set_halign(gtk::Align::Center);switcher.set_hexpand(true);navigation.append(&switcher);
         let compact=adw::Breakpoint::new(adw::BreakpointCondition::parse("max-width: 520sp").unwrap());
         let mut buttons:Vec<(Tab,gtk::ToggleButton)>=Vec::new();
-        for (tab,title,icon) in [(Tab::Profile,"Meu perfil","avatar-default-symbolic"),(Tab::Preferences,"Preferências","preferences-system-symbolic"),(Tab::Security,"Segurança","security-high-symbolic")]{
+        for (tab,title,icon) in [(Tab::Profile,"Meu perfil","papo-avatar-default-symbolic"),(Tab::Preferences,"Preferências","papo-preferences-system-symbolic"),(Tab::Security,"Segurança","papo-security-high-symbolic")]{
             let button=gtk::ToggleButton::new();button.add_css_class("flat");button.add_css_class("papo-settings-tab");button.set_widget_name(&format!("account-tab-{}",tab.name()));button.set_tooltip_text(Some(title));button.update_property(&[gtk::accessible::Property::Label(title)]);
             if let Some((_,first))=buttons.first(){button.set_group(Some(first));}
             let content=gtk::Box::new(gtk::Orientation::Horizontal,8);content.set_halign(gtk::Align::Center);let image=gtk::Image::from_icon_name(icon);image.set_pixel_size(18);content.append(&image);let label=gtk::Label::new(Some(title));content.append(&label);button.set_child(Some(&content));

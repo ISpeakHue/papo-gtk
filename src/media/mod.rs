@@ -81,7 +81,7 @@ pub fn bounded_texture_size(bytes:&[u8],width:u32,height:u32)->Option<Texture>{P
 /// PT-BR: Constrói um widget `adw::Avatar` com textura opcional e ícone padrão de fallback.
 pub fn avatar_image(texture: Option<&Texture>, size: i32) -> adw::Avatar {
     let image = adw::Avatar::new(size, None, false);
-    image.set_icon_name(Some("avatar-default-symbolic"));
+    image.set_icon_name(Some("papo-avatar-default-symbolic"));
     set_avatar(&image, texture);
     image
 }

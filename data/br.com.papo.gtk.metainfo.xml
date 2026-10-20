@@ -13,5 +13,5 @@
   <url type="vcs-browser">https://github.com/ISpeakHue/papo-gtk</url>
   <provides><binary>papo-gtk</binary></provides>
   <content_rating type="oars-1.1"/>
-  <releases><release version="1.0.1" date="2026-10-20"><description><p>Use backend-provided video dimensions, improve legacy video attachment recognition, and keep unsupported containers available as downloads.</p></description></release><release version="1.0.0" date="2026-10-20"><description><p>Voice-channel text chat, improved media caching and rendering, updated backend integration, and modern Linux packages.</p></description></release></releases>
+  <releases><release version="1.0.2" date="2026-10-20"><description><p>Embed application control icons for consistent rendering across desktop themes in AppImage and Flatpak packages.</p></description></release><release version="1.0.1" date="2026-10-20"><description><p>Use backend-provided video dimensions, improve legacy video attachment recognition, and keep unsupported containers available as downloads.</p></description></release><release version="1.0.0" date="2026-10-20"><description><p>Voice-channel text chat, improved media caching and rendering, updated backend integration, and modern Linux packages.</p></description></release></releases>
 </component>

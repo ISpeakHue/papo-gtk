@@ -80,6 +80,11 @@ mod tests {
                 .unwrap().downcast_ref::<gtk::Image>().unwrap();
             assert_eq!(brand.icon_name().as_deref(), Some(crate::app::APP_ID));
         }
+        if std::env::var("PAPO_UI_CASE").as_deref() == Ok("symbolic-icons") {
+            crate::app::branding::exercise_symbols();
+            window.close();
+            return;
+        }
         if std::env::var("PAPO_UI_CASE").as_deref() == Ok("branding") {
             let style = adw::StyleManager::default();
             let previous = style.color_scheme();
@@ -307,7 +312,7 @@ mod tests {
         let assert_fallback = |root: &gtk::Widget, size| {
             assert!(descendants(root).iter().filter_map(|widget| widget.downcast_ref::<adw::Avatar>())
                 .any(|image| image.size() == size && image.custom_image().is_none()
-                    && image.icon_name().as_deref() == Some("avatar-default-symbolic")));
+                    && image.icon_name().as_deref() == Some("papo-avatar-default-symbolic")));
         };
         for format in [image::ImageFormat::Png, image::ImageFormat::Jpeg,
             image::ImageFormat::Gif, image::ImageFormat::WebP] {

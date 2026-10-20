@@ -63,9 +63,9 @@ impl View{
             for (key,count,name,_) in &signature{
                 let button=gtk::ToggleButton::new();if let Some((_,first))=self.buttons.first(){button.set_group(Some(first));}button.add_css_class("flat");button.add_css_class("papo-reaction-filter");button.set_tooltip_text(Some(name));let accessible=format!("{name} · {count} reações");button.update_property(&[gtk::accessible::Property::Label(&accessible)]);
                 let content=gtk::Box::new(gtk::Orientation::Horizontal,8);content.set_halign(gtk::Align::Center);
-                if let Some(id)=key.0{if let Some(image)=actions.emoji_image(id,24){content.append(&image);}else{let image=gtk::Image::from_icon_name("face-smile-symbolic");image.set_pixel_size(24);content.append(&image);}}
+                if let Some(id)=key.0{if let Some(image)=actions.emoji_image(id,24){content.append(&image);}else{let image=gtk::Image::from_icon_name("papo-face-smile-symbolic");image.set_pixel_size(24);content.append(&image);}}
                 else if let Some(unicode)=key.1.as_deref(){let emoji=gtk::Label::new(Some(unicode));emoji.add_css_class("title-3");content.append(&emoji);}
-                else{let image=gtk::Image::from_icon_name("face-smile-symbolic");image.set_pixel_size(24);content.append(&image);}
+                else{let image=gtk::Image::from_icon_name("papo-face-smile-symbolic");image.set_pixel_size(24);content.append(&image);}
                 let count=gtk::Label::new(Some(&count.to_string()));count.add_css_class("heading");content.append(&count);button.set_child(Some(&content));
                 let input=sender.input_sender().clone();let token=self.token;let key_copy=key.clone();button.connect_clicked(move |_|{let _=input.send(ChatMsg::Action(ActionMsg::SelectParticipants{token,key:key_copy.clone()}));});self.filters.append(&button);self.buttons.push((key.clone(),button));
             }self.filter_signature=signature;

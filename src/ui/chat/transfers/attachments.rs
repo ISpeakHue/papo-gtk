@@ -32,7 +32,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let card=|id|descendants(chat.widget().upcast_ref()).into_iter().find(|w|w.widget_name().starts_with(&format!("attachment-{id}-"))).unwrap();
     for key in [png,video,gif]{
         assert!(!descendants(&card(key)).iter().any(|w|w.is::<gtk::Label>()),"visual attachments must have no filename/size header");
-        assert!(!descendants(&card(key)).iter().any(|w|w.downcast_ref::<gtk::Button>().is_some_and(|b|b.icon_name().as_deref()==Some("folder-download-symbolic"))),"no inline download button");
+        assert!(!descendants(&card(key)).iter().any(|w|w.downcast_ref::<gtk::Button>().is_some_and(|b|b.icon_name().as_deref()==Some("papo-folder-download-symbolic"))),"no inline download button");
     }
     assert!(find_button(&card(file),"notes.pdf").is_mapped(),"files without a media preview retain a clickable name");
     for (key,name) in [(avi,"clip.avi"),(matroska,"clip.mkv")]{

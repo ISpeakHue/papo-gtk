@@ -21,6 +21,40 @@ Previews are saved to `/tmp/papo-design-pelican-light.png` and
 `/tmp/papo-design-pelican-dark.png`. Validate launcher metadata with
 `desktop-file-validate data/br.com.papo.gtk.desktop`.
 
+## Bundled control icons
+
+Application controls use 47 `papo-*-symbolic` names backed by embedded Adwaita
+SVGs. They do not depend on the desktop-selected theme being installed inside
+an AppImage or Flatpak. The application icon and presence artwork remain in the
+same resource bundle; native GTK/libadwaita controls keep their toolkit icons.
+SVG sources, attribution and upstream licenses are in `assets/icons/symbolic/`.
+Both packaging recipes include the accompanying license notices.
+
+```sh
+python3 -m unittest discover -s tests -p 'icon_assets_test.py'
+PAPO_UI_CASE=symbolic-icons dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+```
+
+The asset check covers every explicit symbolic icon name in Rust UI code. The
+GTK check removes filesystem theme search paths, selects Adwaita, Breeze and a
+nonexistent theme, and verifies resource URLs, symbolic tint support and SVG
+decoding at 1x/2x. It cannot silently pass by using the missing-image fallback.
+
+Validation (2026-10-20): all-target compilation was warning-free, 282 regular
+Rust tests and seven Python checks passed, and the resource-only GTK case passed
+with GTK warnings treated as fatal. The broader default GUI case stops at an
+emoji-picker assertion (`missing button: ❤️`); the narrow-layout case hits a
+326px/320px Adwaita measurement warning. Both failures were reproduced against
+unchanged GitHub main in the same environment, independently of this icon fix.
+
+Both locally rebuilt packages also passed `tests/icon_runtime_probe.py` using
+their shipped GTK 4.22.5 runtime. This probe extracts the actual executable's
+embedded resources, compares the names with its installed attribution catalog,
+and checks every icon under three selected desktop themes at 1x/2x. It opens no
+account session. To repeat it on a private display, run the script through the
+AppImage's bundled Python/runtime environment or expose it read-only to Flatpak
+and run it with `--binary /app/bin/papo-gtk`.
+
 ## Native chat layout
 
 The GTK workflow also maps the redesigned chat into a real window. It checks

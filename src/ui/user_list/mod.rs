@@ -89,7 +89,7 @@ impl Component for UserListModel {
                         #[watch]
                         set_label: status_label(model.status.as_ref()),
                     },
-                    gtk::Image { set_icon_name: Some("pan-down-symbolic"), set_pixel_size: 12 },
+                    gtk::Image { set_icon_name: Some("papo-pan-down-symbolic"), set_pixel_size: 12 },
                 },
             },
             gtk::Label {

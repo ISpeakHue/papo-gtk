@@ -7,5 +7,52 @@
     <file>status/away.svg</file>
     <file>status/busy.svg</file>
     <file>status/offline.svg</file>
+    <file alias="scalable/actions/papo-audio-volume-high-symbolic.svg">icons/symbolic/audio-volume-high-symbolic.svg</file>
+    <file alias="scalable/actions/papo-audio-volume-muted-symbolic.svg">icons/symbolic/audio-volume-muted-symbolic.svg</file>
+    <file alias="scalable/actions/papo-avatar-default-symbolic.svg">icons/symbolic/avatar-default-symbolic.svg</file>
+    <file alias="scalable/actions/papo-call-stop-symbolic.svg">icons/symbolic/call-stop-symbolic.svg</file>
+    <file alias="scalable/actions/papo-camera-video-symbolic.svg">icons/symbolic/camera-video-symbolic.svg</file>
+    <file alias="scalable/actions/papo-chat-bubbles-text-symbolic.svg">icons/symbolic/chat-message-new-symbolic.svg</file>
+    <file alias="scalable/actions/papo-chat-message-new-symbolic.svg">icons/symbolic/chat-message-new-symbolic.svg</file>
+    <file alias="scalable/actions/papo-document-edit-symbolic.svg">icons/symbolic/document-edit-symbolic.svg</file>
+    <file alias="scalable/actions/papo-document-properties-symbolic.svg">icons/symbolic/document-properties-symbolic.svg</file>
+    <file alias="scalable/actions/papo-edit-copy-symbolic.svg">icons/symbolic/edit-copy-symbolic.svg</file>
+    <file alias="scalable/actions/papo-edit-delete-symbolic.svg">icons/symbolic/edit-delete-symbolic.svg</file>
+    <file alias="scalable/actions/papo-edit-find-symbolic.svg">icons/symbolic/edit-find-symbolic.svg</file>
+    <file alias="scalable/actions/papo-emblem-system-symbolic.svg">icons/symbolic/emblem-system-symbolic.svg</file>
+    <file alias="scalable/actions/papo-face-smile-symbolic.svg">icons/symbolic/face-smile-symbolic.svg</file>
+    <file alias="scalable/actions/papo-folder-download-symbolic.svg">icons/symbolic/folder-download-symbolic.svg</file>
+    <file alias="scalable/actions/papo-image-missing-symbolic.svg">icons/symbolic/image-missing-symbolic.svg</file>
+    <file alias="scalable/actions/papo-image-x-generic-symbolic.svg">icons/symbolic/image-x-generic-symbolic.svg</file>
+    <file alias="scalable/actions/papo-mail-attachment-symbolic.svg">icons/symbolic/mail-attachment-symbolic.svg</file>
+    <file alias="scalable/actions/papo-mail-reply-sender-symbolic.svg">icons/symbolic/mail-reply-sender-symbolic.svg</file>
+    <file alias="scalable/actions/papo-mail-send-symbolic.svg">icons/symbolic/mail-send-symbolic.svg</file>
+    <file alias="scalable/actions/papo-media-playback-pause-symbolic.svg">icons/symbolic/media-playback-pause-symbolic.svg</file>
+    <file alias="scalable/actions/papo-media-playback-start-symbolic.svg">icons/symbolic/media-playback-start-symbolic.svg</file>
+    <file alias="scalable/actions/papo-microphone-disabled-symbolic.svg">icons/symbolic/microphone-disabled-symbolic.svg</file>
+    <file alias="scalable/actions/papo-microphone-sensitivity-high-symbolic.svg">icons/symbolic/microphone-sensitivity-high-symbolic.svg</file>
+    <file alias="scalable/actions/papo-network-server-symbolic.svg">icons/symbolic/network-server-symbolic.svg</file>
+    <file alias="scalable/actions/papo-pan-down-symbolic.svg">icons/symbolic/pan-down-symbolic.svg</file>
+    <file alias="scalable/actions/papo-preferences-system-notifications-symbolic.svg">icons/symbolic/preferences-system-notifications-symbolic.svg</file>
+    <file alias="scalable/actions/papo-preferences-system-symbolic.svg">icons/symbolic/preferences-system-symbolic.svg</file>
+    <file alias="scalable/actions/papo-security-high-symbolic.svg">icons/symbolic/security-high-symbolic.svg</file>
+    <file alias="scalable/actions/papo-sidebar-show-symbolic.svg">icons/symbolic/sidebar-show-symbolic.svg</file>
+    <file alias="scalable/actions/papo-system-log-out-symbolic.svg">icons/symbolic/system-log-out-symbolic.svg</file>
+    <file alias="scalable/actions/papo-system-search-symbolic.svg">icons/symbolic/system-search-symbolic.svg</file>
+    <file alias="scalable/actions/papo-system-users-symbolic.svg">icons/symbolic/system-users-symbolic.svg</file>
+    <file alias="scalable/actions/papo-text-x-generic-symbolic.svg">icons/symbolic/text-x-generic-symbolic.svg</file>
+    <file alias="scalable/actions/papo-video-display-symbolic.svg">icons/symbolic/video-display-symbolic.svg</file>
+    <file alias="scalable/actions/papo-video-x-generic-symbolic.svg">icons/symbolic/video-x-generic-symbolic.svg</file>
+    <file alias="scalable/actions/papo-view-fullscreen-symbolic.svg">icons/symbolic/view-fullscreen-symbolic.svg</file>
+    <file alias="scalable/actions/papo-view-grid-symbolic.svg">icons/symbolic/view-grid-symbolic.svg</file>
+    <file alias="scalable/actions/papo-view-more-symbolic.svg">icons/symbolic/view-more-symbolic.svg</file>
+    <file alias="scalable/actions/papo-view-pin-symbolic.svg">icons/symbolic/view-pin-symbolic.svg</file>
+    <file alias="scalable/actions/papo-view-refresh-symbolic.svg">icons/symbolic/view-refresh-symbolic.svg</file>
+    <file alias="scalable/actions/papo-view-restore-symbolic.svg">icons/symbolic/view-restore-symbolic.svg</file>
+    <file alias="scalable/actions/papo-window-close-symbolic.svg">icons/symbolic/window-close-symbolic.svg</file>
+    <file alias="scalable/actions/papo-zoom-fit-best-symbolic.svg">icons/symbolic/zoom-fit-best-symbolic.svg</file>
+    <file alias="scalable/actions/papo-zoom-in-symbolic.svg">icons/symbolic/zoom-in-symbolic.svg</file>
+    <file alias="scalable/actions/papo-zoom-original-symbolic.svg">icons/symbolic/zoom-original-symbolic.svg</file>
+    <file alias="scalable/actions/papo-zoom-out-symbolic.svg">icons/symbolic/zoom-out-symbolic.svg</file>
   </gresource>
 </gresources>

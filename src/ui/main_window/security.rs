@@ -65,7 +65,7 @@ impl MainWindowModel {
                 save.connect_clicked(move |_| s.input(MainWindowMsg::Security(SecurityMsg::SavePassword(token))));password_section.append(&save);
                 let sessions=gtk::Box::new(gtk::Orientation::Vertical,12);sessions.set_margin_top(12);body.append(&sessions);
                 let heading=gtk::Box::new(gtk::Orientation::Horizontal,12);let title=design::heading("Sessões");title.set_hexpand(true);heading.append(&title);sessions.append(&heading);
-                let reload = gtk::Button::from_icon_name("view-refresh-symbolic");reload.set_tooltip_text(Some("Atualizar sessões"));reload.update_property(&[gtk::accessible::Property::Label("Atualizar sessões")]);let s = sender.clone();
+                let reload = gtk::Button::from_icon_name("papo-view-refresh-symbolic");reload.set_tooltip_text(Some("Atualizar sessões"));reload.update_property(&[gtk::accessible::Property::Label("Atualizar sessões")]);let s = sender.clone();
                 reload.connect_clicked(move |_| s.input(MainWindowMsg::Security(SecurityMsg::Reload(token))));heading.append(&reload);
                 let all = gtk::Button::with_label("Encerrar todas as sessões"); let s = sender.clone();
                 all.add_css_class("destructive-action");all.set_hexpand(true);

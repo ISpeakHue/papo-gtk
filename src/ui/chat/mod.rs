@@ -223,7 +223,7 @@ impl Component for ChatModel {
             adw::HeaderBar {
                 set_widget_name:"conversation-header",
                 #[watch] set_visible:!model.actions.pinned_view,
-                pack_start = &gtk::Button {set_icon_name:"sidebar-show-symbolic",set_tooltip_text:Some("Canais e conversas (F9)"),connect_clicked => ChatMsg::ToggleNavigation},
+                pack_start = &gtk::Button {set_icon_name:"papo-sidebar-show-symbolic",set_tooltip_text:Some("Canais e conversas (F9)"),connect_clicked => ChatMsg::ToggleNavigation},
                 #[name="header_title_area"]
                 #[wrap(Some)]
                 set_title_widget = &gtk::Box {
@@ -242,23 +242,23 @@ impl Component for ChatModel {
                     set_spacing:6,
                     #[name="header_pins"]
                     gtk::Button {
-                        set_icon_name:"view-pin-symbolic",set_tooltip_text:Some("Fixadas"),
+                        set_icon_name:"papo-view-pin-symbolic",set_tooltip_text:Some("Fixadas"),
                         #[watch] set_sensitive:model.access.read&&model.active_channel.as_ref().is_some_and(|c|!c.is_direct()),
                         connect_clicked => ChatMsg::Action(ActionMsg::OpenPins),
                     },
                     #[name="header_search"]
-                    gtk::Button {set_icon_name:"system-search-symbolic",set_tooltip_text:Some("Buscar mensagens (Ctrl+K)"),connect_clicked => ChatMsg::Search},
+                    gtk::Button {set_icon_name:"papo-system-search-symbolic",set_tooltip_text:Some("Buscar mensagens (Ctrl+K)"),connect_clicked => ChatMsg::Search},
                     gtk::Overlay {
-                        gtk::Button {set_icon_name:"preferences-system-notifications-symbolic",set_tooltip_text:Some("Notificações"),connect_clicked => ChatMsg::Notifications},
+                        gtk::Button {set_icon_name:"papo-preferences-system-notifications-symbolic",set_tooltip_text:Some("Notificações"),connect_clicked => ChatMsg::Notifications},
                         add_overlay = &gtk::Label {add_css_class:"papo-notification-count",set_halign:gtk::Align::End,set_valign:gtk::Align::Start,
                             #[watch] set_visible:model.unread_notifications>0,
                             #[watch] set_text:&format!("{}{}",model.unread_notifications.min(99),if model.unread_notifications>99||model.more_notifications{"+"}else{""}),
                         },
                     },
                     #[name="header_members"]
-                    gtk::Button {set_icon_name:"system-users-symbolic",set_tooltip_text:Some("Lista de Membros"),connect_clicked => ChatMsg::ToggleUserList},
+                    gtk::Button {set_icon_name:"papo-system-users-symbolic",set_tooltip_text:Some("Lista de Membros"),connect_clicked => ChatMsg::ToggleUserList},
                     gtk::MenuButton {
-                        set_icon_name:"view-more-symbolic",set_tooltip_text:Some("Opções da conversa"),
+                        set_icon_name:"papo-view-more-symbolic",set_tooltip_text:Some("Opções da conversa"),
                         #[wrap(Some)] set_popover = &gtk::Popover {
                             add_css_class:"papo-menu",
                             gtk::Box {
@@ -359,7 +359,7 @@ impl Component for ChatModel {
                 add_css_class: "papo-reply-banner",
 
                 gtk::Image {
-                    set_icon_name: Some("mail-reply-sender-symbolic"),
+                    set_icon_name: Some("papo-mail-reply-sender-symbolic"),
                     set_pixel_size: 14,
                 },
 
@@ -373,7 +373,7 @@ impl Component for ChatModel {
                 #[name="reply_preview"]
                 gtk::Box {set_orientation:gtk::Orientation::Vertical,set_hexpand:true},
                 gtk::Button {
-                    set_icon_name: "window-close-symbolic",
+                    set_icon_name: "papo-window-close-symbolic",
                     set_has_frame: false,
                     set_tooltip_text: Some("Cancelar resposta"),
                     connect_clicked[sender] => move |_| {
@@ -486,7 +486,7 @@ impl Component for ChatModel {
 
                 gtk::Button {
                     set_valign:gtk::Align::End,
-                    set_icon_name: "mail-attachment-symbolic",
+                    set_icon_name: "papo-mail-attachment-symbolic",
                     set_tooltip_text: Some("Adicionar arquivos"),set_has_frame:false,
                     #[watch]
                     set_sensitive: model.access.send && model.access.attachments && !model.draft.is_sending(),
@@ -495,14 +495,14 @@ impl Component for ChatModel {
                 #[name="emoji_button"]
                 gtk::Button {
                     set_valign:gtk::Align::End,
-                    set_icon_name:"face-smile-symbolic",set_has_frame:false,
+                    set_icon_name:"papo-face-smile-symbolic",set_has_frame:false,
                     set_tooltip_text:Some("Emojis (digite : para filtrar)"),
                     #[watch] set_sensitive:model.access.send&&!model.draft.is_sending(),
                     connect_clicked=>ChatMsg::OpenEmojis,
                 },
                 gtk::Button {
                     set_valign:gtk::Align::End,
-                    set_icon_name:"document-properties-symbolic",set_has_frame:false,set_tooltip_text:Some("Embeds personalizados"),
+                    set_icon_name:"papo-document-properties-symbolic",set_has_frame:false,set_tooltip_text:Some("Embeds personalizados"),
                     #[watch] set_sensitive:model.active_channel.is_some()&&model.access.send&&!model.draft.is_sending(),
                     connect_clicked=>ChatMsg::OpenEmbeds,
                 },
@@ -548,7 +548,7 @@ impl Component for ChatModel {
 
                 gtk::Button {
                     set_valign:gtk::Align::End,
-                    set_icon_name: "mail-send-symbolic",
+                    set_icon_name: "papo-mail-send-symbolic",
                     add_css_class: "suggested-action",
                     #[watch]
                     set_sensitive: model.active_channel.is_some() && model.access.send && (!model.draft.text.trim().is_empty() || !model.draft.files.is_empty()||!model.draft.embeds.is_empty()) && !model.draft.is_sending() && model.transfers.clipboard_request.is_none(),
@@ -1480,7 +1480,7 @@ fn rebuild_messages_view(
         empty_box.set_halign(gtk::Align::Center);
         empty_box.set_margin_top(48);
 
-        let icon = gtk::Image::from_icon_name("chat-message-new-symbolic");
+        let icon = gtk::Image::from_icon_name("papo-chat-message-new-symbolic");
         icon.set_pixel_size(48);
         icon.add_css_class("dim-label");
         empty_box.append(&icon);
@@ -1618,7 +1618,7 @@ fn rebuild_messages_view(
         if let Some(reply) = msg.reply_to {
             let channel_id = msg.channel_id; let s = sender.clone();
             let reply_button=gtk::Button::new();reply_button.add_css_class("flat");reply_button.add_css_class("papo-reply-reference");reply_button.set_halign(gtk::Align::Fill);reply_button.set_tooltip_text(Some("Ir para a mensagem respondida"));
-            let line=gtk::Box::new(gtk::Orientation::Horizontal,6);line.append(&gtk::Image::from_icon_name("mail-reply-sender-symbolic"));
+            let line=gtk::Box::new(gtk::Orientation::Horizontal,6);line.append(&gtk::Image::from_icon_name("papo-mail-reply-sender-symbolic"));
             let original=by_id.get(&reply);let name=gtk::Label::new(Some(original.map(|m|m.sender_name(users_map)).unwrap_or("Mensagem")));name.add_css_class("heading");name.add_css_class("caption");name.set_ellipsize(pango::EllipsizeMode::End);name.set_max_width_chars(20);if let Some(roles)=original.and_then(|m|m.author_id).and_then(|id|users_map.get(&id)).and_then(|u|u.roles.as_deref()){crate::ui::style::role_color(&name,roles);}line.append(&name);
             let snippet=text::compact(reply_text.as_deref().unwrap_or("Abrir mensagem respondida"),users_map,actions);snippet.add_css_class("dim-label");line.append(&snippet);reply_button.set_child(Some(&line));
             reply_button.connect_clicked(move |_|{let _=s.output(ChatOutput::Navigate{channel_id,message_id:reply});});content_box.append(&reply_button);
@@ -1648,38 +1648,38 @@ fn rebuild_messages_view(
         reactions_box.set_widget_name("message-reactions");render_reactions(&reactions_box,msg,actions,access,sender);
 
         let toolbar=gtk::Box::new(gtk::Orientation::Horizontal,2);toolbar.add_css_class("papo-message-actions");
-        let menu=gtk::MenuButton::new();menu.set_icon_name("view-more-symbolic");menu.add_css_class("flat");menu.set_tooltip_text(Some("Mais ações da mensagem"));
+        let menu=gtk::MenuButton::new();menu.set_icon_name("papo-view-more-symbolic");menu.add_css_class("flat");menu.set_tooltip_text(Some("Mais ações da mensagem"));
         let popover=gtk::Popover::new();popover.add_css_class("papo-menu");
         let message_actions=gtk::Box::new(gtk::Orientation::Vertical,2);popover.set_child(Some(&message_actions));menu.set_popover(Some(&popover));
         let msg_id = msg.id;
-        let add_react_btn = gtk::Button::from_icon_name("face-smile-symbolic");add_react_btn.set_widget_name("message-react");
+        let add_react_btn = gtk::Button::from_icon_name("papo-face-smile-symbolic");add_react_btn.set_widget_name("message-react");
         add_react_btn.set_tooltip_text(Some("Adicionar reação"));
         add_react_btn.add_css_class("flat"); add_react_btn.set_sensitive(access.send && !actions.busy.contains(&msg.id));
         let s = sender.clone(); add_react_btn.connect_clicked(move |_| s.input(ChatMsg::Action(ActionMsg::OpenPicker(msg_id)))); toolbar.append(&add_react_btn);
-        let add=message_action_button("Adicionar reação", "face-smile-symbolic");add.set_widget_name("message-react");add.set_sensitive(access.send&&!actions.busy.contains(&msg.id));let input=sender.input_sender().clone();add.connect_clicked(move |_|{let _=input.send(ChatMsg::Action(ActionMsg::OpenPicker(msg_id)));});message_actions.append(&add);
-        if media.external.failed(msg){let retry=message_action_button("Tentar carregar o avatar novamente", "view-refresh-symbolic");let s=sender.clone();retry.connect_clicked(move |_|s.input(ChatMsg::Transfer(TransferMsg::RetryExternalAvatar(msg_id))));message_actions.append(&retry);}
-        let who = message_action_button("Quem reagiu", "system-users-symbolic"); who.set_sensitive(access.read);
+        let add=message_action_button("Adicionar reação", "papo-face-smile-symbolic");add.set_widget_name("message-react");add.set_sensitive(access.send&&!actions.busy.contains(&msg.id));let input=sender.input_sender().clone();add.connect_clicked(move |_|{let _=input.send(ChatMsg::Action(ActionMsg::OpenPicker(msg_id)));});message_actions.append(&add);
+        if media.external.failed(msg){let retry=message_action_button("Tentar carregar o avatar novamente", "papo-view-refresh-symbolic");let s=sender.clone();retry.connect_clicked(move |_|s.input(ChatMsg::Transfer(TransferMsg::RetryExternalAvatar(msg_id))));message_actions.append(&retry);}
+        let who = message_action_button("Quem reagiu", "papo-system-users-symbolic"); who.set_sensitive(access.read);
         let s = sender.clone(); who.connect_clicked(move |_| s.input(ChatMsg::Action(ActionMsg::OpenParticipants(msg_id)))); message_actions.append(&who);
-        let reply=message_action_button("Responder", "mail-reply-sender-symbolic");reply.set_sensitive(access.send);let s=sender.clone();let message=msg.clone();reply.connect_clicked(move |_|s.input(ChatMsg::SetReply(Some(message.clone()))));message_actions.append(&reply);
-        if let Some(text)=text{let copy=message_action_button("Copiar texto", "edit-copy-symbolic");let s=sender.clone();copy.connect_clicked(move |_|s.input(ChatMsg::CopyMessage(text.clone())));message_actions.append(&copy);}
+        let reply=message_action_button("Responder", "papo-mail-reply-sender-symbolic");reply.set_sensitive(access.send);let s=sender.clone();let message=msg.clone();reply.connect_clicked(move |_|s.input(ChatMsg::SetReply(Some(message.clone()))));message_actions.append(&reply);
+        if let Some(text)=text{let copy=message_action_button("Copiar texto", "papo-edit-copy-symbolic");let s=sender.clone();copy.connect_clicked(move |_|s.input(ChatMsg::CopyMessage(text.clone())));message_actions.append(&copy);}
         if let Some(user) = user_id.filter(|_|!actions.pinned_view) {
             if access.can_edit(user, msg.author_id) {
-                let edit = message_action_button("Editar", "document-edit-symbolic");edit.set_widget_name("message-mutate"); edit.set_sensitive(!actions.busy.contains(&msg.id));
+                let edit = message_action_button("Editar", "papo-document-edit-symbolic");edit.set_widget_name("message-mutate"); edit.set_sensitive(!actions.busy.contains(&msg.id));
                 let s = sender.clone(); let m = msg.clone(); edit.connect_clicked(move |_| s.input(ChatMsg::Action(ActionMsg::OpenEdit(m.clone())))); message_actions.append(&edit);
             }
             if access.can_delete(user, msg.author_id) {
-                let delete = message_action_button("Excluir", "edit-delete-symbolic");delete.set_widget_name("message-mutate"); delete.add_css_class("papo-destructive"); delete.set_sensitive(!actions.busy.contains(&msg.id));
+                let delete = message_action_button("Excluir", "papo-edit-delete-symbolic");delete.set_widget_name("message-mutate"); delete.add_css_class("papo-destructive"); delete.set_sensitive(!actions.busy.contains(&msg.id));
                 let s = sender.clone(); let m = msg.clone(); delete.connect_clicked(move |_| s.input(ChatMsg::Action(ActionMsg::ConfirmDelete(m.clone())))); message_actions.append(&delete);
             }
         }
         if access.pin {
-            let pin = message_action_button(if pinned.contains(&msg.id) { "Desafixar" } else { "Fixar" }, "view-pin-symbolic");pin.set_widget_name("message-pin");
+            let pin = message_action_button(if pinned.contains(&msg.id) { "Desafixar" } else { "Fixar" }, "papo-view-pin-symbolic");pin.set_widget_name("message-pin");
             pin.set_sensitive(actions.pins_ready && !actions.busy.contains(&msg.id));
             let s = sender.clone(); pin.connect_clicked(move |_| s.input(ChatMsg::Action(ActionMsg::Pin(msg_id)))); message_actions.append(&pin);
         }
 
         // Reply quick button
-        let reply_btn = gtk::Button::from_icon_name("mail-reply-sender-symbolic");
+        let reply_btn = gtk::Button::from_icon_name("papo-mail-reply-sender-symbolic");
         reply_btn.add_css_class("flat");
         reply_btn.set_tooltip_text(Some("Responder"));
         reply_btn.set_sensitive(access.send);

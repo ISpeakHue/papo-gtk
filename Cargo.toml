@@ -1,6 +1,6 @@
 [package]
 name = "papo-gtk"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2021"
 authors = ["Papo Contributors"]
 description = "GTK 4 frontend for the Papo chat server"

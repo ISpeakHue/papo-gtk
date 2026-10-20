@@ -850,7 +850,7 @@ impl ChatModel {
                 if let Some(attachment)=self.history.messages.iter().find(|m|m.id==message).and_then(|m|m.attachments.iter().flatten().find(|a|a.id==key)) {
                     if !attachment.original_file_name.trim().is_empty(){window.set_title(Some(&attachment.original_file_name));}
                     if let Some(header)=window.child().and_then(|root|root.first_child()).and_downcast::<adw::HeaderBar>() {
-                        let save=gtk::Button::from_icon_name("folder-download-symbolic");save.set_tooltip_text(Some("Baixar arquivo"));
+                        let save=gtk::Button::from_icon_name("papo-folder-download-symbolic");save.set_tooltip_text(Some("Baixar arquivo"));
                         save.update_property(&[gtk::accessible::Property::Label("Baixar arquivo")]);
                         let attachment=attachment.clone();let input=sender.input_sender().clone();
                         save.connect_clicked(move |_|{let _=input.send(ChatMsg::Transfer(TransferMsg::Download{message,attachment:attachment.clone()}));});
@@ -1189,11 +1189,11 @@ fn append_video(card:&gtk::Box,media:&Transfers,message:Uuid,key:Uuid,preview:bo
         if let Some(texture)=media.textures.get(&key){overlay.set_child(Some(&crate::media::preview::picture(texture)));}
         else{
             let placeholder=gtk::Box::new(gtk::Orientation::Vertical,6);placeholder.set_halign(gtk::Align::Center);placeholder.set_valign(gtk::Align::End);placeholder.set_margin_bottom(16);
-            let icon=gtk::Image::from_icon_name("video-x-generic-symbolic");icon.set_pixel_size(32);icon.add_css_class("dim-label");placeholder.append(&icon);
+            let icon=gtk::Image::from_icon_name("papo-video-x-generic-symbolic");icon.set_pixel_size(32);icon.add_css_class("dim-label");placeholder.append(&icon);
             if media.failed.contains_key(&key){let label=gtk::Label::new(Some("Prévia indisponível"));label.add_css_class("dim-label");placeholder.append(&label);}
             overlay.set_child(Some(&placeholder));
         }
-        let button=gtk::Button::from_icon_name("media-playback-start-symbolic");button.set_tooltip_text(Some("Reproduzir vídeo"));button.update_property(&[gtk::accessible::Property::Label("Reproduzir vídeo")]);button.add_css_class("papo-media-play");button.set_halign(gtk::Align::Center);button.set_valign(gtk::Align::Center);
+        let button=gtk::Button::from_icon_name("papo-media-playback-start-symbolic");button.set_tooltip_text(Some("Reproduzir vídeo"));button.update_property(&[gtk::accessible::Property::Label("Reproduzir vídeo")]);button.add_css_class("papo-media-play");button.set_halign(gtk::Align::Center);button.set_valign(gtk::Align::Center);
         button.set_sensitive(!media.video_requests.contains_key(&(message,key)));let input=sender.input_sender().clone();button.connect_clicked(move |_|{let _=input.send(ChatMsg::Transfer(if preview{TransferMsg::Video{message,preview:key}}else{TransferMsg::AttachmentVideo{message,attachment:key}}));});overlay.add_overlay(&button);
         let dimensions=hint.or_else(||media.embeds.get(&key).and_then(|p|[p.video.as_ref(),p.thumbnail.as_ref()].into_iter().flatten().find_map(|m|m.width.zip(m.height).filter(|(w,h)|*w>0&&*h>0))))
             .or_else(||media.sizes.get(&key).copied()).or_else(||media.textures.get(&key).map(|t|(t.width(),t.height())));
@@ -1399,7 +1399,7 @@ pub(crate) fn exercise(api: &crate::api::ApiClient, context: &gtk::glib::MainCon
     let window=adw::Window::builder().default_width(900).default_height(650).content(photo.widget()).build();window.present();for _ in 0..80{pump(context);std::thread::sleep(std::time::Duration::from_millis(5));}
     let open=find_button(photo.widget().upcast_ref(),"Abrir imagem");let picture=descendants(open.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Picture>().ok()).unwrap();
     assert!((620..=640).contains(&picture.width()),"actual picture width: {}",picture.width());assert!((150..=165).contains(&picture.height()));
-    assert!(descendants(photo.widget().upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::Button>()).all(|b|!b.is_mapped()||(b.label().as_deref()!=Some("Baixar arquivo")&&b.icon_name().as_deref()!=Some("folder-download-symbolic"))),"visual attachments expose downloads only in context menus and viewers");crate::ui::main_window::layout::tests::preview(&window,"inline-image",context);open.emit_clicked();pump(context);assert!(photo.model().transfers.images[0].2.is_visible());let viewer=photo.model().transfers.images[0].2.clone();
+    assert!(descendants(photo.widget().upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::Button>()).all(|b|!b.is_mapped()||(b.label().as_deref()!=Some("Baixar arquivo")&&b.icon_name().as_deref()!=Some("papo-folder-download-symbolic"))),"visual attachments expose downloads only in context menus and viewers");crate::ui::main_window::layout::tests::preview(&window,"inline-image",context);open.emit_clicked();pump(context);assert!(photo.model().transfers.images[0].2.is_visible());let viewer=photo.model().transfers.images[0].2.clone();
     let mut tiny=std::io::Cursor::new(Vec::new());image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(32,32,image::Rgba([48,120,180,255]))).write_to(&mut tiny,image::ImageFormat::Png).unwrap();
     photo.emit(ChatMsg::Transfer(TransferMsg::Bytes{token:None,epoch,message:message_id,key:picture_id,result:Ok(tiny.into_inner())}));
     until(context,||photo.model().transfers.textures[&picture_id].width()==32);

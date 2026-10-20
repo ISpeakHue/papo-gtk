@@ -49,6 +49,9 @@ user font rules, and adds bundled Adwaita/Noto/DejaVu fonts as fallbacks. Explic
 `FONTCONFIG_FILE`/`FONTCONFIG_PATH` overrides remain intact. It does not force a
 font family, hinting mode, GDK scale, XWayland backend or software renderer.
 GTK uses the desktop's native backend and monitor scaling.
+Application controls use Papo-prefixed symbolic SVGs embedded in the executable,
+so their artwork and availability stay consistent across desktop icon themes.
+GTK supplies their foreground colors for light, dark and disabled states.
 Core font libraries come from the desktop to keep newer font configuration rules
 compatible on rolling distributions such as Arch. The MIME database is bundled
 so image identification does not depend on other GTK apps being installed.
@@ -82,12 +85,12 @@ libadwaita downgrade or source rebuild is performed.
 
 Versioned release outputs in ignored `dist/` are:
 
-- `Papo-1.0.1-x86_64.AppImage`
+- `Papo-1.0.2-x86_64.AppImage`
 - Its `.sha256` checksum
-- `papo-gtk-1.0.1-source.tar.gz`
-- `Papo-1.0.1-AppImage-README.txt`, installation and runtime notes
+- `papo-gtk-1.0.2-source.tar.gz`
+- `Papo-1.0.2-AppImage-README.txt`, installation and runtime notes
 
-Version 1.0.1 is available from [GitHub Releases](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.0.1).
+Version 1.0.2 is available from [GitHub Releases](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.0.2).
 The package retains the modern desktop/font policy described above.
 
 The AppDir is assembled under `target/appimage-fedora44/AppDir`, containing only
@@ -100,9 +103,9 @@ system Python interpreter; the AppImage sets its own `PAPO_PYTHON`.
 Make the new AppImage executable and run:
 
 ```sh
-./Papo-1.0.1-x86_64.AppImage --runtime-check
-./Papo-1.0.1-x86_64.AppImage --font-check
-./Papo-1.0.1-x86_64.AppImage
+./Papo-1.0.2-x86_64.AppImage --runtime-check
+./Papo-1.0.2-x86_64.AppImage --font-check
+./Papo-1.0.2-x86_64.AppImage
 ```
 
 The runtime check uses synthetic audio/video and validates imports, codecs,
@@ -119,6 +122,13 @@ included. Real calls/devices and the friends' GNOME/KDE setups need their own
 checks; desktop configuration and graphics drivers can still affect rendering.
 
 ## Validation
+
+Version 1.0.2 (2026-10-20): the versioned package passed the bundled runtime
+check, isolated media decoding, font diagnostics and private Wayland startup.
+Its actual executable's 47 control icons resolved and decoded with Adwaita,
+Breeze and an unavailable desktop theme selected, at 1x/2x scale. Source checks
+and the pre-existing broader GUI-test limitations are recorded in
+[desktop testing](docs/testing/desktop.md#bundled-control-icons).
 
 Version 1.0.1 (2026-10-20): the source passed 282 regular tests, six Python
 checks and three focused GTK cases. All-target compilation was warning-free.

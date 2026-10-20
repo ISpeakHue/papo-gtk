@@ -1,0 +1,190 @@
+[
+  {
+    "name": "papo-audio-volume-high-symbolic",
+    "source": "symbolic/status/audio-volume-high-symbolic.svg"
+  },
+  {
+    "name": "papo-audio-volume-muted-symbolic",
+    "source": "symbolic/status/audio-volume-muted-symbolic.svg"
+  },
+  {
+    "name": "papo-avatar-default-symbolic",
+    "source": "symbolic/status/avatar-default-symbolic.svg"
+  },
+  {
+    "name": "papo-call-stop-symbolic",
+    "source": "symbolic/actions/call-stop-symbolic.svg"
+  },
+  {
+    "name": "papo-camera-video-symbolic",
+    "source": "symbolic/devices/camera-video-symbolic.svg"
+  },
+  {
+    "name": "papo-chat-bubbles-text-symbolic",
+    "source": "symbolic/actions/chat-message-new-symbolic.svg"
+  },
+  {
+    "name": "papo-chat-message-new-symbolic",
+    "source": "symbolic/actions/chat-message-new-symbolic.svg"
+  },
+  {
+    "name": "papo-document-edit-symbolic",
+    "source": "symbolic/actions/document-edit-symbolic.svg"
+  },
+  {
+    "name": "papo-document-properties-symbolic",
+    "source": "symbolic/actions/document-properties-symbolic.svg"
+  },
+  {
+    "name": "papo-edit-copy-symbolic",
+    "source": "symbolic/actions/edit-copy-symbolic.svg"
+  },
+  {
+    "name": "papo-edit-delete-symbolic",
+    "source": "symbolic/actions/edit-delete-symbolic.svg"
+  },
+  {
+    "name": "papo-edit-find-symbolic",
+    "source": "symbolic/actions/edit-find-symbolic.svg"
+  },
+  {
+    "name": "papo-emblem-system-symbolic",
+    "source": "symbolic/legacy/emblem-system-symbolic.svg"
+  },
+  {
+    "name": "papo-face-smile-symbolic",
+    "source": "symbolic/emotes/face-smile-symbolic.svg"
+  },
+  {
+    "name": "papo-folder-download-symbolic",
+    "source": "symbolic/places/folder-download-symbolic.svg"
+  },
+  {
+    "name": "papo-image-missing-symbolic",
+    "source": "symbolic/status/image-missing-symbolic.svg"
+  },
+  {
+    "name": "papo-image-x-generic-symbolic",
+    "source": "symbolic/mimetypes/image-x-generic-symbolic.svg"
+  },
+  {
+    "name": "papo-mail-attachment-symbolic",
+    "source": "symbolic/status/mail-attachment-symbolic.svg"
+  },
+  {
+    "name": "papo-mail-reply-sender-symbolic",
+    "source": "symbolic/actions/mail-reply-sender-symbolic.svg"
+  },
+  {
+    "name": "papo-mail-send-symbolic",
+    "source": "symbolic/actions/mail-send-symbolic.svg"
+  },
+  {
+    "name": "papo-media-playback-pause-symbolic",
+    "source": "symbolic/actions/media-playback-pause-symbolic.svg"
+  },
+  {
+    "name": "papo-media-playback-start-symbolic",
+    "source": "symbolic/actions/media-playback-start-symbolic.svg"
+  },
+  {
+    "name": "papo-microphone-disabled-symbolic",
+    "source": "symbolic/status/microphone-disabled-symbolic.svg"
+  },
+  {
+    "name": "papo-microphone-sensitivity-high-symbolic",
+    "source": "symbolic/status/microphone-sensitivity-high-symbolic.svg"
+  },
+  {
+    "name": "papo-network-server-symbolic",
+    "source": "symbolic/places/network-server-symbolic.svg"
+  },
+  {
+    "name": "papo-pan-down-symbolic",
+    "source": "symbolic/ui/pan-down-symbolic.svg"
+  },
+  {
+    "name": "papo-preferences-system-notifications-symbolic",
+    "source": "symbolic/legacy/preferences-system-notifications-symbolic.svg"
+  },
+  {
+    "name": "papo-preferences-system-symbolic",
+    "source": "symbolic/categories/preferences-system-symbolic.svg"
+  },
+  {
+    "name": "papo-security-high-symbolic",
+    "source": "symbolic/status/security-high-symbolic.svg"
+  },
+  {
+    "name": "papo-sidebar-show-symbolic",
+    "source": "symbolic/actions/sidebar-show-symbolic.svg"
+  },
+  {
+    "name": "papo-system-log-out-symbolic",
+    "source": "symbolic/actions/system-log-out-symbolic.svg"
+  },
+  {
+    "name": "papo-system-search-symbolic",
+    "source": "symbolic/actions/system-search-symbolic.svg"
+  },
+  {
+    "name": "papo-system-users-symbolic",
+    "source": "symbolic/legacy/system-users-symbolic.svg"
+  },
+  {
+    "name": "papo-text-x-generic-symbolic",
+    "source": "symbolic/mimetypes/text-x-generic-symbolic.svg"
+  },
+  {
+    "name": "papo-video-display-symbolic",
+    "source": "symbolic/devices/video-display-symbolic.svg"
+  },
+  {
+    "name": "papo-video-x-generic-symbolic",
+    "source": "symbolic/mimetypes/video-x-generic-symbolic.svg"
+  },
+  {
+    "name": "papo-view-fullscreen-symbolic",
+    "source": "symbolic/actions/view-fullscreen-symbolic.svg"
+  },
+  {
+    "name": "papo-view-grid-symbolic",
+    "source": "symbolic/actions/view-grid-symbolic.svg"
+  },
+  {
+    "name": "papo-view-more-symbolic",
+    "source": "symbolic/actions/view-more-symbolic.svg"
+  },
+  {
+    "name": "papo-view-pin-symbolic",
+    "source": "symbolic/actions/view-pin-symbolic.svg"
+  },
+  {
+    "name": "papo-view-refresh-symbolic",
+    "source": "symbolic/actions/view-refresh-symbolic.svg"
+  },
+  {
+    "name": "papo-view-restore-symbolic",
+    "source": "symbolic/actions/view-restore-symbolic.svg"
+  },
+  {
+    "name": "papo-window-close-symbolic",
+    "source": "symbolic/ui/window-close-symbolic.svg"
+  },
+  {
+    "name": "papo-zoom-fit-best-symbolic",
+    "source": "symbolic/actions/zoom-fit-best-symbolic.svg"
+  },
+  {
+    "name": "papo-zoom-in-symbolic",
+    "source": "symbolic/actions/zoom-in-symbolic.svg"
+  },
+  {
+    "name": "papo-zoom-original-symbolic",
+    "source": "symbolic/actions/zoom-original-symbolic.svg"
+  },
+  {
+    "name": "papo-zoom-out-symbolic",
+    "source": "symbolic/actions/zoom-out-symbolic.svg"
+  }
+]

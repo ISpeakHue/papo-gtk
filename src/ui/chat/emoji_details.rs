@@ -30,7 +30,7 @@ pub(super) fn show(view:&gtk::TextView,offset:i32,details:&Details,state:&Popup)
     let body=gtk::Box::new(gtk::Orientation::Horizontal,12);body.set_margin_top(10);body.set_margin_bottom(10);body.set_margin_start(10);body.set_margin_end(10);
     let source=match &details.preview{
         Preview::Custom{paintable,animation,source}=>{
-            let image=gtk::Image::from_paintable(paintable.as_ref());if paintable.is_none(){image.set_icon_name(Some("face-smile-symbolic"));}
+            let image=gtk::Image::from_paintable(paintable.as_ref());if paintable.is_none(){image.set_icon_name(Some("papo-face-smile-symbolic"));}
             image.set_widget_name("emoji-details-preview");image.set_pixel_size(48);image.set_valign(gtk::Align::Center);image.update_property(&[gtk::accessible::Property::Label(&format!(":{}:",details.name))]);
             if let Some(animation)=animation{animation.watch(&image,None);}body.append(&image);
             let source=source.borrow();if source.trim().is_empty(){"Emoji personalizado deste servidor".into()}else{format!("Este emoji é do servidor {source}")}

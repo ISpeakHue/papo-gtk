@@ -10,7 +10,7 @@ pub(crate) struct Fullscreen {
 }
 impl Fullscreen {
     pub fn new(slot:&gtk::Box,player:&gtk::Box,frame:&crate::media::frame::Frame,media:&impl IsA<gtk::MediaStream>,controls:&gtk::Box)->Rc<Self>{
-        let button=gtk::Button::from_icon_name("view-fullscreen-symbolic");button.add_css_class("flat");button.set_tooltip_text(Some("Tela cheia"));button.update_property(&[gtk::accessible::Property::Label("Tela cheia")]);controls.append(&button);
+        let button=gtk::Button::from_icon_name("papo-view-fullscreen-symbolic");button.add_css_class("flat");button.set_tooltip_text(Some("Tela cheia"));button.update_property(&[gtk::accessible::Property::Label("Tela cheia")]);controls.append(&button);
         let placeholder=gtk::Box::new(gtk::Orientation::Vertical,8);placeholder.set_widget_name("fullscreen-video-placeholder");placeholder.append(&gtk::Label::new(Some("Reproduzindo em tela cheia")));
         let back=gtk::Button::with_label("Voltar ao chat");back.set_halign(gtk::Align::Start);placeholder.append(&back);
         let state=Rc::new(Self{slot:slot.clone(),player:player.clone(),frame:frame.clone(),media:media.as_ref().clone(),button:button.clone(),placeholder,window:RefCell::new(None),stopped:Cell::new(false)});
@@ -27,7 +27,7 @@ impl Fullscreen {
         let playing=self.media.is_playing();self.placeholder.set_height_request(self.player.height().max(1));
         self.slot.remove(&self.player);self.slot.append(&self.placeholder);
         self.frame.set_halign(gtk::Align::Fill);self.frame.set_valign(gtk::Align::Fill);self.frame.set_hexpand(true);self.frame.set_vexpand(true);
-        window.set_child(Some(&self.player));self.button.set_icon_name("view-restore-symbolic");self.button.set_tooltip_text(Some("Sair da tela cheia"));self.button.update_property(&[gtk::accessible::Property::Label("Sair da tela cheia")]);
+        window.set_child(Some(&self.player));self.button.set_icon_name("papo-view-restore-symbolic");self.button.set_tooltip_text(Some("Sair da tela cheia"));self.button.update_property(&[gtk::accessible::Property::Label("Sair da tela cheia")]);
         let weak=Rc::downgrade(self);window.connect_close_request(move |_|{if let Some(state)=weak.upgrade(){state.restore();}gtk::glib::Propagation::Proceed});
         let keys=gtk::EventControllerKey::new();keys.set_propagation_phase(gtk::PropagationPhase::Capture);let weak=window.downgrade();keys.connect_key_pressed(move |_,key,_,_|{if matches!(key,gtk::gdk::Key::Escape|gtk::gdk::Key::F11){if let Some(window)=weak.upgrade(){window.close();}gtk::glib::Propagation::Stop}else{gtk::glib::Propagation::Proceed}});window.add_controller(keys);
         *self.window.borrow_mut()=Some(window.clone());window.fullscreen();window.present();if playing{self.media.play();}self.button.grab_focus();
@@ -37,7 +37,7 @@ impl Fullscreen {
         let playing=self.media.is_playing();window.set_child(None::<&gtk::Widget>);
         self.frame.set_halign(gtk::Align::Start);self.frame.set_valign(gtk::Align::Start);self.frame.set_hexpand(false);self.frame.set_vexpand(false);
         if self.placeholder.parent().is_some(){self.slot.remove(&self.placeholder);}self.slot.append(&self.player);
-        self.button.set_icon_name("view-fullscreen-symbolic");self.button.set_tooltip_text(Some("Tela cheia"));self.button.update_property(&[gtk::accessible::Property::Label("Tela cheia")]);
+        self.button.set_icon_name("papo-view-fullscreen-symbolic");self.button.set_tooltip_text(Some("Tela cheia"));self.button.update_property(&[gtk::accessible::Property::Label("Tela cheia")]);
         if !self.stopped.get(){if playing{self.media.play();}if let Some(parent)=self.slot.root().and_downcast::<gtk::Window>(){parent.present();}self.button.grab_focus();}
     }
     pub fn close(&self){let window=self.window.borrow().clone();if let Some(window)=window{window.close();}}

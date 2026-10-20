@@ -38,7 +38,7 @@ pub(super) fn widget(embed:Option<&Embed>,source:Option<&str>,message:Uuid,key:U
     }else{
         let placeholder=gtk::Box::new(gtk::Orientation::Vertical,6);placeholder.set_halign(gtk::Align::Center);placeholder.set_valign(gtk::Align::Center);
         let failed=media.failed.contains_key(&key)&&!media.requested.contains(&key);
-        if failed{let icon=gtk::Image::from_icon_name("image-missing-symbolic");icon.set_pixel_size(24);placeholder.append(&icon);}else{placeholder.append(&gtk::Spinner::builder().spinning(true).build());}
+        if failed{let icon=gtk::Image::from_icon_name("papo-image-missing-symbolic");icon.set_pixel_size(24);placeholder.append(&icon);}else{placeholder.append(&gtk::Spinner::builder().spinning(true).build());}
         let button=gtk::MenuButton::new();button.set_has_frame(false);button.add_css_class("papo-inline-image");button.set_tooltip_text(Some(if failed{"GIF indisponível — informações e tentar novamente"}else{"Carregando GIF — informações"}));button.set_child(Some(&media.placeholder(key,&placeholder,true)));
         let popover=gtk::Popover::new();let body=info(embed,source);
         if failed{let label=gtk::Label::new(Some("Não foi possível carregar o GIF."));label.add_css_class("dim-label");body.append(&label);}

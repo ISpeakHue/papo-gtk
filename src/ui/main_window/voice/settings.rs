@@ -37,7 +37,7 @@ pub(super) fn device_row(initial: &str) -> adw::ComboRow {
 pub(super) fn group(body: &gtk::Box, title: &str, refresh_label: &str, sender: &ComponentSender<MainWindowModel>, action: impl Fn() -> VoiceMsg + 'static) -> adw::PreferencesGroup {
     let group = adw::PreferencesGroup::new();
     group.set_title(title);
-    let refresh = gtk::Button::from_icon_name("view-refresh-symbolic");
+    let refresh = gtk::Button::from_icon_name("papo-view-refresh-symbolic");
     refresh.add_css_class("flat");
     refresh.set_tooltip_text(Some(refresh_label));
     refresh.update_property(&[gtk::accessible::Property::Label(refresh_label)]);
@@ -82,7 +82,7 @@ pub(super) fn new(sender: &ComponentSender<MainWindowModel>) -> Controls {
     let volume = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     volume.set_hexpand(true);
     volume.set_valign(gtk::Align::Center);
-    let icon = gtk::Image::from_icon_name("microphone-sensitivity-high-symbolic");
+    let icon = gtk::Image::from_icon_name("papo-microphone-sensitivity-high-symbolic");
     icon.add_css_class("dim-label");
     volume.append(&icon);
     let gain = gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 300.0, 5.0);

@@ -37,7 +37,7 @@ impl Category {
 }
 pub(super) fn navigation()->(gtk::ScrolledWindow,Vec<(Option<Category>,gtk::ToggleButton)>) {
     let bar=gtk::Box::new(gtk::Orientation::Horizontal,0);bar.set_widget_name("emoji-categories");
-    let all=gtk::ToggleButton::new();all.set_icon_name("view-grid-symbolic");all.set_active(true);
+    let all=gtk::ToggleButton::new();all.set_icon_name("papo-view-grid-symbolic");all.set_active(true);
     let mut buttons=vec![(None,all.clone())];
     for category in Category::ALL {
         let button=gtk::ToggleButton::with_label(category.icon());button.set_group(Some(&all));

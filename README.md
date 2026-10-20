@@ -66,7 +66,7 @@ See [SECURITY_REVIEW.md](SECURITY_REVIEW.md) for media isolation and supported c
 
 ## Downloads
 
-[Version 1.0.1](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.0.1) provides
+[Version 1.0.2](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.0.2) provides
 an x86_64 AppImage and Flatpak bundle, SHA-256 checksums and matching source.
 See [APPIMAGE.md](APPIMAGE.md) for the modern Fedora/Arch baseline and
 [FLATPAK.md](FLATPAK.md) for installation and runtime details.

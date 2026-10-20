@@ -243,7 +243,7 @@ impl ChatModel {
                 let controls=gtk::Box::new(gtk::Orientation::Horizontal,8);
                 let mention=gtk::Button::with_label("@");mention.set_visible(self.active_channel.as_ref().is_some_and(|c|!c.is_direct()));mention.set_tooltip_text(Some("Mencionar membro (digite @ para filtrar)"));
                 let output=sender.input_sender().clone();mention.connect_clicked(move |_|{let _=output.send(ChatMsg::Action(ActionMsg::OpenEditMentions(token)));});controls.append(&mention);
-                let emoji=gtk::Button::from_icon_name("face-smile-symbolic");emoji.set_tooltip_text(Some("Inserir emoji"));
+                let emoji=gtk::Button::from_icon_name("papo-face-smile-symbolic");emoji.set_tooltip_text(Some("Inserir emoji"));
                 let output=sender.input_sender().clone();emoji.connect_clicked(move |_|{let _=output.send(ChatMsg::Action(ActionMsg::OpenEditEmojis(token)));});controls.append(&emoji);
                 let spacer=gtk::Box::new(gtk::Orientation::Horizontal,0);spacer.set_hexpand(true);controls.append(&spacer);
                 controls.append(&button("Cancelar edição",sender,move ||ActionMsg::CancelEdit(token)));

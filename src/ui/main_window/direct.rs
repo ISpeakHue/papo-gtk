@@ -1,4 +1,5 @@
-//! Participant conversations share the message pipeline but never public channel roles.
+//! EN-US: Participant conversations share the message pipeline but never public channel roles.
+//! PT-BR: Conversas diretas compartilham o fluxo de mensagens, sem herdar cargos de canais públicos.
 use super::*;
 use crate::models::{DirectConversation,Message,MessageCursor};
 use std::collections::{HashMap,HashSet};

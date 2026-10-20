@@ -1,4 +1,5 @@
-//! The editable profile header keeps image updates separate from the mounted form.
+//! EN-US: The editable profile header keeps image updates separate from the mounted form.
+//! PT-BR: O cabeçalho editável do perfil atualiza imagens sem remontar o formulário.
 use super::*;
 
 pub(super) struct Hero {

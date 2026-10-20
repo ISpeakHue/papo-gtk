@@ -1,4 +1,5 @@
-//! Independent per-member generations and full-snapshot reconciliation.
+//! EN-US: Independent per-member generations and full-snapshot reconciliation.
+//! PT-BR: Gerações independentes por membro e reconciliação de snapshots completos.
 use std::collections::{HashMap,HashSet};
 use uuid::Uuid;
 use crate::models::UserSummary;

@@ -1,3 +1,5 @@
+# EN-US: Bundle media plugins and dependencies while leaving GPU drivers to the host.
+# PT-BR: Inclui plugins de mídia e dependências no pacote, mantendo os drivers de GPU no sistema hospedeiro.
 """Hardware media plugins are bundled; GPU-specific drivers stay on the host."""
 
 import ctypes

@@ -1,4 +1,6 @@
 #!/usr/bin/python3
+# EN-US: Check runtime elements and actual isolated media conversion without an account or capture devices.
+# PT-BR: Verifica os componentes de execução e a conversão isolada de mídia sem conta nem dispositivos de captura.
 """Offline package checks; no account, network requests or physical capture."""
 import json
 import ssl

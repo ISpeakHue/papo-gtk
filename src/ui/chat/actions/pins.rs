@@ -1,4 +1,5 @@
-//! A scoped, read-only conversation renders pins without changing chat history.
+//! EN-US: A scoped, read-only conversation renders pins without changing chat history.
+//! PT-BR: Uma conversa restrita à leitura exibe mensagens fixadas sem alterar o histórico do chat.
 use super::*;
 use std::cell::RefCell;
 

@@ -1,4 +1,5 @@
-//! Channel models.
+//! EN-US: Channel models.
+//! PT-BR: Modelos dos canais e de seus metadados.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

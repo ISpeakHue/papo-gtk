@@ -1,4 +1,5 @@
-//! Voice controls share the chat WebSocket but own their media lifetime.
+//! EN-US: Voice controls share the chat WebSocket but own their media lifetime.
+//! PT-BR: Controles de chamada compartilham o WebSocket do chat e gerenciam seu próprio ciclo de vida de mídia.
 use super::*;
 use adw::prelude::*;
 use crate::models::{VoiceEvent,VoiceMember,IceConfig,ChannelType};

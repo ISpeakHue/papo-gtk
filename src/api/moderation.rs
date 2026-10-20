@@ -1,3 +1,5 @@
+//! EN-US: Authenticated moderation and audit operations.
+//! PT-BR: Operações administrativas de moderação e auditoria enviadas pela sessão autenticada.
 use super::*;
 impl ApiClient {
     pub async fn set_user_banned(&self,user:Uuid,banned:bool)->Result<()>{

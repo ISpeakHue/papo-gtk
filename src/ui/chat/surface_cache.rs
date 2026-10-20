@@ -1,4 +1,5 @@
-//! Reuse recent text rows, without retaining players, GIF timers or large media textures.
+//! EN-US: Reuse recent text rows, without retaining players, GIF timers or large media textures.
+//! PT-BR: Reutiliza linhas recentes de texto sem reter reprodutores, temporizadores de GIF ou grandes texturas.
 use super::*;
 use std::collections::VecDeque;
 type Rows=HashMap<String,(String,gtk::ListBoxRow)>;

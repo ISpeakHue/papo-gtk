@@ -1,5 +1,5 @@
 //! WebSocket client — runs as a long-lived background tokio task.
-//! EN: Long-lived Tokio background task connecting to `ws://<host>/ws`, parsing real-time events, sending heartbeats, and handling exponential backoff reconnects.
+//! EN-US: Long-lived Tokio background task connecting to `ws://<host>/ws`, parsing real-time events, sending heartbeats, and handling exponential backoff reconnects.
 //! PT-BR: Cliente WebSocket — executa como uma tarefa de segundo plano de longa duração no Tokio. Conecta-se a `ws://<host>/ws`, analisa eventos em tempo real, envia heartbeats e gerencia reconexões com recuo exponencial.
 
 use futures_util::{SinkExt, StreamExt};
@@ -14,7 +14,7 @@ use crate::models::*;
 // ── Incoming event types ──────────────────────────────────────────────────────
 
 /// Envelope shared by all WebSocket events.
-/// EN: Generic event wrapper extracting the `type` tag and raw JSON payload.
+/// EN-US: Generic event wrapper extracting the `type` tag and raw JSON payload.
 /// PT-BR: Envelope compartilhado por todos os eventos WebSocket para identificar o tipo e o payload JSON bruto.
 #[derive(Debug, Deserialize)]
 struct RawEvent {
@@ -25,19 +25,19 @@ struct RawEvent {
 }
 
 /// Strongly-typed events surfaced to the UI layer.
-/// EN: High-level application events dispatched to Relm4 components.
+/// EN-US: High-level application events dispatched to Relm4 components.
 /// PT-BR: Eventos tipados de alto nível repassados para a camada de interface (Relm4).
 #[derive(Debug, Clone)]
 pub enum WsEvent {
     Voice(VoiceEvent),
     ConnectionReady(Uuid),
     Error { message: String, code: Option<String> },
-    /// EN: A new message was posted. / PT-BR: Uma nova mensagem foi publicada.
+    /// EN-US: A new message was posted. / PT-BR: Uma nova mensagem foi publicada.
     NewMessage(Message),
     NewNotification(crate::models::NotificationEvent),
-    /// EN: A message was edited. / PT-BR: Uma mensagem foi editada.
+    /// EN-US: A message was edited. / PT-BR: Uma mensagem foi editada.
     MessageEdit { id: Uuid, content: String, channel_id: Option<Uuid>, edited_at: Option<chrono::DateTime<chrono::Utc>> },
-    /// EN: A message was deleted. / PT-BR: Uma mensagem foi apagada.
+    /// EN-US: A message was deleted. / PT-BR: Uma mensagem foi apagada.
     MessageDelete {
         id: Uuid,
 
@@ -113,7 +113,7 @@ impl WsCommand {fn for_connection(self,id:Uuid)->Option<String>{match self{Self:
 // ── Client ───────────────────────────────────────────────────────────────────
 
 /// Spawns a background task that manages the WebSocket connection.
-/// EN: Spawns the background Tokio task managing the live WebSocket stream.
+/// EN-US: Spawns the background Tokio task managing the live WebSocket stream.
 /// Returns an event receiver for the UI and a command sender for outgoing frames.
 /// PT-BR: Inicializa uma tarefa assíncrona em segundo plano no Tokio gerenciando a conexão WebSocket.
 /// Retorna um receptor de eventos para a interface e um transmissor de comandos para envio de mensagens/status.
@@ -125,7 +125,7 @@ where S:futures_util::Sink<WsMessage>+Unpin {
     tokio::select!{_ = events.closed()=>false,result=tokio::time::timeout(deadline,write.send(frame))=>matches!(result,Ok(Ok(())))}
 }
 
-/// EN: Public entry point to start the WebSocket loop using default timeout thresholds.
+/// EN-US: Public entry point to start the WebSocket loop using default timeout thresholds.
 /// PT-BR: Ponto de entrada público para iniciar o loop WebSocket utilizando limites de tempo padrão.
 pub fn spawn(client: crate::api::ApiClient) -> (mpsc::Receiver<WsEvent>, mpsc::Sender<WsCommand>) {spawn_with_deadlines(client,Deadlines::default())}
 
@@ -134,12 +134,12 @@ fn spawn_with_deadlines(client: crate::api::ApiClient,deadlines:Deadlines) -> (m
     let (cmd_tx, mut cmd_rx) = mpsc::channel::<WsCommand>(64);
 
     tokio::spawn(async move {
-        // EN: Initial reconnect delay in seconds (doubles exponentially up to 60s).
+        // EN-US: Initial reconnect delay in seconds (doubles exponentially up to 60s).
         // PT-BR: Atraso inicial de reconexão em segundos (dobra exponencialmente até 60s).
         let mut backoff_secs = 2u64;
 
         loop {
-            // EN: If the UI has dropped the event receiver, stop the background task.
+            // EN-US: If the UI has dropped the event receiver, stop the background task.
             // PT-BR: Se a interface fechou o canal receptor de eventos, encerra a tarefa em segundo plano.
             if ev_tx.is_closed() {
                 break;
@@ -161,7 +161,7 @@ fn spawn_with_deadlines(client: crate::api::ApiClient,deadlines:Deadlines) -> (m
                 Ok((stream, _)) => {
                     let connection_id=Uuid::new_v4();
                     if ev_tx.send(WsEvent::ConnectionReady(connection_id)).await.is_err(){return;}
-                    // EN: Reset backoff counter upon successful connection.
+                    // EN-US: Reset backoff counter upon successful connection.
                     // PT-BR: Redefine o contador de recuo (backoff) após uma conexão bem-sucedida.
                     backoff_secs = 2;
                     // Also resync after the first connection: initial HTTP loading
@@ -171,12 +171,14 @@ fn spawn_with_deadlines(client: crate::api::ApiClient,deadlines:Deadlines) -> (m
                     }
 
                     let (mut write, mut read) = stream.split();
-                    // EN: Heartbeat ticker every 25 seconds.
+                    // EN-US: Heartbeat ticker every 25 seconds.
                     // PT-BR: Intervalo de pulso (heartbeat) a cada 25 segundos.
                     let mut heartbeat = tokio::time::interval(deadlines.heartbeat);
                     heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
 
+                    // EN-US: Only heartbeat acknowledgments reset liveness; unrelated traffic must not hide a stalled peer.
+                    // PT-BR: Apenas confirmações de heartbeat renovam a conexão ativa; tráfego não relacionado não deve ocultar um servidor sem resposta.
                     let mut last_ack=tokio::time::Instant::now();
                     loop {
                         tokio::select! {

@@ -1,5 +1,5 @@
 //! Async REST API client for the Papo backend.
-//! EN: Async HTTP client using reqwest with cookie-based JWT sessions, rate limiting, and RFC 7807 error discrimination.
+//! EN-US: Async HTTP client using reqwest with cookie-based JWT sessions, rate limiting, and RFC 7807 error discrimination.
 //! PT-BR: Cliente REST assíncrono para o backend do Papo com sessões JWT baseadas em cookies, controle de taxa e discriminação de erros RFC 7807.
 
 use anyhow::{Context, Result};
@@ -27,7 +27,7 @@ pub(crate) mod body;
 use requests::{PacedRequest, RequestScheduler};
 
 /// Preserve status and RFC 7807 problem codes so expired sessions reach the login view.
-/// EN: Structured error holding HTTP status, machine-readable problem code, and human message.
+/// EN-US: Structured error holding HTTP status, machine-readable problem code, and human message.
 /// PT-BR: Erro estruturado contendo status HTTP, código legível por máquina e mensagem para o usuário.
 #[derive(Debug, thiserror::Error)]
 #[error("{message}")]
@@ -37,7 +37,7 @@ pub struct ApiError {
     pub message: String,
 }
 
-/// EN: Checks if an error represents an invalidated session (401 Unauthorized or 403 Banned), requiring re-login.
+/// EN-US: Checks if an error represents an invalidated session (401 Unauthorized or 403 Banned), requiring re-login.
 /// PT-BR: Verifica se um erro representa uma sessão invalidada (401 Unauthorized ou 403 Banned), exigindo novo login.
 pub fn is_session_error(error: &anyhow::Error) -> bool {
     error.downcast_ref::<ApiError>().is_some_and(|error|
@@ -45,14 +45,14 @@ pub fn is_session_error(error: &anyhow::Error) -> bool {
         (error.status == StatusCode::FORBIDDEN && error.code.as_deref() == Some("banned")))
 }
 
-/// EN: Checks if an error is a permissions failure (403 Forbidden without being banned).
+/// EN-US: Checks if an error is a permissions failure (403 Forbidden without being banned).
 /// PT-BR: Verifica se um erro é de permissão insuficiente (403 Forbidden sem ser banimento).
 pub fn is_permission_error(error: &anyhow::Error) -> bool {
     error.downcast_ref::<ApiError>().is_some_and(|e| e.status == StatusCode::FORBIDDEN) && !is_session_error(error)
 }
 
 /// Redact cookies in HeaderValue/Request debug output without changing the wire.
-/// EN: Sensitive cookie wrapper preventing token leakage in debug logs.
+/// EN-US: Sensitive cookie wrapper preventing token leakage in debug logs.
 /// PT-BR: Invólucro de cookies sensíveis que impede vazamento de tokens em logs de depuração.
 #[derive(Default)]
 struct SessionCookies(Jar);
@@ -96,7 +96,8 @@ impl ApiClient {
             })})
             .connect_timeout(Duration::from_secs(5))
             .timeout(Duration::from_secs(30));
-        // Local development must connect directly, even if a system proxy is set.
+        // EN-US: Local development connects directly; a system proxy must not receive local session traffic.
+        // PT-BR: O desenvolvimento local conecta diretamente; o proxy do sistema não deve receber tráfego da sessão local.
         if Self::is_loopback(&base) {
             builder = builder.no_proxy().resolve_to_addrs("localhost",&[
                 std::net::SocketAddr::new(std::net::Ipv4Addr::LOCALHOST.into(),0),std::net::SocketAddr::new(std::net::Ipv6Addr::LOCALHOST.into(),0),

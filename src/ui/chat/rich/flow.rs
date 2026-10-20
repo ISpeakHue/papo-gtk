@@ -1,5 +1,5 @@
-//! Give rich text its content width while retaining native, responsive wrapping.
-//! GtkTextView reports no useful natural width to a left-aligned embed card.
+//! EN-US: Give rich text its content width while retaining native, responsive wrapping. GtkTextView reports no useful natural width to a left-aligned embed card.
+//! PT-BR: Ajusta a largura natural do texto rico mantendo a quebra de linha nativa e responsiva.
 use gtk::{glib,pango,prelude::*,subclass::prelude::*};
 
 mod imp {

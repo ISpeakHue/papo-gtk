@@ -1,4 +1,5 @@
-//! Keyboard routing keeps the native text/IM event path intact.
+//! EN-US: Keyboard routing keeps the native text/IM event path intact.
+//! PT-BR: Atalhos preservam o caminho nativo dos eventos de texto e do método de entrada.
 use super::*;
 
 fn buttons(widget:&gtk::Widget,found:&mut Vec<gtk::Button>){
@@ -55,8 +56,10 @@ pub(crate) fn type_to_focus(view:&gtk::TextView,scroll:&gtk::ScrolledWindow,comp
             let Some(window)=view.root().and_downcast::<gtk::Window>()else{return gtk::glib::Propagation::Proceed;};
             if owns_text_or_popup(gtk::prelude::RootExt::focus(&window)){return gtk::glib::Propagation::Proceed;}
             if view.grab_focus()&&controller.current_event().is_some(){
-                // Forward the real event, including dead keys and IM commits.
-                // Re-entry sees the focused TextView and proceeds normally.
+                // EN-US: Forward the original event so dead keys and input-method composition survive focus transfer.
+                // Re-entry finds the focused TextView and lets GTK process it normally.
+                // PT-BR: Encaminha o evento original para preservar teclas de acento e composição ao transferir o foco.
+                // Na reentrada, o TextView já tem foco e o GTK processa o evento normalmente.
                 controller.forward(&view);return gtk::glib::Propagation::Stop;
             }
             gtk::glib::Propagation::Proceed

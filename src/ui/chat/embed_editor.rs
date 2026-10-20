@@ -1,4 +1,5 @@
-//! Form-based custom embed authoring for message drafts.
+//! EN-US: Form-based custom embed authoring for message drafts.
+//! PT-BR: Formulário de criação de conteúdo incorporado personalizado nos rascunhos.
 use super::*;
 use crate::models::*;
 use std::{rc::Rc,cell::RefCell};

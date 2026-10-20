@@ -1,3 +1,5 @@
+//! EN-US: Local notification state and reconciliation of messages, reads and server updates.
+//! PT-BR: Estado local das notificações e reconciliação de mensagens, leituras e atualizações do servidor.
 use crate::models::*;
 use std::collections::{HashMap,HashSet,VecDeque};
 use uuid::Uuid;

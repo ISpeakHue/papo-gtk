@@ -1,4 +1,5 @@
-//! Webhook management uses the user's session; execution belongs to external integrations.
+//! EN-US: Webhook management uses the user's session; execution belongs to external integrations.
+//! PT-BR: A gestão de webhooks usa a sessão do usuário; a execução fica a cargo das integrações externas.
 use super::*;
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub(crate) enum AvatarFailure {Missing,Invalid,Transient,RateLimited(std::time::Duration)}

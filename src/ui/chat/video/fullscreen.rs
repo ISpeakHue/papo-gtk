@@ -1,4 +1,5 @@
-//! Move the existing player into a fullscreen window without duplicating it.
+//! EN-US: Move the existing player into a fullscreen window without duplicating it.
+//! PT-BR: Move o reprodutor existente para uma janela em tela cheia sem duplicá-lo.
 use super::*;
 use std::cell::RefCell;
 

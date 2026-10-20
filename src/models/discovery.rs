@@ -1,4 +1,5 @@
-//! Search summaries and notification records have their own contracts, not Message fields.
+//! EN-US: Search summaries and notification records have their own contracts, not Message fields.
+//! PT-BR: Resultados de busca e notificações têm contratos próprios, distintos do modelo de mensagem.
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

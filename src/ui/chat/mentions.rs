@@ -1,4 +1,5 @@
-//! Plain-text mention rendering keeps untrusted member names out of GTK markup.
+//! EN-US: Plain-text mention rendering keeps untrusted member names out of GTK markup.
+//! PT-BR: Menções em texto simples mantêm nomes não confiáveis fora da marcação GTK.
 use crate::models::UserSummary;
 use std::collections::HashMap;
 use uuid::Uuid;

@@ -1,4 +1,5 @@
-//! Shared authentication flow used by the login UI and protocol regression tests.
+//! EN-US: Shared authentication flow used by the login UI and protocol regression tests.
+//! PT-BR: Fluxo de autenticação compartilhado pela interface de login e pelos testes do protocolo.
 
 use anyhow::{Context, Result};
 

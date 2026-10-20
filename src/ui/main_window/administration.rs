@@ -1,4 +1,5 @@
-//! Server setup and permission-gated role/channel administration.
+//! EN-US: Server setup and permission-gated role/channel administration.
+//! PT-BR: Configuração do servidor e administração de cargos e canais conforme as permissões.
 use super::*;
 use crate::models::*;
 use crate::ui::chat::actions::window;

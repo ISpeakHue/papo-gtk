@@ -1,4 +1,5 @@
-//! Channel-scoped machine identities; webhook secrets exist only at creation.
+//! EN-US: Channel-scoped machine identities; webhook secrets exist only at creation.
+//! PT-BR: Identidades de integração vinculadas ao canal; segredos de webhook são expostos apenas na criação.
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

@@ -1,4 +1,5 @@
-//! Account security layout; request and confirmation handling stays in the parent.
+//! EN-US: Account security layout; request and confirmation handling stays in the parent.
+//! PT-BR: Layout de segurança da conta; requisições e confirmações ficam no módulo pai.
 use super::*;
 
 pub(super) fn heading(text:&str)->gtk::Label {

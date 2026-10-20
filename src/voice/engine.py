@@ -1,3 +1,5 @@
+# EN-US: Run native call media; exchange signaling with GTK through private JSON-line IPC.
+# PT-BR: Executa a mídia nativa das chamadas e troca sinalização com o GTK por comunicação privada em linhas JSON.
 """Native GStreamer audio/video worker. stdin/stdout are private JSON-line IPC.
 
 No sockets for application signaling, credential arguments, recording, or webview.
@@ -20,6 +22,8 @@ from urllib.parse import quote
 
 _output_lock = threading.Lock()
 
+# EN-US: Serialize worker output so events from different callbacks never interleave in the JSON-line protocol.
+# PT-BR: Serializa a saída do processo para que eventos de callbacks distintos não se misturem no protocolo de linhas JSON.
 def emit(event):
     with _output_lock:
         print(json.dumps(event, separators=(",", ":")), flush=True)
@@ -588,6 +592,8 @@ engine = Engine()
 def reader():
     try:
         for line in sys.stdin:
+            # EN-US: Dispatch on GLib's main loop; the stdin reader must not mutate GStreamer state directly.
+            # PT-BR: Executa no loop principal do GLib; a leitura de stdin não deve alterar o estado do GStreamer diretamente.
             GLib.idle_add(engine.dispatch, json.loads(line))
     except (ValueError, OSError):
         GLib.idle_add(engine.fail, "Comando de áudio inválido.")

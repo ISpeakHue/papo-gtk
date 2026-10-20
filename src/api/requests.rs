@@ -1,4 +1,5 @@
-//! One request budget for the session, including cloned clients and media jobs.
+//! EN-US: One request budget for the session, including cloned clients and media jobs.
+//! PT-BR: Um único orçamento de requisições por sessão, compartilhado por clientes clonados e tarefas de mídia.
 use std::time::Duration;
 use reqwest::{RequestBuilder, Response, StatusCode};
 use tokio::{sync::Mutex, time::Instant};
@@ -41,7 +42,8 @@ impl RequestScheduler {
         // overtaking the selected chat. Cooldowns use a separate lock so an
         // in-flight response can extend the deadline while this task waits.
         let _turn = self.turn.lock().await;
-        // Do not reserve future slots: cancelled media jobs must not delay login.
+        // EN-US: Reserve a slot only on admission so cancelled media jobs cannot delay login.
+        // PT-BR: Reserva a vaga apenas na admissão para que tarefas de mídia canceladas não atrasem o login.
         loop {
             let mut state = self.state.lock().await;
             let now = Instant::now();
@@ -121,7 +123,8 @@ impl PacedRequest for RequestBuilder {
             let response = result?;
             if response.status() != StatusCode::TOO_MANY_REQUESTS { return Ok(response); }
             let delay = retry_after(response.headers()).unwrap_or(Duration::from_secs(1 << attempt)).max(REQUEST_GAP);
-            // Even a rejected mutation cools down all other tasks; never replay it.
+            // EN-US: A rejected write shares the cooldown but is never replayed: it may have side effects.
+            // PT-BR: Uma escrita rejeitada compartilha a pausa, mas não é repetida, pois pode ter efeitos colaterais.
             scheduler.cool_down(delay).await;
             if !read_only || attempt == MAX_READ_RETRIES || delay > Duration::from_secs(5) {
                 return Ok(response);

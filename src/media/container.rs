@@ -1,6 +1,9 @@
-//! Permit only self-contained MP4/QuickTime and WebM before native playback.
+//! EN-US: Permit only self-contained MP4/QuickTime and WebM before native playback.
+//! PT-BR: Permite apenas MP4/QuickTime autocontido e WebM antes da reprodução nativa.
 use std::{fs::File,io::{Read,Seek,SeekFrom},path::Path};
 use anyhow::{Result,ensure,bail};
+// EN-US: Inspect the actual container before native playback; a MIME label or suffix is only a UI hint.
+// PT-BR: Inspeciona o contêiner real antes da reprodução nativa; MIME e extensão são apenas pistas para a interface.
 pub fn validate(path:&Path)->Result<()> {
     let mut file=File::open(path)?;let length=file.metadata()?.len();ensure!((12..=256<<20).contains(&length),"Mídia fora do limite de tamanho.");
     let mut head=[0u8;12];file.read_exact(&mut head)?;

@@ -1,4 +1,5 @@
-//! Room-entry cue isolated from GTK's native player lifecycle.
+//! EN-US: Room-entry cue isolated from GTK's native player lifecycle.
+//! PT-BR: Som de entrada na chamada isolado do ciclo de vida do reprodutor nativo do GTK.
 use std::sync::{Arc,Mutex,atomic::{AtomicU32,Ordering}};
 use tokio::{io::{AsyncReadExt,AsyncWriteExt},sync::oneshot,task::JoinHandle};
 

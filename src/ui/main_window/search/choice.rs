@@ -1,4 +1,5 @@
-//! Query text filters the popup only; changing it never selects a member.
+//! EN-US: Query text filters the popup only; changing it never selects a member.
+//! PT-BR: O texto da busca filtra apenas o popup; digitar não seleciona automaticamente um membro.
 use super::*;
 use std::{cell::RefCell,rc::Rc};
 type Render=Rc<dyn Fn(&gtk::Box,&str)>;

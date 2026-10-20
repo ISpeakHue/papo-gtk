@@ -1,4 +1,5 @@
-//! Moderation and append-only audit viewer, gated by manage_server.
+//! EN-US: Moderation and append-only audit viewer, gated by manage_server.
+//! PT-BR: Moderação e consulta de auditoria sem edição, restritas à permissão manage_server.
 use super::*;
 use crate::models::{AuditFilter,AuditPage,RecoveryLink};
 use crate::ui::chat::actions::window;

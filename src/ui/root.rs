@@ -475,7 +475,7 @@ mod tests {
     }
 }
 
-/// EN: Root state coordinator holding references to child controllers and session identity.
+/// EN-US: Root state coordinator holding references to child controllers and session identity.
 /// PT-BR: Coordenador de estado raiz contendo referências aos controladores filhos e identidade da sessão.
 pub struct RootModel {
     view: View,
@@ -488,22 +488,22 @@ pub struct RootModel {
 
 // ── Messages ──────────────────────────────────────────────────────────────────
 
-/// EN: Messages that transition the top-level application state.
+/// EN-US: Messages that transition the top-level application state.
 /// PT-BR: Mensagens que realizam a transição do estado de nível superior da aplicação.
 #[derive(Debug)]
 pub enum RootMsg {
     /// Received from Login component upon successful auth
-    /// EN: Emitted when authentication succeeds with user profile and authenticated API client.
+    /// EN-US: Emitted when authentication succeeds with user profile and authenticated API client.
     /// PT-BR: Emitido após autenticação bem-sucedida contendo o perfil do usuário e cliente de API autenticado.
     Authenticated {
         whoami: WhoamiResponse,
         client: ApiClient,
     },
     /// Log out and return to the login screen
-    /// EN: Triggered by user requesting manual logout.
+    /// EN-US: Triggered by user requesting manual logout.
     /// PT-BR: Disparado quando o usuário solicita desconexão manual.
     Logout,
-    /// EN: Triggered when token validation fails or session expires, redirecting to login.
+    /// EN-US: Triggered when token validation fails or session expires, redirecting to login.
     /// PT-BR: Disparado quando a validação de token falha ou a sessão expira, redirecionando para a tela de login.
     SessionExpired,
 }
@@ -546,7 +546,7 @@ impl Component for RootModel {
                     set_hhomogeneous:false,set_vhomogeneous:false,
                     // Each view owns its header; avoid crossfading two sets
                     // of window controls during authentication or logout.
-                    // EN: Disables crossfading transitions to prevent conflicting window controls during view switch.
+                    // EN-US: Disables crossfading transitions to prevent conflicting window controls during view switch.
                     // PT-BR: Desativa transições com crossfade para evitar controles de janela conflitantes durante a troca de visualização.
                     set_transition_type: gtk::StackTransitionType::None,
                     add_named[Some("login")] = model.login_controller.widget(),

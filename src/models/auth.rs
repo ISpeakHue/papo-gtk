@@ -1,4 +1,5 @@
-//! Auth-related request/response models.
+//! EN-US: Auth-related request/response models.
+//! PT-BR: Modelos de requisição e resposta da autenticação.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

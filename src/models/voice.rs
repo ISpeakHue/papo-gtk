@@ -1,3 +1,5 @@
+//! EN-US: Voice participant, connection and signaling models.
+//! PT-BR: Modelos de participantes, conexões e sinalização das chamadas.
 use serde::{Deserialize,Serialize};
 use uuid::Uuid;
 #[derive(Clone,Deserialize,Serialize)]

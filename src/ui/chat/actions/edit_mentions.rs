@@ -1,4 +1,5 @@
-//! The editor owns its mention state; it never mutates the channel's draft.
+//! EN-US: The editor owns its mention state; it never mutates the channel's draft.
+//! PT-BR: O editor mantém suas próprias menções e não altera o rascunho do canal.
 use super::*;
 
 pub(super) struct Mentions {

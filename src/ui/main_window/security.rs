@@ -1,4 +1,5 @@
-//! Account security controls. Secret strings stay in password widgets/request bodies.
+//! EN-US: Account security controls. Secret strings stay in password widgets/request bodies.
+//! PT-BR: Controles de segurança da conta; segredos permanecem nos campos de senha e corpos de requisição.
 use super::*;
 use crate::models::Connection;
 use crate::ui::chat::actions::window;

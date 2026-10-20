@@ -1,4 +1,5 @@
-//! Recycled search widgets with shared, session-cached webhook avatars.
+//! EN-US: Recycled search widgets with shared, session-cached webhook avatars.
+//! PT-BR: Linhas de busca reutilizáveis com avatares de webhook compartilhados no cache da sessão.
 use super::*;
 #[derive(Clone)]pub(super) struct Row{pub external:Option<crate::models::ExternalAuthor>,pub avatar:Option<gtk::gdk::Texture>,pub id:Uuid,pub channel:Uuid,pub heading:String,pub text:String,pub display:String,pub revision:u64,pub renderer:std::rc::Rc<dyn Fn(&str)->gtk::TextView>}
 impl PartialEq for Row{fn eq(&self,other:&Self)->bool{self.external==other.external&&self.avatar==other.avatar&&self.id==other.id&&self.channel==other.channel&&self.heading==other.heading&&self.text==other.text&&self.display==other.display&&self.revision==other.revision}}

@@ -1,7 +1,5 @@
-//! Data models matching the Papo backend's OpenAPI schema.
-//!
-//! All fields are optional where the OpenAPI schema marks them `nullable: true`
-//! or where the property is not in the `required` list.
+//! EN-US: Backend OpenAPI models; nullable or non-required fields use optional types.
+//! PT-BR: Modelos do esquema OpenAPI do backend; campos anuláveis ou não obrigatórios usam tipos opcionais.
 
 pub mod auth;
 pub mod channel;

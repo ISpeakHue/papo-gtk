@@ -1,4 +1,5 @@
-//! Retained but undisplayed metadata must keep its original wire validation.
+//! EN-US: Retained but undisplayed metadata must keep its original wire validation.
+//! PT-BR: Metadados preservados, mas não exibidos, mantêm a validação original do formato de rede.
 use super::*;
 use uuid::Uuid;
 use serde::{de::DeserializeOwned, Deserialize};

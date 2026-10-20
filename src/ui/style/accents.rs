@@ -1,4 +1,5 @@
-//! One CSS provider per display, shared by the colors of live embed widgets.
+//! EN-US: One CSS provider per display, shared by the colors of live embed widgets.
+//! PT-BR: Um provedor CSS por display, compartilhado pelas cores dos widgets de conteúdo incorporado ativos.
 use std::{cell::RefCell, collections::BTreeMap, rc::{Rc, Weak}};
 use gtk::prelude::*;
 

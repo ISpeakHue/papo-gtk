@@ -1,4 +1,5 @@
-//! Theme-independent presence badges shared by members, DMs and the user footer.
+//! EN-US: Theme-independent presence badges shared by members, DMs and the user footer.
+//! PT-BR: Indicadores de presença independentes do tema, compartilhados por membros, conversas diretas e rodapé.
 use gtk::prelude::*;
 use crate::ws::PresenceStatus;
 

@@ -1,4 +1,5 @@
-//! Session-local compressed media; decoded textures and GIF frames remain disposable.
+//! EN-US: Session-local compressed media; decoded textures and GIF frames remain disposable.
+//! PT-BR: Mídia comprimida em memória por sessão; texturas decodificadas e quadros de GIF podem ser descartados separadamente.
 use std::{collections::{HashMap,HashSet,VecDeque},sync::Arc};
 use uuid::Uuid;
 use crate::ui::chat::state::Change;
@@ -36,6 +37,8 @@ impl Cache {
     fn insert_kind(&mut self,key:Uuid,channel:Uuid,message:Uuid,bytes:Arc<[u8]>,video:bool) {
         self.remove(key);if bytes.is_empty()||bytes.len()>25<<20{return;}
         self.bytes+=bytes.len();self.entries.insert(key,Entry{channel,message,bytes,video,touched:std::time::Instant::now()});self.order.push_back(key);crate::performance::record("encoded_cache_bytes",self.bytes as u64);
+        // EN-US: Retain recent compressed bytes for re-decoding, with eviction independent of the texture cache.
+        // PT-BR: Retém bytes comprimidos recentes para nova decodificação, com descarte independente do cache de texturas.
         while self.bytes>BYTE_LIMIT||self.entries.len()>ENTRY_LIMIT {
             let Some(old)=self.order.iter().find(|id|!self.recent.values().any(|keys|keys.contains(id))).or_else(||self.order.front()).copied()else{break;};self.remove(old);
         }

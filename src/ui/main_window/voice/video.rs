@@ -1,5 +1,5 @@
-//! A single explicit subscription avoids guessing publisher mappings for the
-//! backend's reusable video slots (the current protocol has no video-route ack).
+//! EN-US: A single explicit subscription avoids guessing publisher mappings for the backend's reusable video slots (the current protocol has no video-route ack).
+//! PT-BR: Uma assinatura explícita evita deduzir associações de publicadores nos slots reutilizáveis do backend, cujo protocolo não confirma a rota de vídeo.
 use super::*;
 use base64::Engine as _;
 use serde_json::json;

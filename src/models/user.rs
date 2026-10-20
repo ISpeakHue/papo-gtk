@@ -1,4 +1,5 @@
-//! User-related models.
+//! EN-US: User-related models.
+//! PT-BR: Modelos de usuários e de seus perfis.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

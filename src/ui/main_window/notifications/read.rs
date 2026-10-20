@@ -1,4 +1,5 @@
-//! Explicit, coalesced read acknowledgements for server channels and DMs.
+//! EN-US: Explicit, coalesced read acknowledgments for server channels and DMs.
+//! PT-BR: Confirmações explícitas de leitura, agrupadas para canais do servidor e conversas diretas.
 use super::*;
 use std::collections::HashMap;
 use crate::models::MessageCursor;
@@ -26,13 +27,16 @@ impl Reads {
     fn acknowledge(&mut self,message:&Message){
         let cursor=MessageCursor::from(message);self.acknowledged.entry(message.channel_id).and_modify(|old|{if key(cursor)>key(*old){*old=cursor;}}).or_insert(cursor);self.retry.remove(&message.channel_id);
     }
+    // EN-US: Commit the submitted message cursor, not the channel currently open when the response arrives.
+    // PT-BR: Confirma o cursor da mensagem enviada, não o canal aberto quando a resposta chega.
     fn finish(&mut self,request:Uuid,message:&Message,success:bool)->bool{
         if self.pending!=Some(request){return false;}
         self.pending=None;
         if success{
             self.acknowledge(message);
         }else{
-            // Do not hammer a denied/unavailable endpoint every UI tick.
+            // EN-US: Back off after failure so UI ticks do not repeatedly hit an unavailable or denied endpoint.
+            // PT-BR: Aguarda após uma falha para que os ticks da interface não repitam chamadas a um endpoint indisponível ou negado.
             self.retry.insert(message.channel_id,Instant::now()+Duration::from_secs(30));
         }
         true

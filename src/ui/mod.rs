@@ -1,4 +1,5 @@
-//! UI module — re-exports all sub-components.
+//! EN-US: UI module — re-exports all sub-components.
+//! PT-BR: Módulo de interface que reexporta os componentes visuais.
 
 pub mod login;
 pub mod main_window;

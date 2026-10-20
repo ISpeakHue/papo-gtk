@@ -1,3 +1,5 @@
+//! EN-US: Fetch and validate the authenticated STUN/TURN configuration for calls.
+//! PT-BR: Obtém e valida a configuração autenticada de STUN/TURN para as chamadas.
 use super::*;
 impl ApiClient {
     pub async fn voice_ice_servers(&self)->Result<IceConfig>{

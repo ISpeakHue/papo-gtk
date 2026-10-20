@@ -1,4 +1,5 @@
-//! DM, block and administration contracts verified against the Go handlers.
+//! EN-US: DM, block and administration contracts verified against the Go handlers.
+//! PT-BR: Contratos de mensagens diretas, bloqueios e administração verificados nos handlers do backend Go.
 use super::*;
 impl ApiClient {
     pub async fn list_direct(&self)->Result<Vec<DirectConversation>>{

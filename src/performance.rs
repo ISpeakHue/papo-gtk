@@ -1,4 +1,5 @@
-//! Opt-in aggregate diagnostics. Labels are fixed in source, never user data.
+//! EN-US: Opt-in aggregate diagnostics. Labels are fixed in source, never user data.
+//! PT-BR: Diagnósticos agregados opcionais; os rótulos são fixos no código e não contêm dados do usuário.
 use std::{collections::BTreeMap,sync::{LazyLock,Mutex},time::Instant};
 static ENABLED:LazyLock<bool>=LazyLock::new(||std::env::var("PAPO_PERFORMANCE").as_deref()==Ok("1"));
 #[derive(Default)]struct Sample{count:u64,total:u64,max:u64}

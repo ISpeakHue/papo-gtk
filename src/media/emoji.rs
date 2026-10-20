@@ -1,4 +1,5 @@
-//! Server emoji frames are decoded on a worker and shared at their display size.
+//! EN-US: Server emoji frames are decoded on a worker and shared at their display size.
+//! PT-BR: Quadros de emojis do servidor são decodificados fora da interface e compartilhados no tamanho de exibição.
 use super::{PreparedImage,animation::PreparedAnimation};
 use base64::prelude::*;
 use image::{AnimationDecoder,ImageDecoder};

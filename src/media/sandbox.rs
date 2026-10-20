@@ -1,4 +1,5 @@
-//! File-media converters get no network, home, desktop sockets or writable source.
+//! EN-US: File-media converters get no network, home, desktop sockets or writable source.
+//! PT-BR: Conversores de arquivos de mídia não recebem acesso à rede, pasta pessoal, sockets do desktop ou escrita no arquivo de origem.
 use std::path::Path;
 pub(super) struct Command{process:tokio::process::Command,input:Option<std::path::PathBuf>}
 impl Command{pub async fn output(&mut self)->std::io::Result<std::process::Output>{self.process.output().await}}
@@ -6,10 +7,10 @@ impl Drop for Command{fn drop(&mut self){if let Some(path)=&self.input{let _=std
 pub(super) fn command(path:&Path,script:&str)->anyhow::Result<Command>{
     let source=path.canonicalize()?;
     if Path::new("/.flatpak-info").is_file(){
-        // Nested user namespaces are denied by Flatpak's seccomp policy. Its
-        // portal starts a tighter copy of this app, never a host command.
-        // Instance-private /tmp paths cannot be handed to another sandbox.
-        // Stage just this input in the portal's documented exposure directory.
+        // EN-US: Flatpak denies nested user namespaces. Its portal starts a more restricted app sandbox,
+        // not a host command; copy only this input to the portal exposure directory because /tmp is instance-private.
+        // PT-BR: O Flatpak bloqueia namespaces de usuário aninhados. Seu portal inicia um sandbox mais restrito
+        // do aplicativo, sem executar comandos no host; copia apenas esta entrada, pois /tmp é privado de cada instância.
         let home=dirs::home_dir().ok_or_else(||anyhow::anyhow!("Diretório do aplicativo indisponível"))?;
         let directory=home.join(".var/app").join(crate::app::APP_ID).join("sandbox");std::fs::create_dir_all(&directory)?;
         let name=format!("papo-media-{}",uuid::Uuid::new_v4());let input=directory.join(&name);

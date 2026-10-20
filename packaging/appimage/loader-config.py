@@ -1,3 +1,5 @@
+# EN-US: Relocate loader paths into the cache; the mounted AppImage remains read-only.
+# PT-BR: Ajusta os caminhos dos carregadores no cache; o AppImage montado permanece somente leitura.
 """Relocate Glycin's immutable configuration without modifying the mounted image."""
 import configparser
 import os

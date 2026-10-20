@@ -1,5 +1,5 @@
-//! Native rich cards. General media uses the authorized API; public GIF
-//! providers have a separate bounded resolver that never executes remote HTML.
+//! EN-US: Render native rich cards from backend embed metadata without executing remote HTML.
+//! PT-BR: Renderiza cartões nativos com metadados fornecidos pelo backend, sem executar HTML remoto.
 use super::*;
 mod flow;
 

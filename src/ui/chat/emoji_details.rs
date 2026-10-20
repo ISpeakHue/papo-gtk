@@ -1,4 +1,5 @@
-//! Cached emoji metadata in a small native popover, anchored to the clicked glyph.
+//! EN-US: Cached emoji metadata in a small native popover, anchored to the clicked glyph.
+//! PT-BR: Metadados de emoji em cache exibidos em um popover nativo ancorado no símbolo clicado.
 use super::*;
 use std::{cell::RefCell,rc::Rc};
 

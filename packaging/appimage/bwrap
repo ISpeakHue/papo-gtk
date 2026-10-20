@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# EN-US: Expose immutable AppImage decoder libraries while retaining Glycin's sandbox restrictions.
+# PT-BR: Disponibiliza bibliotecas imutáveis de decodificação do AppImage mantendo as restrições de isolamento do Glycin.
 # Glycin clears LD_LIBRARY_PATH and only mounts its executable. Add the immutable
 # AppDir so its portable decoder libraries remain available inside the sandbox.
 # Existing namespace, seccomp, read-only filesystem and network rules stay active.

@@ -1,4 +1,5 @@
-//! State transitions kept independent of GTK so races can be tested headlessly.
+//! EN-US: State transitions kept independent of GTK so races can be tested headlessly.
+//! PT-BR: Transições de estado independentes do GTK permitem testar condições de corrida sem interface gráfica.
 
 use uuid::Uuid;
 use std::collections::{HashSet,HashMap,VecDeque};
@@ -121,6 +122,8 @@ impl History {
     }
 
     pub fn finish(&mut self, request_id: Uuid, messages: Vec<Message>, append: bool) -> bool {
+        // EN-US: Ignore superseded fetches and replay live changes after merging the snapshot so an old response cannot undo them.
+        // PT-BR: Ignora consultas substituídas e reaplica eventos após mesclar o snapshot para que respostas antigas não desfaçam mudanças recentes.
         if self.pending != Some(request_id) {
             return false;
         }
@@ -147,8 +150,8 @@ impl History {
     /// Independent journals let a read receipt coexist with history pagination.
     pub fn begin_snapshot(&mut self, request: Uuid) { self.snapshots.insert(request, Vec::new()); }
     pub fn fail_snapshot(&mut self, request: Uuid) { self.snapshots.remove(&request); }
-    /// Polling supplies only attachment states, never stale message content.
-    /// Events received during the request take precedence over its response.
+    /// EN-US: The fallback read supplies attachment states only; events received during the request take precedence.
+    /// PT-BR: A consulta alternativa fornece apenas estados de anexos; eventos recebidos durante a requisição têm prioridade.
     pub(super) fn finish_moderation(&mut self,request:Uuid,messages:Vec<Message>)->Vec<Change>{
         let Some(events)=self.snapshots.remove(&request) else{return Vec::new();};
         let mut changes=Vec::new();

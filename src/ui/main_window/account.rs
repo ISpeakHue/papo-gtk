@@ -1,4 +1,5 @@
-//! Profile and preferences dialogs; accepted writes are the source of local state.
+//! EN-US: Profile and preferences dialogs; accepted writes are the source of local state.
+//! PT-BR: Diálogos de perfil e preferências; o estado local acompanha as gravações aceitas pelo servidor.
 use super::*;
 use adw::prelude::*;
 use crate::models::*;

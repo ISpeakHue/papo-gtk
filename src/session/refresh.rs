@@ -1,4 +1,5 @@
-//! Serial renewal with an expiry margin and bounded outage recovery.
+//! EN-US: Serial renewal with an expiry margin and bounded outage recovery.
+//! PT-BR: Renovação serial da sessão com margem antes da expiração e recuperação limitada de falhas temporárias.
 use crate::api::ApiClient;
 use std::time::Duration;
 use chrono::{DateTime,Utc};
@@ -40,8 +41,8 @@ pub async fn run(api:ApiClient,user:String,mut report:impl FnMut(anyhow::Error)-
                     let terminal=crate::api::is_session_error(&error)||error.downcast_ref::<crate::api::ApiError>().is_some_and(|e|e.status.is_client_error()&&e.status!=reqwest::StatusCode::TOO_MANY_REQUESTS);
                     if terminal {report(error);return;}
                     if api.auth_cookie().is_some()&&api.auth_cookie()!=previous{
-                        // Set-Cookie may arrive even when the JSON body is lost.
-                        // Keep the accepted rotation instead of replaying it.
+                        // EN-US: Set-Cookie can arrive before a lost JSON body. Preserve the accepted rotation; do not replay it.
+                        // PT-BR: Set-Cookie pode chegar antes de o corpo JSON se perder. Preserva a rotação aceita sem repeti-la.
                         if let Some(previous)=previous{let _=crate::session::rotated(&api,&user,&previous).await;}
                         expiry=api.session_expiry().unwrap_or_else(||Utc::now()+chrono::Duration::hours(1));
                         if !report(error){return;}break;
@@ -49,9 +50,10 @@ pub async fn run(api:ApiClient,user:String,mut report:impl FnMut(anyhow::Error)-
                     let ambiguous=error.downcast_ref::<crate::api::ApiError>().is_none()
                         && !error.downcast_ref::<reqwest::Error>().is_some_and(|e|e.is_connect())
                         && api.auth_cookie()==previous;
-                    // Backend rotation has a 60-second grace period. Recover a
-                    // lost response promptly, but never replay an old mutation
-                    // after that window (which could trigger reuse detection).
+                    // EN-US: Recover an ambiguous rotation within the backend's 60-second grace period;
+                    // replaying the old token later could trigger reuse detection and invalidate the session.
+                    // PT-BR: Recupera uma rotação incerta dentro dos 60 segundos de tolerância do backend;
+                    // reutilizar o token antigo depois disso pode acionar a detecção de reuso e invalidar a sessão.
                     if ambiguous {ambiguous_since.get_or_insert(started);}
                     if ambiguous_since.is_some_and(|since|since.elapsed()>=Duration::from_secs(45)) {
                         report(anyhow::anyhow!("Não foi possível confirmar a renovação da sessão. Entre novamente para continuar com segurança."));return;

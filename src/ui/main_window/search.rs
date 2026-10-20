@@ -1,4 +1,5 @@
-//! Search owns each query generation; closing or replacing it aborts the old request.
+//! EN-US: Search owns each query generation; closing or replacing it aborts the old request.
+//! PT-BR: Cada busca tem sua própria geração; fechar ou substituir a consulta cancela a requisição anterior.
 use super::*;
 use adw::prelude::*;
 use crate::models::{SearchRequest, SearchResponse, SearchResult};

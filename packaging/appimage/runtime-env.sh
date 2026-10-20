@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# EN-US: Share relocated runtime paths without overriding the desktop's font and scale choices.
+# PT-BR: Compartilha caminhos ajustados do pacote sem substituir as escolhas de fonte e escala do desktop.
 # Shared by AppRun and the bundle's validation commands.
 export LD_LIBRARY_PATH="$PAPO_APPDIR/usr/lib64"
 export PAPO_PYTHON="$PAPO_APPDIR/usr/bin/python3"
@@ -33,8 +35,8 @@ PAPO_PIXBUF_MODULES=("$GDK_PIXBUF_MODULEDIR"/*.so)
 mv "$PAPO_PIXBUF_TEMP" "$PAPO_PIXBUF_CACHE"
 export GDK_PIXBUF_MODULE_FILE="$PAPO_PIXBUF_CACHE"
 export SSL_CERT_FILE="$PAPO_APPDIR/usr/share/papo-gtk/ca-certificates.crt"
-# Preserve desktop/user font configuration and explicit Fontconfig overrides.
-# The wrapper includes the host's complete fonts.conf before adding fallbacks.
+# EN-US: Preserve explicit Fontconfig overrides and load the host's complete font rules before bundled fallbacks.
+# PT-BR: Preserva ajustes explícitos do Fontconfig e carrega todas as regras de fonte do host antes das fontes alternativas do pacote.
 if [[ -z "${FONTCONFIG_FILE:-}" && -z "${FONTCONFIG_PATH:-}" ]]; then
     export FONTCONFIG_FILE="$PAPO_APPDIR/usr/etc/fonts/fonts.conf"
 fi

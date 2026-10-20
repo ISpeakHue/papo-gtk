@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
+# EN-US: Stage repository files and locked dependencies for an offline GNOME SDK build.
+# PT-BR: Prepara arquivos do repositório e dependências fixadas para uma compilação offline no SDK do GNOME.
 set -euo pipefail
 PAPO_PROJECT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$PAPO_PROJECT"
 [[ $(uname -m) == x86_64 ]] || { echo 'This release recipe builds x86_64 only.' >&2; exit 1; }
 command -v flatpak-builder >/dev/null
 mkdir -p target/flatpak/source/.cargo dist
-# Copy only repository source, never the checkout's settings, build outputs or credentials.
+# EN-US: Stage Git-listed source only; ignored settings, credentials and build outputs stay outside the package.
+# PT-BR: Prepara apenas fontes listados pelo Git; configurações, credenciais e artefatos ignorados ficam fora do pacote.
 python3 - <<'PY'
 from pathlib import Path
 import shutil, subprocess

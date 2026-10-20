@@ -1,5 +1,5 @@
-//! Compatibility for backends which broadcast sensitive states but not clean.
-//! Events drive normal updates; legacy servers get one batched fallback only.
+//! EN-US: Events drive moderation updates; legacy servers get one batched fallback per covered group.
+//! PT-BR: Eventos conduzem a moderação; servidores antigos recebem apenas uma consulta alternativa em lote para cada grupo coberto.
 use super::*;
 use std::collections::HashSet;
 

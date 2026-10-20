@@ -1,4 +1,5 @@
-//! Terminal diagnostics never enable third-party request, frame or UI dumps.
+//! EN-US: Terminal diagnostics never enable third-party request, frame or UI dumps.
+//! PT-BR: Diagnósticos de terminal sem despejos de requisições, quadros ou interface de bibliotecas externas.
 use tracing_subscriber::{filter::filter_fn, fmt::MakeWriter, prelude::*, EnvFilter};
 
 pub fn init() {

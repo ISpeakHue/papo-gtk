@@ -1,4 +1,5 @@
-//! Rich embed metadata and validated custom embed inputs.
+//! EN-US: Rich embed metadata and validated custom embed inputs.
+//! PT-BR: Metadados de conteúdo incorporado e entradas validadas para incorporações personalizadas.
 use chrono::{DateTime,Utc};
 use serde::{Deserialize,Serialize};
 use uuid::Uuid;

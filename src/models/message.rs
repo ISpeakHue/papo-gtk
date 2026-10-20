@@ -1,4 +1,5 @@
-//! Message, attachment, embed and reaction models.
+//! EN-US: Message, attachment, embed and reaction models.
+//! PT-BR: Modelos de mensagens, anexos, conteúdo incorporado e reações.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -27,13 +28,15 @@ pub struct Attachment {
 impl Attachment {
     pub fn thumbnail_dimensions(&self)->Option<(i32,i32)>{self.thumbnail_width.zip(self.thumbnail_height).filter(|(w,h)|(1..=16384).contains(w)&&(1..=16384).contains(h))}
 
-    /// Match the backend's nullable container metadata bounds before sizing UI.
+    /// EN-US: Validate nullable backend geometry before reserving display space; never size a texture from these hints.
+    /// PT-BR: Valida a geometria opcional do backend antes de reservar espaço; essas pistas não dimensionam texturas.
     pub fn video_dimensions(&self)->Option<(i32,i32)>{
         self.width.zip(self.height).filter(|(w,h)|self.is_video()&&(1..=16384).contains(w)&&(1..=16384).contains(h)
             &&i64::from(*w)*i64::from(*h)<=100_000_000&&i64::from(*w)<=i64::from(*h)*10&&i64::from(*h)<=i64::from(*w)*10)
     }
 
-    /// Preview classification only; downloaded bytes still pass container validation.
+    /// EN-US: Classify the preview UI only; downloaded bytes still require independent container validation.
+    /// PT-BR: Classifica apenas a prévia na interface; os bytes baixados ainda exigem validação independente do contêiner.
     pub fn is_video(&self)->bool{
         let mime=self.mime_type.split(';').next().unwrap_or("").trim();
         // Newly detected containers outside the native validator stay ordinary

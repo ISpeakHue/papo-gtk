@@ -1,4 +1,5 @@
-//! Paintables occupy one GTK character; protocol codes remain lossless in drafts.
+//! EN-US: Paintables occupy one GTK character; protocol codes remain lossless in drafts.
+//! PT-BR: Cada paintable ocupa um caractere no GTK; os códigos do protocolo são preservados integralmente nos rascunhos.
 use super::*;
 #[derive(Default)]
 pub(super) struct Catalog {
@@ -29,8 +30,8 @@ impl Composer {
         value.emojis.sort_by_key(|s|s.start);caret
     }
     pub(super) fn refresh_at(&self,entry:&gtk::TextView,mut caret:i32)->i32 {
-        // A server emoji can disappear while a draft/undo snapshot retains it.
-        // Fall back to its code instead of exposing an orphan object character.
+        // EN-US: A draft or undo snapshot can outlive a server emoji. Restore its code instead of an orphan object character.
+        // PT-BR: Um rascunho ou snapshot de desfazer pode sobreviver ao emoji do servidor. Restaura seu código em vez de um objeto órfão.
         {
             let catalog=self.catalog.borrow();let mut value=self.value.borrow_mut();
             let missing:Vec<_>=value.emojis.iter().filter(|s|catalog.names.get(s.code.trim_matches(':')).is_none_or(|id|!catalog.paintables.contains_key(id))).cloned().collect();

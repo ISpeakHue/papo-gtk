@@ -1,4 +1,5 @@
-//! Streaming transfers and bounded media textures owned by the chat session.
+//! EN-US: Streaming transfers and bounded media textures owned by the chat session.
+//! PT-BR: Transferências em fluxo e texturas de mídia limitadas, pertencentes à sessão do chat.
 use super::*;
 mod viewer;
 #[cfg(test)]pub(crate) mod pins_tests;

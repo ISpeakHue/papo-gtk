@@ -1,3 +1,5 @@
+# EN-US: Decode silent animation frames with bounded output outside the GTK player.
+# PT-BR: Decodifica quadros de animação sem áudio, com saída limitada e fora do reprodutor GTK.
 """Bounded silent video-to-animation decoding outside GTK's player lifecycle."""
 import math
 import os

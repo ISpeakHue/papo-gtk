@@ -1,4 +1,5 @@
-//! Role models.
+//! EN-US: Role models.
+//! PT-BR: Modelos de cargos e de suas permissões.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

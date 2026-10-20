@@ -1,4 +1,5 @@
-//! Responsive media geometry independent of a thumbnail's pixel dimensions.
+//! EN-US: Responsive media geometry independent of a thumbnail's pixel dimensions.
+//! PT-BR: Geometria responsiva da mídia, independente da resolução da miniatura.
 use gtk::{glib,prelude::*,subclass::prelude::*};
 mod imp {
     use super::*;

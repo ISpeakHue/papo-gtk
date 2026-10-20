@@ -1,3 +1,5 @@
+//! EN-US: Custom emoji catalog and validated creation requests.
+//! PT-BR: Catálogo de emojis personalizados e requisições validadas de criação.
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

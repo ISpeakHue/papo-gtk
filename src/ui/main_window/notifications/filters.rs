@@ -1,4 +1,5 @@
-//! Local notification filters and channel/sender groups; IDs keep duplicate names distinct.
+//! EN-US: Local notification filters and channel/sender groups; IDs keep duplicate names distinct.
+//! PT-BR: Filtros locais e agrupamentos de notificações por canal ou remetente; identificadores distinguem nomes iguais.
 use super::*;
 use std::{cell::{Cell,RefCell},rc::Rc};
 

@@ -1,4 +1,5 @@
-//! The editor shares the emoji catalog and completion rules with the composer.
+//! EN-US: The editor shares the emoji catalog and completion rules with the composer.
+//! PT-BR: O editor compartilha o catálogo de emojis e as regras de autocompletar com o campo de envio.
 use super::*;
 pub(super) struct Completion {
     pub panel:gtk::ScrolledWindow,

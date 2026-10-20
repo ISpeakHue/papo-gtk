@@ -1,4 +1,5 @@
-//! Composer emoji completion uses GTK's local Unicode catalog and server names.
+//! EN-US: Composer emoji completion uses GTK's local Unicode catalog and server names.
+//! PT-BR: Autocompletar de emojis com o catálogo Unicode local do GTK e os nomes cadastrados no servidor.
 use super::*;
 #[cfg(test)]pub(crate) use categories::exercise as exercise_categories;
 mod categories;

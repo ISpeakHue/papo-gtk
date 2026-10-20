@@ -1,4 +1,5 @@
-//! Clipboard images enter the same bounded, permission-checked attachment flow as files.
+//! EN-US: Clipboard images enter the same bounded, permission-checked attachment flow as files.
+//! PT-BR: Imagens da área de transferência usam o mesmo fluxo de anexos, com limites e verificação de permissões.
 use super::*;
 use crate::api::features::{UploadFile, MAX_FILE};
 

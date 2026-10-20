@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# EN-US: Assemble an AppDir from the builder without copying personal settings or credentials.
+# PT-BR: Monta o AppDir a partir do ambiente de compilação sem copiar configurações pessoais nem credenciais.
 """Assemble a modern Fedora AppDir from an isolated builder, never personal data."""
 import hashlib
 import importlib.util

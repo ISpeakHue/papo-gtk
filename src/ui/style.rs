@@ -1,4 +1,5 @@
-//! App-specific geometry and surfaces; Adwaita supplies theme/accent/contrast.
+//! EN-US: App-specific geometry and surfaces; Adwaita supplies theme/accent/contrast.
+//! PT-BR: Geometria e superfícies específicas do aplicativo; tema, cores de destaque e contraste vêm do Adwaita.
 mod accents;
 #[cfg(test)] pub(crate) use accents::{exercise as exercise_accents,sample as sample_accent};
 pub(super) use accents::apply as embed_accent;

@@ -1,3 +1,5 @@
+//! EN-US: Desktop notifications using the freedesktop.org protocol.
+//! PT-BR: Notificações do desktop integradas pelo protocolo freedesktop.org.
 //! https://specifications.freedesktop.org/notification/latest/protocol.html
 use super::*;
 use gtk::{gio,glib};

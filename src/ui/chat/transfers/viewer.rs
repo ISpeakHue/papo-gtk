@@ -1,4 +1,5 @@
-//! Original image work belongs to the viewer, never to the chat thumbnail cache.
+//! EN-US: Original image work belongs to the viewer, never to the chat thumbnail cache.
+//! PT-BR: O processamento da imagem original pertence ao visualizador, separado do cache de miniaturas do chat.
 use super::*;
 mod controls;
 pub(super) use controls::{install,picture};

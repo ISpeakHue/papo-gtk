@@ -1,22 +1,22 @@
 //! Bounded GIF decoding off the UI thread; frame timers live with the paintable.
-//! EN: Decodes animated GIFs safely off the UI thread with strict memory budgets, viewport-aware playback, and system motion preferences.
+//! EN-US: Decodes animated GIFs safely off the UI thread with strict memory budgets, viewport-aware playback, and system motion preferences.
 //! PT-BR: Decodificação limitada de GIFs fora da thread de interface; temporizadores de quadros vinculados ao paintable, com respeito ao orçamento de memória, visibilidade na tela e preferências de movimento do sistema.
 
 use super::PreparedImage;
 use gtk::{gdk,glib,prelude::*,subclass::prelude::*};
 use std::{cell::{Cell,RefCell,OnceCell},time::Duration};
 
-/// EN: In-memory representation of decoded animation frames and their respective display delays.
+/// EN-US: In-memory representation of decoded animation frames and their respective display delays.
 /// PT-BR: Representação em memória dos quadros decodificados da animação e seus respectivos tempos de espera (delays).
 #[derive(Debug)]
 pub struct PreparedAnimation{pub frames:Vec<(PreparedImage,Duration)>}
 impl PreparedAnimation{
     /// Publish a bounded first frame before preparing the remaining animation.
-    /// EN: Fast-path decode of the first frame (max 420x300) to display an immediate placeholder while remaining frames decode.
+    /// EN-US: Fast-path decode of the first frame (max 420x300) to display an immediate placeholder while remaining frames decode.
     /// PT-BR: Decodificação rápida do primeiro quadro (máx 420x300) para exibir uma prévia imediata enquanto os demais quadros são processados.
     pub fn first(bytes:&[u8])->Option<PreparedImage>{
         use image::{AnimationDecoder,ImageDecoder};
-        // EN: Reject files larger than 5MB. / PT-BR: Rejeita arquivos maiores que 5MB.
+        // EN-US: Reject files larger than 5MB. / PT-BR: Rejeita arquivos maiores que 5MB.
         if bytes.len()>5<<20{return None;}
         let mut decoder=image::codecs::gif::GifDecoder::new(std::io::Cursor::new(bytes)).ok()?;
         let(w,h)=decoder.dimensions();if w==0||h==0||w>2048||h>2048{return None;}
@@ -26,7 +26,7 @@ impl PreparedAnimation{
         Some(PreparedImage{width:pixels.width(),height:pixels.height(),pixels:pixels.into_raw()})
     }
 
-    /// EN: Decodes all frames up to a limit of 300 frames. If memory exceeds 48MB, dynamically downscales all frames to fit in RAM.
+    /// EN-US: Decodes all frames up to a limit of 300 frames. If memory exceeds 48MB, dynamically downscales all frames to fit in RAM.
     /// PT-BR: Decodifica todos os quadros até o limite de 300 quadros. Se a memória exceder 48MB, reduz dinamicamente a resolução de todos os quadros para caber na RAM.
     pub fn decode(bytes:&[u8])->Option<Self>{
         use image::{AnimationDecoder,ImageDecoder};
@@ -42,7 +42,7 @@ impl PreparedAnimation{
             frames.push((PreparedImage{width:pixels.width(),height:pixels.height(),pixels:pixels.into_raw()},delay));
             // Preserve the whole animation by reducing preview resolution
             // instead of rejecting a normal GIF when decoded frames fill RAM.
-            // EN: Dynamic resolution step-down if decoded uncompressed frames exceed 48MB.
+            // EN-US: Dynamic resolution step-down if decoded uncompressed frames exceed 48MB.
             // PT-BR: Redução dinâmica de resolução caso os quadros não comprimidos excedam 48MB.
             while total>48<<20 {
                 target=((target.0*3/4).max(1),(target.1*3/4).max(1));total=0;

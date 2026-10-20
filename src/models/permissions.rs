@@ -1,4 +1,5 @@
-//! UI access decisions mirror services/messages.go; the backend remains authoritative.
+//! EN-US: UI access decisions mirror services/messages.go; the backend remains authoritative.
+//! PT-BR: As permissões da interface refletem as regras do backend, que continua sendo a autoridade final.
 use super::{ChannelPermissionEntry, Role, RoleSummary};
 use uuid::Uuid;
 

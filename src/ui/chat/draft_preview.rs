@@ -1,4 +1,5 @@
-//! Small local thumbnails for staged attachments; no upload or live player.
+//! EN-US: Small local thumbnails for staged attachments; no upload or live player.
+//! PT-BR: Miniaturas locais dos anexos preparados para envio, sem upload nem reprodutor ativo.
 use super::*;
 use crate::api::features::UploadFile;
 use std::{path::{Path,PathBuf},sync::Arc};

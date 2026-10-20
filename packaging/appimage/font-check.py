@@ -1,3 +1,5 @@
+# EN-US: Inspect native font settings and render a diagnostic window without an account session.
+# PT-BR: Inspeciona as configurações nativas de fonte e renderiza uma janela de diagnóstico sem sessão de conta.
 """Inspect native font/scaling settings and optionally snapshot a test window."""
 import argparse
 import json

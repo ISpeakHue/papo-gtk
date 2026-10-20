@@ -1,4 +1,5 @@
-//! Native adaptive navigation: server rail + channel list, chat, utility pane.
+//! EN-US: Native adaptive navigation: server rail + channel list, chat, utility pane.
+//! PT-BR: Navegação adaptativa nativa com lista de servidores, canais, chat e painel auxiliar.
 use super::*;
 use adw::prelude::*;
 

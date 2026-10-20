@@ -1,4 +1,5 @@
-//! Unicode categories come from GTK's bundled CLDR catalog, including aliases.
+//! EN-US: Unicode categories come from GTK's bundled CLDR catalog, including aliases.
+//! PT-BR: Categorias Unicode obtidas do catálogo CLDR do GTK, incluindo nomes alternativos.
 use super::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

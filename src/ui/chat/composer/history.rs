@@ -1,4 +1,5 @@
-//! GTK's text history omits paintables. Keep bounded rich draft snapshots.
+//! EN-US: GTK's text history omits paintables. Keep bounded rich draft snapshots.
+//! PT-BR: O histórico de texto do GTK não inclui paintables; mantém snapshots limitados dos rascunhos com conteúdo visual.
 use super::*;
 #[derive(Clone)]
 struct Snapshot {value:DisplayText,caret:i32,bound:i32}

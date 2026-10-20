@@ -1,4 +1,5 @@
-//! Local syntax grammars run on bounded workers; GTK only installs color tags.
+//! EN-US: Local syntax grammars run on bounded workers; GTK only installs color tags.
+//! PT-BR: Análise de sintaxe local em tarefas limitadas; o GTK apenas aplica as tags de cor.
 use std::{cell::RefCell,collections::HashMap,rc::Rc,sync::{Arc,LazyLock,atomic::{AtomicBool,Ordering}},time::{Duration,Instant}};
 use gtk::prelude::*;
 use syntect::{highlighting::{HighlightIterator,HighlightState,Highlighter,ThemeSet},parsing::{ParseState,ScopeStack,SyntaxSet},util::LinesWithEndings};

@@ -1,4 +1,5 @@
-//! Embedded application artwork, available even without a desktop installation.
+//! EN-US: Embedded application artwork, available even without a desktop installation.
+//! PT-BR: Arte incorporada ao executável, disponível mesmo sem instalar o aplicativo no desktop.
 
 use std::sync::Once;
 

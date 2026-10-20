@@ -1,4 +1,5 @@
-//! Keep small previews moving while full GIF animations prepare off-thread.
+//! EN-US: Keep small previews moving while full GIF animations prepare off-thread.
+//! PT-BR: Mantém o carregamento de prévias pequenas enquanto as animações completas são preparadas fora da interface.
 use super::*;
 
 #[cfg(test)]
@@ -50,8 +51,8 @@ pub(super) fn queue_image(
         let Ok(permit) = decoders.clone().acquire_owned().await else { return; };
         drop(wait);
         let initial = tokio::task::spawn_blocking(move || {
-            // An aborted async job must not release its slot while its blocking
-            // decoder is still running.
+            // EN-US: Keep the permit inside the blocking decoder: cancelling its async caller does not stop decoding.
+            // PT-BR: Mantém a permissão dentro do decodificador bloqueante: cancelar a tarefa assíncrona não interrompe a decodificação.
             let _permit = permit;
             let _timing = crate::performance::timer("media_decode_us");
             let bytes: std::sync::Arc<[u8]> = match input {

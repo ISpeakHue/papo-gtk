@@ -1,4 +1,5 @@
-//! Native grouped settings rows matching the account preferences mockup.
+//! EN-US: Native grouped settings rows matching the account preferences mockup.
+//! PT-BR: Preferências agrupadas em linhas nativas conforme o desenho das configurações da conta.
 use super::*;
 
 pub(super) fn group(body:&gtk::Box,title:&str)->adw::PreferencesGroup {

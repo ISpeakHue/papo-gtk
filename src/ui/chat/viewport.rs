@@ -1,4 +1,5 @@
-//! Scroll only for explicit navigation or while following the newest messages.
+//! EN-US: Scroll only for explicit navigation or while following the newest messages.
+//! PT-BR: A rolagem automática ocorre na navegação explícita ou enquanto o usuário acompanha as mensagens mais recentes.
 use super::*;
 use adw::prelude::*;
 use crate::ui::smooth_scroll::{animate_wheel,stop_wheel};
@@ -84,9 +85,10 @@ impl Viewport {
         if let Some(view)=scroll.child().and_downcast::<gtk::Viewport>(){view.set_scroll_to_focus(false);}
         // ListBox also scrolls its cursor independently of GtkViewport.
         list.set_adjustment(None::<&gtk::Adjustment>);
-        // Tick callbacks run before layout. Restoring only on a later tick
-        // exposes one frame at the wrong position when a row changes height.
-        // Apply the anchor after GTK allocation, before that frame is painted.
+        // EN-US: Restore the anchor after allocation and before painting. Tick callbacks run before layout,
+        // so waiting for the next tick would expose a misplaced frame when media changes a row's height.
+        // PT-BR: Restaura a âncora após a alocação e antes do desenho. Callbacks de tick precedem o layout;
+        // esperar o próximo tick mostraria um quadro deslocado quando a mídia altera a altura de uma linha.
         let layout_hook:Rc<RefCell<Option<(gtk::gdk::FrameClock,gtk::glib::SignalHandlerId)>>>=Default::default();
         let hook=layout_hook.clone();let rows=list.downgrade();let pending=self.pending.clone();let reflow=self.reflow.clone();let wheel=self.wheel.clone();
         let handoff=self.handoff.clone();let reveal=self.reveal.clone();let generation=self.generation.clone();let opening=self.opening.clone();let ready=self.opening_ready.clone();let active=self.opening_callback.clone();let following=self.following.clone();let cover=cover.downgrade();let input=sender.input_sender().clone();

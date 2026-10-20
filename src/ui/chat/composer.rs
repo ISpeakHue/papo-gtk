@@ -1,4 +1,5 @@
-//! Inline emojis and readable mention labels in the native multiline composer; IDs stay in draft/request text.
+//! EN-US: Native multiline composer with readable emoji and mentions; drafts retain protocol identifiers.
+//! PT-BR: Editor nativo multilinha com emojis e menções legíveis; os rascunhos preservam os identificadores do protocolo.
 use super::*;
 use mentions::{DisplayText,Span};
 mod inline;

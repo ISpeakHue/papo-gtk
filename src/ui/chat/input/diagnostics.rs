@@ -1,4 +1,5 @@
-//! Opt-in local input diagnostics. Never collect key values, text or credentials.
+//! EN-US: Opt-in local input diagnostics. Never collect key values, text or credentials.
+//! PT-BR: Diagnósticos locais de entrada ativados explicitamente; não coletam teclas, texto ou credenciais.
 use super::*;
 use std::{cell::Cell,rc::Rc};
 

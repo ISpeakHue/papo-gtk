@@ -1,3 +1,5 @@
+# EN-US: Archive repository source alongside the binary; exclude ignored build and local data.
+# PT-BR: Arquiva o código do repositório junto ao executável, excluindo artefatos e dados locais ignorados pelo Git.
 """Write the matching frontend source alongside the distributable binary."""
 
 from pathlib import Path

@@ -1,3 +1,5 @@
+//! EN-US: Coordinate the notification inbox, its window, desktop alerts and read acknowledgments.
+//! PT-BR: Coordena a caixa de notificações, sua janela, avisos do desktop e confirmações de leitura.
 mod desktop;
 mod filters;
 #[cfg(test)]pub(crate) use filters::exercise as exercise_filters;

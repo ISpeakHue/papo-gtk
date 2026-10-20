@@ -1,12 +1,14 @@
-//! Small webhook avatars, shared by resource across messages and channels.
+//! EN-US: Small webhook avatars, shared by resource across messages and channels.
+//! PT-BR: Avatares pequenos de webhooks são compartilhados por recurso entre mensagens e canais.
 use super::*;
 const ACTIVE:usize=2;
 const QUEUED:usize=128;
 const CACHED:usize=256;
 
-/// Discord avatar hashes identify immutable pixels. Size/signature parameters
-/// and the CDN alias do not change those pixels. Keep the original URL for the
-/// actual request, including signatures; other providers keep their full URL.
+/// EN-US: Discord avatar hashes identify immutable pixels across CDN aliases and size/signature variants.
+/// Normalize only the cache key; requests retain the original signed URL, and other providers keep their full key.
+/// PT-BR: Hashes de avatares do Discord identificam os mesmos pixels entre aliases de CDN e variantes de tamanho e assinatura.
+/// Normaliza apenas a chave do cache; requisições mantêm a URL assinada original e outros provedores preservam a chave completa.
 fn key(value:&str)->String{
     if let Ok(url)=reqwest::Url::parse(value){
         if url.scheme()=="https"&&url.username().is_empty()&&url.password().is_none()&&url.fragment().is_none()

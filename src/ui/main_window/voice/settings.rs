@@ -1,4 +1,5 @@
-//! Native call preferences; changes keep their existing immediate behavior.
+//! EN-US: Native call preferences; changes keep their existing immediate behavior.
+//! PT-BR: Preferências nativas de chamada; alterações mantêm o comportamento de aplicação imediata.
 use super::*;
 
 pub(super) struct Controls {

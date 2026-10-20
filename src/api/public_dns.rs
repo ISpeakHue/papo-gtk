@@ -1,4 +1,5 @@
-//! Validate the exact socket addresses passed to the HTTP connector, not just URLs.
+//! EN-US: Validate the exact socket addresses passed to the HTTP connector, not just URLs.
+//! PT-BR: Valida os endereços de conexão efetivamente entregues ao cliente HTTP, além da URL.
 use std::net::{IpAddr,SocketAddr};
 pub(super) fn public(ip:IpAddr)->bool{
     match ip{
@@ -9,6 +10,8 @@ pub(super) fn public(ip:IpAddr)->bool{
         IpAddr::V6(ip)=>{let s=ip.segments();(s[0]&0xe000)==0x2000&&s[0]!=0x2002&&!(s[0]==0x2001&&(s[1]<0x0200||s[1]==0x0db8))&&!(s[0]==0x3fff&&s[1]<0x1000)}
     }
 }
+// EN-US: Reject the entire DNS answer if any destination is non-public; a mixed answer must not bypass isolation.
+// PT-BR: Rejeita toda a resposta DNS se algum destino não for público; respostas mistas não podem contornar o isolamento.
 fn vetted(addresses:Vec<SocketAddr>)->std::io::Result<reqwest::dns::Addrs>{
     if addresses.is_empty()||addresses.iter().any(|a|!public(a.ip())){return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied,"External media requires public network addresses"));}
     Ok(Box::new(addresses.into_iter()))

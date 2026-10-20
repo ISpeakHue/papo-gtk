@@ -1,4 +1,5 @@
-//! Shared account settings shell. Pages mount once and retain their draft widgets.
+//! EN-US: Shared account settings shell. Pages mount once and retain their draft widgets.
+//! PT-BR: Janela compartilhada de configurações; cada aba é montada uma vez e preserva seus campos de rascunho.
 use super::*;
 
 #[derive(Clone,Copy,Debug,PartialEq,Eq,Hash)]

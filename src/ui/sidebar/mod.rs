@@ -1,4 +1,5 @@
-//! Channel sidebar component — displays server header, channels list, and user footer.
+//! EN-US: Channel sidebar component — displays server header, channels list, and user footer.
+//! PT-BR: Barra lateral com cabeçalho do servidor, canais e rodapé do usuário.
 
 use gtk::pango;
 use gtk::prelude::*;

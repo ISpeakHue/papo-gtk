@@ -1,4 +1,5 @@
-//! Bound GTK row ownership while keeping a scrollable, variable-height history.
+//! EN-US: Bound GTK row ownership while keeping a scrollable, variable-height history.
+//! PT-BR: Limita as linhas mantidas pelo GTK preservando o histórico rolável com alturas variáveis.
 use super::*;
 pub(super) const ROW_LIMIT:usize=200;
 const ESTIMATE:f64=64.0;

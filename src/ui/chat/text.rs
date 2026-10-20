@@ -1,4 +1,5 @@
-//! Native, read-only message text with inline custom emoji paintables.
+//! EN-US: Native, read-only message text with inline custom emoji paintables.
+//! PT-BR: Texto nativo de mensagens, somente leitura, com paintables de emojis personalizados embutidos.
 use super::*;
 #[derive(Debug,PartialEq,Eq)]
 pub(super) enum Part { Text(String), Emoji(Uuid,String) }

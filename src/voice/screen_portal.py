@@ -1,3 +1,5 @@
+# EN-US: Let the desktop portal authorize capture and own one non-persistent screen-sharing session.
+# PT-BR: Deixa o portal do desktop autorizar a captura e controlar uma sessão não persistente de compartilhamento de tela.
 """One non-persistent ScreenCast session, owned by the media worker's bus peer.
 
 The portal alone chooses/authorizes the source. No X11/Wayland capture fallback.

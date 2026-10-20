@@ -1,4 +1,5 @@
-//! Secrets only appear in JSON request bodies. Errors never echo backend-supplied secrets.
+//! EN-US: Secrets only appear in JSON request bodies. Errors never echo backend-supplied secrets.
+//! PT-BR: Segredos ficam nos corpos JSON das requisições; os erros não reproduzem segredos recebidos do backend.
 use super::*;
 
 pub fn recovery_token(input: &str) -> Result<String> {

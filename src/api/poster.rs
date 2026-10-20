@@ -1,4 +1,5 @@
-//! Bounded, authenticated ranges for a silent video poster, never a full background download.
+//! EN-US: Bounded, authenticated ranges for a silent video poster, never a full background download.
+//! PT-BR: Leitura autenticada de intervalos limitados do vídeo para gerar uma prévia silenciosa, sem baixar o arquivo inteiro em segundo plano.
 use super::*;
 use super::requests::PacedRequest;
 use futures_util::StreamExt;

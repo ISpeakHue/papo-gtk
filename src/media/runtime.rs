@@ -1,4 +1,5 @@
-//! Select the packaged media interpreter without changing local development.
+//! EN-US: Select the packaged media interpreter without changing local development.
+//! PT-BR: Seleciona o interpretador de mídia do pacote sem alterar o ambiente de desenvolvimento local.
 
 pub fn python() -> tokio::process::Command {
     let executable = std::env::var_os("PAPO_PYTHON")

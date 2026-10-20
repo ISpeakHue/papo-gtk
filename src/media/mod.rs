@@ -1,5 +1,5 @@
 //! Media utilities — Base64 decoding, GDK texture generation, and file size formatting.
-//! EN: Manages image processing, bounded memory decoding, thumbnail downscaling, and GDK texture generation for UI display.
+//! EN-US: Manages image processing, bounded memory decoding, thumbnail downscaling, and GDK texture generation for UI display.
 //! PT-BR: Utilitários de mídia — decodificação em memória limitada, miniaturas, geração de texturas GDK e manipulação de avatares/anexos.
 
 use gtk::gdk::Texture;
@@ -21,20 +21,20 @@ pub mod container;
 mod sandbox;
 
 /// Bound encoded input, dimensions and decoded cache size before creating a texture.
-/// EN: Decodes image bytes into a GDK texture, constraining bounds to a default 512x512 box.
+/// EN-US: Decodes image bytes into a GDK texture, constraining bounds to a default 512x512 box.
 /// PT-BR: Decodifica bytes de imagem em uma textura GDK, restringindo as dimensões a uma caixa máxima de 512x512.
 pub fn bounded_texture(bytes: &[u8]) -> Option<Texture> {
     bounded_texture_size(bytes,512,512)
 }
 
-/// EN: Prepared raw RGBA image data ready for texture upload on the UI thread.
+/// EN-US: Prepared raw RGBA image data ready for texture upload on the UI thread.
 /// PT-BR: Dados brutos de imagem RGBA prontos para upload como textura na thread de interface.
 #[derive(Debug)]
 pub struct PreparedImage{pub width:u32,pub height:u32,pub pixels:Vec<u8>}
 impl PreparedImage{
     /// Original attachments are decoded only for an open viewer. Keep the
     /// encoded file on disk and bound source pixels and the displayed texture.
-    /// EN: Decodes full-resolution image for the modal lightbox viewer with strict memory bounds (192MB max alloc).
+    /// EN-US: Decodes full-resolution image for the modal lightbox viewer with strict memory bounds (192MB max alloc).
     /// PT-BR: Decodifica imagem em resolução completa para o visualizador modal com limites estritos de alocação (máx 192MB).
     pub fn decode_viewer(path:&std::path::Path)->Option<Self>{
         let reader=image::ImageReader::open(path).ok()?.with_guessed_format().ok()?;
@@ -47,17 +47,17 @@ impl PreparedImage{
         let pixels=image.into_rgba8();Some(Self{width:pixels.width(),height:pixels.height(),pixels:pixels.into_raw()})
     }
 
-    /// EN: Decodes image bytes upscaling or downscaling to target dimensions.
+    /// EN-US: Decodes image bytes upscaling or downscaling to target dimensions.
     /// PT-BR: Decodifica bytes de imagem ajustando (ampliando ou reduzindo) para as dimensões alvo.
     pub fn decode(bytes:&[u8],width:u32,height:u32)->Option<Self>{Self::decode_impl(bytes,width,height,true)}
 
     /// Chat frames handle enlargement at presentation time. Other native image
     /// widgets retain their established decoding size (notably avatars).
-    /// EN: Decodes image bytes into a thumbnail without enlarging smaller originals.
+    /// EN-US: Decodes image bytes into a thumbnail without enlarging smaller originals.
     /// PT-BR: Decodifica bytes de imagem em miniatura sem ampliar originais que já sejam menores.
     pub fn decode_thumbnail(bytes:&[u8],width:u32,height:u32)->Option<Self>{Self::decode_impl(bytes,width,height,false)}
 
-    // EN: Internal decoding implementation with bounds checking (max 4MB file, max 4096x4096px).
+    // EN-US: Internal decoding implementation with bounds checking (max 4MB file, max 4096x4096px).
     // PT-BR: Implementação interna de decodificação com checagem de limites (arquivo máx 4MB, dimensões máx 4096x4096px).
     fn decode_impl(bytes:&[u8],width:u32,height:u32,enlarge:bool)->Option<Self>{
         if bytes.len()>4<<20{return None;}
@@ -67,17 +67,17 @@ impl PreparedImage{
         let pixels=image::load_from_memory_with_format(bytes,format).ok()?.thumbnail(width,height).to_rgba8();let(w,h)=pixels.dimensions();Some(Self{width:w,height:h,pixels:pixels.into_raw()})
     }
 
-    /// EN: Convert raw RGBA pixels into a `gdk::Texture` (`gdk::MemoryTexture`).
+    /// EN-US: Convert raw RGBA pixels into a `gdk::Texture` (`gdk::MemoryTexture`).
     /// PT-BR: Converte pixels brutos RGBA em uma textura `gdk::Texture` (`gdk::MemoryTexture`).
     pub fn texture(self)->Texture{use gtk::prelude::*;gtk::gdk::MemoryTexture::new(self.width as i32,self.height as i32,gtk::gdk::MemoryFormat::R8g8b8a8,&Bytes::from_owned(self.pixels),self.width as usize*4).upcast()}
 }
 
-/// EN: Helper to decode and directly create a bounded texture in a single step.
+/// EN-US: Helper to decode and directly create a bounded texture in a single step.
 /// PT-BR: Auxiliar para decodificar e criar diretamente uma textura limitada em um único passo.
 pub fn bounded_texture_size(bytes:&[u8],width:u32,height:u32)->Option<Texture>{PreparedImage::decode(bytes,width,height).map(PreparedImage::texture)}
 
 /// Reuse decoded textures when rebuilding rows, with a fallback for missing avatars.
-/// EN: Construct an `adw::Avatar` widget with an optional texture and fallback icon.
+/// EN-US: Construct an `adw::Avatar` widget with an optional texture and fallback icon.
 /// PT-BR: Constrói um widget `adw::Avatar` com textura opcional e ícone padrão de fallback.
 pub fn avatar_image(texture: Option<&Texture>, size: i32) -> adw::Avatar {
     let image = adw::Avatar::new(size, None, false);
@@ -87,7 +87,7 @@ pub fn avatar_image(texture: Option<&Texture>, size: i32) -> adw::Avatar {
 }
 
 /// Stable avatar widgets allow asynchronous batches to update only the image.
-/// EN: Create an avatar widget labeled with user ID for targeted in-place updates.
+/// EN-US: Create an avatar widget labeled with user ID for targeted in-place updates.
 /// PT-BR: Cria um widget de avatar nomeado com o ID do usuário para atualizações direcionadas sem reconstruir o layout.
 pub fn member_avatar(id:uuid::Uuid,texture:Option<&Texture>,size:i32)->adw::Avatar{
     let avatar=avatar_image(texture,size);avatar.set_widget_name(&format!("avatar-{id}"));avatar

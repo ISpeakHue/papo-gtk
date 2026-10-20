@@ -1,4 +1,5 @@
-//! Main application window coordinating the sidebar, chat area, and online user list.
+//! EN-US: Main application window coordinating the sidebar, chat area, and online user list.
+//! PT-BR: Janela principal coordena a barra lateral, o chat e a lista de membros.
 
 pub(crate) mod layout;
 mod members;

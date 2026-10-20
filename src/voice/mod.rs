@@ -1,4 +1,5 @@
-//! Native media process with bounded IPC and deterministic capture cleanup.
+//! EN-US: Native media process with bounded IPC and deterministic capture cleanup.
+//! PT-BR: Processo nativo de mídia com comunicação limitada e liberação determinística dos recursos de captura.
 use serde::Deserialize;
 use serde_json::Value;
 use tokio::{io::{AsyncBufReadExt,AsyncWriteExt,BufReader},sync::mpsc,process::Command};

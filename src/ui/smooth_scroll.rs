@@ -1,4 +1,5 @@
-//! Shared mouse-wheel easing; pixel/touchpad scrolling stays native to GTK.
+//! EN-US: Shared mouse-wheel easing; pixel/touchpad scrolling stays native to GTK.
+//! PT-BR: Suavização compartilhada para a roda do mouse; a rolagem em pixels e por touchpad continua nativa do GTK.
 use adw::prelude::*;
 use std::{cell::RefCell, rc::Rc};
 

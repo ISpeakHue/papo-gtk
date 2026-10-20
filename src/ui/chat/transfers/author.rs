@@ -1,5 +1,5 @@
-//! Small session-local author avatars survive scrolling and channel switches.
-//! Bytes still come only from authorized embed responses, never remote URLs.
+//! EN-US: Small session-local author avatars survive scrolling and channel switches. Bytes still come only from authorized embed responses, never remote URLs.
+//! PT-BR: Pequenos avatares de autores permanecem na sessão entre rolagens e trocas de canal; os bytes vêm apenas de respostas autorizadas.
 use super::*;
 
 const CACHE_LIMIT:usize=256;

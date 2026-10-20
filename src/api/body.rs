@@ -1,4 +1,5 @@
-//! Shared limits cover chunked responses and error paths as well as JSON success.
+//! EN-US: Shared limits cover chunked responses and error paths as well as JSON success.
+//! PT-BR: Limites compartilhados para respostas recebidas em partes, erros e respostas JSON bem-sucedidas.
 use super::*;
 use futures_util::StreamExt;
 pub(super) const ERROR_LIMIT:usize=64<<10;
@@ -11,12 +12,15 @@ fn budget(url:&Url)->usize {
 }
 pub(super) async fn read(response:reqwest::Response,limit:usize)->Result<Vec<u8>>{
     anyhow::ensure!(response.content_length().is_none_or(|n|n<=limit as u64),"Resposta da API excede o limite de tamanho.");
+    // EN-US: Enforce the budget while streaming too; Content-Length can be absent or inaccurate.
+    // PT-BR: Aplica o limite também durante a leitura; Content-Length pode estar ausente ou incorreto.
     let mut bytes=Vec::new();let mut chunks=response.bytes_stream();
     while let Some(chunk)=chunks.next().await{let chunk=chunk?;anyhow::ensure!(chunk.len()<=limit.saturating_sub(bytes.len()),"Resposta da API excede o limite de tamanho.");bytes.extend_from_slice(&chunk);}
     Ok(bytes)
 }
 pub(super) async fn json_bytes(response:reqwest::Response)->Result<Vec<u8>>{let limit=budget(response.url());read(response,limit).await}
-/// The same guards apply before HTTP and socket data reaches GTK's renderers.
+/// EN-US: Apply the same structural limits to HTTP and socket data before GTK renders it.
+/// PT-BR: Aplica os mesmos limites estruturais aos dados HTTP e de socket antes da renderização pelo GTK.
 pub(crate) fn validate(value:&serde_json::Value)->Result<()> {
     let mut queue=vec![("",value)];let mut nodes=0usize;
     while let Some((key,value))=queue.pop(){

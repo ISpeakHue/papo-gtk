@@ -1,4 +1,5 @@
-//! Message and emoji workflows, with request identities scoped to the selected channel.
+//! EN-US: Message and emoji workflows, with request identities scoped to the selected channel.
+//! PT-BR: Ações de mensagens e emojis usam identificadores de requisição vinculados ao canal selecionado.
 #[cfg(test)]
 pub(crate) mod tests;
 mod edit_mentions;

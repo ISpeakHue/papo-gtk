@@ -1,3 +1,5 @@
+# EN-US: Validate bundled libraries and codecs using synthetic media without physical capture.
+# PT-BR: Valida bibliotecas e codecs do pacote com mídia sintética, sem captura de dispositivos físicos.
 """Check the bundled runtime using synthetic data and no physical devices."""
 
 import ctypes

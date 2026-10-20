@@ -1,4 +1,5 @@
-//! Present thumbnail pixels at native size; the media frame controls layout.
+//! EN-US: Present thumbnail pixels at native size; the media frame controls layout.
+//! PT-BR: Exibe os pixels da miniatura no tamanho nativo; o contêiner de mídia controla o layout.
 use gtk::{gdk,glib};
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;

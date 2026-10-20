@@ -1,4 +1,5 @@
-//! Reaction filters and stable member rows share the main window's metadata cache.
+//! EN-US: Reaction filters and stable member rows share the main window's metadata cache.
+//! PT-BR: Filtros de reações e linhas estáveis de membros compartilham o cache de metadados da janela principal.
 use super::*;
 use adw::prelude::*;
 

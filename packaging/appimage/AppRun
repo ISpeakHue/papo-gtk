@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# EN-US: Check the host baseline, configure the bundled runtime, then launch Papo.
+# PT-BR: Verifica os requisitos do sistema, configura o ambiente do pacote e inicia o Papo.
 set -euo pipefail
 PAPO_APPDIR="${APPDIR:-$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)}"
 export PAPO_APPDIR

@@ -1,4 +1,5 @@
-//! Restricted moderation contracts. Recovery tokens and audit metadata are never logged.
+//! EN-US: Restricted moderation contracts. Recovery tokens and audit metadata are never logged.
+//! PT-BR: Contratos restritos de moderação; tokens de recuperação e metadados de auditoria não são registrados em logs.
 use chrono::{DateTime,Utc};
 use serde::Deserialize;
 use uuid::Uuid;

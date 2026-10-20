@@ -1,4 +1,5 @@
-//! Session-local decoded avatars and request generations for asynchronous updates.
+//! EN-US: Session-local decoded avatars and request generations for asynchronous updates.
+//! PT-BR: Avatares decodificados por sessão e gerações de requisição para controlar atualizações assíncronas.
 
 use std::collections::{HashMap, HashSet};
 use gtk::gdk::Texture;

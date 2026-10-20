@@ -1,4 +1,5 @@
-//! Large rosters retain lightweight records and recycle their visible widgets.
+//! EN-US: Large rosters retain lightweight records and recycle their visible widgets.
+//! PT-BR: Listas grandes mantêm registros leves e reutilizam apenas os widgets visíveis.
 use super::*;
 #[derive(Clone,PartialEq)]struct Row{key:String,id:Option<Uuid>,name:String,phrase:String,status:PresenceStatus,roles:Vec<crate::models::RoleSummary>,avatar:Option<gtk::gdk::Texture>,show:bool}
 pub(super) struct List{store:gtk::gio::ListStore,pub widget:gtk::ListView}

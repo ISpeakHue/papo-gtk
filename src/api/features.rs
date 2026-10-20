@@ -1,4 +1,5 @@
-//! Authenticated media transfers and account contracts. Never retry message POSTs.
+//! EN-US: Authenticated media transfers and account contracts. Never retry message POSTs.
+//! PT-BR: Transferências autenticadas de mídia e contratos de conta; o envio de mensagens não é repetido automaticamente.
 use super::*;
 use futures_util::StreamExt;
 use std::path::PathBuf;

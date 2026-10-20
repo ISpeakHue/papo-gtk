@@ -1,4 +1,5 @@
-//! Direct conversations are participant channels, independent of public channel roles.
+//! EN-US: Direct conversations are participant channels, independent of public channel roles.
+//! PT-BR: Conversas diretas são canais de participantes, independentes dos cargos dos canais públicos.
 use super::*;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;

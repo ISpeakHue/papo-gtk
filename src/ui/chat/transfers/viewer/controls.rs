@@ -1,4 +1,5 @@
-//! Zoom changes the native picture's allocation, never decodes another copy.
+//! EN-US: Zoom changes the native picture's allocation, never decodes another copy.
+//! PT-BR: O zoom altera a área ocupada pela imagem nativa sem decodificar outra cópia.
 use super::*;
 use std::{cell::Cell,rc::Rc};
 

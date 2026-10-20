@@ -1,3 +1,5 @@
+# EN-US: Extract a single bounded video frame in the isolated media process.
+# PT-BR: Extrai um único quadro de vídeo com limites no processo isolado de mídia.
 """One silent video preroll frame; bounded output and no GTK/player/UI objects."""
 import os
 import struct

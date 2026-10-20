@@ -1,5 +1,5 @@
 //! Chat view component — displays channel header, message history, attachments, link previews, reactions, and composer.
-//! EN: Core messaging interface managing virtualized message history, media attachments, link embeds, emoji/mention autocompletion, and composer.
+//! EN-US: Core messaging interface managing virtualized message history, media attachments, link embeds, emoji/mention autocompletion, and composer.
 //! PT-BR: Componente de visualização de chat — exibe cabeçalho do canal, histórico de mensagens virtualizado, anexos, prévias de links, reações, autocompletar de emojis/menções e editor de texto.
 
 mod window;
@@ -58,7 +58,7 @@ use uuid::Uuid;
 use crate::media::{avatar_image, format_file_size};
 use crate::models::{Attachment, Channel, ConversationTarget, DirectConversation, Embed, Message, MessageListResponse, MessageCursor, UserSummary};
 
-/// EN: Initialization data for mounting the ChatModel component.
+/// EN-US: Initialization data for mounting the ChatModel component.
 /// PT-BR: Dados de inicialização para montagem do componente ChatModel.
 #[derive(Debug, Clone, Default)]
 pub struct ChatInit {
@@ -70,7 +70,7 @@ pub struct ChatInit {
     pub(crate) pinned_inbox:Option<std::rc::Rc<std::cell::RefCell<Option<actions::pins::Snapshot>>>>,
 }
 
-/// EN: Central state for the Chat view, managing history, media transfers, drafts, and UI row recycling.
+/// EN-US: Central state for the Chat view, managing history, media transfers, drafts, and UI row recycling.
 /// PT-BR: Estado central da tela de chat, gerenciando histórico, transferências de mídia, rascunhos e reciclagem de linhas de interface.
 pub struct ChatModel {
     pub active_channel: Option<ConversationTarget>,

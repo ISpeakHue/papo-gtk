@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# EN-US: Build with the modern Fedora toolchain and package only selected runtime resources.
+# PT-BR: Compila com a ferramenta moderna do Fedora e empacota apenas os recursos de execução selecionados.
 set -euo pipefail
 PAPO_PROJECT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$PAPO_PROJECT"

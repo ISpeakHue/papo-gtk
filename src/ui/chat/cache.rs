@@ -1,4 +1,5 @@
-//! Recent conversations belong to one authenticated chat session, never to disk.
+//! EN-US: Recent conversations belong to one authenticated chat session, never to disk.
+//! PT-BR: Conversas recentes pertencem a uma única sessão autenticada e não são persistidas em disco.
 use std::collections::VecDeque;
 use uuid::Uuid;
 use super::state::{Change, History};

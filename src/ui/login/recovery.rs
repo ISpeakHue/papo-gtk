@@ -1,3 +1,5 @@
+//! EN-US: Account access recovery flow from the login screen.
+//! PT-BR: Fluxo de recuperação de acesso iniciado na tela de login.
 use super::*;
 
 pub(super) struct Recovery {

@@ -1,4 +1,5 @@
-//! Extract one silent, small video frame outside GTK's playback lifecycle.
+//! EN-US: Extract one silent, small video frame outside GTK's playback lifecycle.
+//! PT-BR: Extrai um quadro pequeno e silencioso do vídeo fora do ciclo de vida do reprodutor GTK.
 use std::{path::Path,time::Duration};
 
 pub async fn extract(path:&Path)->anyhow::Result<Vec<u8>> {

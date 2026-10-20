@@ -1,4 +1,5 @@
-//! Escape follows each transient window's normal close/unsaved-changes path.
+//! EN-US: Escape follows each transient window's normal close/unsaved-changes path.
+//! PT-BR: Escape usa o fluxo normal de fechamento e de confirmação de alterações de cada janela auxiliar.
 use gtk::prelude::*;
 pub(super) fn install(){
     fn observe(window:&gtk::Window){

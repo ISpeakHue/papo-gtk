@@ -1,4 +1,5 @@
-//! Bidirectional, contiguous history windows. Recent channel heads live separately.
+//! EN-US: Bidirectional, contiguous history windows. Recent channel heads live separately.
+//! PT-BR: Janelas contíguas de histórico permitem navegação nas duas direções; mensagens recentes ficam em um cache separado.
 use super::*;
 
 pub(super) const HISTORY_LIMIT:usize=600;

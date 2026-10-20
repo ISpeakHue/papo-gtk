@@ -1,4 +1,5 @@
-//! Recognize GIF source links without contacting provider pages or CDNs.
+//! EN-US: Recognize GIF source links without contacting provider pages or CDNs.
+//! PT-BR: Reconhece links de GIF sem acessar páginas ou CDNs dos provedores.
 use reqwest::Url;
 
 fn page(value:&str)->Option<Url>{

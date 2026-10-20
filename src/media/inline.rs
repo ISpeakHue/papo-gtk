@@ -1,4 +1,5 @@
-//! Give shared emoji frames text-sized geometry without decoding another copy.
+//! EN-US: Give shared emoji frames text-sized geometry without decoding another copy.
+//! PT-BR: Dimensiona quadros compartilhados de emoji como texto, sem decodificar outra cópia.
 use gtk::{gdk,glib,prelude::*,subclass::prelude::*};
 mod imp {
     use super::*;

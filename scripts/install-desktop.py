@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# EN-US: Register the chosen local executable and embedded artwork with the desktop.
+# PT-BR: Registra no desktop o executável local escolhido e a arte incorporada.
 """Register a built Papo executable and its icons in the desktop app list."""
 
 import argparse

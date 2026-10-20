@@ -1,4 +1,5 @@
-//! Small editing helpers keep composer offsets in GTK character coordinates.
+//! EN-US: Small editing helpers keep composer offsets in GTK character coordinates.
+//! PT-BR: Operações de edição mantêm os índices do editor nas coordenadas de caracteres do GTK.
 use super::*;
 mod diagnostics;
 pub(super) mod shortcuts;

@@ -1,4 +1,5 @@
-//! Bounded first-frame/thumbnail residency for the latest opening batch.
+//! EN-US: Bounded first-frame/thumbnail residency for the latest opening batch.
+//! PT-BR: Retenção limitada de primeiros quadros e miniaturas do lote recente carregado ao abrir o canal.
 use super::*;
 
 const BYTE_LIMIT: u64 = 192 << 20;
@@ -48,6 +49,8 @@ impl Cache {
         self.bytes += bytes;
         self.entries.insert((channel,key),Entry { texture:texture.clone(),messages:messages.clone(),bytes,touched:Instant::now() });
         self.order.push_back((channel,key));
+        // EN-US: Evict older previews first, but keep the hard memory limit even when every entry is recent.
+        // PT-BR: Descarta primeiro as prévias antigas, mantendo o limite rígido de memória mesmo se todas forem recentes.
         while self.bytes > BYTE_LIMIT || self.entries.len() > ENTRY_LIMIT {
             let Some(key) = self.order.iter().find(|(channel,key)|!self.recent.get(channel).is_some_and(|keys|keys.contains(key))).or_else(||self.order.front()).copied() else { break; };
             self.remove(key);

@@ -1,4 +1,5 @@
-//! Explicit mute and hover-volume controls for user-started inline playback.
+//! EN-US: Explicit mute and hover-volume controls for user-started inline playback.
+//! PT-BR: Controles explícitos de silêncio e volume para vídeos iniciados pelo usuário no chat.
 use gtk::prelude::*;
 use std::{cell::Cell,rc::Rc};
 mod fullscreen;

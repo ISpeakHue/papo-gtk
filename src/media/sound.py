@@ -1,3 +1,5 @@
+# EN-US: Play bundled call cues with Papo's mixer identity, preserving the user's audio settings.
+# PT-BR: Reproduz os sons de chamada com a identidade do Papo no mixer, preservando as configurações de áudio do usuário.
 """Decode a short bundled cue in a disposable process, independent of GTK players."""
 import json
 import sys

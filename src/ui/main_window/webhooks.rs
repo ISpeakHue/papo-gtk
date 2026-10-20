@@ -1,4 +1,5 @@
-//! Permission-gated management. Secrets are held only in the current dialog.
+//! EN-US: Permission-gated management. Secrets are held only in the current dialog.
+//! PT-BR: Gestão de webhooks conforme as permissões; segredos existem apenas no diálogo atual.
 use super::*;
 use crate::models::*;
 use crate::ui::chat::actions::window;

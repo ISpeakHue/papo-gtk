@@ -1,4 +1,5 @@
-//! CommonMark/GFM events become native text runs, never HTML or remote widgets.
+//! EN-US: CommonMark/GFM events become native text runs, never HTML or remote widgets.
+//! PT-BR: Eventos CommonMark/GFM viram trechos de texto nativos, sem HTML nem widgets remotos.
 use pulldown_cmark::{CodeBlockKind,Event,Options,Parser,Tag,TagEnd};
 
 #[derive(Clone,Debug,Default,PartialEq,Eq,Hash)]

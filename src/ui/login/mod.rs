@@ -1,4 +1,5 @@
-//! Login and Register screen component.
+//! EN-US: Login and Register screen component.
+//! PT-BR: Componente das telas de login e cadastro.
 
 mod authenticate;
 pub(crate) mod recovery;

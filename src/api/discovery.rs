@@ -1,3 +1,5 @@
+//! EN-US: Authenticated history navigation, search, notifications and read acknowledgments.
+//! PT-BR: Navegação autenticada no histórico, busca, notificações e confirmações de leitura.
 use super::*;
 
 impl ApiClient {

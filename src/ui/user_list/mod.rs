@@ -1,4 +1,5 @@
-//! Online users and member list component.
+//! EN-US: Online users and member list component.
+//! PT-BR: Componente da lista de membros e de suas presenças.
 
 mod recycled;
 #[cfg(test)]mod scrolling;

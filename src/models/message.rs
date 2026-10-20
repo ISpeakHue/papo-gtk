@@ -15,6 +15,8 @@ pub struct Attachment {
     pub mime_type: String,
     pub original_file_name: String,
     pub size_bytes: i64,
+    pub width:Option<i32>,
+    pub height:Option<i32>,
     pub thumbnail_id: Option<Uuid>,
     pub thumbnail_width:Option<i32>,
     pub thumbnail_height:Option<i32>,
@@ -25,34 +27,66 @@ pub struct Attachment {
 impl Attachment {
     pub fn thumbnail_dimensions(&self)->Option<(i32,i32)>{self.thumbnail_width.zip(self.thumbnail_height).filter(|(w,h)|(1..=16384).contains(w)&&(1..=16384).contains(h))}
 
+    /// Match the backend's nullable container metadata bounds before sizing UI.
+    pub fn video_dimensions(&self)->Option<(i32,i32)>{
+        self.width.zip(self.height).filter(|(w,h)|self.is_video()&&(1..=16384).contains(w)&&(1..=16384).contains(h)
+            &&i64::from(*w)*i64::from(*h)<=100_000_000&&i64::from(*w)<=i64::from(*h)*10&&i64::from(*h)<=i64::from(*w)*10)
+    }
+
     /// Preview classification only; downloaded bytes still pass container validation.
     pub fn is_video(&self)->bool{
         let mime=self.mime_type.split(';').next().unwrap_or("").trim();
+        // Newly detected containers outside the native validator stay ordinary
+        // download tiles rather than presenting an unusable playback control.
+        if ["video/x-msvideo","video/x-matroska"].iter().any(|kind|mime.eq_ignore_ascii_case(kind)){return false;}
         if mime.get(..6).is_some_and(|prefix|prefix.eq_ignore_ascii_case("video/")){return true;}
         if ["application/quicktime","application/x-quicktimeplayer"].iter().any(|kind|mime.eq_ignore_ascii_case(kind)){return true;}
-        // The backend's Go content sniffer reports QuickTime's `qt  ` brand as
-        // generic binary data. Use its filename only for such unknown types.
+        // Older records can retain generic MIME even when download responses
+        // now report a detected video type. Classify supported suffixes only
+        // for unknown MIME; the downloaded container is validated separately.
         let unknown=mime.is_empty()||["application/octet-stream","binary/octet-stream"].iter().any(|kind|mime.eq_ignore_ascii_case(kind));
-        unknown&&std::path::Path::new(&self.original_file_name).extension().is_some_and(|ext|ext.eq_ignore_ascii_case("mov"))
+        unknown&&std::path::Path::new(&self.original_file_name).extension().is_some_and(|ext|["mov","mp4","m4v","webm"].iter().any(|suffix|ext.eq_ignore_ascii_case(suffix)))
     }
 }
 
 #[cfg(test)]mod attachment_tests{
     use super::*;
+    #[test]fn original_video_geometry_obeys_the_backend_bounds_and_older_servers(){
+        let base=serde_json::json!({"id":Uuid::new_v4(),"mime_type":"video/mp4","original_file_name":"clip.mp4","size_bytes":1,"created_at":"2026-10-20T12:00:00Z"});
+        assert_eq!(serde_json::from_value::<Attachment>(base.clone()).unwrap().video_dimensions(),None);
+        for (w,h,expected) in [
+            (Some(1920),Some(1080),Some((1920,1080))),(Some(720),Some(1280),Some((720,1280))),
+            (Some(10000),Some(10000),Some((10000,10000))),(Some(16384),Some(1639),Some((16384,1639))),
+            (None,None,None),(Some(720),None,None),(None,Some(1280),None),
+            (Some(0),Some(10),None),(Some(-1),Some(10),None),(Some(i32::MAX),Some(1),None),
+            (Some(16384),Some(16384),None),(Some(10001),Some(10000),None),
+            (Some(1000),Some(10),None),(Some(10),Some(1000),None)
+        ]{
+            let mut value=base.clone();value["width"]=serde_json::json!(w);value["height"]=serde_json::json!(h);
+            assert_eq!(serde_json::from_value::<Attachment>(value).unwrap().video_dimensions(),expected,"{w:?} × {h:?}");
+        }
+        let mut image=base;image["mime_type"]=serde_json::json!("image/avif");image["width"]=serde_json::json!(1920);image["height"]=serde_json::json!(1080);
+        assert_eq!(serde_json::from_value::<Attachment>(image).unwrap().video_dimensions(),None);
+    }
     #[test]fn thumbnail_geometry_is_optional_and_requires_two_valid_dimensions(){
         for (w,h,expected) in [(Some(640),Some(120),Some((640,120))),(None,None,None),(Some(640),None,None),(Some(0),Some(10),None),(Some(-1),Some(10),None),(Some(i32::MAX),Some(1),None)]{
             let a:Attachment=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"mime_type":"image/png","original_file_name":"photo.png","size_bytes":1,"thumbnail_width":w,"thumbnail_height":h,"created_at":"2026-10-19T12:00:00Z"})).unwrap();assert_eq!(a.thumbnail_dimensions(),expected);
         }
     }
-    #[test]fn recognizes_quicktime_when_backend_reports_generic_binary(){
+    #[test]fn recognizes_supported_legacy_video_names_only_for_generic_mime(){
         for (mime,name,expected) in [
             ("video/quicktime","clip.mov",true),("VIDEO/QUICKTIME; codecs=avc1","clip",true),
             ("application/octet-stream","phone.MOV",true),("application/octet-stream; charset=binary","phone.mov",true),
             ("binary/octet-stream","clip.mov",true),("","clip.mov",true),
             ("application/quicktime","clip",true),("application/x-quicktimeplayer","clip.mov",true),
             ("video/mp4","clip.mp4",true),("video/webm","clip.webm",true),
+            ("application/octet-stream","clip.MP4",true),("application/octet-stream","clip.m4v",true),
+            ("binary/octet-stream","clip.WEBM",true),("","clip.mp4",true),
             ("application/octet-stream","notes.pdf",false),("application/octet-stream","clip.mov.exe",false),
-            ("image/png","clip.mov",false),("text/plain","clip.mov",false)
+            ("application/octet-stream","clip.webm.html",false),("application/octet-stream","clip.mkv",false),
+            ("image/png","clip.mov",false),("text/plain","clip.mov",false),
+            ("image/avif","clip.mp4",false),("image/heic","clip.webm",false),("audio/mp4","clip.mp4",false),
+            ("video/x-msvideo","clip.avi",false),("video/x-matroska","clip.mkv",false)
         ]{
             let a:Attachment=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"mime_type":mime,"original_file_name":name,"size_bytes":1,"created_at":"2026-10-19T12:00:00Z"})).unwrap();
             assert_eq!(a.is_video(),expected,"{mime}: {name}");

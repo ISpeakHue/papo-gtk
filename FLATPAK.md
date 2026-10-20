@@ -3,13 +3,13 @@
 Papo's x86_64 Flatpak uses the GNOME 50 runtime (GTK 4.22 and libadwaita 1.9).
 It works on GNOME and KDE desktops through Flatpak's runtime and desktop portals.
 
-## Install version 1.0.0
+## Install version 1.0.1
 
-Download `Papo-1.0.0-x86_64.flatpak` from
-[GitHub Releases](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.0.0), then:
+Download `Papo-1.0.1-x86_64.flatpak` from
+[GitHub Releases](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.0.1), then:
 
 ```sh
-flatpak install --user ./Papo-1.0.0-x86_64.flatpak
+flatpak install --user ./Papo-1.0.1-x86_64.flatpak
 flatpak run br.com.papo.gtk
 ```
 
@@ -67,6 +67,14 @@ devices still need desktop acceptance testing.
 [Flatpak bundles](https://docs.flatpak.org/en/latest/single-file-bundles.html)
 and [sandbox permissions](https://docs.flatpak.org/en/latest/sandbox-permissions.html)
 describe the distribution format and permission model.
+
+## Version 1.0.1 validation (2026-10-20)
+
+The installed release bundle reports 1.0.1. Its runtime check passed with all
+38 required media elements and isolated MP4/MOV/WebM conversion. Startup passed
+on a private Wayland display with separate test settings and fatal GTK warnings.
+The source passed 282 regular tests, six Python checks and three focused GTK
+cases; all-target compilation was warning-free.
 
 ## Version 1.0.0 validation (2026-10-20)
 

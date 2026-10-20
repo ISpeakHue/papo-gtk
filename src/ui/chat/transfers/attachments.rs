@@ -6,7 +6,7 @@ use actions::tests::{mock,descendants,find_button,pump,until};
 pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let (api,backend,server)=tokio::runtime::Handle::current().block_on(mock());
     let user=Uuid::new_v4();let channel=Uuid::new_v4();let message=Uuid::new_v4();let date=chrono::Utc::now();
-    let gif=Uuid::new_v4();let png=Uuid::new_v4();let video=Uuid::new_v4();let file=Uuid::new_v4();
+    let gif=Uuid::new_v4();let png=Uuid::new_v4();let video=Uuid::new_v4();let file=Uuid::new_v4();let avi=Uuid::new_v4();let matroska=Uuid::new_v4();
     let motion=crate::media::animation::fixture();
     let mut still=std::io::Cursor::new(Vec::new());image::DynamicImage::new_rgba8(32,16).write_to(&mut still,image::ImageFormat::Png).unwrap();let still=still.into_inner();
     {
@@ -19,7 +19,8 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let target:Channel=serde_json::from_value(serde_json::json!({"id":channel,"name":"Media attachments","created_at":date})).unwrap();
     let msg:Message=serde_json::from_value(serde_json::json!({"id":message,"channel_id":channel,"author_id":user,"created_at":date,"attachments":[
         attachment(png,"image/png","image.png",128),attachment(video,"video/webm","clip.webm",128),
-        attachment(file,"application/pdf","notes.pdf",128),attachment(gif,"image/gif","cat.gif",motion.len())
+        attachment(file,"application/pdf","notes.pdf",128),attachment(gif,"image/gif","cat.gif",motion.len()),
+        attachment(avi,"video/x-msvideo","clip.avi",128),attachment(matroska,"video/x-matroska","clip.mkv",128)
     ]})).unwrap();
     let chat=ChatModel::builder().launch(ChatInit{api:Some(api),active_channel:Some(target),user_id:Some(user),messages:vec![msg],..Default::default()}).detach();
     chat.emit(ChatMsg::SetAccess{user_id:user,access:crate::models::Access::direct()});
@@ -34,6 +35,10 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
         assert!(!descendants(&card(key)).iter().any(|w|w.downcast_ref::<gtk::Button>().is_some_and(|b|b.icon_name().as_deref()==Some("folder-download-symbolic"))),"no inline download button");
     }
     assert!(find_button(&card(file),"notes.pdf").is_mapped(),"files without a media preview retain a clickable name");
+    for (key,name) in [(avi,"clip.avi"),(matroska,"clip.mkv")]{
+        assert!(find_button(&card(key),name).is_mapped(),"unsupported native containers keep a download tile");
+        assert!(!backend.lock().unwrap().requests.iter().any(|(_,p,_)|p.starts_with(&format!("/attachments/{key}"))),"unsupported containers must not schedule previews");
+    }
     {
         let b=backend.lock().unwrap();
         assert_eq!(b.requests.iter().filter(|(_,p,_)|p==&format!("/attachments/{gif}")).count(),1);

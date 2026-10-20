@@ -1144,7 +1144,7 @@ pub(super) fn attachment_widget(a: &Attachment, message: Uuid, media: &Transfers
     let card = gtk::Box::new(gtk::Orientation::Vertical, 6);
     card.set_halign(gtk::Align::Start);let visual=a.mime_type.starts_with("image/")||a.is_video();if !visual{card.add_css_class("card");}
     if media.visible(a) {
-        if a.is_video(){append_video(&card,media,message,a.id,false,a.thumbnail_dimensions(),sender);}
+        if a.is_video(){append_video(&card,media,message,a.id,false,a.video_dimensions().or_else(||a.thumbnail_dimensions()),sender);}
         if a.mime_type.starts_with("image/")&&media.textures.contains_key(&a.id) {
             let image = media.picture(a.id).unwrap();
             image.set_can_shrink(true);
@@ -1194,7 +1194,8 @@ fn append_video(card:&gtk::Box,media:&Transfers,message:Uuid,key:Uuid,preview:bo
         }
         let button=gtk::Button::from_icon_name("media-playback-start-symbolic");button.set_tooltip_text(Some("Reproduzir vídeo"));button.update_property(&[gtk::accessible::Property::Label("Reproduzir vídeo")]);button.add_css_class("papo-media-play");button.set_halign(gtk::Align::Center);button.set_valign(gtk::Align::Center);
         button.set_sensitive(!media.video_requests.contains_key(&(message,key)));let input=sender.input_sender().clone();button.connect_clicked(move |_|{let _=input.send(ChatMsg::Transfer(if preview{TransferMsg::Video{message,preview:key}}else{TransferMsg::AttachmentVideo{message,attachment:key}}));});overlay.add_overlay(&button);
-        let dimensions=hint.or_else(||media.embeds.get(&key).and_then(|p|[p.video.as_ref(),p.thumbnail.as_ref()].into_iter().flatten().find_map(|m|m.width.zip(m.height).filter(|(w,h)|*w>0&&*h>0))));
+        let dimensions=hint.or_else(||media.embeds.get(&key).and_then(|p|[p.video.as_ref(),p.thumbnail.as_ref()].into_iter().flatten().find_map(|m|m.width.zip(m.height).filter(|(w,h)|*w>0&&*h>0))))
+            .or_else(||media.sizes.get(&key).copied()).or_else(||media.textures.get(&key).map(|t|(t.width(),t.height())));
         let(width,height)=dimensions.map_or((640,360),|(w,h)|crate::media::frame::fit_size(w,h,false));
         card.append(&crate::media::frame::frame(&overlay,width,height));
     }

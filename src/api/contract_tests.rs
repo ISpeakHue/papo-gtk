@@ -717,3 +717,19 @@ async fn updated_backend_retains_thumbnail_geometry_and_webhook_discovery_identi
     let notices=api.notifications(Uuid::new_v4(),None).await.unwrap();assert_eq!(notices.notifications[0].webhook_id,Some(hook));assert_eq!(notices.notifications[0].external_author.as_ref().unwrap().name,"Relay sender");
     assert_eq!(server.await.unwrap().len(),3);
 }
+
+#[tokio::test]
+async fn original_video_geometry_survives_history_send_edit_pins_and_live_messages(){
+    let mut msg=message();msg["attachments"]=json!([{"id":Uuid::new_v4(),"mime_type":"video/quicktime","original_file_name":"clip.mov","size_bytes":4096,"width":720,"height":1280,"thumbnail_id":null,"thumbnail_width":null,"thumbnail_height":null,"created_at":DATE}]);
+    let(api,server)=mock(vec![
+        (200,json!({"channel_id":CHANNEL,"messages":[msg.clone()],"has_more":false})),
+        (201,msg.clone()),(200,msg.clone()),(200,json!({"channel_id":CHANNEL,"pinned":[msg.clone()]}))
+    ]).await;
+    let channel=CHANNEL.parse().unwrap();let id=ID.parse().unwrap();
+    let history=api.list_messages(channel,None).await.unwrap();
+    let sent=api.send_message(&CreateMessageRequest{channel_id:channel,content:Some("clip".into()),reply_to:None,embeds:vec![]}).await.unwrap();
+    let edited=api.edit_message(id,"updated clip").await.unwrap();let pinned=api.pinned_messages(channel).await.unwrap();
+    msg["type"]=json!("message");let Some(crate::ws::WsEvent::NewMessage(live))=crate::ws::parse_event(&msg.to_string())else{panic!("live video metadata was rejected")};
+    for message in [&history.messages[0],&sent,&edited,&pinned[0],&live]{let attachment=&message.attachments.as_ref().unwrap()[0];assert_eq!(attachment.video_dimensions(),Some((720,1280)));assert!(attachment.thumbnail_dimensions().is_none());}
+    assert_eq!(server.await.unwrap().len(),4);
+}

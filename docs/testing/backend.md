@@ -4,6 +4,49 @@ Commands run from the repository root. See [Testing](../../TESTING.md) for setup
 Dated validation results describe their original fixture runs, rather than a
 current guarantee for every server, desktop or driver.
 
+## Backend video metadata update (2026-10-20, `3252cfc`)
+
+The adjacent checkout matches GitHub's `main` at
+`3252cfc2b0563d31d6c6eedd535c94fe5f15aceb`. Reviewed the changes since
+`e9cbcd1`: container dimension extraction, attachment storage/serialization,
+MIME sniffing and repair, download/range headers, and the OpenAPI additions.
+
+- Message attachments now include nullable original video `width` and `height`
+  on history, creation, edit and pinned responses, and full live messages.
+  The frontend retains these fields and reserves the video's original aspect
+  ratio before downloading a poster. Original geometry takes precedence over
+  thumbnail geometry; absent or invalid originals fall back to thumbnail,
+  learned poster geometry or the established default. Existing inline caps,
+  resizing and viewport anchoring apply. Small decoded posters cannot shrink a
+  box already reserved from server dimensions.
+- Both dimensions must be present, within 1–16384, at most 100 million pixels,
+  and at most 10:1 in either direction, matching the backend's parser/migration.
+  These are layout hints, not permission to allocate an original-size texture.
+  Older servers can omit both fields; earlier uploads can legitimately be null.
+- New uploads persist detected container MIME. Deduplication repairs existing
+  generic media metadata; downloads also sniff legacy generic blobs and retain
+  the corrected Content-Type on 200/206 responses with `nosniff`. Existing
+  authenticated range handling is compatible and keeps its byte budgets.
+  Old list records may still be generic, so supported MOV/MP4/M4V/WebM suffixes
+  can select the video UI only when MIME is absent or generic. Specific image,
+  audio and text MIME remains authoritative, including AVIF/HEIC and M4A.
+- Routes and event types are unchanged. The database migration runs on the
+  backend. Decoder/container validation remains in force. Newly detected AVI
+  and Matroska attachments keep ordinary download tiles because the native
+  validator does not support those containers.
+
+The extended `backend-contracts` GUI case checks portrait/landscape placeholders
+before bytes arrive, thumbnail/default fallback, original-versus-poster stability
+and narrow resizing. New automated contracts retain dimensions through REST
+history/send/edit/pins and live message parsing, including nullable compatibility
+and the backend's invalid-dimension bounds. All fixtures are synthetic/local.
+
+Validation: all-target compilation was warning-free; 282 automated tests passed
+(four desktop/device tests remain opt-in). The `backend-contracts`, `mov-media`
+and `attachment-media` private-display GUI cases passed with GTK warnings treated
+as fatal. The attachment case also verifies that AVI/Matroska files show download
+tiles without scheduling unusable media previews.
+
 ## Backend contract review (2026-10-19, `e9cbcd1`)
 
 The local backend checkout matches GitHub's `main` at

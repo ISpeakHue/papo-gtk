@@ -55,6 +55,7 @@ jobs:
           python -m unittest discover -s tests -p platform_capture_test.py
           python -m unittest discover -s tests -p icon_assets_test.py
           PAPO_UI_CASE=symbolic-icons cargo test --locked ui_smoke -- --ignored --test-threads=1
+          PAPO_UI_CASE=startup cargo test --locked ui_smoke -- --ignored --test-threads=1
       - name: Stage developer preview (external MSYS2 runtime required)
         run: python packaging/windows/build.py
       - uses: actions/upload-artifact@v4

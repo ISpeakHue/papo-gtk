@@ -48,7 +48,8 @@ fn set_default(key:&str,value:&OsStr){if std::env::var_os(key).is_none_or(|v|v.i
         assert_eq!(Path::new(&mac),exe.parent().unwrap().join("../Resources/runtime/bin/python3"));
         let explicit=OsString::from("/custom path/python");
         assert_eq!(python_path(Os::Windows,Some(explicit.clone()),Some(exe),|_|true),explicit);
-        assert_eq!(python_path(Os::Windows,None,Some(Path::new("/Papo Preview/papo-gtk.exe")),|_|true),OsString::from("/Papo Preview/runtime/bin/python.exe"));
+        let windows=python_path(Os::Windows,None,Some(Path::new("/Papo Preview/papo-gtk.exe")),|_|true);
+        assert_eq!(Path::new(&windows),Path::new("/Papo Preview/runtime/bin/python.exe"));
     }
     #[test]fn development_falls_back_to_the_native_interpreter(){
         for(os,expected)in[(Os::Linux,"/usr/bin/python3"),(Os::Windows,"python.exe"),(Os::Macos,"python3")]{assert_eq!(python_path(os,Some(OsString::new()),None,|_|false),OsString::from(expected));}

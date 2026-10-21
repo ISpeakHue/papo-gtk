@@ -69,7 +69,8 @@ Python, GI typelibs, GSettings schemas and GStreamer paths from that runtime.
 The Windows workflow also compiles the macOS foundation against Homebrew GTK
 and libadwaita, without claiming runtime or bundle validation. Its Windows job
 checks all Rust targets with warnings treated as errors,
-runs platform policy, synthetic voice worker and native icon tests, and uploads
+runs platform policy, synthetic voice worker, native icon and chat/member startup
+tests, and uploads
 a developer preview artifact. This does not replace testing on real Windows
 hardware. Native credential integration is compiled but ordinary tests never
 read or change the developer's real keyring. GUI tests use an isolated

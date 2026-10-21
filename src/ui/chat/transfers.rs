@@ -528,6 +528,7 @@ enum ImageInput{Bytes(Vec<u8>),Shared(std::sync::Arc<[u8]>),Base64(String)}
 }
 fn queue_poster(transfers:&mut Transfers,api:crate::api::ApiClient,sender:&ComponentSender<ChatModel>,message:Uuid,key:Uuid,embedded:bool,thumbnail:bool){
     transfers.poster_attempted.insert(key);
+    if !crate::platform::CURRENT.isolated_media_helpers&&(!thumbnail||embedded){return;}
     let token=Uuid::new_v4();transfers.image_tokens.insert(key,token);let epoch=transfers.epoch;
     let limit=transfers.poster_limiter.clone();let work=transfers.limiter.clone();let output=sender.input_sender().clone();
     transfers.media_job(key,tokio::spawn(async move{
@@ -540,6 +541,7 @@ fn queue_poster(transfers:&mut Transfers,api:crate::api::ApiClient,sender:&Compo
                     Err(error)=>return Err(error),
                 }
             }
+            anyhow::ensure!(crate::platform::CURRENT.isolated_media_helpers,"Conversão isolada de mídia indisponível nesta plataforma.");
             let _poster=limit.acquire_owned().await?;let _work=work.acquire_owned().await?;
             let endpoint=if embedded{format!("/embeds/{key}/video")}else{format!("/attachments/{key}")};
             let file=api.video_preview_file(&endpoint).await?;
@@ -646,7 +648,7 @@ impl ChatModel {
                 // without metadata remains readable until message_embeds arrives.
                 let Some(embed)=embed else{continue;};
                 let key=embed.id;self.transfers.giphy.insert(id,key);
-                if gifs::separate_animation(embed){
+                if gifs::separate_animation(embed)&&crate::platform::CURRENT.isolated_media_helpers{
                     self.transfers.wanted.insert(key);
                     if gif_videos.len()+self.transfers.video_requests.len()<2&&self.transfers.request_gif(key){candidates+=1;gif_videos.push((m.id,key));}
                 }
@@ -690,7 +692,7 @@ impl ChatModel {
                     // One owner for an animated link: a backend rendition beats
                     // a blocked provider page and a static thumbnail cannot race it.
                     self.transfers.wanted.insert(p.id);
-                    if candidates<24&&gifs::separate_animation(p)&&gif_videos.len()+self.transfers.video_requests.len()<2&&self.transfers.request_gif(p.id){candidates+=1;gif_videos.push((m.id,p.id));}
+                    if crate::platform::CURRENT.isolated_media_helpers&&candidates<24&&gifs::separate_animation(p)&&gif_videos.len()+self.transfers.video_requests.len()<2&&self.transfers.request_gif(p.id){candidates+=1;gif_videos.push((m.id,p.id));}
                     if !author_needed&&gifs::separate_animation(p)&&(p.has_video()||!p.fetch_method.is_empty()||self.transfers.resolved.contains(&p.id)){continue;}
                 }
                 if p.has_video()&&p.thumbnail.is_none()&&!p.fetch_method.is_empty()&&!author_needed&&!p.animated_link(){
@@ -1059,7 +1061,7 @@ impl ChatModel {
     fn gif_fallback(&mut self,key:Uuid,sender:&ComponentSender<Self>){
         // Bound automatic video downloads; decoding uses the shared limiter
         // and an isolated process, without replacing a user-started player.
-        if self.transfers.video_requests.len()>=2{return;}
+        if !crate::platform::CURRENT.isolated_media_helpers||self.transfers.video_requests.len()>=2{return;}
         if let Some(message)=self.gif_preview(key){self.start_download(message,key,None,true,sender);}
     }
     fn queue_gif_video(&mut self,message:Uuid,key:Uuid,file:std::sync::Arc<TemporaryFile>,sender:&ComponentSender<Self>){

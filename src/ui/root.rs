@@ -27,11 +27,11 @@ mod tests {
     impl IsolatedConfig {
         fn new()->Self{
             let path=std::env::temp_dir().join(format!("papo-gui-config-{}",uuid::Uuid::new_v4()));
-            std::fs::create_dir(&path).unwrap();let previous=std::env::var_os("XDG_CONFIG_HOME");std::env::set_var("XDG_CONFIG_HOME",&path);Self{path,previous}
+            std::fs::create_dir(&path).unwrap();let previous=std::env::var_os("PAPO_TEST_CONFIG_DIR");std::env::set_var("PAPO_TEST_CONFIG_DIR",&path);Self{path,previous}
         }
     }
     impl Drop for IsolatedConfig {
-        fn drop(&mut self){if let Some(previous)=&self.previous{std::env::set_var("XDG_CONFIG_HOME",previous);}else{std::env::remove_var("XDG_CONFIG_HOME");}let _=std::fs::remove_dir_all(&self.path);}
+        fn drop(&mut self){if let Some(previous)=&self.previous{std::env::set_var("PAPO_TEST_CONFIG_DIR",previous);}else{std::env::remove_var("PAPO_TEST_CONFIG_DIR");}let _=std::fs::remove_dir_all(&self.path);}
     }
 
     fn descendants(widget: &gtk::Widget) -> Vec<gtk::Widget> {

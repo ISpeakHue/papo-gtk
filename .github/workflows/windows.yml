@@ -1,0 +1,77 @@
+name: Windows developer preview
+
+on:
+  push:
+    branches: [multiplatform]
+  pull_request:
+    branches: [multiplatform]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: msys2 {0}
+    env:
+      CARGO_TERM_COLOR: always
+      RUSTFLAGS: '-D warnings'
+      GSK_RENDERER: cairo
+      GTK_A11Y: none
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          path-type: minimal
+          install: >-
+            mingw-w64-ucrt-x86_64-rust
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-gtk4
+            mingw-w64-ucrt-x86_64-libadwaita
+            mingw-w64-ucrt-x86_64-librsvg
+            mingw-w64-ucrt-x86_64-python-gobject
+            mingw-w64-ucrt-x86_64-gst-python
+            mingw-w64-ucrt-x86_64-gst-plugins-base
+            mingw-w64-ucrt-x86_64-gst-plugins-good
+            mingw-w64-ucrt-x86_64-gst-plugins-bad
+            mingw-w64-ucrt-x86_64-gst-libav
+            mingw-w64-ucrt-x86_64-libnice
+      - name: Check every Rust target on Windows
+        run: cargo check --locked --all-targets
+      - name: Test platform policy and native worker lifecycle with synthetic audio
+        run: |
+          cargo test --locked platform:: -- --test-threads=1
+          cargo test --locked native_voice -- --ignored --test-threads=1
+      - name: Test embedded icon coverage and native GTK rendering
+        run: |
+          python -m unittest discover -s tests -p platform_capture_test.py
+          python -m unittest discover -s tests -p icon_assets_test.py
+          PAPO_UI_CASE=symbolic-icons cargo test --locked ui_smoke -- --ignored --test-threads=1
+      - name: Stage developer preview (external MSYS2 runtime required)
+        run: python packaging/windows/build.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Papo-Windows-x86_64-developer-preview
+          path: dist/Papo-*-windows-x86_64-dev.zip
+          if-no-files-found: error
+
+  macos-foundation:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    env:
+      RUSTFLAGS: '-D warnings'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install native GTK build dependencies
+        run: brew install pkgconf gtk4 libadwaita
+      - name: Compile shared code and native Keychain adapter (no macOS bundle yet)
+        run: cargo check --locked --all-targets

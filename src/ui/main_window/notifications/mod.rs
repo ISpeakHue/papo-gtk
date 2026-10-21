@@ -1,6 +1,7 @@
 //! EN-US: Coordinate the notification inbox, its window, desktop alerts and read acknowledgments.
 //! PT-BR: Coordena a caixa de notificações, sua janela, avisos do desktop e confirmações de leitura.
-mod desktop;
+#[cfg(target_os="linux")]mod desktop;
+#[cfg(not(target_os="linux"))]#[path="desktop_pending.rs"]mod desktop;
 mod filters;
 #[cfg(test)]pub(crate) use filters::exercise as exercise_filters;
 mod read;
@@ -16,8 +17,8 @@ pub enum NoticeMsg {
     Loaded{token:Uuid,cursor:Option<MessageCursor>,result:anyhow::Result<NotificationList>},
     Marked{id:Uuid,result:anyhow::Result<u32>},
     MarkedBatch{ids:Vec<Uuid>,result:anyhow::Result<u32>},
-    DesktopAction{notice:Uuid,channel:Uuid,message:Uuid,observed:Option<crate::models::MessageObservation>,token:Option<String>},
-    DesktopReady(Result<gtk::gio::DBusProxy,gtk::glib::Error>),
+    #[cfg(target_os="linux")]DesktopAction{notice:Uuid,channel:Uuid,message:Uuid,observed:Option<crate::models::MessageObservation>,token:Option<String>},
+    #[cfg(target_os="linux")]DesktopReady(Result<gtk::gio::DBusProxy,gtk::glib::Error>),
 }
 #[derive(Default)]
 pub(super) struct Notifications {
@@ -126,7 +127,7 @@ impl MainWindowModel {
                     sender.input(MainWindowMsg::Notification(NoticeMsg::Open));if let Some(v)=&self.notifications.view{v.status.set_text("Localizando mensagem… Se o canal estiver indisponível, a notificação permanecerá aqui.");}
                 }
             }
-            NoticeMsg::DesktopAction{notice,channel,message,observed,token}=>{
+            #[cfg(target_os="linux")]NoticeMsg::DesktopAction{notice,channel,message,observed,token}=>{
                 if !self.can_read_target(channel){return;}
                 if let Some(window)=root.root().and_downcast::<gtk::Window>(){if let Some(token)=token{window.set_startup_id(&token);}window.present();}
                 if let Some(observed)=observed{if !self.notifications.inbox.messages.contains_key(&message){self.notifications.inbox.observe(observed);}}
@@ -134,7 +135,7 @@ impl MainWindowModel {
                 if let Some(v)=&self.notifications.view{v.window.set_visible(false);}
                 sender.input(MainWindowMsg::Navigate{channel_id:channel,message_id:message});
             }
-            NoticeMsg::DesktopReady(result)=>{self.notifications.desktop.ready(result,sender.input_sender().clone());self.deliver_notices(sender);}
+            #[cfg(target_os="linux")]NoticeMsg::DesktopReady(result)=>{self.notifications.desktop.ready(result,sender.input_sender().clone());self.deliver_notices(sender);}
         }
     }
     fn personal_notice(&self,n:&state::Notice)->bool{n.channel_id.is_some_and(|id|self.direct.known.contains(&id)||self.direct.items.iter().any(|d|d.id==id))}
@@ -170,6 +171,7 @@ impl MainWindowModel {
         self.notifications.inbox.event(event);if read{self.notifications.inbox.mark(id);}self.load_notice_authors(&sender);self.mark_open_notices(&sender);self.deliver_notices(sender.clone());self.render_inbox(&sender);self.mark_open_notices(&sender);self.refresh_notifications(None,sender);
     }
     pub(super) fn deliver_notices(&mut self,sender:ComponentSender<Self>){
+        if !crate::platform::CURRENT.desktop_notifications{return;}
         if self.account.config.notifications.as_ref().is_some_and(|p|p.enabled==Some(true)){self.notifications.desktop.initialize(sender.input_sender().clone());}
         let channels=self.notification_channels();
         let mut send=Vec::new();
@@ -345,7 +347,7 @@ pub(crate) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::Mai
     main.emit(MainWindowMsg::Notification(NoticeMsg::Loaded{token,cursor:Some(MessageCursor{created_at:chrono::Utc::now(),id:event_id}),result:Ok(serde_json::from_value(serde_json::json!({"notifications":[{"id":event_id,"message_id":msg_id,"channel_id":channel,"author_id":user,"message_content":"ephemeral preview","read":false,"created_at":"2026-10-06T00:00:00Z"}],"has_more":false})).unwrap())}));
     until(context,||main.model().notifications.marks.is_empty()&&main.model().notifications.inbox.rows[&event_id].persisted&&!main.model().notifications.seen_events.contains(&event_id));
     let writes:Vec<_>=backend.lock().unwrap().requests[baseline..].iter().filter(|(method,path,_)|method=="PUT"&&path.ends_with("/read_notification")).cloned().collect();assert_eq!(writes.len(),1);assert_eq!(writes[0].2["notification_ids"],serde_json::json!([event_id]));
-    desktop::exercise(main,context,id);
+    #[cfg(target_os="linux")]desktop::exercise(main,context,id);
 
 }
 #[cfg(test)]

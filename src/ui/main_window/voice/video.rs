@@ -45,9 +45,9 @@ impl MainWindowModel {
     pub(super) fn render_video(&self){
         let v=&self.voice.video;let connected=self.voice.call.as_ref().is_some_and(|c|c.phase==Phase::Connected);
         let ready=connected&&v.negotiated&&!v.busy;
-        v.camera.set_sensitive(ready&&(v.camera_on||!v.list.is_empty()));v.screen.set_sensitive(ready);
+        v.camera.set_sensitive(ready&&(v.camera_on||!v.list.is_empty()));v.screen.set_sensitive(ready&&crate::platform::CURRENT.screen_capture);
         v.devices.set_sensitive(!v.list.is_empty()&&!v.camera_on&&!v.busy);
-        v.camera_sync.set(true);v.camera.set_active(v.camera_pending.unwrap_or(v.camera_on));v.camera_sync.set(false);v.screen.set_tooltip_text(Some(if v.screen_on{"Parar compartilhamento"}else{"Compartilhar tela"}));
+        v.camera_sync.set(true);v.camera.set_active(v.camera_pending.unwrap_or(v.camera_on));v.camera_sync.set(false);v.screen.set_tooltip_text(Some(if !crate::platform::CURRENT.screen_capture{"Compartilhamento de tela indisponível nesta plataforma"}else if v.screen_on{"Parar compartilhamento"}else{"Compartilhar tela"}));
         let mut keep=HashSet::new();if let Some(call)=self.voice.call.as_ref().filter(|c|c.phase==Phase::Connected){for member in self.voice.members.get(&call.channel).into_iter().flat_map(|members|members.values()){if member.user_id==self.current_user.id{continue;}for (active,kind) in [(member.camera_on,"video"),(member.screen_sharing,"screen")]{if active{keep.insert(format!("watch-{}-{kind}",member.user_id));}}}}
         let mut child=v.choices.first_child();while let Some(w)=child{child=w.next_sibling();if !keep.contains(w.widget_name().as_str()){v.choices.remove(&w);}}
     }
@@ -67,6 +67,7 @@ impl MainWindowModel {
             VideoMsg::Reload=>{let request=Uuid::new_v4();self.voice.video.request=Some(request);self.voice.jobs.push(tokio::spawn(async move{let result=crate::voice::cameras().await;let _=s.input_sender().send(MainWindowMsg::Voice(VoiceMsg::Video(VideoMsg::Cameras{request,result})));}));}
             VideoMsg::Cameras{request,result}=>{if self.voice.video.request!=Some(request){return;}self.voice.video.request=None;match result{Ok(list)=>{let v=&mut self.voice.video;let old=v.list.get(v.devices.selected() as usize).map(|d|d.id.clone());let mut labels:Vec<_>=list.iter().map(|d|d.name.as_str()).collect();if labels.is_empty(){labels.push("Nenhuma câmera disponível");}v.devices.set_model(Some(&gtk::StringList::new(&labels)));v.devices.set_selected(old.and_then(|id|list.iter().position(|d|d.id==id)).unwrap_or(0) as u32);v.list=list;},Err(e)=>self.voice.status.set_text(&e.to_string())}}
             VideoMsg::Camera(_)|VideoMsg::Screen=>{
+                if matches!(msg,VideoMsg::Screen)&&!crate::platform::CURRENT.screen_capture{return;}
                 let v=&self.voice.video;if v.busy||!v.negotiated||!self.voice.call.as_ref().is_some_and(|c|c.phase==Phase::Connected){self.render_voice();return;}
                 let camera=matches!(msg,VideoMsg::Camera(_));let on=if let VideoMsg::Camera(on)=msg{on}else{!v.screen_on};if camera&&on==v.camera_on{self.render_voice();return;}let kind=if camera{"video"}else{"screen"};let device=v.list.get(v.devices.selected() as usize).map(|d|d.id.clone());
                 if camera&&on&&device.is_none(){self.voice.status.set_text("Escolha uma câmera disponível.");self.render_voice();return;}

@@ -13,10 +13,15 @@ mod ws;
 mod voice;
 mod logging;
 mod performance;
+mod platform;
 
 fn main() {
     let argument=std::env::args().nth(1);
     if argument.as_deref()==Some("--version"){println!("Papo {}",env!("CARGO_PKG_VERSION"));return;}
+    if argument.as_deref()==Some("--platform-info"){
+        println!("{}",serde_json::to_string_pretty(&platform::CURRENT).expect("platform metadata is serializable"));return;
+    }
+    platform::runtime::configure();
     // EN-US: Initialize structured logging/tracing subsystem.
     // PT-BR: Inicializa o subsistema de rastreamento e logging estruturado.
     logging::init();

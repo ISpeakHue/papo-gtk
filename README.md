@@ -20,7 +20,10 @@ Raw dependency dumps remain disabled even with `RUST_LOG=trace` or an explicit
 transport logging directive. Authentication models and cookie header values
 also redact secrets in debug output.
 
-## Build and run
+Windows-first port development and macOS groundwork are described in
+[MULTIPLATFORM.md](MULTIPLATFORM.md). Windows builds on this branch are experimental.
+
+## Build and run (Linux)
 
 Requires Rust, a C compiler, pkg-config, GLib development tools (`glib-compile-resources`), OpenSSL development files, GTK 4.12+
 and libadwaita 1.6+. On Fedora 44:

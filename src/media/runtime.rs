@@ -2,14 +2,12 @@
 //! PT-BR: Seleciona o interpretador de mídia do pacote sem alterar o ambiente de desenvolvimento local.
 
 pub fn python() -> tokio::process::Command {
-    let executable = std::env::var_os("PAPO_PYTHON")
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| "/usr/bin/python3".into());
-    tokio::process::Command::new(executable)
+    crate::platform::runtime::python()
 }
 
 /// Offline package acceptance using synthetic media and no physical devices.
 pub async fn check()->anyhow::Result<()>{
+    anyhow::ensure!(crate::platform::CURRENT.isolated_media_helpers,"Isolated media helpers are not implemented on this platform yet.");
     struct Scratch(std::path::PathBuf);
     impl Drop for Scratch{fn drop(&mut self){let _=std::fs::remove_dir_all(&self.0);}}
     let scratch=Scratch(std::env::temp_dir().join(format!("papo-runtime-{}",uuid::Uuid::new_v4())));

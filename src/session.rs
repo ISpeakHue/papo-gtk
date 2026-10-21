@@ -28,16 +28,14 @@ fn account(base:&str,user:&str)->String{format!("{base}\n{user}")}
 // EN-US: Read a credential from the OS keyring by key.
 // PT-BR: Lê uma credencial do chaveiro do SO pela chave informada.
 fn read(key:&str)->Result<Option<String>>{
-    let entry=keyring::Entry::new(SERVICE,key).map_err(|_|anyhow!("Chaveiro indisponível."))?;
-    match entry.get_password(){Ok(value)=>Ok(Some(value)),Err(keyring::Error::NoEntry)=>Ok(None),Err(_)=>Err(anyhow!("Não foi possível abrir a sessão no chaveiro."))}
+    crate::platform::credentials::read(SERVICE,key)
 }
 
 #[cfg(not(test))]
 // EN-US: Write or delete a credential in the OS keyring.
 // PT-BR: Grava ou remove uma credencial no chaveiro do SO.
 fn write(key:&str,value:Option<&str>)->Result<()>{
-    let entry=keyring::Entry::new(SERVICE,key).map_err(|_|anyhow!("Chaveiro indisponível."))?;
-    match value{Some(value)=>entry.set_password(value).map_err(|_|anyhow!("Não foi possível salvar a sessão no chaveiro.")),None=>match entry.delete_credential(){Ok(())|Err(keyring::Error::NoEntry)=>Ok(()),Err(_)=>Err(anyhow!("Não foi possível remover a sessão do chaveiro."))}}
+    crate::platform::credentials::write(SERVICE,key,value)
 }
 
 // UI/protocol tests must never read a real user's credentials or modify their keyring.

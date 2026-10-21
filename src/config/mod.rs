@@ -44,9 +44,12 @@ impl Motion{
     pub fn index(self)->u32{match self{Self::System=>0,Self::Always=>1,Self::Reduced=>2}}
 }
 impl AppConfig {
-    /// EN-US: Returns the XDG config path: `~/.config/papo-gtk/config.toml`.
-    /// PT-BR: Retorna o caminho de configuração XDG: `~/.config/papo-gtk/config.toml`.
+    /// EN-US: Returns the native configuration path (XDG, AppData or Application Support).
+    /// PT-BR: Retorna o caminho nativo de configuração (XDG, AppData ou Application Support).
     pub fn path() -> PathBuf {
+        // EN-US: GUI tests must isolate settings on every OS, regardless of XDG support.
+        // PT-BR: Testes da interface isolam as configurações em todos os sistemas, independentemente do suporte XDG.
+        #[cfg(test)]if let Some(root)=std::env::var_os("PAPO_TEST_CONFIG_DIR"){return PathBuf::from(root).join("config.toml");}
         config_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join("papo-gtk")

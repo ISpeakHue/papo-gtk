@@ -43,9 +43,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tokio-stream = "0.1"
 futures-util = "0.3"
 
-# Secret storage (keyring / libsecret)
-keyring = { version = "3", features = ["sync-secret-service", "crypto-rust", "vendored"] }
-
 # Image decoding for avatars (base64 PNG/JPEG/WebP/GIF)
 base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
@@ -57,13 +54,27 @@ thiserror = "1"
 # Config / settings persistence (TOML)
 toml = "0.8"
 
-# XDG dirs for cache/config paths
+# Native OS directories for cache/config paths
 dirs = "5"
 pulldown-cmark = { version = "0.13", default-features = false }
 syntect = { version = "5.3", default-features = false, features = ["default-syntaxes", "default-themes", "regex-fancy"] }
 
+# EN-US: Select native credential stores per target; unsupported targets must never silently use the mock store.
+# PT-BR: Seleciona o chaveiro nativo de cada plataforma; alvos sem suporte não devem usar silenciosamente o armazenamento simulado.
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", features = ["sync-secret-service", "crypto-rust", "vendored"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", features = ["apple-native"] }
+
 [dev-dependencies]
 tokio = { version = "1", features = ["test-util"] }
+
+[target.'cfg(windows)'.dev-dependencies]
+windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_System_Threading"] }
 
 [profile.release]
 strip = true

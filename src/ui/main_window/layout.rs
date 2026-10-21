@@ -44,7 +44,7 @@ pub(super) fn shortcuts(root:&gtk::Box,s:&ComponentSender<MainWindowModel>){
     root.insert_action_group("papo",Some(&actions));
     let controller=gtk::ShortcutController::new();controller.set_scope(gtk::ShortcutScope::Managed);
     for (trigger,action) in [("<Control>k","search"),("<Control>f","search"),("<Control>comma","preferences"),("<Control><Shift>m","members"),("<Alt>1","channels"),("<Alt>2","direct"),("F9","navigation")]{
-        controller.add_shortcut(gtk::Shortcut::new(gtk::ShortcutTrigger::parse_string(trigger),Some(gtk::NamedAction::new(&format!("papo.{action}")))));
+        controller.add_shortcut(gtk::Shortcut::new(gtk::ShortcutTrigger::parse_string(&trigger.replace("<Control>",&crate::platform::shortcuts::accelerator(""))),Some(gtk::NamedAction::new(&format!("papo.{action}")))));
     }
     root.add_controller(controller);
 }

@@ -41,8 +41,12 @@ except (ImportError, ValueError):
     sys.exit(1)
 
 
-if "ScreenPortal" not in globals():
-    from screen_portal import ScreenPortal
+# EN-US: Direct developer/probe execution selects the same adapter as the embedded worker.
+# PT-BR: A execução direta de desenvolvimento/testes seleciona o mesmo adaptador do processo embutido.
+if "create_screen_capture" not in globals():
+    from pathlib import Path
+    backend = Path(__file__).resolve().parents[1] / "platform" / "capture" / ("linux.py" if sys.platform.startswith("linux") else "unavailable.py")
+    exec(compile(backend.read_text(encoding="utf-8"), str(backend), "exec"))
 
 
 def devices(kind="Audio/Source"):
@@ -413,19 +417,12 @@ class Engine:
                     raise ValueError("missing camera")
                 self.publish_video(kind, selected.create_element(None))
             else:
-                def ready(fd, node, serial):
+                def ready(source):
                     try:
-                        source = Gst.ElementFactory.make("pipewiresrc")
-                        source.set_property("fd", fd)
-                        if serial is not None and source.find_property("target-object"):
-                            source.set_property("target-object", str(serial))
-                        else:
-                            source.set_property("path", str(node))
-                        source.set_property("do-timestamp", True)
                         self.publish_video(kind, source)
                     except Exception:
-                        self.media_failed(kind, "Não foi possível iniciar a captura PipeWire.")
-                self.portal = ScreenPortal(ready, lambda: self.media_failed(kind, "Compartilhamento encerrado, cancelado ou negado pelo desktop."))
+                        self.media_failed(kind, "Não foi possível iniciar a captura de tela.")
+                self.portal = create_screen_capture(ready, lambda: self.media_failed(kind, "Compartilhamento encerrado, cancelado ou negado pelo desktop."))
                 self.portal.start()
         except Exception:
             self.media_failed(kind, "Câmera indisponível ou plugins de vídeo/portal ausentes.")

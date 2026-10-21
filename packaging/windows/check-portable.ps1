@@ -1,10 +1,15 @@
 # EN-US: Exercise only shipped files from an unrelated working directory.
 # PT-BR: Testa apenas arquivos distribuídos a partir de outro diretório de trabalho.
+param(
+    [string]$Archive,
+    [string]$WorkDirectory = $(if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() })
+)
 $ErrorActionPreference = 'Stop'
-$archive = Get-ChildItem "$PSScriptRoot/../../download/Papo-*-windows-x86_64-dev.zip" | Select-Object -First 1
-if (!$archive) { throw 'Portable archive missing' }
-$destination = Join-Path $env:RUNNER_TEMP 'Papo portable á é ç'
-Expand-Archive $archive.FullName $destination
+$zip = if ($Archive) { Get-Item $Archive } else { Get-ChildItem "$PSScriptRoot/../../download/Papo-*-windows-x86_64-dev.zip" | Select-Object -First 1 }
+if (!$zip) { throw 'Portable archive missing' }
+$accents = [string][char]0xe1 + ' ' + [char]0xe9 + ' ' + [char]0xe7
+$destination = Join-Path $WorkDirectory ('Papo portable ' + $accents + ' ' + [guid]::NewGuid().ToString('N'))
+Expand-Archive $zip.FullName $destination
 $package = (Get-ChildItem $destination -Directory | Select-Object -First 1).FullName
 $launcher = Join-Path $package 'Papo.exe'
 # EN-US: Clear inherited developer discovery paths without changing machine settings.
@@ -15,7 +20,7 @@ $env:GSK_RENDERER = 'cairo'
 $env:GTK_A11Y = 'none'
 $env:PYTHONUTF8 = '1'
 $beforePath = [Environment]::GetEnvironmentVariable('PATH', 'Machine')
-$unrelated = New-Item -ItemType Directory -Force (Join-Path $env:RUNNER_TEMP 'unrelated cwd')
+$unrelated = New-Item -ItemType Directory -Force (Join-Path $WorkDirectory 'unrelated cwd')
 Set-Location $unrelated.FullName
 function Invoke-Check([string]$option) {
     & $launcher $option
@@ -37,7 +42,7 @@ try {
     & $launcher --check-packaged-runtime
     if ($LASTEXITCODE -eq 0) { throw 'Missing bundled Python incorrectly succeeded' }
 } finally { Move-Item "$python.disabled" $python }
-$manifest = Get-Content (Join-Path $package 'runtime/RUNTIME-MANIFEST.json') -Raw | ConvertFrom-Json
+$manifest = Get-Content (Join-Path $package 'runtime/RUNTIME-MANIFEST.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 foreach ($file in $manifest.files) {
     $actual = Get-FileHash (Join-Path $package $file.path) -Algorithm SHA256
     if ($actual.Hash -ne $file.sha256) { throw "Package modified during checks: $($file.path)" }

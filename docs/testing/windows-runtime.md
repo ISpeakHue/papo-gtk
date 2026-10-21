@@ -88,7 +88,14 @@ GStreamer installed. Record full OS build/UBR and artifact/source hashes. Extrac
 under a path such as `Downloads\Papo á é ç`, open Papo.exe, close it, then invoke
 both diagnostic commands from an unrelated working directory. Move the package
 and repeat. Confirm no installer/runtime prompt, correct text/icons and unchanged
-machine PATH. Keep this evidence separate from hosted CI; the VM pass is required
+machine PATH. The same automated script can be run there from PowerShell:
+
+```powershell
+powershell -NoProfile -File packaging/windows/check-portable.ps1 -Archive C:\Downloads\Papo-1.0.2-windows-x86_64-dev.zip
+```
+
+It uses a unique temporary extraction directory, preserves the original ZIP and
+modifies only the current shell's environment. Keep this evidence separate from hosted CI; the VM pass is required
 before checking off step 3's full completion criterion.
 
 ## Verification record

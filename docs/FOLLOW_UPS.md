@@ -7,6 +7,12 @@ in the [testing guides](../TESTING.md), [design guide](../DESIGN.md),
 
 ## Investigations that need current evidence
 
+- **Linux CI qualification:** the [build-provenance record](testing/build-provenance.md#verification-record-2026-10-21)
+  identifies the repaired sandbox/loader setup, the explicit codec dependency
+  correction and individual remaining GUI failures. Keep those cases failing until
+  their assertions or product defects are resolved with mapped-layout/decoder
+  evidence; an icon-only pass does not qualify the complete GUI workflow.
+
 - **Native playback teardown:** the [2026-10-13 crash analysis](archive/CRASH_ANALYSIS_2026-10-13.md)
   records a GStreamer cleanup SIGSEGV after leaving fullscreen and jumping to the
   latest messages. Synthetic passing runs did not establish its root cause or

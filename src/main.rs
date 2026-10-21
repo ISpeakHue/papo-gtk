@@ -33,6 +33,11 @@ fn main() {
         .build()
         .expect("Failed to create Tokio runtime");
 
+    if argument.as_deref()==Some("--check-packaged-runtime"){
+        if let Err(error)=rt.block_on(platform::runtime::check_packaged()){eprintln!("Packaged runtime check failed: {error}");std::process::exit(1);}
+        println!("Papo {}: packaged runtime OK",env!("CARGO_PKG_VERSION"));return;
+    }
+
     if argument.as_deref()==Some("--check-media-runtime"){
         if let Err(error)=rt.block_on(media::runtime::check()){eprintln!("Media runtime check failed: {error}");std::process::exit(1);}
         println!("Papo {}: isolated media runtime OK",env!("CARGO_PKG_VERSION"));return;

@@ -6,6 +6,12 @@ experimental developer build; macOS has platform boundaries prepared but no
 supported build or `.app` bundle yet. There is one application and protocol
 implementation, rather than separate operating-system forks.
 
+The first release targets and dependency constraints are defined in
+[WINDOWS_SUPPORT.md](WINDOWS_SUPPORT.md). The
+[Windows acceptance matrix](docs/testing/windows.md) records required cases,
+historical CI evidence and pending desktop tests. These documents complete step 1
+of [the implementation plan](MULTIPLATFORM_PLAN.md); Windows remains experimental.
+
 ## Current boundaries
 
 | Integration | Linux | Windows | Future macOS |
@@ -54,11 +60,17 @@ pacman -S --needed git \
   mingw-w64-ucrt-x86_64-gst-plugins-bad mingw-w64-ucrt-x86_64-gst-libav \
   mingw-w64-ucrt-x86_64-libnice
 cargo run --locked
-python packaging/windows/build.py
+python packaging/windows/native_inputs.py capture target/windows-native-inputs
+python packaging/windows/build.py --native-inputs target/windows-native-inputs
 ```
 
-Git is required to record the matching source revision; the script checks it
-before compiling.
+Git is required to record the source revision. Packaging requires a clean checkout
+by default; `--allow-dirty` is an explicit local-preview override. The source state
+is checked before/after compilation and staging. Exact MSYS2 packages and their
+hashes are retained separately from the preview ZIP. See
+[build provenance and CI diagnostics](docs/testing/build-provenance.md) for the
+original line-ending diagnosis, toolchain metadata, input restoration and limits.
+Byte-identical rebuilds have not been demonstrated.
 
 The build script produces `dist/Papo-1.0.2-windows-x86_64-dev.zip`.
 It contains the executable, license and `Papo.cmd`, **not the native runtime**.
@@ -117,11 +129,11 @@ and focused icon/call-control GUI checks. Notification and backend-GIF GUI
 assertions passed with GTK warnings nonfatal; the notification window still
 produces a height-measurement warning under the host GTK version.
 
-The [Linux container workflow](https://github.com/ISpeakHue/papo-gtk/actions/runs/39536236637)
-still fails during the icon test when its glycin SVG loader exits inside
-Bubblewrap. The complete Linux GUI CI
-workflow remains unverified. Local GUI limitations are described in
-[desktop testing](docs/testing/desktop.md).
+The initial [Linux container workflow](https://github.com/ISpeakHue/papo-gtk/actions/runs/39536236637)
+failed during the icon test when its Glycin SVG loader exited inside Bubblewrap.
+At that point the complete Linux GUI workflow was unverified. Step 2 below records
+the subsequent runtime repair and complete case sweep; remaining GUI limitations
+are tracked in [desktop testing](docs/testing/desktop.md) and the provenance record.
 
 The [successful packaging rerun](https://github.com/ISpeakHue/papo-gtk/actions/runs/39537643269)
 provides the **Papo-Windows-x86_64-developer-preview** artifact. The downloaded ZIP
@@ -133,3 +145,18 @@ clean-source release.
 
 ZIP SHA-256:
 `c44ca68449e8bd6eeb75115b4224f26cf0447defc3dfedf8a121c140c0708b3c`
+
+## Build provenance (step 2)
+
+The original dirty preview was reproduced as a Git for Windows/MSYS2 line-ending
+configuration mismatch. `.gitattributes` now gives both implementations a clean
+checkout; unexpected source edits fail packaging. The
+[clean-source packaging run](https://github.com/ISpeakHue/papo-gtk/actions/runs/39615565000)
+retained 352 exact MSYS2 package archives, toolchain/build metadata and checksums.
+It was packaging-only and does not replace native application or desktop tests.
+Byte-identical rebuilding remains unproven.
+
+Linux CI now uses rootless Fedora with decoder isolation preserved and retains
+every GUI case's result. See the [provenance and CI record](docs/testing/build-provenance.md)
+for diagnosed container/codec failures, verification and remaining GUI assertions.
+The initial results above remain historical evidence.

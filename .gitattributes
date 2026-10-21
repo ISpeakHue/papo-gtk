@@ -1,0 +1,15 @@
+# EN-US: Normalize source text for both Git for Windows and MSYS2 Git.
+# PT-BR: Normaliza o código-fonte para Git for Windows e Git do MSYS2.
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.png -text
+*.jpg -text
+*.jpeg -text
+*.gif -text
+*.webp -text
+*.ico -text
+*.ogg -text
+*.wav -text
+*.mp4 -text
+*.webm -text
+*.mov -text

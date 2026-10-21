@@ -62,3 +62,6 @@ if (Get-ChildItem $package -Filter '*.pyc' -Recurse) { throw 'Bytecode written i
 if (Get-ChildItem $package -Filter 'registry*.bin' -Recurse) { throw 'Plugin registry written inside package' }
 if ($beforePath -ne [Environment]::GetEnvironmentVariable('PATH', 'Machine')) { throw 'Machine PATH changed' }
 Write-Output 'Portable runtime, relocation, immutable files and missing-component checks passed.'
+# EN-US: Expected native failures were asserted above; do not leak their status to the CI shell.
+# PT-BR: As falhas nativas esperadas já foram verificadas; não repassa seu status ao shell da CI.
+$global:LASTEXITCODE = 0

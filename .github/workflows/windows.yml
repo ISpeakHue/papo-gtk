@@ -11,12 +11,17 @@ on:
         description: Rebuild packaging for code already covered by native tests
         type: boolean
         default: false
+      runtime_artifact_run:
+        description: Only recheck the portable ZIP from this run ID (does not qualify a release)
+        type: string
+        default: ''
 
 permissions:
   contents: read
 
 jobs:
   windows:
+    if: github.event_name != 'workflow_dispatch' || inputs.runtime_artifact_run == ''
     runs-on: windows-2022
     timeout-minutes: 60
     defaults:
@@ -135,6 +140,10 @@ jobs:
 
   portable-runtime:
     needs: windows
+    if: ${{ always() && !cancelled() && (needs.windows.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.runtime_artifact_run != '')) }}
+    permissions:
+      contents: read
+      actions: read
     runs-on: windows-2022
     timeout-minutes: 15
     steps:
@@ -145,12 +154,14 @@ jobs:
         with:
           name: Papo-Windows-x86_64-developer-preview
           path: download
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.runtime_artifact_run || github.run_id }}
       - name: Validate portable ZIP without developer discovery paths
         shell: pwsh
         run: ./packaging/windows/check-portable.ps1
 
   macos-foundation:
-    if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only
+    if: github.event_name != 'workflow_dispatch' || (!inputs.packaging_only && inputs.runtime_artifact_run == '')
     runs-on: macos-latest
     timeout-minutes: 40
     env:

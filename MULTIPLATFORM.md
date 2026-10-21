@@ -59,6 +59,7 @@ pacman -S --needed git \
   mingw-w64-ucrt-x86_64-gst-plugins-base mingw-w64-ucrt-x86_64-gst-plugins-good \
   mingw-w64-ucrt-x86_64-gst-plugins-bad mingw-w64-ucrt-x86_64-gst-libav \
   mingw-w64-ucrt-x86_64-libnice
+export PAPO_RUNTIME_DIR="$(cygpath -w "$MINGW_PREFIX")"
 cargo run --locked
 python packaging/windows/native_inputs.py capture target/windows-native-inputs
 python packaging/windows/build.py --native-inputs target/windows-native-inputs
@@ -73,13 +74,18 @@ original line-ending diagnosis, toolchain metadata, input restoration and limits
 Byte-identical rebuilds have not been demonstrated.
 
 The build script produces `dist/Papo-1.0.2-windows-x86_64-dev.zip`.
-It contains the executable, license and `Papo.cmd`, **not the native runtime**.
-Launch it with `Papo.cmd`; its default external runtime directory is
-`C:\msys64\ucrt64`. Set `PAPO_RUNTIME_DIR` if your installation lives elsewhere.
-This directory must contain the same packages as the build environment.
-The launcher sets DLL search paths before process startup; Rust configures
-Python, GI typelibs, GSettings schemas and GStreamer paths from that runtime.
-`PAPO_PYTHON` remains an explicit interpreter override.
+It includes an application-owned UCRT64 runtime: GTK/libadwaita, Python/GI,
+GStreamer plugins/codecs, schemas, icons, loaders and dependency licenses. Extract
+the whole archive and launch `Papo.exe`; `Papo.cmd` forwards CLI arguments too.
+The native bootstrap establishes DLL lookup before the GTK executable starts.
+Neither a default `C:\msys64` installation nor a system Python is searched.
+`PAPO_RUNTIME_DIR` explicitly selects a complete alternate packaged runtime;
+source-tree development uses an explicit UCRT64 prefix as above. `PAPO_PYTHON`
+remains an explicit helper interpreter override.
+
+Run `Papo.exe --check-packaged-runtime` for the offline dependency, Python/GI,
+icon, schema and codec probe. See [runtime packaging](docs/testing/windows-runtime.md)
+for layout, relocation, manifest and validation limits.
 
 The Windows workflow also compiles the macOS foundation against Homebrew GTK
 and libadwaita, without claiming runtime or bundle validation. Its Windows job
@@ -96,7 +102,7 @@ configuration directory on every OS, including systems that ignore XDG variables
 
 Before a supported Windows release: implement an isolated decoder process,
 permission-aware screen/window selection, native notifications with activation
-and revocation, a complete redistributable runtime/DLL closure, an installer,
+and revocation, clean Windows 11 runtime acceptance, an installer,
 application icon/metadata and signing. Validate real media devices, dead-key/IME
 input, DPI scaling, reconnects and fullscreen media on Windows.
 

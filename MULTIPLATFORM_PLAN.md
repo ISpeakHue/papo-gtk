@@ -22,12 +22,12 @@ The current state is described in [MULTIPLATFORM.md](MULTIPLATFORM.md):
 - Platform capabilities, runtime paths, capture and decoder-isolation boundaries.
 - Windows compilation, synthetic voice lifecycle, icon and chat/member startup checks.
 - macOS compilation and test linking, without a supported macOS application bundle.
-- A Windows developer ZIP requiring an external MSYS2 UCRT64 installation.
+- A portable Windows developer ZIP with an application-owned UCRT64 runtime (step 3).
 
 Windows desktop alerts, local screen sharing and isolated video conversion are
 currently disabled. Synthetic checks do not establish real-device compatibility.
-The developer artifact also reports local checkout changes in its source metadata,
-and the Linux container GUI workflow has an unresolved SVG-loader failure.
+Step 2 resolves the original checkout metadata and container SVG-loader failures;
+remaining GUI assertions are tracked in the provenance record.
 
 ## Ordered implementation steps
 

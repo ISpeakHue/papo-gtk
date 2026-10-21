@@ -88,6 +88,35 @@ class WindowsBundle(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'Unresolved non-system DLL nvcuda'):
             bundler.closure()
 
+    def test_native_files_require_package_ownership(self):
+        prefix = self.root / 'ucrt64'
+        (prefix / 'bin').mkdir(parents=True)
+        source = prefix / 'bin/local-injection.dll'
+        source.write_bytes(pe_image(['kernel32.dll']))
+        with patch('bundle.run', side_effect=['/ucrt64', '']):
+            bundler = Bundle(self.root / 'package', prefix)
+        with self.assertRaisesRegex(RuntimeError, 'Unowned native input'):
+            bundler.copy(source)
+
+    def test_loader_cache_uses_runtime_relative_paths(self):
+        prefix = self.root / 'ucrt64'
+        (prefix / 'bin').mkdir(parents=True)
+        with patch('bundle.run', side_effect=['/ucrt64', '']):
+            bundler = Bundle(self.root / 'Papo á', prefix)
+        loaders = bundler.root / 'lib/gdk-pixbuf-2.0/2.10.0/loaders'
+        loaders.mkdir(parents=True)
+        dll = loaders / 'libpixbufloader-svg.dll'
+        dll.write_bytes(b'fixture')
+        import json
+        from types import SimpleNamespace
+        result = SimpleNamespace(stdout='# Builder directory should disappear\n' + json.dumps(str(dll)) + '\n"svg" 4 "gdk-pixbuf" "SVG" "LGPL"\n')
+        with patch('bundle.subprocess.run', return_value=result):
+            bundler.caches()
+        cache = (loaders.parent / 'loaders.cache').read_text()
+        self.assertIn('"lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader-svg.dll"', cache)
+        self.assertNotIn(str(self.root), cache)
+        self.assertNotIn('Builder directory', cache)
+
 
 if __name__ == '__main__':
     unittest.main()

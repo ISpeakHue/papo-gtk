@@ -52,8 +52,9 @@ pub fn configure() {
             set_default("PYTHONSAFEPATH", OsStr::new("1"));
         }
     }
+    let scanner = if CURRENT.os == Os::Windows { "libexec/gstreamer-1.0/gst-plugin-scanner.exe" } else { "libexec/gstreamer-1.0/gst-plugin-scanner" };
     for (name, suffix) in [("GI_TYPELIB_PATH", "lib/girepository-1.0"), ("GSETTINGS_SCHEMA_DIR", "share/glib-2.0/schemas"),
-                           ("GST_PLUGIN_SYSTEM_PATH_1_0", "lib/gstreamer-1.0"), ("GST_PLUGIN_SCANNER_1_0", "libexec/gstreamer-1.0/gst-plugin-scanner.exe")] {
+                           ("GST_PLUGIN_SYSTEM_PATH_1_0", "lib/gstreamer-1.0"), ("GST_PLUGIN_SCANNER_1_0", scanner)] {
         let path = root.join(suffix);
         if path.exists() { set_default(name, path.as_os_str()); }
     }

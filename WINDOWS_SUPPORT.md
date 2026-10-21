@@ -71,7 +71,7 @@ These references inform the constraints; desktop qualification remains pending.
 
 | Current developer preview | First supported Windows release |
 | --- | --- |
-| ZIP requires an external MSYS2 UCRT64 installation and `Papo.cmd`. | Installer and self-contained ZIP run without MSYS2, Rust, Git, system Python or separately installed GStreamer. |
+| ZIP bundles its UCRT64 runtime and launches through `Papo.exe`; clean Windows 11 acceptance remains pending. | Installer and self-contained ZIP run without MSYS2, Rust, Git, system Python or separately installed GStreamer. |
 | Some native integrations are intentionally unavailable. | Every required feature in the acceptance matrix passes, including isolated conversions, native notifications and consent-based screen sharing. |
 | Packaging rejects unexpected source changes and retains build/native-input manifests; byte-identical rebuilding is unproven. | Release provenance identifies the tested source and dependency inputs, with unexpected source changes rejected. |
 | Server CI exercises selected synthetic cases. | Packaged artifacts pass desktop, clean-machine, real-device and real-backend checks. |

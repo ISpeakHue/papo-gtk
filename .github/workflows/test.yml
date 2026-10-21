@@ -29,6 +29,10 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
       RUSTFLAGS: "-D warnings"
+      # EN-US: Virtual-display tests must not require a host GPU/OpenGL driver.
+      # PT-BR: Testes em tela virtual não devem exigir GPU/driver OpenGL do host.
+      GSK_RENDERER: cairo
+      GTK_A11Y: none
     steps:
       - name: Install Rust and native build dependencies
         run: dnf install -y bubblewrap git gcc rust cargo pkgconf-pkg-config glib2-devel openssl-devel gtk4-devel libadwaita-devel python3-gobject python3-gstreamer1 gstreamer1-plugins-base gstreamer1-plugins-good gstreamer1-plugins-bad-free libnice-gstreamer1 xorg-x11-server-Xvfb xorg-x11-xauth setxkbmap libXtst dbus-daemon

@@ -32,6 +32,14 @@ def main():
     for name in ("Papo.cmd", "README.txt"):
         shutil.copy2(ROOT / "packaging/windows" / name, stage)
     shutil.copy2(ROOT / "LICENSE", stage)
+    shutil.copytree(ROOT / "assets/icons/symbolic/licenses", stage / "licenses/symbolic-icons")
+    revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    dirty = bool(subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=normal"], cwd=ROOT))
+    source_label = "Base source (local changes present)" if dirty else "Matching source"
+    (stage / "SOURCE.txt").write_text(
+        f"{source_label}: https://github.com/ISpeakHue/papo-gtk/tree/{revision}\n",
+        encoding="utf-8",
+    )
     subprocess.run([str(stage / "papo-gtk.exe"), "--platform-info"], check=True)
     shutil.make_archive(str(stage), "zip", stage.parent, stage.name)
     print(f"Developer preview: {stage}.zip (requires an installed MSYS2 UCRT64 runtime)")

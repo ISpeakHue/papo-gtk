@@ -528,7 +528,7 @@ enum ImageInput{Bytes(Vec<u8>),Shared(std::sync::Arc<[u8]>),Base64(String)}
 }
 fn queue_poster(transfers:&mut Transfers,api:crate::api::ApiClient,sender:&ComponentSender<ChatModel>,message:Uuid,key:Uuid,embedded:bool,thumbnail:bool){
     transfers.poster_attempted.insert(key);
-    if !crate::platform::CURRENT.isolated_media_helpers&&(!thumbnail||embedded){return;}
+    if !crate::platform::CURRENT.isolated_media_helpers&&(!thumbnail||embedded){transfers.requested.remove(&key);return;}
     let token=Uuid::new_v4();transfers.image_tokens.insert(key,token);let epoch=transfers.epoch;
     let limit=transfers.poster_limiter.clone();let work=transfers.limiter.clone();let output=sender.input_sender().clone();
     transfers.media_job(key,tokio::spawn(async move{
@@ -656,6 +656,7 @@ impl ChatModel {
             for a in m.attachments.iter().flatten() {
                 let video=a.is_video();
                 if candidates>=24{break;}
+                if video&&!crate::platform::CURRENT.isolated_media_helpers&&a.thumbnail_id.is_none()&&!self.transfers.encoded.contains(a.id){continue;}
                 if video&&a.thumbnail_id.is_none()&&!self.transfers.encoded.contains(a.id)&&!self.transfers.textures.contains_key(&a.id)&&!self.transfers.poster_capacity(){continue;}
                 if (a.mime_type.starts_with("image/")||video) && self.transfers.visible(a)
                 && self.transfers.request(a.id) {
@@ -693,9 +694,9 @@ impl ChatModel {
                     // a blocked provider page and a static thumbnail cannot race it.
                     self.transfers.wanted.insert(p.id);
                     if crate::platform::CURRENT.isolated_media_helpers&&candidates<24&&gifs::separate_animation(p)&&gif_videos.len()+self.transfers.video_requests.len()<2&&self.transfers.request_gif(p.id){candidates+=1;gif_videos.push((m.id,p.id));}
-                    if !author_needed&&gifs::separate_animation(p)&&(p.has_video()||!p.fetch_method.is_empty()||self.transfers.resolved.contains(&p.id)){continue;}
+                    if !author_needed&&crate::platform::CURRENT.isolated_media_helpers&&gifs::separate_animation(p)&&(p.has_video()||!p.fetch_method.is_empty()||self.transfers.resolved.contains(&p.id)){continue;}
                 }
-                if p.has_video()&&p.thumbnail.is_none()&&!p.fetch_method.is_empty()&&!author_needed&&!p.animated_link(){
+                if crate::platform::CURRENT.isolated_media_helpers&&p.has_video()&&p.thumbnail.is_none()&&!p.fetch_method.is_empty()&&!author_needed&&!p.animated_link(){
                     if candidates>=24{break;}
                     if !self.transfers.encoded.contains(p.id)&&!self.transfers.textures.contains_key(&p.id)&&!self.transfers.poster_capacity(){continue;}
                     if self.transfers.request(p.id){

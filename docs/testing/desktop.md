@@ -184,7 +184,8 @@ previews and the emoji picker as well as chat. A focused synthetic check can use
 this is a test override, not a required launch option. Mixed-monitor fractional
 scaling still requires real GNOME/KDE acceptance.
 
-The GUI smoke harness uses a temporary `XDG_CONFIG_HOME` for every process,
+The GUI smoke harness uses a temporary `PAPO_TEST_CONFIG_DIR` for every process
+(the test-only configuration override works on Linux, Windows and macOS),
 so remembered sessions and device-local animation settings cannot leak into
 fixtures or be changed by them. The previous environment is restored afterward.
 

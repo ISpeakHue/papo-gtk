@@ -1,3 +1,7 @@
+//! EN-US: Native X11 pixel sampling is only available in Linux regression tests.
+//! PT-BR: A leitura nativa de pixels X11 só está disponível nos testes de regressão Linux.
+#[cfg(target_os="linux")]
+mod x11 {
 //! Inspect displayed pixels in the private X11 GTK regression window.
 //! Unlike snapshot_child, this does not force GTK to rebuild render nodes.
 use gtk::prelude::*;
@@ -14,7 +18,7 @@ extern "C" {
 }
 extern "C" { fn gdk_x11_surface_get_xid(surface:*mut gtk::gdk::ffi::GdkSurface)->c_ulong; }
 
-pub(super) struct DisplayFrames { display:*mut c_void,window:c_ulong }
+pub(crate) struct DisplayFrames { display:*mut c_void,window:c_ulong }
 impl DisplayFrames {
     pub fn new(window:&adw::Window)->Option<Self>{
         let surface=window.surface()?;
@@ -39,3 +43,14 @@ impl DisplayFrames {
     }
 }
 impl Drop for DisplayFrames { fn drop(&mut self){unsafe { XCloseDisplay(self.display); }} }
+
+}
+#[cfg(target_os="linux")]pub(super) use x11::DisplayFrames;
+
+#[cfg(not(target_os="linux"))]pub(super) struct DisplayFrames;
+#[cfg(not(target_os="linux"))]impl DisplayFrames {
+    pub fn new(_window:&adw::Window)->Option<Self>{None}
+    pub fn contains(&self,_window:&adw::Window,_widget:&gtk::Widget,_color:u32)->bool{
+        unreachable!("X11 pixel sampling is unavailable on this platform")
+    }
+}

@@ -73,5 +73,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Install native GTK build dependencies
         run: brew install pkgconf gtk4 libadwaita
-      - name: Compile shared code and native Keychain adapter (no macOS bundle yet)
-        run: cargo check --locked --all-targets
+      - name: Compile and link tests and the native Keychain adapter (no macOS bundle yet)
+        run: |
+          cargo check --locked --all-targets
+          cargo test --locked --no-run

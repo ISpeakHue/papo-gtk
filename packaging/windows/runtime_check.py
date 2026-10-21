@@ -7,7 +7,45 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
+
+
+def trusted_codec_roots(packages, program_files):
+    """EN-US: Recognize only registered, Microsoft Store-signed OS codec extensions.
+    PT-BR: Reconhece apenas extensões de codecs registradas e assinadas pela Microsoft Store.
+    """
+    names = {'Microsoft.HEVCVideoExtension', 'Microsoft.VP9VideoExtensions'}
+    base = program_files / 'WindowsApps'
+    roots = []
+    for package in packages:
+        name = package.get('Name')
+        location = Path(package.get('InstallLocation') or '.')
+        if (name in names and package.get('PublisherId') == '8wekyb3d8bbwe'
+                and package.get('PackageFamilyName') == name + '_8wekyb3d8bbwe'
+                and package.get('SignatureKind') in {'Store', 'System'}
+                and package.get('Status') == 'Ok' and location.is_absolute()
+                and location.is_relative_to(base) and len(location.relative_to(base).parts) == 1
+                and location.name.startswith(name + '_') and location.name.endswith('__8wekyb3d8bbwe')):
+            roots.append(location)
+    return roots
+
+
+def os_codec_roots():
+    shell = Path(os.environ['SystemRoot']) / 'System32/WindowsPowerShell/v1.0/powershell.exe'
+    # EN-US: Query registered packages offline; a path/name alone does not establish OS ownership.
+    # PT-BR: Consulta pacotes registrados offline; só o caminho/nome não comprova origem do sistema.
+    command = """[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+$ErrorActionPreference = 'Stop'
+$packages = @(Get-AppxPackage -PackageTypeFilter Main | Select-Object Name,PackageFamilyName,PublisherId,InstallLocation,@{N='SignatureKind';E={$_.SignatureKind.ToString()}},@{N='Status';E={$_.Status.ToString()}})
+ConvertTo-Json -InputObject $packages -Compress
+"""
+    result = subprocess.run([str(shell), '-NoProfile', '-Command', command], check=True,
+                            capture_output=True, encoding='utf-8-sig', timeout=20,
+                            creationflags=subprocess.CREATE_NO_WINDOW)
+    packages = json.loads(result.stdout)
+    assert isinstance(packages, list), 'Invalid registered-package inventory'
+    return trusted_codec_roots(packages, Path(os.environ['ProgramFiles']).resolve())
 
 
 def loaded_modules():
@@ -99,11 +137,15 @@ def main():
     loaded = loaded_modules()
     windows = Path(os.environ['SystemRoot']).resolve()
     external = [path for path in loaded if not path.is_relative_to(root) and not path.is_relative_to(windows)]
+    codecs = os_codec_roots() if external else []
+    system_codecs = [path for path in external if any(path.is_relative_to(codec) for codec in codecs)]
+    external = [path for path in external if path not in system_codecs]
     assert not external, ('External runtime DLLs loaded', external)
     print(json.dumps({'status': 'ok', 'python': sys.version.split()[0], 'prefix': str(root),
                       'gtk': f'{Gtk.get_major_version()}.{Gtk.get_minor_version()}.{Gtk.get_micro_version()}',
                       'gstreamer': Gst.version_string(), 'checked_files': len(manifest['files']),
                       'loaded_modules': len(loaded), 'media_fixtures': 4,
+                      'os_codec_modules': [str(path) for path in system_codecs],
                       'runtime_cache': os.environ.get('GST_REGISTRY_1_0')}, ensure_ascii=False))
 
 

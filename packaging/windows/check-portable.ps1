@@ -13,7 +13,10 @@ if ($expected -notmatch '^[0-9a-fA-F]{64}$' -or (Get-FileHash $zip.FullName -Alg
 }
 $accents = [string][char]0xe1 + ' ' + [char]0xe9 + ' ' + [char]0xe7
 $destination = Join-Path $WorkDirectory ('Papo portable ' + $accents + ' ' + [guid]::NewGuid().ToString('N'))
-Expand-Archive $zip.FullName $destination
+# EN-US: Use the inbox ZIP reader; PowerShell 5.1 progress rendering slows large runtime archives.
+# PT-BR: Usa o leitor ZIP do Windows; o progresso do PowerShell 5.1 torna runtimes grandes lentos.
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[IO.Compression.ZipFile]::ExtractToDirectory($zip.FullName, $destination)
 $package = (Get-ChildItem $destination -Directory | Select-Object -First 1).FullName
 $launcher = Join-Path $package 'Papo.exe'
 # EN-US: Clear inherited developer discovery paths without changing machine settings.

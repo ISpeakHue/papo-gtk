@@ -14,15 +14,16 @@ ROOT = Path(__file__).resolve().parents[1]
 @unittest.skipUnless(os.name == 'nt' and shutil.which('gcc'), 'Native Windows GCC required')
 class WindowsLauncher(unittest.TestCase):
     def test_unicode_empty_quotes_backslashes_and_unrelated_working_directory(self):
-        with tempfile.TemporaryDirectory(prefix='Papo á é ç ') as directory:
-            stage = Path(directory)
+        with tempfile.TemporaryDirectory(prefix='Papo-build-') as directory:
+            build = Path(directory)
+            stage = build / 'Papo á é ç'
             runtime = stage / 'runtime'
             (runtime / 'bin').mkdir(parents=True)
             cache = runtime / 'lib/gdk-pixbuf-2.0/2.10.0/loaders.cache'
             cache.parent.mkdir(parents=True)
             cache.write_text('', encoding='utf-8')
             (runtime / 'runtime.id').write_text('0' * 64, encoding='ascii')
-            stub = stage / 'arguments.c'
+            stub = build / 'arguments.c'
             stub.write_text('''#include <stdio.h>
 #include <wchar.h>
 int wmain(int argc, wchar_t **argv) {
@@ -34,8 +35,12 @@ int wmain(int argc, wchar_t **argv) {
 }
 ''', encoding='ascii')
             options = ['gcc', '-Os', '-static', '-static-libgcc', '-municode', '-Wl,--stack,4194304', '-Wall', '-Wextra', '-Werror']
-            subprocess.run([*options, str(stub), '-o', str(runtime / 'bin/papo-gtk.exe')], check=True)
-            subprocess.run([*options, str(ROOT / 'packaging/windows/launcher.c'), '-lshell32', '-o', str(stage / 'Papo.exe')], check=True)
+            subprocess.run([*options, str(stub), '-o', str(build / 'arguments.exe')], check=True)
+            subprocess.run([*options, str(ROOT / 'packaging/windows/launcher.c'), '-lshell32', '-o', str(build / 'bootstrap.exe')], check=True)
+            # EN-US: Test Unicode installation separately from the linker's ANSI output-path limitation.
+            # PT-BR: Testa a instalação Unicode separada da limitação ANSI do caminho de saída do linker.
+            shutil.move(build / 'arguments.exe', runtime / 'bin/papo-gtk.exe')
+            shutil.move(build / 'bootstrap.exe', stage / 'Papo.exe')
             arguments = ['', 'á é ç', 'space and "quotes"', 'trailing space \\', 'two\\\\"quoted', 'line\nbreak', '😀']
             env = {key: value for key, value in os.environ.items() if key != 'PAPO_RUNTIME_DIR'}
             result = subprocess.run([str(stage / 'Papo.exe'), *arguments], cwd=ROOT, env=env,

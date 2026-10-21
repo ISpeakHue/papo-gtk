@@ -39,6 +39,11 @@ Packaged Windows never searches PATH for an alternative Python. Source builds
 must explicitly select their UCRT64 prefix via `PAPO_RUNTIME_DIR`; `PAPO_PYTHON`
 remains an explicit developer override. Neither override is needed by end users.
 
+The UCRT64 linker currently fails with accented output paths. Build in an ASCII
+workspace; the native regression compiles there before moving its executables to
+an accented installation directory. This is a build-tool limitation, not an
+installation-path restriction.
+
 The bootstrap preserves Unicode argument boundaries and supports package paths
 with spaces and accents. It creates its GStreamer registry beneath LocalAppData,
 keyed by runtime identity and location. Relocation therefore gets a fresh registry

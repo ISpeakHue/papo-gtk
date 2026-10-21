@@ -60,7 +60,11 @@ def capture(directory):
                    cwd=ROOT, check=True)
     packages = sorted(path for path in directory.iterdir()
                       if ".pkg.tar." in path.name and not path.name.endswith(".sig"))
-    retained = package_set(run("pacman", "-Qp", *(msys_path(path) for path in packages)))
+    # EN-US: Stay below Windows' command-line limit when retaining the full toolchain closure.
+    # PT-BR: Respeita o limite da linha de comando do Windows ao preservar toda a ferramenta de compilação.
+    inventories = [run("pacman", "-Qp", *(msys_path(path) for path in packages[offset:offset + 40]))
+                   for offset in range(0, len(packages), 40)]
+    retained = package_set("\n".join(inventories))
     if retained != installed:
         raise RuntimeError("Rolling repository versions changed; retained packages do not match installed versions. "
                            "Re-provision the full environment, then start a new archive.")

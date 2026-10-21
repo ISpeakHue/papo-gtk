@@ -44,8 +44,8 @@ release if Microsoft servicing or dependency requirements have changed.
 
 An upstream library's Windows floor is not a Papo support claim. The application
 policy above is deliberately narrower. Keep a consistent UCRT64 runtime and use
-`Cargo.lock`; record the actual native package versions in step 2 rather than
-treating the rolling package repository as a version pin.
+`Cargo.lock`; [build provenance](docs/testing/build-provenance.md) records actual native
+package versions and retained archive hashes. The rolling repository itself is not a version pin.
 
 | Component | Selected requirement / constraint | What remains to qualify |
 | --- | --- | --- |
@@ -73,7 +73,7 @@ These references inform the constraints; desktop qualification remains pending.
 | --- | --- |
 | ZIP requires an external MSYS2 UCRT64 installation and `Papo.cmd`. | Installer and self-contained ZIP run without MSYS2, Rust, Git, system Python or separately installed GStreamer. |
 | Some native integrations are intentionally unavailable. | Every required feature in the acceptance matrix passes, including isolated conversions, native notifications and consent-based screen sharing. |
-| Source metadata records a base commit and checkout changes. | Release provenance identifies the tested source and dependency inputs, with unexpected source changes rejected. |
+| Packaging rejects unexpected source changes and retains build/native-input manifests; byte-identical rebuilding is unproven. | Release provenance identifies the tested source and dependency inputs, with unexpected source changes rejected. |
 | Server CI exercises selected synthetic cases. | Packaged artifacts pass desktop, clean-machine, real-device and real-backend checks. |
 | No stable Windows support promise. | Published support is limited to qualified rows and documented runtime/device conditions. |
 

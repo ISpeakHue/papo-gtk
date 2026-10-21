@@ -60,11 +60,17 @@ pacman -S --needed git \
   mingw-w64-ucrt-x86_64-gst-plugins-bad mingw-w64-ucrt-x86_64-gst-libav \
   mingw-w64-ucrt-x86_64-libnice
 cargo run --locked
-python packaging/windows/build.py
+python packaging/windows/native_inputs.py capture target/windows-native-inputs
+python packaging/windows/build.py --native-inputs target/windows-native-inputs
 ```
 
-Git is required to record the matching source revision; the script checks it
-before compiling.
+Git is required to record the source revision. Packaging requires a clean checkout
+by default; `--allow-dirty` is an explicit local-preview override. The source state
+is checked before/after compilation and staging. Exact MSYS2 packages and their
+hashes are retained separately from the preview ZIP. See
+[build provenance and CI diagnostics](docs/testing/build-provenance.md) for the
+original line-ending diagnosis, toolchain metadata, input restoration and limits.
+Byte-identical rebuilds have not been demonstrated.
 
 The build script produces `dist/Papo-1.0.2-windows-x86_64-dev.zip`.
 It contains the executable, license and `Papo.cmd`, **not the native runtime**.

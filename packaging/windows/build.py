@@ -22,6 +22,11 @@ def main():
         executable = shutil.which(name)
         if not executable or Path(executable).resolve().parent != prefix:
             raise SystemExit(f"{name} must come from the same UCRT64 bin directory as Python.")
+    if not shutil.which("git"):
+        raise SystemExit("Git is required for source metadata; install it with pacman -S git.")
+    revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    dirty = bool(subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=normal"], cwd=ROOT))
+    source_label = "Base source (local changes present)" if dirty else "Matching source"
     subprocess.run(["cargo", "build", "--release", "--locked"], cwd=ROOT, check=True)
     version = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))["package"]["version"]
     stage = ROOT / "dist" / f"Papo-{version}-windows-x86_64-dev"
@@ -33,9 +38,6 @@ def main():
         shutil.copy2(ROOT / "packaging/windows" / name, stage)
     shutil.copy2(ROOT / "LICENSE", stage)
     shutil.copytree(ROOT / "assets/icons/symbolic/licenses", stage / "licenses/symbolic-icons")
-    revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-    dirty = bool(subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=normal"], cwd=ROOT))
-    source_label = "Base source (local changes present)" if dirty else "Matching source"
     (stage / "SOURCE.txt").write_text(
         f"{source_label}: https://github.com/ISpeakHue/papo-gtk/tree/{revision}\n",
         encoding="utf-8",

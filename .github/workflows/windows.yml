@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [multiplatform]
   workflow_dispatch:
+    inputs:
+      packaging_only:
+        description: Rebuild packaging for code already covered by native tests
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -31,6 +36,7 @@ jobs:
           update: true
           path-type: minimal
           install: >-
+            git
             mingw-w64-ucrt-x86_64-rust
             mingw-w64-ucrt-x86_64-gcc
             mingw-w64-ucrt-x86_64-pkgconf
@@ -45,12 +51,15 @@ jobs:
             mingw-w64-ucrt-x86_64-gst-libav
             mingw-w64-ucrt-x86_64-libnice
       - name: Check every Rust target on Windows
+        if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only
         run: cargo check --locked --all-targets
       - name: Test platform policy and native worker lifecycle with synthetic audio
+        if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only
         run: |
           cargo test --locked platform:: -- --test-threads=1
           cargo test --locked native_voice -- --ignored --test-threads=1
       - name: Test embedded icon coverage and native GTK rendering
+        if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only
         run: |
           python -m unittest discover -s tests -p platform_capture_test.py
           python -m unittest discover -s tests -p icon_assets_test.py
@@ -65,6 +74,7 @@ jobs:
           if-no-files-found: error
 
   macos-foundation:
+    if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only
     runs-on: macos-latest
     timeout-minutes: 40
     env:

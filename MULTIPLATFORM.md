@@ -45,7 +45,7 @@ From an **MSYS2 UCRT64** terminal:
 
 ```sh
 pacman -Syu
-pacman -S --needed \
+pacman -S --needed git \
   mingw-w64-ucrt-x86_64-rust mingw-w64-ucrt-x86_64-gcc \
   mingw-w64-ucrt-x86_64-pkgconf mingw-w64-ucrt-x86_64-gtk4 \
   mingw-w64-ucrt-x86_64-libadwaita mingw-w64-ucrt-x86_64-librsvg \
@@ -56,6 +56,9 @@ pacman -S --needed \
 cargo run --locked
 python packaging/windows/build.py
 ```
+
+Git is required to record the matching source revision; the script checks it
+before compiling.
 
 The build script produces `dist/Papo-1.0.2-windows-x86_64-dev.zip`.
 It contains the executable, license and `Papo.cmd`, **not the native runtime**.
@@ -71,7 +74,8 @@ and libadwaita, without claiming runtime or bundle validation. Its Windows job
 checks all Rust targets with warnings treated as errors,
 runs platform policy, synthetic voice worker, native icon and chat/member startup
 tests, and uploads
-a developer preview artifact. This does not replace testing on real Windows
+a developer preview artifact. A manual `packaging_only` workflow dispatch rebuilds packaging for a source
+revision already covered by the native checks. This does not replace testing on real Windows
 hardware. Native credential integration is compiled but ordinary tests never
 read or change the developer's real keyring. GUI tests use an isolated
 configuration directory on every OS, including systems that ignore XDG variables.
@@ -97,3 +101,24 @@ Credential backend features are documented in
 The initial Windows toolchain is provisioned through
 [msys2/setup-msys2](https://github.com/msys2/setup-msys2), using the
 [UCRT64 Rust package](https://packages.msys2.org/packages/mingw-w64-ucrt-x86_64-rust).
+
+## Initial verification (`ec8bf2b`)
+
+The [native verification run](https://github.com/ISpeakHue/papo-gtk/actions/runs/39536236642)
+passed Windows platform-policy tests, synthetic voice startup/gain/cleanup, icon
+rendering without a host icon theme, and synthetic chat/member startup. The
+macOS job compiled all targets and linked the test executable. These checks use
+no real account, microphone, camera or desktop capture; native credential access
+is compiled but the ordinary session tests use memory storage.
+
+On Linux, all 286 regular tests passed (four integration tests remain opt-in),
+as did the synthetic voice worker, four private portal checks, call-sound tests,
+and focused icon/call-control GUI checks. Notification and backend-GIF GUI
+assertions passed with GTK warnings nonfatal; the notification window still
+produces a height-measurement warning under the host GTK version.
+
+The [Linux container workflow](https://github.com/ISpeakHue/papo-gtk/actions/runs/39536236637)
+still fails during the icon test when its glycin SVG loader exits inside
+Bubblewrap. The complete Linux GUI CI
+workflow remains unverified. Local GUI limitations are described in
+[desktop testing](docs/testing/desktop.md).

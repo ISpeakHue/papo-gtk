@@ -25,7 +25,12 @@ jobs:
     container:
       image: fedora:44
       options: --security-opt seccomp=unconfined --security-opt apparmor=unconfined
-    timeout-minutes: 30
+    # EN-US: Only dependency installation/checkout preparation runs as root.
+    # PT-BR: Apenas a instalação/preparação do checkout executa como root.
+    defaults:
+      run:
+        shell: runuser -u papo-ci -- bash --noprofile --norc -e -o pipefail {0}
+    timeout-minutes: 60
     env:
       CARGO_TERM_COLOR: always
       RUSTFLAGS: "-D warnings"
@@ -35,86 +40,53 @@ jobs:
       GTK_A11Y: none
     steps:
       - name: Install Rust and native build dependencies
-        run: dnf install -y bubblewrap git gcc rust cargo pkgconf-pkg-config glib2-devel openssl-devel gtk4-devel libadwaita-devel python3-gobject python3-gstreamer1 gstreamer1-plugins-base gstreamer1-plugins-good gstreamer1-plugins-bad-free libnice-gstreamer1 xorg-x11-server-Xvfb xorg-x11-xauth setxkbmap libXtst dbus-daemon
+        shell: bash
+        run: dnf install -y bubblewrap git gcc rust cargo pkgconf-pkg-config glib2-devel openssl-devel gtk4-devel libadwaita-devel python3-gobject python3-gstreamer1 gstreamer1-plugins-base gstreamer1-plugins-good gstreamer1-plugins-bad-free libnice-gstreamer1 xorg-x11-server-Xvfb xorg-x11-xauth setxkbmap libXtst dbus-daemon glycin-loaders librsvg2 fontconfig dejavu-sans-fonts util-linux shadow-utils
+      - name: Create isolated unprivileged test account
+        shell: bash
+        run: useradd --create-home --uid 1001 papo-ci
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Grant the test account ownership of the checkout
+        shell: bash
+        run: chown -R papo-ci:papo-ci "$GITHUB_WORKSPACE"
+      - name: Check namespace and sandboxed PNG/SVG loading before GTK
+        id: runtime
+        env:
+          G_MESSAGES_DEBUG: all
+        run: |
+          mkdir -p target/ci
+          python3 packaging/ci/runtime_probe.py 2>&1 | tee target/ci/runtime.log
+      - name: Check Windows provenance and retained input policy
+        run: python3 -m unittest discover -s tests -p 'windows_packaging_test.py'
       - name: Check AppImage media plugin and host driver boundaries
         run: python3 -m unittest discover -s tests -p 'appimage_packaging_test.py'
       - name: Check call sound decoding and application audio identity
         run: python3 -m unittest discover -s tests -p 'call_sound_test.py'
-      - name: Check bundled control icon coverage and theme-independent rendering
-        run: |
-          python3 -m unittest discover -s tests -p 'icon_assets_test.py'
-          PAPO_UI_CASE=symbolic-icons dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+      - name: Check bundled control icon coverage
+        run: python3 -m unittest discover -s tests -p 'icon_assets_test.py'
       - name: Compile application and run unit and integration tests
         run: cargo test --locked
       - name: Reject local media playlists before decoder discovery
         run: python3 tests/security/media_network_probe.py
-      - name: Check bounded asynchronous server icon preparation
-        run: PAPO_UI_CASE=security-icons dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-      - name: Check native syntax colors, Unicode offsets, themes and spoilers
-        run: PAPO_UI_CASE=syntax-highlighting dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-      - name: Check reaction filters, member avatars and profile metadata batches
-        run: PAPO_UI_CASE=reaction-participants dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-      - name: Check login, chat workflows and adaptive layouts under a virtual display
-        run: dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-      - name: Check multiline composer, wrapping and dead-key input
-        run: PAPO_UI_CASE=multiline PAPO_NATIVE_INPUT_TEST=1 GTK_IM_MODULE=simple dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-      - name: Check dead-key input after full application startup
-        run: PAPO_UI_CASE=full-app-input PAPO_NATIVE_INPUT_TEST=1 GTK_IM_MODULE=simple dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-      - name: Check dead-key input across login-to-chat focus handoff
-        run: PAPO_UI_CASE=login-input PAPO_NATIVE_INPUT_TEST=1 GTK_IM_MODULE=simple dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-      - name: Check explicit channel reads and owner-only account recovery
-        run: PAPO_UI_CASE=backend-update dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-      - name: Check rich cards and quoted Twitter/X embeds
-        run: PAPO_UI_CASE=embeds dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-      - name: Check bounded embed colors, theme changes and provider cleanup
-        run: PAPO_UI_CASE=style-palette dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-      - name: Check uploaded GIF motion and media download actions
-        run: PAPO_UI_CASE=attachment-media dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-      - name: Check video posters and compressed media reuse across channels
-        run: PAPO_UI_CASE=media-cache dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-      - name: Check member groups, Markdown, emoji tabs and channel actions
-        run: PAPO_UI_CASE=report8 dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-      - name: Check rich replies, dated navigation, DM completion and dialog dismissal
-        run: PAPO_UI_CASE=report10 dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-      - name: Check inline composer emojis, editor completion and page navigation
-        run: PAPO_UI_CASE=report11 dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-      - name: Check responsive emoji grids, lazy pages and animation cleanup
-        run: PAPO_UI_CASE=emoji-grid dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-      - name: Check collapsed channel and DM notification groups and unread counts
-        run: PAPO_UI_CASE=notification-filters dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-      - name: Check grouped notification read batching, retries and live events
-        run: PAPO_UI_CASE=account-notices dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-      - name: Check tabbed account settings, retained drafts and password cleanup
-        run: PAPO_UI_CASE=account-settings dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-      - name: Check webhook message grouping, avatar queues and cache reuse
-        run: PAPO_UI_CASE=webhook-chat dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-      - name: Check GIF link animations, compact editing and autocomplete keyboard routing
-        run: PAPO_UI_CASE=report9 PAPO_NATIVE_INPUT_TEST=1 GTK_IM_MODULE=simple dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-      - name: Check readable edit mentions, user replacement and native accented input
-        run: PAPO_UI_CASE=edit-mentions PAPO_NATIVE_INPUT_TEST=1 GTK_IM_MODULE=simple dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-      - name: Check inline emoji details, animation, spoilers and popover cleanup
-        run: PAPO_UI_CASE=emoji-details PAPO_NATIVE_INPUT_TEST=1 dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-      - name: Check backend GIF media, cache reuse and temporary chat errors
-        run: PAPO_UI_CASE=backend-gifs dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-      - name: Check viewport avatars, recycled search, motion and reconnect recovery
-        run: |
-          for scenario in backend-contracts voice-chat avatar-viewport search-recycling emoji-notifications notification-window recovery media-loading recent-media; do
-            PAPO_UI_CASE="$scenario" dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-          done
-      - name: Check staged attachment previews and clipboard uploads
-        run: |
-          for scenario in draft-previews clipboard; do
-            PAPO_UI_CASE="$scenario" dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-          done
-      - name: Check Unicode emoji categories and search
-        run: PAPO_UI_CASE=emoji-categories dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
-      - name: Check pinned-message media and scoped playback
-        run: PAPO_UI_CASE=pins-media dbus-run-session -- xvfb-run -a cargo test --locked ui_smoke -- --ignored --test-threads=1
+      - name: Run all focused GTK cases and retain individual failures
+        if: ${{ !cancelled() && steps.runtime.outcome == 'success' }}
+        run: bash packaging/ci/gui-checks.sh
       - name: Check private screen portal permissions and cleanup
+        if: ${{ !cancelled() && steps.runtime.outcome == 'success' }}
         run: dbus-run-session -- python3 tests/portal_probe.py
       - name: Check native audio worker cleanup using synthetic capture
+        if: ${{ !cancelled() && steps.runtime.outcome == 'success' }}
         run: cargo test --locked native_voice -- --ignored
+
+      - name: Retain Linux runtime and individual GUI diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Linux-CI-diagnostics
+          path: target/ci/
+          if-no-files-found: warn
 
   voice-sfu:
     if: github.event_name == 'workflow_dispatch' && inputs.backend_repository != ''

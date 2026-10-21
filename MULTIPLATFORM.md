@@ -6,6 +6,12 @@ experimental developer build; macOS has platform boundaries prepared but no
 supported build or `.app` bundle yet. There is one application and protocol
 implementation, rather than separate operating-system forks.
 
+The first release targets and dependency constraints are defined in
+[WINDOWS_SUPPORT.md](WINDOWS_SUPPORT.md). The
+[Windows acceptance matrix](docs/testing/windows.md) records required cases,
+historical CI evidence and pending desktop tests. These documents complete step 1
+of [the implementation plan](MULTIPLATFORM_PLAN.md); Windows remains experimental.
+
 ## Current boundaries
 
 | Integration | Linux | Windows | Future macOS |

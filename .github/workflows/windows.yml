@@ -30,6 +30,18 @@ jobs:
       PYTHONUTF8: '1'
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Record checkout Git configuration before MSYS2
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force target/windows-build | Out-Null
+          git --version | Out-File -Encoding utf8 target/windows-build/checkout-git.txt
+          git config --show-origin --get-regexp '^core\.(autocrlf|eol|filemode|symlinks|ignorecase)$' | Out-File -Append -Encoding utf8 target/windows-build/checkout-git.txt
+          git status --porcelain=v1 --untracked-files=all | Out-File -Append -Encoding utf8 target/windows-build/checkout-git.txt
+          git diff --stat HEAD | Out-File -Append -Encoding utf8 target/windows-build/checkout-git.txt
+          git diff --summary HEAD | Out-File -Append -Encoding utf8 target/windows-build/checkout-git.txt
+          git ls-files --eol | Out-File -Append -Encoding utf8 target/windows-build/checkout-git.txt
       - uses: msys2/setup-msys2@v2
         with:
           msystem: UCRT64
@@ -50,6 +62,24 @@ jobs:
             mingw-w64-ucrt-x86_64-gst-plugins-bad
             mingw-w64-ucrt-x86_64-gst-libav
             mingw-w64-ucrt-x86_64-libnice
+      - name: Diagnose source differences with MSYS2 Git before compiling
+        run: |
+          python - <<'PYCODE'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path("packaging/windows").resolve()))
+          from build import source_state, write_json, require_source
+          source = source_state()
+          write_json(Path("target/windows-build/post-setup.json"), source)
+          print(source["status"] or "Clean source checkout")
+          print(source["diff_summary"])
+          print(source["git_config"])
+          require_source(source)
+          PYCODE
+      - name: Test source provenance and package archive verification
+        run: python -m unittest discover -s tests -p windows_packaging_test.py
+      - name: Retain exact installed native dependency packages
+        run: python packaging/windows/native_inputs.py capture target/windows-native-inputs
       - name: Check every Rust target on Windows
         if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only
         run: cargo check --locked --all-targets
@@ -66,12 +96,36 @@ jobs:
           PAPO_UI_CASE=symbolic-icons cargo test --locked ui_smoke -- --ignored --test-threads=1
           PAPO_UI_CASE=startup cargo test --locked ui_smoke -- --ignored --test-threads=1
       - name: Stage developer preview (external MSYS2 runtime required)
-        run: python packaging/windows/build.py
+        run: |
+          papo_build_options=()
+          if [[ "${{ inputs.packaging_only }}" == "true" ]]; then
+            papo_build_options+=(--packaging-only)
+          fi
+          python packaging/windows/build.py --native-inputs target/windows-native-inputs "${papo_build_options[@]}"
       - uses: actions/upload-artifact@v4
         with:
           name: Papo-Windows-x86_64-developer-preview
-          path: dist/Papo-*-windows-x86_64-dev.zip
+          path: |
+            dist/Papo-*-windows-x86_64-dev.zip
+            dist/Papo-*-windows-x86_64-dev.zip.sha256
           if-no-files-found: error
+
+      - name: Retain source and toolchain diagnostics even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-build-diagnostics
+          path: target/windows-build/
+          if-no-files-found: warn
+      - name: Retain native rebuild inputs separately from the preview ZIP
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-UCRT64-native-inputs
+          path: target/windows-native-inputs/
+          compression-level: 0
+          retention-days: 90
+          if-no-files-found: warn
 
   macos-foundation:
     if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only

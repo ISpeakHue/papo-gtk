@@ -43,6 +43,7 @@ All ordinary fixtures use synthetic data; real device/server checks are opt-in.
 
 | Guide | Coverage |
 | --- | --- |
+| [Windows acceptance matrix](docs/testing/windows.md) | Target desktop builds, feature checklist, existing CI evidence and packaged-release gates |
 | [Desktop integration and layout](docs/testing/desktop.md) | Icons, adaptive navigation, header geometry and AppImage media plugins |
 | [Feature workflows and acceptance checks](docs/testing/workflows.md) | Requirements, manual scenarios and account/admin feature walkthroughs |
 | [Accounts and profiles](docs/testing/account.md) | Login request budgets, remembered sessions, profiles, settings and status |

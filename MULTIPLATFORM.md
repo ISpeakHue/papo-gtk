@@ -122,3 +122,14 @@ still fails during the icon test when its glycin SVG loader exits inside
 Bubblewrap. The complete Linux GUI CI
 workflow remains unverified. Local GUI limitations are described in
 [desktop testing](docs/testing/desktop.md).
+
+The [successful packaging rerun](https://github.com/ISpeakHue/papo-gtk/actions/runs/39537643269)
+provides the **Papo-Windows-x86_64-developer-preview** artifact. The downloaded ZIP
+passed integrity checks and contains an AMD64 executable, launcher, instructions,
+license attribution and source metadata. It requires the external MSYS2 runtime.
+Its `SOURCE.txt` points to `c911a1519259dd14a9845cf9e13b9cb64d7aecb4` and reports
+local checkout changes; this preview has not been verified as a reproducible
+clean-source release.
+
+ZIP SHA-256:
+`c44ca68449e8bd6eeb75115b4224f26cf0447defc3dfedf8a121c140c0708b3c`

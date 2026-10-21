@@ -7,6 +7,10 @@ param(
 $ErrorActionPreference = 'Stop'
 $zip = if ($Archive) { Get-Item $Archive } else { Get-ChildItem "$PSScriptRoot/../../download/Papo-*-windows-x86_64-dev.zip" | Select-Object -First 1 }
 if (!$zip) { throw 'Portable archive missing' }
+$expected = (Get-Content ($zip.FullName + '.sha256') -Raw -Encoding UTF8).Split(' ')[0].Trim()
+if ($expected -notmatch '^[0-9a-fA-F]{64}$' -or (Get-FileHash $zip.FullName -Algorithm SHA256).Hash -ne $expected) {
+    throw 'Portable ZIP checksum mismatch'
+}
 $accents = [string][char]0xe1 + ' ' + [char]0xe9 + ' ' + [char]0xe7
 $destination = Join-Path $WorkDirectory ('Papo portable ' + $accents + ' ' + [guid]::NewGuid().ToString('N'))
 Expand-Archive $zip.FullName $destination
@@ -42,6 +46,13 @@ try {
     & $launcher --check-packaged-runtime
     if ($LASTEXITCODE -eq 0) { throw 'Missing bundled Python incorrectly succeeded' }
 } finally { Move-Item "$python.disabled" $python }
+$gtk = Get-ChildItem (Join-Path $package 'runtime/bin') -Filter 'libgtk-4-*.dll' | Select-Object -First 1
+if (!$gtk) { throw 'Bundled GTK DLL missing' }
+Move-Item $gtk.FullName ($gtk.FullName + '.disabled')
+try {
+    & $launcher --version
+    if ($LASTEXITCODE -eq 0) { throw 'Missing bundled GTK incorrectly used an external DLL' }
+} finally { Move-Item ($gtk.FullName + '.disabled') $gtk.FullName }
 $manifest = Get-Content (Join-Path $package 'runtime/RUNTIME-MANIFEST.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 foreach ($file in $manifest.files) {
     $actual = Get-FileHash (Join-Path $package $file.path) -Algorithm SHA256
@@ -50,4 +61,4 @@ foreach ($file in $manifest.files) {
 if (Get-ChildItem $package -Filter '*.pyc' -Recurse) { throw 'Bytecode written inside package' }
 if (Get-ChildItem $package -Filter 'registry*.bin' -Recurse) { throw 'Plugin registry written inside package' }
 if ($beforePath -ne [Environment]::GetEnvironmentVariable('PATH', 'Machine')) { throw 'Machine PATH changed' }
-Write-Output 'Portable runtime, relocation, immutable files and missing-Python checks passed.'
+Write-Output 'Portable runtime, relocation, immutable files and missing-component checks passed.'

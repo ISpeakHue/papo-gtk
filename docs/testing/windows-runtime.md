@@ -74,7 +74,7 @@ Windows sandbox backend and must remain unavailable.
 A separate `portable-runtime` Windows job downloads the ZIP without MSYS2 setup,
 clears inherited developer lookup paths, sets a minimal process PATH and runs from
 an unrelated working directory. It repeats the probe after relocation to paths
-with spaces/accents, requires failure with bundled Python removed, verifies file
+with spaces/accents, requires failure with bundled Python or the GTK DLL removed, verifies file
 immutability and confirms no machine-wide PATH change. Hosted Windows Server
 runners include development tools; restricted discovery and DLL-origin auditing
 are stronger than an ordinary build-job check but do not substitute for a pristine
@@ -94,7 +94,8 @@ machine PATH. The same automated script can be run there from PowerShell:
 powershell -NoProfile -File packaging/windows/check-portable.ps1 -Archive C:\Downloads\Papo-1.0.2-windows-x86_64-dev.zip
 ```
 
-It uses a unique temporary extraction directory, preserves the original ZIP and
+Keep the adjacent `.zip.sha256` file with the archive. The script verifies it,
+uses a unique temporary extraction directory, preserves the original ZIP and
 modifies only the current shell's environment. Keep this evidence separate from hosted CI; the VM pass is required
 before checking off step 3's full completion criterion.
 

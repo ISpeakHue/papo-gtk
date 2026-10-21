@@ -16,9 +16,13 @@ static void die(const wchar_t *message) {
 static void path(wchar_t *out, const wchar_t *root, const wchar_t *suffix) {
     if (swprintf(out, CAP, L"%ls\\%ls", root, suffix) < 0) die(L"Runtime path too long");
 }
+static void environment(const wchar_t *name, const wchar_t *value) {
+    if (!SetEnvironmentVariableW(name, value) && (value || GetLastError() != ERROR_ENVVAR_NOT_FOUND))
+        die(L"Cannot configure runtime environment");
+}
 static void env_path(const wchar_t *name, const wchar_t *root, const wchar_t *suffix) {
     wchar_t value[CAP]; path(value, root, suffix);
-    if (!SetEnvironmentVariableW(name, value)) die(L"Cannot configure runtime environment");
+    environment(name, value);
 }
 static int file(const wchar_t *name) {
     DWORD attributes = GetFileAttributesW(name);
@@ -44,6 +48,9 @@ static void argument(wchar_t *buffer, size_t *used, const wchar_t *value) {
     character(buffer, used, L'"');
 }
 int wmain(int argc, wchar_t **argv) {
+    /* EN-US: Missing bundled imports must fail instead of opening a blocking loader dialog.
+     * PT-BR: Imports ausentes devem falhar sem abrir uma janela bloqueante do carregador. */
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
     wchar_t own[CAP], root[CAP], bin[CAP], target[CAP], command[CAP] = {0}, system[CAP];
     DWORD length = GetModuleFileNameW(NULL, own, CAP);
     if (!length || length >= CAP) die(L"Cannot locate launcher");
@@ -70,39 +77,42 @@ int wmain(int argc, wchar_t **argv) {
     for (const wchar_t *p = root; *p; p++) { hash ^= (uint16_t)*p; hash *= UINT64_C(1099511628211); }
     for (size_t i = 0; i < 64; i++) { hash ^= (unsigned char)id[i]; hash *= UINT64_C(1099511628211); }
     wchar_t cache_base[CAP], cache[CAP];
-    if (!GetEnvironmentVariableW(L"LOCALAPPDATA", cache_base, CAP) &&
+    DWORD local_length = GetEnvironmentVariableW(L"LOCALAPPDATA", cache_base, CAP);
+    if (local_length >= CAP) die(L"Local cache directory too long");
+    if (!local_length &&
         FAILED(SHGetFolderPathW(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, cache_base))) die(L"Local cache directory unavailable");
     if (swprintf(cache, CAP, L"%ls\\papo-gtk\\runtime\\%016llx", cache_base, (unsigned long long)hash) < 0)
         die(L"Cache path too long");
     int created = SHCreateDirectoryExW(NULL, cache, NULL);
     if (created != ERROR_SUCCESS && created != ERROR_ALREADY_EXISTS && created != ERROR_FILE_EXISTS)
         die(L"Cannot create runtime cache");
-    if (!GetSystemDirectoryW(system, CAP)) die(L"System directory unavailable");
+    DWORD system_length = GetSystemDirectoryW(system, CAP);
+    if (!system_length || system_length >= CAP) die(L"System directory unavailable");
     wchar_t search[CAP];
     if (swprintf(search, CAP, L"%ls;%ls", bin, system) < 0) die(L"DLL path too long");
-    SetEnvironmentVariableW(L"PATH", search);
-    SetEnvironmentVariableW(L"PAPO_RUNTIME_DIR", root);
-    SetEnvironmentVariableW(L"PYTHONPATH", NULL);
-    SetEnvironmentVariableW(L"PYTHONNOUSERSITE", L"1");
-    SetEnvironmentVariableW(L"PYTHONSAFEPATH", L"1");
-    SetEnvironmentVariableW(L"PYTHONDONTWRITEBYTECODE", L"1");
-    if (!GetEnvironmentVariableW(L"PAPO_PYTHON", NULL, 0)) SetEnvironmentVariableW(L"PYTHONHOME", root);
+    environment(L"PATH", search);
+    environment(L"PAPO_RUNTIME_DIR", root);
+    environment(L"PYTHONPATH", NULL);
+    environment(L"PYTHONNOUSERSITE", L"1");
+    environment(L"PYTHONSAFEPATH", L"1");
+    environment(L"PYTHONDONTWRITEBYTECODE", L"1");
+    if (!GetEnvironmentVariableW(L"PAPO_PYTHON", NULL, 0)) environment(L"PYTHONHOME", root);
     env_path(L"GI_TYPELIB_PATH", root, L"lib\\girepository-1.0");
     env_path(L"GSETTINGS_SCHEMA_DIR", root, L"share\\glib-2.0\\schemas");
     env_path(L"GIO_MODULE_DIR", root, L"lib\\gio\\modules");
-    SetEnvironmentVariableW(L"GIO_EXTRA_MODULES", NULL);
+    environment(L"GIO_EXTRA_MODULES", NULL);
     env_path(L"GTK_PATH", root, L"lib\\gtk-4.0");
     env_path(L"XDG_DATA_DIRS", root, L"share");
     env_path(L"FONTCONFIG_PATH", root, L"etc\\fonts");
     env_path(L"FONTCONFIG_FILE", root, L"etc\\fonts\\fonts.conf");
     env_path(L"GST_PLUGIN_SYSTEM_PATH_1_0", root, L"lib\\gstreamer-1.0");
-    SetEnvironmentVariableW(L"GST_PLUGIN_SYSTEM_PATH", NULL);
-    SetEnvironmentVariableW(L"GST_PLUGIN_PATH", NULL);
-    SetEnvironmentVariableW(L"GST_PLUGIN_PATH_1_0", NULL);
+    environment(L"GST_PLUGIN_SYSTEM_PATH", NULL);
+    environment(L"GST_PLUGIN_PATH", NULL);
+    environment(L"GST_PLUGIN_PATH_1_0", NULL);
     env_path(L"GST_PLUGIN_SCANNER_1_0", root, L"libexec\\gstreamer-1.0\\gst-plugin-scanner.exe");
     env_path(L"GST_REGISTRY_1_0", cache, L"registry.bin");
-    SetEnvironmentVariableW(L"GST_REGISTRY", NULL);
-    SetEnvironmentVariableW(L"XDG_CACHE_HOME", cache);
+    environment(L"GST_REGISTRY", NULL);
+    environment(L"XDG_CACHE_HOME", cache);
     wchar_t pattern[CAP]; path(pattern, root, L"lib\\gdk-pixbuf-2.0\\*");
     WIN32_FIND_DATAW entry; HANDLE found = FindFirstFileW(pattern, &entry); int loader = 0;
     if (found != INVALID_HANDLE_VALUE) {
@@ -112,15 +122,15 @@ int wmain(int argc, wchar_t **argv) {
             if (swprintf(suffix, CAP, L"lib\\gdk-pixbuf-2.0\\%ls", entry.cFileName) < 0) die(L"Loader path too long");
             path(directory, root, suffix); path(marker, directory, L"loaders.cache");
             if (file(marker)) {
-                SetEnvironmentVariableW(L"GDK_PIXBUF_MODULE_FILE", marker);
+                environment(L"GDK_PIXBUF_MODULE_FILE", marker);
                 env_path(L"GDK_PIXBUF_MODULEDIR", directory, L"loaders"); loader = 1; break;
             }
         } while (FindNextFileW(found, &entry));
         FindClose(found);
     }
     if (!loader) die(L"Bundled image loader cache is missing");
-    SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32 | LOAD_LIBRARY_SEARCH_USER_DIRS);
-    SetDllDirectoryW(L"");
+    if (!SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32 | LOAD_LIBRARY_SEARCH_USER_DIRS) || !SetDllDirectoryW(L""))
+        die(L"Cannot restrict DLL search");
     if (!AddDllDirectory(bin)) die(L"Cannot register runtime DLL directory");
     size_t used = 0; argument(command, &used, target);
     for (int i = 1; i < argc; i++) argument(command, &used, argv[i]);
@@ -135,7 +145,9 @@ int wmain(int argc, wchar_t **argv) {
     if (!CreateProcessW(target, command, NULL, NULL, TRUE, 0, NULL, bin, &startup, &child))
         die(L"Cannot start bundled application");
     CloseHandle(child.hThread);
-    WaitForSingleObject(child.hProcess, INFINITE);
-    DWORD status = 1; GetExitCodeProcess(child.hProcess, &status); CloseHandle(child.hProcess);
+    if (WaitForSingleObject(child.hProcess, INFINITE) != WAIT_OBJECT_0) die(L"Cannot wait for application");
+    DWORD status = 1;
+    if (!GetExitCodeProcess(child.hProcess, &status)) die(L"Cannot read application exit status");
+    CloseHandle(child.hProcess);
     return (int)status;
 }

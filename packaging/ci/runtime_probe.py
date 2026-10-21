@@ -21,10 +21,17 @@ def main():
     # PT-BR: Exercita a criação de namespaces antes do GTK, preservando o seccomp do decodificador.
     subprocess.run(["bwrap", "--unshare-all", "--die-with-parent", "--ro-bind", "/usr", "/usr",
                     "--symlink", "usr/lib64", "/lib64", "--symlink", "usr/lib", "/lib",
-                    "--dev", "/dev", "--tmpfs", "/tmp", "/usr/bin/true"], check=True)
+                    "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp", "/usr/bin/true"], check=True)
     import gi
     gi.require_version("GdkPixbuf", "2.0")
     from gi.repository import GdkPixbuf
+    gi.require_version("Gst", "1.0")
+    from gi.repository import Gst
+    Gst.init(None)
+    decoders = [name for name in ("openh264dec", "avdec_h264") if Gst.ElementFactory.find(name)]
+    if not decoders:
+        raise SystemExit("The CI image must supply an H.264 decoder for the original media fixtures.")
+    print("H.264 decoder factories:", decoders, flush=True)
     root = Path(__file__).resolve().parents[2]
     for path in (root / "assets/icons/symbolic/zoom-out-symbolic.svg",
                  root / "assets/icons/hicolor/256x256/apps/br.com.papo.gtk.png"):

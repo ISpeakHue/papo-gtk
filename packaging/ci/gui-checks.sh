@@ -17,12 +17,12 @@ papo_cases=(symbolic-icons security-icons syntax-highlighting reaction-participa
 if (( $# )); then papo_cases=("$@"); fi
 for papo_case in "${papo_cases[@]}"; do
     printf '\nRunning GTK case: %s\n' "$papo_case"
-    unset PAPO_NATIVE_INPUT_TEST
+    papo_environment=(env -u PAPO_NATIVE_INPUT_TEST "PAPO_UI_CASE=$papo_case")
     case "$papo_case" in
-        multiline|full-app-input|login-input|report9|edit-mentions|emoji-details) export PAPO_NATIVE_INPUT_TEST=1 ;;
+        multiline|full-app-input|login-input|report9|edit-mentions) papo_environment+=(PAPO_NATIVE_INPUT_TEST=1 GTK_IM_MODULE=simple) ;;
+        emoji-details) papo_environment+=(PAPO_NATIVE_INPUT_TEST=1) ;;
     esac
-    PAPO_UI_CASE="$papo_case" GTK_IM_MODULE=simple \
-        timeout --kill-after=10s 240s dbus-run-session -- xvfb-run -a \
+    "${papo_environment[@]}" timeout --kill-after=10s 240s dbus-run-session -- xvfb-run -a \
         cargo test --locked ui_smoke -- --ignored --test-threads=1 \
         2>&1 | tee "target/ci/gui/$papo_case.log"
     papo_statuses=("${PIPESTATUS[@]}")

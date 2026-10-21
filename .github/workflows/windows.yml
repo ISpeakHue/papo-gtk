@@ -117,7 +117,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Windows-build-diagnostics
-          path: target/windows-build/
+          path: |
+            target/windows-build/*.json
+            target/windows-build/checkout-git.txt
           if-no-files-found: warn
       - name: Retain native rebuild inputs separately from the preview ZIP
         if: always()

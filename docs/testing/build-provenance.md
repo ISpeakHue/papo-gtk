@@ -102,8 +102,8 @@ kernel-policy change is used. See the supported options in
 [Podman's documentation](https://docs.podman.io/en/stable/markdown/podman-run.1.html).
 
 The image explicitly installs Glycin loaders, librsvg, Bubblewrap, fonts, GI,
-GStreamer, Xvfb and the input/device test dependencies. The early runtime probe
-records versions, UID mapping and security state, exercises Bubblewrap and decodes
+GStreamer (including explicit OpenH264/libav plugins), Xvfb and the input/device test dependencies. The early runtime probe
+records versions, H.264 decoder factories, UID mapping and security state, exercises Bubblewrap including a private `/proc` and decodes
 bundled SVG/PNG files with Glycin's own namespace/seccomp isolation intact. It fails
 before GUI assertions when the runtime cannot provide those boundaries. Production
 sandbox code and decoder settings are unchanged.
@@ -112,7 +112,7 @@ sandbox code and decoder settings are unchanged.
 case). Each gets a private D-Bus/Xvfb session, a timeout, log and exit status. Every
 case runs even if a preceding case fails, and **any** failed/timed-out case fails
 the job. GTK diagnostics stay visible. Portal/native worker checks still run after
-a GUI failure when the runtime preflight passed. CI retains `runtime.log`,
+a GUI failure when the runtime preflight passed. CI retains `runtime.log`, `unit.log`,
 `gui/results.tsv`, per-case logs and a job summary instead of presenting an early
 partial GUI run as full validation.
 

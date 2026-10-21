@@ -60,7 +60,7 @@ jobs:
       - name: Check bundled control icon coverage
         run: python3 -m unittest discover -s tests -p 'icon_assets_test.py'
       - name: Compile application and run unit and integration tests
-        run: cargo test --locked
+        run: cargo test --locked 2>&1 | tee target/ci/unit.log
       - name: Reject local media playlists before decoder discovery
         run: python3 tests/security/media_network_probe.py
       - name: Run all focused GTK cases and retain individual failures
@@ -80,6 +80,7 @@ jobs:
           name: Linux-CI-diagnostics
           path: |
             target/ci/runtime.log
+            target/ci/unit.log
             target/ci/gui/
           if-no-files-found: warn
 

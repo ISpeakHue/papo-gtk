@@ -14,7 +14,8 @@ import sys
 import tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
-BUILD_COMMAND = ["cargo", "build", "--release", "--locked"]
+BUILD_COMMAND = ["cargo", "build", "--release", "--locked", "--target", "x86_64-pc-windows-gnu",
+                 "--target-dir", "target/windows-build/cargo"]
 # EN-US: Record only build controls; dumping the environment could expose CI secrets.
 # PT-BR: Registra apenas controles de compilação; copiar o ambiente poderia expor segredos da CI.
 BUILD_ENV = ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "CARGO_BUILD_TARGET",
@@ -48,6 +49,7 @@ def source_state(root=ROOT):
                                       if path.is_symlink() else sha256(path))
     return {
         "untracked_sha256": untracked_hashes,
+        "index_diff_sha256": hashlib.sha256(run("git", "diff", "--cached", "--no-ext-diff", "--binary", root=root).encode()).hexdigest(),
         "diff_sha256": hashlib.sha256(run("git", "diff", "--no-ext-diff", "--binary", "HEAD", root=root).encode()).hexdigest(),
         "commit": run("git", "rev-parse", "HEAD", root=root),
         "status": run("git", "status", "--porcelain=v1", "--untracked-files=all", root=root),
@@ -98,6 +100,7 @@ def main():
     parser.add_argument("--allow-dirty", action="store_true", help="Explicitly label a local development build")
     parser.add_argument("--native-inputs", type=Path, required=True,
                         help="Verified archive directory produced by native_inputs.py")
+    parser.add_argument("--preflight", action="store_true", help="Record source, tools and inputs without compiling")
     parser.add_argument("--packaging-only", action="store_true", help="Record that native tests were skipped")
     args = parser.parse_args()
     if sys.platform != "win32" or os.environ.get("MSYSTEM") != "UCRT64":
@@ -113,6 +116,14 @@ def main():
     inputs = verify_archive(args.native_inputs, installed=run("pacman", "-Q"))
     if os.environ.get("CARGO_BUILD_TARGET") or os.environ.get("CARGO_TARGET_DIR"):
         raise RuntimeError("Custom Cargo target/output directories are not supported by this staging recipe.")
+    environment = {
+        "source": before, "toolchain": versions, "native_inputs_manifest_sha256": inputs["manifest_sha256"],
+        "command": BUILD_COMMAND,
+        "environment": {key: os.environ[key] for key in BUILD_ENV if key in os.environ},
+    }
+    write_json(diagnostics / "environment.json", environment)
+    if args.preflight:
+        return
     subprocess.run(BUILD_COMMAND, cwd=ROOT, check=True)
     after = source_state()
     write_json(diagnostics / "source-after.json", after)
@@ -122,7 +133,7 @@ def main():
     if stage.exists():
         shutil.rmtree(stage)
     stage.mkdir(parents=True)
-    shutil.copy2(ROOT / "target/release/papo-gtk.exe", stage)
+    shutil.copy2(ROOT / "target/windows-build/cargo/x86_64-pc-windows-gnu/release/papo-gtk.exe", stage)
     for name in ("Papo.cmd", "README.txt"):
         shutil.copy2(ROOT / "packaging/windows" / name, stage)
     shutil.copy2(ROOT / "LICENSE", stage)

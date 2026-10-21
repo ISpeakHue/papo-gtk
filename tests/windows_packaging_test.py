@@ -2,8 +2,6 @@
 PT-BR: Fixtures Git reais e verificações dos pacotes, sem exigir um runtime Windows.
 """
 import copy
-import importlib.util
-import json
 from pathlib import Path
 import subprocess
 import sys
@@ -24,8 +22,8 @@ class SourceProvenance(unittest.TestCase):
         self.git("init", "-q")
         self.git("config", "core.autocrlf", "false")
         self.git("config", "core.filemode", "false")
-        (self.root / "source.rs").write_text("fn main() {}\n", encoding="utf-8")
-        (self.root / ".gitignore").write_text("target/\ndist/\n", encoding="utf-8")
+        (self.root / "source.rs").write_bytes(b"fn main() {}\n")
+        (self.root / ".gitignore").write_bytes(b"target/\ndist/\n")
         self.commit()
 
     def git(self, *args):

@@ -14,6 +14,9 @@ def main():
                     ["bwrap", "--version"]):
         subprocess.run(command, check=True)
     print("uid_map:", Path("/proc/self/uid_map").read_text(), flush=True)
+    print("process restrictions:", "\n".join(line for line in Path("/proc/self/status").read_text().splitlines()
+          if line.startswith(("Cap", "NoNewPrivs", "Seccomp"))), flush=True)
+    print("LSM:", Path("/proc/self/attr/current").read_text().strip(), flush=True)
     # EN-US: Exercise namespace creation before GTK, preserving the decoder's own seccomp boundary.
     # PT-BR: Exercita a criação de namespaces antes do GTK, preservando o seccomp do decodificador.
     subprocess.run(["bwrap", "--unshare-all", "--die-with-parent", "--ro-bind", "/usr", "/usr",

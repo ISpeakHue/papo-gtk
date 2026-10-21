@@ -17,7 +17,6 @@ permissions:
 
 jobs:
   windows:
-    if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only
     runs-on: windows-2022
     timeout-minutes: 60
     defaults:
@@ -81,6 +80,8 @@ jobs:
         run: python -m unittest discover -s tests -p windows_packaging_test.py
       - name: Retain exact installed native dependency packages
         run: python packaging/windows/native_inputs.py capture target/windows-native-inputs
+      - name: Record native toolchain and build options before compilation
+        run: python packaging/windows/build.py --preflight --native-inputs target/windows-native-inputs
       - name: Check every Rust target on Windows
         if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only
         run: cargo check --locked --all-targets
@@ -143,38 +144,3 @@ jobs:
         run: |
           cargo check --locked --all-targets
           cargo test --locked --no-run
-
-  historical-checkout-diagnosis:
-    if: github.event_name == 'workflow_dispatch' && inputs.packaging_only
-    runs-on: windows-2022
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: c911a1519259dd14a9845cf9e13b9cb64d7aecb4
-          persist-credentials: false
-      - name: Inspect original checkout with Git for Windows
-        shell: pwsh
-        run: |
-          git --version
-          git config --show-origin --get-regexp '^core\.(autocrlf|eol|filemode|symlinks|ignorecase)$'
-          git status --porcelain=v1 --untracked-files=all
-          git diff --stat HEAD
-          git diff --summary HEAD
-      - uses: msys2/setup-msys2@v2
-        with:
-          msystem: UCRT64
-          update: true
-          path-type: minimal
-          install: git
-      - name: Inspect the same source with MSYS2 Git
-        shell: msys2 {0}
-        run: |
-          git --version
-          git config --show-origin --get-regexp '^core\.(autocrlf|eol|filemode|symlinks|ignorecase)$'
-          git status --porcelain=v1 --untracked-files=all
-          git diff --stat HEAD
-          git diff --summary HEAD
-          git diff --numstat HEAD
-          git ls-files --eol
-          git diff -- README.md
-          git diff --ignore-space-at-eol --exit-code HEAD

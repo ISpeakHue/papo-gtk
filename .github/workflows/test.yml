@@ -20,16 +20,11 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    # The manifest requires GTK >= 4.12 and libadwaita >= 1.6.
-    # Media helpers create their own user/network/mount namespaces.
-    container:
-      image: fedora:44
-      options: --security-opt seccomp=unconfined --security-opt apparmor=unconfined
-    # EN-US: Only dependency installation/checkout preparation runs as root.
-    # PT-BR: Apenas a instalação/preparação do checkout executa como root.
+    # EN-US: Keep Fedora's GTK version while running containers without host-root capabilities.
+    # PT-BR: Mantém o GTK do Fedora com contêineres sem capacidades de root do host.
     defaults:
       run:
-        shell: runuser -u papo-ci -- bash --noprofile --norc -e -o pipefail {0}
+        shell: bash packaging/ci/run-fedora.sh {0}
     timeout-minutes: 60
     env:
       CARGO_TERM_COLOR: always
@@ -39,18 +34,16 @@ jobs:
       GSK_RENDERER: cairo
       GTK_A11Y: none
     steps:
-      - name: Install Rust and native build dependencies
-        shell: bash
-        run: dnf install -y bubblewrap git gcc rust cargo pkgconf-pkg-config glib2-devel openssl-devel gtk4-devel libadwaita-devel python3-gobject python3-gstreamer1 gstreamer1-plugins-base gstreamer1-plugins-good gstreamer1-plugins-bad-free libnice-gstreamer1 xorg-x11-server-Xvfb xorg-x11-xauth setxkbmap libXtst dbus-daemon glycin-loaders librsvg2 fontconfig dejavu-sans-fonts util-linux shadow-utils
-      - name: Create isolated unprivileged test account
-        shell: bash
-        run: useradd --create-home --uid 1001 papo-ci
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Grant the test account ownership of the checkout
+      - name: Prepare rootless Fedora test environment
         shell: bash
-        run: chown -R papo-ci:papo-ci "$GITHUB_WORKSPACE"
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman uidmap slirp4netns fuse-overlayfs
+          podman info
+          podman build -t localhost/papo-ci:fedora44 packaging/ci
       - name: Check namespace and sandboxed PNG/SVG loading before GTK
         id: runtime
         env:

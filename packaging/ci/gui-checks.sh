@@ -25,7 +25,9 @@ for papo_case in "${papo_cases[@]}"; do
         timeout --kill-after=10s 240s dbus-run-session -- xvfb-run -a \
         cargo test --locked ui_smoke -- --ignored --test-threads=1 \
         2>&1 | tee "target/ci/gui/$papo_case.log"
-    papo_status=${PIPESTATUS[0]}
+    papo_statuses=("${PIPESTATUS[@]}")
+    papo_status=${papo_statuses[0]}
+    if (( papo_statuses[1] != 0 )); then papo_status=${papo_statuses[1]}; fi
     printf '%s\t%s\n' "$papo_case" "$papo_status" >> target/ci/gui/results.tsv
     if (( papo_status != 0 )); then papo_failures=$((papo_failures + 1)); fi
     if [[ -n ${GITHUB_STEP_SUMMARY:-} ]]; then

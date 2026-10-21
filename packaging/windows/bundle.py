@@ -95,7 +95,7 @@ class Bundle:
             self.tree(stdlib / 'site-packages' / name)
         for relative in ('lib/girepository-1.0', 'lib/gstreamer-1.0', 'lib/gio/modules',
                          'lib/gtk-4.0', 'lib/gdk-pixbuf-2.0', 'share/glib-2.0/schemas',
-                         'share/icons/Adwaita', 'share/icons/hicolor', 'share/mime', 'share/locale',
+                         'share/icons/Adwaita', 'share/icons/hicolor', 'share/mime/packages', 'share/locale',
                          'etc/fonts', 'share/fonts', 'share/gtk-4.0', 'share/libadwaita', 'share/zoneinfo'):
             self.tree(Path(relative), optional=relative not in {'lib/girepository-1.0', 'lib/gstreamer-1.0', 'share/glib-2.0/schemas'})
         scanners = list((self.prefix / 'libexec').glob('gstreamer-1.0/gst-plugin-scanner.exe'))
@@ -148,6 +148,13 @@ class Bundle:
         env = {**os.environ, 'PATH': str(self.root / 'bin') + os.pathsep + os.environ['PATH']}
         schema_dir = self.root / 'share/glib-2.0/schemas'
         subprocess.run([str(self.prefix / 'bin/glib-compile-schemas.exe'), '--strict', str(schema_dir)], check=True, env=env)
+        mime = self.root / 'share/mime'
+        if mime.is_dir():
+            subprocess.run([str(self.prefix / 'bin/update-mime-database.exe'), str(mime)], check=True, env=env)
+        icon_tool = self.prefix / 'bin/gtk4-update-icon-cache.exe'
+        if icon_tool.is_file():
+            for theme in self.root.glob('share/icons/*/index.theme'):
+                subprocess.run([str(icon_tool), '--force', str(theme.parent)], check=True, env=env)
         modules = self.root / 'lib/gio/modules'
         if modules.is_dir():
             subprocess.run([str(self.prefix / 'bin/gio-querymodules.exe'), str(modules)], check=True, env=env)

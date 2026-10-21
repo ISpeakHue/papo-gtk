@@ -43,7 +43,7 @@ The bootstrap preserves Unicode argument boundaries and supports package paths
 with spaces and accents. It creates its GStreamer registry beneath LocalAppData,
 keyed by runtime identity and location. Relocation therefore gets a fresh registry
 instead of stale absolute plugin paths. Python writes no bytecode into the package.
-GSettings and GIO caches are generated during staging; GdkPixbuf loader filenames
+GSettings, MIME, available icon-theme and GIO caches are generated during staging; GdkPixbuf loader filenames
 are relative to the runtime prefix. Machine-wide PATH/settings are never modified.
 
 [MSYS2 Python](https://www.msys2.org/docs/python/) uses a Unix-style standard-library

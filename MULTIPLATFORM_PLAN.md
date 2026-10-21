@@ -98,6 +98,13 @@ remaining GUI assertions are tracked in the provenance record.
    accented characters, with a different working directory and without changing
    the machine-wide `PATH`.
 
+   **Implementation 2026-10-21:** The native bootstrap, package-owned runtime
+   collector, recursive PE import audit, relocatable caches, dependency/license
+   manifests and offline runtime probes are implemented. See
+   [runtime packaging and verification](docs/testing/windows-runtime.md).
+   The checkbox stays open until the clean Windows 11 VM completion check above
+   has recorded evidence; hosted Server CI is tracked separately.
+
 4. [ ] **Establish Windows application identity and native startup.**
 
    Add executable icon/version resources and an application manifest, with DPI

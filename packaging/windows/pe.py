@@ -9,12 +9,12 @@ import struct
 # PT-BR: Estes são componentes do sistema, não DLLs redistribuíveis de GPU/fabricantes.
 SYSTEM_DLLS = set(('''advapi32 avrt bcrypt bcryptprimitives cabinet cfgmgr32 comctl32 comdlg32
     crypt32 cryptbase cryptnet cryptui d2d1 d3d9 d3d11 d3d12 d3dcompiler_47 dcomp dbghelp
-    dhcpcsvc dnsapi dsound dwmapi dwrite dxgi dxva2 evr fwpuclnt gdi32 glu32 hid imagehlp
+    dhcpcsvc dnsapi dsound dwmapi dwrite dxgi dxva2 evr fwpuclnt gdi32 gdiplus glu32 hid imagehlp
     imm32 iphlpapi kernel32 ksuser mf mfplat mfreadwrite mfuuid mmdevapi mpr msacm32 msimg32
     msvcrt msvfw32 ncrypt netapi32 normaliz nsi ntdll ole32 oleacc oleaut32 opengl32 powrprof
     propsys psapi rasapi32 rpcrt4 secur32 setupapi shcore shell32 shlwapi strmiids ucrtbase
     user32 userenv usp10 uxtheme version vfw32 wevtapi windowscodecs winhttp wininet winmm
-    winscard wintrust winusb wlanapi wldap32 ws2_32 wtsapi32 wmvcore rtworkq msdmo
+    winscard wintrust winusb wlanapi wldap32 ws2_32 wsock32 wtsapi32 wmvcore rtworkq msdmo
     dinput8 xinput1_4 resampledmo hnetcfg activeds adsiid ktmw32 urlmon win32u
     sensorsapi mfcore mfcaptureengine avicap32 oledlg authz tdh pdh''').split())
 SYSTEM_DLLS = {name + '.dll' for name in SYSTEM_DLLS} | {'winspool.drv'}

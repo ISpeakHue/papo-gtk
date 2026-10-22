@@ -146,6 +146,7 @@ async fn access_check()->anyhow::Result<()>{
 from ctypes import wintypes as w
 assert not os.environ.get('PAPO_RUNTIME_DIR')
 assert not os.environ.get('HTTP_PROXY') and not os.environ.get('DBUS_SESSION_BUS_ADDRESS')
+print('access: files', file=sys.stderr, flush=True)
 for path, mode in [({private:?}, 'rb'), ({source:?}, 'rb'), (sys.argv[1], 'ab'), ({marker:?}, 'xb')]:
     try:
         f=open(path, mode)
@@ -154,29 +155,35 @@ for path, mode in [({private:?}, 'rb'), ({source:?}, 'rb'), (sys.argv[1], 'ab'),
     else:
         f.close()
         raise AssertionError('private file/input/runtime boundary failed')
+print('access: attributes', file=sys.stderr, flush=True)
 try:
     os.chmod(sys.argv[1], 0o777)
 except OSError:
     pass
 else:
     raise AssertionError('input attributes writable')
+print('access: replace', file=sys.stderr, flush=True)
 try:
     os.rename(os.path.dirname(sys.argv[1]), os.path.dirname(sys.argv[1])+'-replaced')
 except OSError:
     pass
 else:
     raise AssertionError('input directory replaceable')
+print('access: scratch', file=sys.stderr, flush=True)
 with tempfile.TemporaryFile() as f:
     f.write(b'private writable scratch')
+print('access: handles', file=sys.stderr, flush=True)
 kernel=ctypes.WinDLL('kernel32', use_last_error=True)
 kernel.GetFinalPathNameByHandleW.argtypes=[w.HANDLE,w.LPWSTR,w.DWORD,w.DWORD]
 buffer=ctypes.create_unicode_buffer(32768)
 length=kernel.GetFinalPathNameByHandleW(w.HANDLE({handle}), buffer, len(buffer), 0)
 assert not length or not buffer.value.casefold().endswith('private.txt'), 'inherited private handle'
+print('access: credentials', file=sys.stderr, flush=True)
 cred=ctypes.WinDLL('advapi32', use_last_error=True)
 cred.CredReadW.argtypes=[w.LPCWSTR,w.DWORD,w.DWORD,ctypes.POINTER(ctypes.c_void_p)]
 result=ctypes.c_void_p()
 assert not cred.CredReadW({target:?},1,0,ctypes.byref(result)), 'credential read escaped container'
+print('access: tcp', file=sys.stderr, flush=True)
 for family,address in [(socket.AF_INET,('127.0.0.1',{tcp})), (socket.AF_INET6,('::1',{tcp6}))]:
     s=socket.socket(family,socket.SOCK_STREAM); s.settimeout(0.3)
     try:
@@ -187,6 +194,7 @@ for family,address in [(socket.AF_INET,('127.0.0.1',{tcp})), (socket.AF_INET6,('
         raise AssertionError('TCP escaped container')
     finally:
         s.close()
+print('access: udp', file=sys.stderr, flush=True)
 s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
 try:
     s.sendto(b'synthetic',('127.0.0.1',{udp}))
@@ -197,7 +205,7 @@ finally:
 print('access-denied')
 "#,private=private.to_string_lossy(),source=source.to_string_lossy(),marker=marker.to_string_lossy(),handle=handle.as_raw_handle() as usize,tcp=tcp.local_addr()?.port(),tcp6=tcp6.local_addr()?.port(),udp=udp.local_addr()?.port());
     let mut cmd=command(&source,&script)?;let name=cmd.name.clone();let output=cmd.output().await?;
-    anyhow::ensure!(output.status.success()&&String::from_utf8_lossy(&output.stdout).trim()=="access-denied","Native access probe failed: {}",String::from_utf8_lossy(&output.stderr));
+    anyhow::ensure!(output.status.success()&&String::from_utf8_lossy(&output.stdout).trim()=="access-denied","Native access probe failed (exit {:?}, stdout {} bytes): {}",output.status.code(),output.stdout.len(),String::from_utf8_lossy(&output.stderr));
     tokio::time::sleep(Duration::from_millis(50)).await;
     let mut bytes=[0;64];anyhow::ensure!(tcp.accept().is_err()&&tcp6.accept().is_err()&&udp.recv_from(&mut bytes).is_err(),"Sandbox made a network request");
     anyhow::ensure!(!profile_exists(&name)&&!marker.exists(),"Access probe cleanup failed");

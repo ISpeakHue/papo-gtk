@@ -228,17 +228,16 @@ extern "C" DWORD papo_media_run(const wchar_t* runtime,const wchar_t* source,con
         status(SetNamedSecurityInfoW(const_cast<LPWSTR>(input.c_str()),SE_FILE_OBJECT,DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION,nullptr,nullptr,acl,nullptr));
         staging.lock();
         const auto media=staging.file(L"media"); copy_input(source,media,cancel); staging.seal(media);
-        // EN-US: Scan only software conversion plugins; device/network discovery is unnecessary and may hang in a container.
-        // PT-BR: Examina só plugins de conversão por software; descoberta de dispositivos/rede é desnecessária e pode travar no contêiner.
-        const auto plugins=input+L"\\plugins"; require(CreateDirectoryW(plugins.c_str(),nullptr)); staging.lock_plugins(plugins);
-        for(const wchar_t* plugin:{L"coreelements",L"typefindfunctions",L"playback",L"app",L"videoconvertscale",L"videorate",L"isomp4",L"matroska",L"libav",L"vpx",L"videoparsersbad",L"audioparsers",L"audioconvert",L"opus",L"vorbis"}) {
-            const auto filename=L"libgst"+std::wstring(plugin)+L".dll";
-            const auto staged=staging.file(L"plugins\\"+filename);
-            copy_input((std::wstring(runtime)+L"\\lib\\gstreamer-1.0\\"+filename).c_str(),staged,cancel); staging.seal(staged);
-        }
-
         const auto scratch=profile.folder+L"\\AC\\Temp"; CreateDirectoryW((profile.folder+L"\\AC").c_str(),nullptr); CreateDirectoryW(scratch.c_str(),nullptr);
         grant(scratch,profile.sid,FILE_ALL_ACCESS,SUB_CONTAINERS_AND_OBJECTS_INHERIT);
+        // EN-US: Private codec copies stay in profile scratch; the sealed media and original runtime remain read-only.
+        // PT-BR: Cópias privadas dos codecs ficam no scratch do perfil; a mídia selada e o runtime original continuam só leitura.
+        const auto plugins=profile.folder+L"\\papo-codecs"; require(CreateDirectoryW(plugins.c_str(),nullptr));
+        status(SetNamedSecurityInfoW(const_cast<LPWSTR>(plugins.c_str()),SE_FILE_OBJECT,DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION,nullptr,nullptr,acl,nullptr));
+        for(const wchar_t* plugin:{L"coreelements",L"typefindfunctions",L"playback",L"app",L"videoconvertscale",L"videorate",L"isomp4",L"matroska",L"libav",L"vpx",L"videoparsersbad",L"audioparsers",L"audioconvert",L"opus",L"vorbis"}) {
+            const auto filename=L"libgst"+std::wstring(plugin)+L".dll";
+            copy_input((std::wstring(runtime)+L"\\lib\\gstreamer-1.0\\"+filename).c_str(),plugins+L"\\"+filename,cancel);
+        }
         pipe(stdout_read,stdout_write); pipe(stderr_read,stderr_write); pipe(stdin_read,stdin_write); stdin_write.reset();
         require(SetHandleInformation(stdin_read.value,HANDLE_FLAG_INHERIT,HANDLE_FLAG_INHERIT));
         HANDLE inherited[]={stdin_read.value,stdout_write.value,stderr_write.value};

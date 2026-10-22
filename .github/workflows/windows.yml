@@ -15,13 +15,17 @@ on:
         description: Only recheck the portable ZIP from this run ID (does not qualify a release)
         type: string
         default: ''
+      bridge_probe:
+        description: Diagnose native sandbox APIs against an existing runtime ZIP; not release acceptance
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   windows:
-    if: github.event_name != 'workflow_dispatch' || inputs.runtime_artifact_run == ''
+    if: (github.event_name != 'workflow_dispatch' || inputs.runtime_artifact_run == '') && !inputs.bridge_probe
     runs-on: windows-2022
     timeout-minutes: 60
     defaults:
@@ -157,7 +161,7 @@ jobs:
 
   portable-runtime:
     needs: windows
-    if: ${{ always() && !cancelled() && (needs.windows.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.runtime_artifact_run != '')) }}
+    if: ${{ always() && !cancelled() && !inputs.bridge_probe && (needs.windows.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.runtime_artifact_run != '')) }}
     permissions:
       contents: read
       actions: read
@@ -178,7 +182,7 @@ jobs:
         run: ./packaging/windows/check-portable.ps1
 
   macos-foundation:
-    if: github.event_name != 'workflow_dispatch' || (!inputs.packaging_only && inputs.runtime_artifact_run == '')
+    if: (github.event_name != 'workflow_dispatch' || (!inputs.packaging_only && inputs.runtime_artifact_run == '')) && !inputs.bridge_probe
     runs-on: macos-latest
     timeout-minutes: 40
     env:
@@ -192,3 +196,51 @@ jobs:
         run: |
           cargo check --locked --all-targets
           cargo test --locked --no-run
+
+  sandbox-api-prototype:
+    if: github.event_name == 'workflow_dispatch' && inputs.bridge_probe
+    runs-on: windows-2022
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: Papo-Windows-x86_64-developer-preview
+          path: download
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.runtime_artifact_run }}
+      - name: Extract the previously verified runtime for native API diagnostics
+        shell: pwsh
+        run: |
+          $zip=Get-ChildItem download -Filter 'Papo-*-windows-x86_64-dev.zip'|Select-Object -First 1
+          $expected=([IO.File]::ReadAllText($zip.FullName+'.sha256')).Split(' ')[0]
+          if((Get-FileHash $zip.FullName -Algorithm SHA256).Hash -ne $expected){throw 'Archive checksum mismatch'}
+          New-Item -ItemType Directory -Force target | Out-Null
+          $destination=Join-Path $env:RUNNER_TEMP 'Papo-native-sandbox-runtime'
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [IO.Compression.ZipFile]::ExtractToDirectory($zip.FullName,$destination)
+          $package=(Get-ChildItem $destination -Directory|Select-Object -First 1).FullName
+          (Join-Path $package 'runtime')|Set-Content target/probe-runtime.txt -Encoding utf8NoBOM
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          path-type: minimal
+          install: mingw-w64-ucrt-x86_64-gcc
+      - name: Compile the actual bridge and run only the native API compatibility diagnostic
+        shell: msys2 {0}
+        run: |
+          g++ --version
+          g++ -std=c++17 -O2 -static -municode -Wall -Wextra -Werror tests/security/windows_sandbox_probe.cpp src/platform/sandbox/windows.cpp -luserenv -ladvapi32 -lole32 -o target/sandbox-probe.exe
+          papo_runtime_path=$(cat target/probe-runtime.txt | tr -d '\r\n')
+          target/sandbox-probe.exe "$papo_runtime_path" "$(cygpath -w "$PWD/tests/fixtures/chat-h264.mp4")" "$(cygpath -w "$PWD/tests/security/windows_api_probe.py")" > target/prototype.stdout.txt 2> target/prototype.stderr.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Sandbox-API-prototype
+          path: target/prototype.*.txt

@@ -139,3 +139,20 @@ For a resumed fixture, put `check-storage.ps1`, `storage-acceptance.ps1`, the up
 ZIP and its checksum on a new read-only input disk, use a fresh writable results
 disk, and run the storage wrapper as `PapoTester`. The scripts are staged with a
 UTF-8 BOM for Windows PowerShell 5.1.
+
+## Step 6 media isolation acceptance
+
+Use `prepare.py --test media` to run `check-media.ps1` with the packaged
+`--check-media-runtime` command as the standard fixture account. The check uses
+synthetic MP4/MOV/WebM files, private marker/credential fixtures, local listeners
+and disposable AppContainer profiles. It requires healthy poster/animation
+conversion and the denied-access, quotas, cancellation and parent-exit checks.
+It never reads an existing Papo session or uses a real backend.
+
+The wrapper saves `media.json`, native stdout/stderr and `media-child-exit.txt`,
+then shuts Windows down normally. The driver checks the package checksum/source,
+accented/spaced extraction, runtime file hashes, unchanged machine PATH and
+package cleanup. For an installed fixture, stage the new ZIP/checksum,
+`check-media.ps1` and `media-acceptance.ps1` (UTF-8 BOM) on a read-only input disk
+and use a fresh results image. See the
+[isolation contract](../../../docs/testing/windows-isolation.md).

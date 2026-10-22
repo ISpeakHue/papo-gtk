@@ -46,6 +46,7 @@ All ordinary fixtures use synthetic data; real device/server checks are opt-in.
 | [Build provenance and CI diagnostics](docs/testing/build-provenance.md) | Windows source/toolchain/native inputs, sandboxed Fedora runtime and per-case GUI failures |
 | [Windows acceptance matrix](docs/testing/windows.md) | Target desktop builds, feature checklist, existing CI evidence and packaged-release gates |
 | [Windows storage acceptance](docs/testing/windows-storage.md) | Disposable native credentials, cross-process persistence, file names, locks, cancellation and clipboard |
+| [Windows decoder isolation](docs/testing/windows-isolation.md) | AppContainer/Job policy, resource limits, adversarial probes and packaged media-runtime acceptance |
 | [Desktop integration and layout](docs/testing/desktop.md) | Icons, adaptive navigation, header geometry and AppImage media plugins |
 | [Feature workflows and acceptance checks](docs/testing/workflows.md) | Requirements, manual scenarios and account/admin feature walkthroughs |
 | [Accounts and profiles](docs/testing/account.md) | Login request budgets, remembered sessions, profiles, settings and status |

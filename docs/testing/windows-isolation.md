@@ -17,15 +17,18 @@ Each invocation creates a random, per-process `Papo.Media.<PID>.<UUID>` profile.
 The process starts suspended with its AppContainer SID and one application-owned
 capability SID. That capability grants only read/execute access to the runtime;
 it grants no network, device, credential or user-data capability. A shared
-read/execute ACE on the runtime avoids adding thousands of per-job ACEs. It is
+read/execute ACE and explicit write denial on the runtime avoid adding thousands
+of per-job ACEs. Existing equivalent grants are reused without another tree walk.
+This policy is
 not inherited by application settings, caches or the user's home directory.
 Windows system resources available to ordinary AppContainers remain governed by
 Windows policy; this is not a virtual filesystem containing only three paths.
 
 The source is copied, with a 256 MiB bound and cancellation checks, into a
-separately protected read-only subtree. The original path and containing directory
-are never granted. Profile-root child deletion is denied to the container so it
-cannot replace that subtree. Scratch belongs only to this invocation's profile.
+separately protected read-only subtree **outside** the writable profile. The
+original path and containing directory are never granted. Explicit write/delete
+denials and parent-held, non-inherited file/directory handles prevent changing or
+replacing that subtree while the job runs. Scratch belongs only to this invocation's profile.
 Different conversions have distinct AppContainer identities.
 
 Python receives an explicit bundled `PYTHONHOME`, no user site, no current-directory
@@ -33,7 +36,7 @@ module search, no bytecode writes and a clean environment containing only runtim
 and scratch settings plus the Windows system directory. Parent cookies, proxy
 settings and desktop addresses are not inherited. Only stdin (EOF), stdout and
 stderr pipe handles appear in `PROC_THREAD_ATTRIBUTE_HANDLE_LIST`; private file,
-socket and job handles are not inherited. Before resuming, the broker verifies
+socket, sealed-input and job handles are not inherited. Before resuming, the broker verifies
 the token's AppContainer SID, capability SID/count and low integrity level, and
 successfully assigns the process to its job. Setup failures never launch an
 unrestricted fallback.

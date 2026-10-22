@@ -12,6 +12,7 @@
 #include <set>
 #include <algorithm>
 #include <cstring>
+#include <memory>
 
 static bool own_profile(const wchar_t* name);
 static void cleanup_stale();
@@ -64,17 +65,35 @@ void grant(const std::wstring& path, PSID sid, DWORD rights, DWORD inheritance, 
     status(SetNamedSecurityInfoW(const_cast<LPWSTR>(path.c_str()),SE_FILE_OBJECT,
         DACL_SECURITY_INFORMATION|(protect?PROTECTED_DACL_SECURITY_INFORMATION:0),nullptr,nullptr,merged,nullptr));
 }
+constexpr DWORD write_rights=FILE_WRITE_DATA|FILE_APPEND_DATA|FILE_WRITE_EA|FILE_WRITE_ATTRIBUTES|FILE_DELETE_CHILD|DELETE|WRITE_DAC|WRITE_OWNER;
 void runtime_access(const std::wstring& root, PSID sid) {
     // EN-US: A single private capability grants only runtime reads, shared by distinct per-job identities.
     // PT-BR: Uma capacidade privada permite só ler o runtime, compartilhada por identidades distintas por job.
     static std::mutex mutex; static std::set<std::wstring> ready;
     std::lock_guard<std::mutex> lock(mutex);
-    if (!ready.count(root)) {
-        require(GetFileAttributesW((root+L"\\bin\\python.exe").c_str())!=INVALID_FILE_ATTRIBUTES);
-        grant(root,sid,FILE_GENERIC_READ|FILE_GENERIC_EXECUTE,SUB_CONTAINERS_AND_OBJECTS_INHERIT);
-        ready.insert(root);
+    if (ready.count(root)) return;
+    require(GetFileAttributesW((root+L"\\bin\\python.exe").c_str())!=INVALID_FILE_ATTRIBUTES);
+    PACL acl=nullptr; Local descriptor;
+    status(GetNamedSecurityInfoW(root.c_str(),SE_FILE_OBJECT,DACL_SECURITY_INFORMATION,nullptr,nullptr,&acl,nullptr,&descriptor.value));
+    bool readable=false,denied=false;
+    if(acl) for(DWORD i=0;i<acl->AceCount;++i) {
+        void* raw=nullptr; require(GetAce(acl,i,&raw)); auto header=static_cast<ACE_HEADER*>(raw);
+        if((header->AceFlags&(OBJECT_INHERIT_ACE|CONTAINER_INHERIT_ACE))!=(OBJECT_INHERIT_ACE|CONTAINER_INHERIT_ACE)||(header->AceFlags&INHERIT_ONLY_ACE)) continue;
+        if(header->AceType==ACCESS_ALLOWED_ACE_TYPE) {
+            auto ace=static_cast<ACCESS_ALLOWED_ACE*>(raw);
+            if(EqualSid(&ace->SidStart,sid)&&(ace->Mask&(FILE_GENERIC_READ|FILE_GENERIC_EXECUTE))==(FILE_GENERIC_READ|FILE_GENERIC_EXECUTE)) readable=true;
+        } else if(header->AceType==ACCESS_DENIED_ACE_TYPE) {
+            auto ace=static_cast<ACCESS_DENIED_ACE*>(raw);
+            if(EqualSid(&ace->SidStart,sid)&&(ace->Mask&write_rights)==write_rights) denied=true;
+        }
     }
+    // EN-US: Existing installer grants need no WRITE_DAC or repeat subtree propagation at startup.
+    // PT-BR: Permissões já dadas pelo instalador dispensam WRITE_DAC e propagação repetida ao iniciar.
+    if(!denied) grant(root,sid,write_rights,SUB_CONTAINERS_AND_OBJECTS_INHERIT,false,DENY_ACCESS);
+    if(!readable) grant(root,sid,FILE_GENERIC_READ|FILE_GENERIC_EXECUTE,SUB_CONTAINERS_AND_OBJECTS_INHERIT);
+    ready.insert(root);
 }
+
 struct Profile {
     std::wstring name, folder; PSID sid=nullptr; bool created=false;
     explicit Profile(const wchar_t* value):name(value) {
@@ -92,6 +111,32 @@ struct Profile {
     }
     ~Profile() { cleanup(); if(sid) FreeSid(sid); }
 };
+std::wstring input_folder(const std::wstring& name) {
+    wchar_t temp[32768]; const DWORD size=GetTempPathW(32768,temp); require(size>0&&size<32768);
+    return std::wstring(temp)+L"papo-input-"+name;
+}
+struct Input {
+    std::wstring folder; std::vector<std::wstring> files; Handle directory,plugins;
+    std::vector<std::unique_ptr<Handle>> sealed;
+    explicit Input(const std::wstring& name):folder(input_folder(name)) { require(CreateDirectoryW(folder.c_str(),nullptr)); }
+    void lock() { directory.reset(CreateFileW(folder.c_str(),FILE_READ_ATTRIBUTES,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS,nullptr)); require(directory.value!=INVALID_HANDLE_VALUE); }
+    void seal(const std::wstring& path) { auto handle=std::make_unique<Handle>();
+        handle->reset(CreateFileW(path.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr)); require(handle->value!=INVALID_HANDLE_VALUE); sealed.push_back(std::move(handle)); }
+    void lock_plugins(const std::wstring& path) { plugins.reset(CreateFileW(path.c_str(),FILE_READ_ATTRIBUTES,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS,nullptr)); require(plugins.value!=INVALID_HANDLE_VALUE); }
+    std::wstring file(const std::wstring& suffix) { const auto path=folder+L"\\"+suffix; files.push_back(path); return path; }
+    bool cleanup() {
+        sealed.clear(); plugins.reset(); directory.reset();
+        for(int attempt=0;attempt<40;++attempt) {
+            for(const auto& file:files) DeleteFileW(file.c_str());
+            RemoveDirectoryW((folder+L"\\plugins").c_str());
+            if(RemoveDirectoryW(folder.c_str())||GetLastError()==ERROR_PATH_NOT_FOUND||GetLastError()==ERROR_FILE_NOT_FOUND) return true;
+            Sleep(25);
+        }
+        return false;
+    }
+    ~Input() { cleanup(); }
+};
+
 struct Attributes {
     std::vector<unsigned char> memory; LPPROC_THREAD_ATTRIBUTE_LIST list=nullptr;
     Attributes() { SIZE_T size=0; InitializeProcThreadAttributeList(nullptr,2,0,&size); memory.resize(size);
@@ -164,29 +209,32 @@ extern "C" DWORD papo_media_run(const wchar_t* runtime,const wchar_t* source,con
         cancelled(cancel); const ULONGLONG started=GetTickCount64();
         Capability capability; runtime_access(runtime,capability.sid); cancelled(cancel); cleanup_stale();
         Profile profile(name); profile.locate();
-        Job job; Handle process,thread,stdout_read,stdout_write,stderr_read,stderr_write,stdin_read,stdin_write;
+        Input staging(profile.name); Job job; Handle process,thread,stdout_read,stdout_write,stderr_read,stderr_write,stdin_read,stdin_write;
         // EN-US: Input is a separate read-only grant, never the source directory or profile scratch.
         // PT-BR: A entrada recebe permissão separada de só leitura, nunca a pasta original ou o scratch do perfil.
-        grant(profile.folder,profile.sid,FILE_DELETE_CHILD,NO_INHERITANCE,false,DENY_ACCESS);
-        const std::wstring input=profile.folder+L"\\papo-input";
-        require(CreateDirectoryW(input.c_str(),nullptr));
+        const std::wstring input=staging.folder;
         // Remove inherited package-write rights from this subtree; keep the desktop user's full access.
         // Remove a escrita herdada do pacote nesta subárvore; mantém acesso total do usuário desktop.
         HANDLE raw=nullptr; require(OpenProcessToken(GetCurrentProcess(),TOKEN_QUERY,&raw)); Handle token(raw);
         auto user=token_info(token.value,TokenUser); PSID user_sid=reinterpret_cast<TOKEN_USER*>(user.data())->User.Sid;
-        EXPLICIT_ACCESSW entries[2]{};
+        Local system; require(ConvertStringSidToSidW(L"S-1-5-18",&system.value));
+        EXPLICIT_ACCESSW entries[4]{};
         for(auto& e:entries) { e.grfAccessMode=SET_ACCESS; e.grfInheritance=SUB_CONTAINERS_AND_OBJECTS_INHERIT; e.Trustee.TrusteeForm=TRUSTEE_IS_SID; }
         entries[0].Trustee.ptstrName=static_cast<LPWSTR>(user_sid); entries[0].grfAccessPermissions=FILE_ALL_ACCESS;
         entries[1].Trustee.ptstrName=static_cast<LPWSTR>(profile.sid); entries[1].grfAccessPermissions=FILE_GENERIC_READ|FILE_GENERIC_EXECUTE;
-        PACL acl=nullptr; status(SetEntriesInAclW(2,entries,nullptr,&acl)); Local acl_owner; acl_owner.value=acl;
+        entries[2].Trustee.ptstrName=static_cast<LPWSTR>(profile.sid); entries[2].grfAccessMode=DENY_ACCESS; entries[2].grfAccessPermissions=write_rights;
+        entries[3].Trustee.ptstrName=static_cast<LPWSTR>(system.value); entries[3].grfAccessPermissions=FILE_ALL_ACCESS;
+        PACL acl=nullptr; status(SetEntriesInAclW(4,entries,nullptr,&acl)); Local acl_owner; acl_owner.value=acl;
         status(SetNamedSecurityInfoW(const_cast<LPWSTR>(input.c_str()),SE_FILE_OBJECT,DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION,nullptr,nullptr,acl,nullptr));
-        const auto media=input+L"\\media"; copy_input(source,media,cancel);
+        staging.lock();
+        const auto media=staging.file(L"media"); copy_input(source,media,cancel); staging.seal(media);
         // EN-US: Scan only software conversion plugins; device/network discovery is unnecessary and may hang in a container.
         // PT-BR: Examina só plugins de conversão por software; descoberta de dispositivos/rede é desnecessária e pode travar no contêiner.
-        const auto plugins=input+L"\\plugins"; require(CreateDirectoryW(plugins.c_str(),nullptr));
+        const auto plugins=input+L"\\plugins"; require(CreateDirectoryW(plugins.c_str(),nullptr)); staging.lock_plugins(plugins);
         for(const wchar_t* plugin:{L"coreelements",L"typefindfunctions",L"playback",L"app",L"videoconvertscale",L"videorate",L"isomp4",L"matroska",L"libav",L"vpx",L"videoparsersbad",L"audioparsers",L"audioconvert",L"opus",L"vorbis"}) {
             const auto filename=L"libgst"+std::wstring(plugin)+L".dll";
-            copy_input((std::wstring(runtime)+L"\\lib\\gstreamer-1.0\\"+filename).c_str(),plugins+L"\\"+filename,cancel);
+            const auto staged=staging.file(L"plugins\\"+filename);
+            copy_input((std::wstring(runtime)+L"\\lib\\gstreamer-1.0\\"+filename).c_str(),staged,cancel); staging.seal(staged);
         }
 
         const auto scratch=profile.folder+L"\\AC\\Temp"; CreateDirectoryW((profile.folder+L"\\AC").c_str(),nullptr); CreateDirectoryW(scratch.c_str(),nullptr);
@@ -225,7 +273,7 @@ extern "C" DWORD papo_media_run(const wchar_t* runtime,const wchar_t* source,con
         // PT-BR: Após encerrar a árvore resta apenas a quantidade limitada dos buffers de pipe.
         for(int i=0;i<4;++i) { drain(stdout_read.value,1,out,(48ULL<<20)+4096,sink,context); drain(stderr_read.value,2,err,65536,sink,context); }
         process.reset(); stdout_read.reset(); stderr_read.reset(); job.handle.reset();
-        if(!profile.cleanup()) throw Failure{ERROR_DIR_NOT_EMPTY};
+        if(!staging.cleanup()||!profile.cleanup()) throw Failure{ERROR_DIR_NOT_EMPTY};
         return 0;
     } catch(const Failure& error) { return error.code; }
       catch(...) { return ERROR_GEN_FAILURE; }
@@ -249,28 +297,55 @@ extern "C" DWORD papo_media_profile_exists(const wchar_t* name) noexcept {
     PWSTR folder=nullptr; const HRESULT result=GetAppContainerFolderPath(text,&folder);
     const bool exists=SUCCEEDED(result)&&GetFileAttributesW(folder)!=INVALID_FILE_ATTRIBUTES;
     if(folder) CoTaskMemFree(folder);
-    LocalFree(text); FreeSid(sid); return exists?1:0;
+    LocalFree(text); FreeSid(sid); if(exists) return 1;
+    try { return GetFileAttributesW(input_folder(name).c_str())!=INVALID_FILE_ATTRIBUTES?1:0; } catch(...) { return 1; }
 }
 extern "C" DWORD papo_media_profile_remove(const wchar_t* name) noexcept {
     if(!own_profile(name)) return ERROR_ACCESS_DENIED;
     return static_cast<DWORD>(DeleteAppContainerProfile(name));
 }
 
+static bool dead_owner(const wchar_t* name) {
+    if(!own_profile(name)) return false;
+    wchar_t* end=nullptr; const unsigned long pid=wcstoul(name+11,&end,10);
+    if(!pid||pid==GetCurrentProcessId()||!end||*end!=L'.') return false;
+    HANDLE process=OpenProcess(SYNCHRONIZE,FALSE,pid);
+    if(process) { const bool dead=WaitForSingleObject(process,0)==WAIT_OBJECT_0; CloseHandle(process); return dead; }
+    return GetLastError()==ERROR_INVALID_PARAMETER;
+}
+static void remove_stale(const wchar_t* name) {
+    if(!dead_owner(name)) return;
+    try {
+        const auto input=input_folder(name); const auto attributes=GetFileAttributesW(input.c_str());
+        if(attributes!=INVALID_FILE_ATTRIBUTES) {
+            // EN-US: Never follow reparse points during host-side orphan cleanup.
+            // PT-BR: Nunca segue pontos de nova análise ao limpar órfãos pelo processo host.
+            if(attributes&FILE_ATTRIBUTE_REPARSE_POINT) { RemoveDirectoryW(input.c_str()); }
+            else {
+                DeleteFileW((input+L"\\media").c_str()); const auto plugins=input+L"\\plugins";
+                const auto plugin_attributes=GetFileAttributesW(plugins.c_str());
+                if(plugin_attributes!=INVALID_FILE_ATTRIBUTES&&!(plugin_attributes&FILE_ATTRIBUTE_REPARSE_POINT)) {
+                    WIN32_FIND_DATAW plugin{}; HANDLE files=FindFirstFileW((plugins+L"\\libgst*.dll").c_str(),&plugin);
+                    if(files!=INVALID_HANDLE_VALUE) { do { if(!(plugin.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)) DeleteFileW((plugins+L"\\"+plugin.cFileName).c_str()); } while(FindNextFileW(files,&plugin)); FindClose(files); }
+                }
+                RemoveDirectoryW(plugins.c_str()); RemoveDirectoryW(input.c_str());
+            }
+        }
+        DeleteAppContainerProfile(name);
+    } catch(...) {}
+}
 static void cleanup_stale() {
-    // EN-US: Reap only Papo's validated random profiles whose owning process is gone; never touch other packages.
-    // PT-BR: Remove só perfis aleatórios validados do Papo cujo processo pai terminou; não toca outros pacotes.
-    DWORD size=GetEnvironmentVariableW(L"LOCALAPPDATA",nullptr,0); if(!size||size>32768) return;
-    std::vector<wchar_t> folder(size); if(!GetEnvironmentVariableW(L"LOCALAPPDATA",folder.data(),size)) return;
-    const std::wstring pattern=std::wstring(folder.data())+L"\\Packages\\Papo.Media.*";
-    WIN32_FIND_DATAW entry{}; HANDLE search=FindFirstFileW(pattern.c_str(),&entry); if(search==INVALID_HANDLE_VALUE) return;
-    do {
-        if((entry.dwFileAttributes&FILE_ATTRIBUTE_REPARSE_POINT)||!own_profile(entry.cFileName)) continue;
-        wchar_t* end=nullptr; const unsigned long pid=wcstoul(entry.cFileName+11,&end,10);
-        if(!pid||pid==GetCurrentProcessId()||!end||*end!=L'.') continue;
-        HANDLE process=OpenProcess(SYNCHRONIZE,FALSE,pid);
-        if(process) { const bool dead=WaitForSingleObject(process,0)==WAIT_OBJECT_0; CloseHandle(process); if(!dead) continue; }
-        else if(GetLastError()!=ERROR_INVALID_PARAMETER) continue;
-        DeleteAppContainerProfile(entry.cFileName);
-    } while(FindNextFileW(search,&entry));
-    FindClose(search);
+    // EN-US: Inspect only our strict disposable prefixes, including a sealed input whose profile was already removed.
+    // PT-BR: Inspeciona só nossos prefixos descartáveis restritos, incluindo entradas cujo perfil já foi removido.
+    DWORD size=GetEnvironmentVariableW(L"LOCALAPPDATA",nullptr,0);
+    if(size&&size<=32768) {
+        std::vector<wchar_t> folder(size);
+        if(GetEnvironmentVariableW(L"LOCALAPPDATA",folder.data(),size)) {
+            WIN32_FIND_DATAW entry{}; HANDLE search=FindFirstFileW((std::wstring(folder.data())+L"\\Packages\\Papo.Media.*").c_str(),&entry);
+            if(search!=INVALID_HANDLE_VALUE) { do { if(!(entry.dwFileAttributes&FILE_ATTRIBUTE_REPARSE_POINT)) remove_stale(entry.cFileName); } while(FindNextFileW(search,&entry)); FindClose(search); }
+        }
+    }
+    wchar_t temp[32768]; const DWORD length=GetTempPathW(32768,temp); if(!length||length>=32768) return;
+    WIN32_FIND_DATAW entry{}; HANDLE search=FindFirstFileW((std::wstring(temp)+L"papo-input-Papo.Media.*").c_str(),&entry);
+    if(search!=INVALID_HANDLE_VALUE) { do { remove_stale(entry.cFileName+11); } while(FindNextFileW(search,&entry)); FindClose(search); }
 }

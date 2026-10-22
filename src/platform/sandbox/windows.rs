@@ -15,7 +15,7 @@ impl Event{fn new()->io::Result<Self>{let handle=unsafe{CreateEventW(std::ptr::n
 impl Drop for Event{fn drop(&mut self){unsafe{CloseHandle(self.handle());}}}
 struct Cancel(Arc<Event>);
 impl Drop for Cancel{fn drop(&mut self){unsafe{SetEvent(self.0.handle());}}}
-#[derive(Default)]struct Buffers{stdout:Vec<u8>,stderr:Vec<u8>}
+#[derive(Default)]struct Buffers{stdout:Vec<u8>,stderr:Vec<u8>,done:bool,error:u32}
 extern "C" fn collect(context:*mut c_void,channel:i32,bytes:*const u8,size:usize){
     // EN-US: The bridge calls synchronously on this blocking worker, after checking each channel's cap.
     // PT-BR: A ponte chama de modo síncrono neste worker bloqueante após verificar o limite do canal.
@@ -31,16 +31,15 @@ impl Command{
         tokio::task::spawn_blocking(move||{
             let mut exit_code=1;let error=unsafe{papo_media_run(runtime.as_ptr(),source.as_ptr(),name.as_ptr(),script.as_ptr(),event.handle(),timeout,
                 collect,Arc::as_ptr(&buffers).cast_mut().cast(),&mut exit_code)};
+            let mut buffers=buffers.lock().unwrap_or_else(|e|e.into_inner());buffers.done=true;buffers.error=error;
             if error!=0{return Err(io::Error::from_raw_os_error(error as i32));}
-            let mut buffers=buffers.lock().unwrap_or_else(|e|e.into_inner());
             Ok(Output{status:ExitStatus::from_raw(exit_code),stdout:std::mem::take(&mut buffers.stdout),stderr:std::mem::take(&mut buffers.stderr)})
         }).await.map_err(io::Error::other)?
     }
 }
 pub(crate) fn command(path:&Path,script:&str)->anyhow::Result<Command>{
     anyhow::ensure!(!script.contains('\0')&&script.encode_utf16().count()<12000,"Invalid media helper script");
-    let runtime=std::env::var_os("PAPO_RUNTIME_DIR").filter(|v|!v.is_empty()).map(PathBuf::from)
-        .or_else(||std::env::current_exe().ok().and_then(|p|p.parent()?.parent().map(Path::to_path_buf))).ok_or_else(||anyhow::anyhow!("Media runtime unavailable"))?.canonicalize()?;
+    let runtime=crate::platform::runtime::directory().ok_or_else(||anyhow::anyhow!("Media runtime unavailable"))?.canonicalize()?;
     anyhow::ensure!(runtime.join("bin/python.exe").is_file(),"Packaged media interpreter missing");
     Ok(Command{runtime,source:path.canonicalize()?,script:script.to_owned(),name:format!("Papo.Media.{}.{}",std::process::id(),uuid::Uuid::new_v4()),timeout:25000,buffers:Arc::default()})
 }
@@ -71,14 +70,15 @@ pub(crate) async fn check()->anyhow::Result<serde_json::Value>{
 fn profile_exists(name:&str)->bool{unsafe{papo_media_profile_exists(wide(name).as_ptr())!=0}}
 fn alive(pid:u32)->bool{
     use windows_sys::Win32::System::Threading::{OpenProcess,WaitForSingleObject,PROCESS_SYNCHRONIZE};
-    let handle=unsafe{OpenProcess(PROCESS_SYNCHRONIZE,0,pid)};if handle.is_null(){return false;}
+    let handle=unsafe{OpenProcess(PROCESS_SYNCHRONIZE,0,pid)};if handle.is_null(){return unsafe{windows_sys::Win32::Foundation::GetLastError()}!=87;}
     let running=unsafe{WaitForSingleObject(handle,0)}==258;unsafe{CloseHandle(handle);}running
 }
-const TREE:&str="import os, subprocess, sys, time\nchild=subprocess.Popen([sys.executable,'-I','-c','import time; time.sleep(60)'], close_fds=True)\nprint(str(os.getpid())+','+str(child.pid), flush=True)\ntime.sleep(60)";
+const TREE:&str="import os, subprocess, sys, time\nchild=subprocess.Popen([sys.executable,'-s','-P','-B','-u','-c',\"import time; print('ready', flush=True); time.sleep(60)\"], close_fds=True, stdout=subprocess.PIPE, creationflags=0x08000000)\nassert child.stdout.readline().strip()==b'ready' and child.poll() is None\nprint(str(os.getpid())+','+str(child.pid), flush=True)\ntime.sleep(60)";
 async fn pids(buffers:&Mutex<Buffers>)->anyhow::Result<Vec<u32>>{
     tokio::time::timeout(Duration::from_secs(12),async{loop{
-        let output=buffers.lock().unwrap_or_else(|e|e.into_inner()).stdout.clone();
+        let (output,done,error,stderr)={let buffers=buffers.lock().unwrap_or_else(|e|e.into_inner());(buffers.stdout.clone(),buffers.done,buffers.error,buffers.stderr.clone())};
         if output.contains(&b'\n'){return String::from_utf8(output)?.trim().split(',').map(|s|s.parse::<u32>().map_err(Into::into)).collect::<anyhow::Result<Vec<_>>>();}
+        anyhow::ensure!(!done,"Tree helper exited before readiness (native code {error}): {}",String::from_utf8_lossy(&stderr));
         tokio::time::sleep(Duration::from_millis(20)).await;
     }}).await?
 }

@@ -38,11 +38,15 @@ pub fn python() -> tokio::process::Command {
     cmd
 }
 
+// EN-US: Keep decoder and ordinary worker discovery on the same packaged/developer runtime root.
+// PT-BR: Mantém a descoberta dos decodificadores e demais workers na mesma raiz de runtime.
+pub(crate) fn directory()->Option<PathBuf>{
+    std::env::var_os("PAPO_RUNTIME_DIR").filter(|p| !p.is_empty()).map(PathBuf::from)
+        .or_else(|| std::env::current_exe().ok().and_then(|exe| runtime_root(&exe,CURRENT.os)))
+}
 pub fn configure() {
     if CURRENT.os == Os::Linux { return; }
-    let root = std::env::var_os("PAPO_RUNTIME_DIR").filter(|p| !p.is_empty()).map(PathBuf::from)
-        .or_else(|| std::env::current_exe().ok().and_then(|exe| runtime_root(&exe, CURRENT.os)));
-    let Some(root) = root.filter(|p| p.is_dir()) else { return; };
+    let Some(root) = directory().filter(|p| p.is_dir()) else { return; };
     let python = root.join(if CURRENT.os == Os::Windows { "bin/python.exe" } else { "bin/python3" });
     if python.is_file() {
         set_default("PAPO_PYTHON", python.as_os_str());

@@ -81,7 +81,7 @@ static int launch(int argc, wchar_t **argv) {
     if (!absolute_length || absolute_length >= CAP) die(L"Invalid runtime path");
     wcscpy(root, absolute);
     path(bin, root, L"bin");
-    int shell = argc > 1 && (wcscmp(argv[1], L"--register-desktop") == 0 || wcscmp(argv[1], L"--unregister-desktop") == 0 || wcscmp(argv[1], L"--desktop-info") == 0 || wcscmp(argv[1], L"--test-toast") == 0 || wcscmp(argv[1], L"--clear-test-toast") == 0);
+    int shell = argc > 1 && (wcscmp(argv[1], L"--register-desktop") == 0 || wcscmp(argv[1], L"--unregister-desktop") == 0 || wcscmp(argv[1], L"--desktop-info") == 0 || wcscmp(argv[1], L"--test-toast") == 0 || wcscmp(argv[1], L"--clear-test-toast") == 0 || wcscmp(argv[1], L"--test-toast-info") == 0);
     path(target, root, shell ? L"bin\\papo-shell.exe" : L"bin\\papo-gtk.exe");
     if (!file(target)) die(L"Bundled application is missing; extract the entire ZIP");
     wchar_t marker[CAP]; path(marker, root, L"runtime.id");

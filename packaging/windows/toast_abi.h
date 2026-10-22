@@ -25,3 +25,11 @@ struct ToastHistory : IInspectable {
     virtual HRESULT STDMETHODCALLTYPE RemoveGroupedTagWithId(HSTRING,HSTRING,HSTRING)=0;
 };
 struct ToastManager2 : IInspectable {virtual HRESULT STDMETHODCALLTYPE get_History(ToastHistory**)=0;};
+struct ToastVector : IInspectable {
+    virtual HRESULT STDMETHODCALLTYPE GetAt(UINT32,IInspectable**)=0;
+    virtual HRESULT STDMETHODCALLTYPE get_Size(UINT32*)=0;
+};
+struct ToastHistory2 : IInspectable {
+    virtual HRESULT STDMETHODCALLTYPE GetHistory(ToastVector**)=0;
+    virtual HRESULT STDMETHODCALLTYPE GetHistoryWithId(HSTRING,ToastVector**)=0;
+};

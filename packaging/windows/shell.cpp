@@ -68,6 +68,13 @@ static void toast(const wchar_t* id,bool show=true){
     if(show){Com<ToastNotifier> notifier;check(manager->CreateToastNotifierWithId(String(PAPO_APP_ID),notifier.out()));check(notifier->Show(notification.p));}
 }
 static void clear_toast(){Com<ToastManager2> manager;check(RoGetActivationFactory(String(L"Windows.UI.Notifications.ToastNotificationManager"),guid(L"{7AB93C52-0E48-4750-BA9D-1A4113981847}"),(void**)manager.out()));Com<ToastHistory> history;check(manager->get_History(history.out()));check(history->RemoveGroupedTagWithId(String(L"identity-probe"),String(L"papo-step4"),String(PAPO_APP_ID)));}
+static void toast_info(){
+    Com<ToastManager2> manager;check(RoGetActivationFactory(String(L"Windows.UI.Notifications.ToastNotificationManager"),guid(L"{7AB93C52-0E48-4750-BA9D-1A4113981847}"),(void**)manager.out()));
+    Com<ToastHistory> history;check(manager->get_History(history.out()));Com<ToastHistory2> query;check(history->QueryInterface(guid(L"{3BC3D253-2F31-4092-9129-8AD5ABF067DA}"),(void**)query.out()));
+    Com<ToastVector> entries;check(query->GetHistoryWithId(String(PAPO_APP_ID),entries.out()));UINT32 size=0;check(entries->get_Size(&size));bool found=false;
+    for(UINT32 i=0;i<size&&i<1000;i++){Com<IInspectable> item;check(entries->GetAt(i,item.out()));Com<ToastNames> names;check(item->QueryInterface(guid(L"{9DFB9FD1-143A-490E-90BF-B9FBA7132DE7}"),(void**)names.out()));HSTRING tag;check(names->get_Tag(&tag));UINT32 length;auto text=WindowsGetStringRawBuffer(tag,&length);found=found||std::wstring(text,length)==L"identity-probe";WindowsDeleteString(tag);}
+    std::printf("{\"count\":%u,\"test_present\":%s}\n",size,found?"true":"false");
+}
 static void inspect(){
     Com<IShellLinkW> link;shell_link(link,true);Com<IPropertyStore> properties;check(link->QueryInterface(IID_PPV_ARGS(properties.out())));
     PROPVARIANT value;PropVariantInit(&value);check(properties->GetValue(PKEY_AppUserModel_ID,&value));bool app=value.vt==VT_LPWSTR&&wcscmp(value.pwszVal,PAPO_APP_ID)==0;PropVariantClear(&value);
@@ -85,6 +92,7 @@ int wmain(int argc,wchar_t** argv){
         else if(argc==2&&wcscmp(argv[1],L"--desktop-info")==0)inspect();
         else if(argc==3&&wcscmp(argv[1],L"--test-toast")==0)toast(argv[2]);
         else if(argc==2&&wcscmp(argv[1],L"--clear-test-toast")==0)clear_toast();
+        else if(argc==2&&wcscmp(argv[1],L"--test-toast-info")==0)toast_info();
         else if(argc==2&&wcscmp(argv[1],L"--self-check")==0){toast(L"70b0d588-40ac-4314-86bf-130ad1c9b2ee",false);std::puts("{\"winrt_abi\":true}");}
         else throw std::runtime_error("Unknown shell command");
         RoUninitialize();return 0;

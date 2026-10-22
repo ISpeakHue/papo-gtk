@@ -122,13 +122,13 @@ class Bundle:
             obj = rc.with_suffix('.o')
             subprocess.run(['windres', '-i', str(rc), '-o', str(obj), '-O', 'coff'], check=True)
             shell = name == 'papo-shell.exe'
-            source = ROOT / ('packaging/windows/shell.cpp' if shell else 'packaging/windows/launcher.c')
+            native_source = ROOT / ('packaging/windows/shell.cpp' if shell else 'packaging/windows/launcher.c')
             command = ['g++' if shell else 'gcc', *flags]
             if shell:
                 command += ['-std=c++17', '-I', str(directory)]
             elif name == 'Papo.exe':
                 command += ['-DPAPO_GUI', '-mwindows']
-            command += [str(source), str(obj), '-lshell32']
+            command += [str(native_source), str(obj), '-lshell32']
             if shell:
                 command += ['-lole32', '-lpropsys', '-lshlwapi', '-lruntimeobject', '-luuid']
             command += ['-o', str(self.root / 'bin' / name if shell else self.stage / name)]

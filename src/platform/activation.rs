@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use uuid::Uuid;
 
+#[cfg(windows)]
 #[derive(Debug,Clone,Copy,PartialEq,Eq)]
 pub enum Activation { Present, Ticket(Uuid) }
 pub fn parse_uri(value:&str)->Option<Uuid>{
@@ -38,6 +39,9 @@ pub fn check_policy()->anyhow::Result<()>{
     router.account(Some(owner));let id=router.issue(destination,100).unwrap();anyhow::ensure!(router.resolve(id,100,|_|true).is_none(),"Expired activation accepted");
     let id=router.issue(destination,100).unwrap();anyhow::ensure!(router.resolve(id,0,|_|false).is_none(),"Unreadable channel accepted");
     let id=router.issue(destination,100).unwrap();router.account(None);anyhow::ensure!(router.resolve(id,0,|_|true).is_none(),"Logged-out activation accepted");
+    router.account(Some(Account{server:"https://fixture.invalid/api".into(),user:Uuid::new_v4(),session:Uuid::new_v4()}));
+    for _ in 0..64{anyhow::ensure!(router.issue(destination,100).is_some(),"Ticket capacity unexpectedly exhausted");}
+    anyhow::ensure!(router.issue(destination,100).is_none(),"Ticket registry grew beyond its bound");
     Ok(())
 }
 #[cfg(test)]mod tests{
@@ -47,6 +51,5 @@ pub fn check_policy()->anyhow::Result<()>{
     #[test]fn shell_uri_rejects_extra_data_and_noncanonical_identifiers(){
         let id=Uuid::new_v4();let uri=format!("papo-notification://open/{id}");assert_eq!(parse_uri(&uri),Some(id));
         for invalid in [format!("{uri}?token=secret"),format!("{uri}/other"),uri.to_uppercase(),"papo-notification://open/00000000-0000-0000-0000-000000000000".into(),"https://fixture.invalid".into()]{assert!(parse_uri(&invalid).is_none());}
-        assert_eq!(Activation::Present,Activation::Present);assert_eq!(Activation::Ticket(id),Activation::Ticket(id));
     }
 }

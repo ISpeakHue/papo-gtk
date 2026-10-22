@@ -124,6 +124,7 @@ def main():
     parser.add_argument('--iso-sha256', required=True)
     parser.add_argument('--archive', required=True, type=Path)
     parser.add_argument('--directory', type=Path, default=ROOT / 'target/windows-clean-vm')
+    parser.add_argument('--test', choices=['runtime','identity'], default='runtime')
     parser.add_argument('--firmware', type=Path, default=Path('/usr/share/qemu/firmware/30-edk2-ovmf-4m-qcow2-x64-sb-enrolled.json'))
     args = parser.parse_args()
     directory = args.directory.resolve()
@@ -139,17 +140,17 @@ def main():
     media = directory / 'input'
     media.mkdir(exist_ok=True)
     answer_file(media / 'Autounattend.xml')
-    for source in (archive, checksum, ROOT / 'packaging/windows/check-portable.ps1', Path(__file__).with_name('acceptance.ps1')):
+    for source in (archive, checksum, ROOT / 'packaging/windows/check-portable.ps1', ROOT / 'packaging/windows/check-identity.ps1', Path(__file__).with_name('acceptance.ps1'), Path(__file__).with_name('identity-acceptance.ps1')):
         shutil.copy2(source, media / source.name)
     (media / 'setup.ps1').write_text(r'''$ErrorActionPreference = 'Stop'
 $destination = 'C:\PapoAcceptance'
 New-Item -ItemType Directory -Force $destination | Out-Null
-foreach ($pattern in @('acceptance.ps1', 'check-portable.ps1', '*.zip', '*.sha256')) {
+foreach ($pattern in @('acceptance.ps1', 'identity-acceptance.ps1', 'check-portable.ps1', 'check-identity.ps1', '*.zip', '*.sha256')) {
     Copy-Item (Join-Path $PSScriptRoot $pattern) $destination
 }
 $startup = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Startup\PapoAcceptance.cmd"
-'@powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\PapoAcceptance\acceptance.ps1' | Set-Content $startup -Encoding ASCII
-''', encoding='utf-8')
+'@powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\PapoAcceptance\ACCEPTANCE_ENTRY' | Set-Content $startup -Encoding ASCII
+'''.replace('ACCEPTANCE_ENTRY', 'identity-acceptance.ps1' if args.test == 'identity' else 'acceptance.ps1'), encoding='utf-8')
     run('xorriso', '-as', 'mkisofs', '-quiet', '-J', '-r', '-V', 'PAPO_INPUT', '-o', directory / 'input.iso', media)
     run('qemu-img', 'create', '-f', 'qcow2', directory / 'os.qcow2', '80G')
     results = directory / 'results.img'
@@ -168,7 +169,7 @@ $startup = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Startup\PapoA
     shutil.copy2(mapping['nvram-template']['filename'], variables)
     manifest = {'schema': 1, 'iso': str(iso), 'iso_sha256': args.iso_sha256.lower(),
                 'archive': archive.name, 'archive_sha256': digest(archive),
-                'network': 'none', 'memory_mib': 6144, 'cpus': 4,
+                'test': args.test, 'network': 'none', 'memory_mib': 6144, 'cpus': 4,
                 'accounts': {'administrator': 'PapoTestAdmin', 'acceptance': 'PapoTester'},
                 'firmware': {'executable': mapping['executable'], 'variables': str(variables), 'variable_format': variable_format, 'descriptor': str(args.firmware), 'code_sha256': digest(Path(mapping['executable']['filename']))},
                 'hypervisor': subprocess.check_output(['qemu-system-x86_64', '--version'], text=True).splitlines()[0]}

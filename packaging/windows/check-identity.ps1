@@ -14,6 +14,8 @@ Add-Type @'
 using System;
 using System.Runtime.InteropServices;
 public static class PapoIdentityNative {
+ [DllImport("shcore.dll")] public static extern int GetProcessDpiAwareness(IntPtr process,out int awareness);
+ [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr hwnd);
  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hwnd,int command);
  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hwnd);
  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
@@ -93,12 +95,13 @@ try{
  }
  $env:GSK_RENDERER='cairo';$env:GTK_A11Y='none';$env:PYTHONUTF8='1'
  $report.runtime=Cli @('--check-packaged-runtime')
+ $report.activation_policy=Cli @('--check-activation-policy')
  Cli @('--register-desktop')|Out-Null;$registered=$true;$report.desktop=Cli @('--desktop-info')|ConvertFrom-Json
  $shortcut=Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Papo.lnk'
  # EN-US: Normal launch uses the GUI entry point, from an unrelated working directory.
  # PT-BR: A inicialização normal usa a entrada gráfica a partir de outro diretório.
  $script:bootstrap=Start-Process $gui -WorkingDirectory $env:SystemRoot -PassThru -RedirectStandardOutput (Join-Path $OutputDirectory 'application.stdout.txt') -RedirectStandardError (Join-Path $OutputDirectory 'application.stderr.txt');$null=$bootstrap.Handle
- $script:ownedWindow=WaitWindow;Start-Sleep -Seconds 2;$normal=Status;if($normal.console){throw 'Normal GTK process owns a console'};Screenshot 'normal-window.png'
+ $script:ownedWindow=WaitWindow;[PapoIdentityNative]::ShowWindow($ownedWindow.MainWindowHandle,3)|Out-Null;Start-Sleep -Seconds 2;$awareness=0;if([PapoIdentityNative]::GetProcessDpiAwareness($ownedWindow.Handle,[ref]$awareness) -ne 0 -or $awareness -ne 1){throw 'GTK DPI mode does not match its manifest'};$report.dpi=@{awareness='system';window_dpi=[PapoIdentityNative]::GetDpiForWindow($ownedWindow.MainWindowHandle)};$normal=Status;if($normal.console){throw 'Normal GTK process owns a console'};Screenshot 'normal-window.png'
  Start-Process $shortcut; $shortcutState=WaitDelivery $normal.delivered;if($shortcutState.pid -ne $normal.pid){throw 'Shortcut started a duplicate instance'};$report.shortcut_activation=$shortcutState
  [PapoIdentityNative]::ShowWindow($ownedWindow.MainWindowHandle,6)|Out-Null
  Start-Process ('papo-notification://open/'+[guid]::NewGuid().ToString());$warm=WaitDelivery $shortcutState.delivered

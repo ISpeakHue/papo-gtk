@@ -22,6 +22,10 @@ fn main() {
     if argument.as_deref()==Some("--platform-info"){
         println!("{}",serde_json::to_string_pretty(&platform::CURRENT).expect("platform metadata is serializable"));return;
     }
+    #[cfg(windows)] if argument.as_deref()==Some("--check-activation-policy"){
+        if let Err(error)=platform::activation::check_policy(){eprintln!("Activation policy failed: {error}");std::process::exit(1);}
+        println!("Windows account-bound activation policy OK");return;
+    }
     platform::runtime::configure();
     // EN-US: Initialize structured logging/tracing subsystem.
     // PT-BR: Inicializa o subsistema de rastreamento e logging estruturado.

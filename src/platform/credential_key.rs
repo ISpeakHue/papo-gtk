@@ -10,7 +10,7 @@ pub(super) fn target(service:&str,key:&str)->String{
     #[test]fn case_paths_unicode_and_service_boundaries_remain_distinct(){
         let service="br.com.papo.gtk.session.v1";
         let values=["https://example.test/API/\nAlice","https://example.test/api/\nAlice","https://example.test/api/\nalice","https://example.test/api/\náéç"];
-        let targets:std::collections::HashSet<_>=values.map(|key|target(service,key));assert_eq!(targets.len(),values.len());
+        let targets:std::collections::HashSet<_>=values.map(|key|target(service,key)).into_iter().collect();assert_eq!(targets.len(),values.len());
         assert_ne!(target("ab","c"),target("a","bc"));assert_eq!(target(service,"user"),target(service,"user"));assert_eq!(target(service,&"x".repeat(10000)).len(),"br.com.papo.gtk.session.v2:".len()+64);
     }
 }

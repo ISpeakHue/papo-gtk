@@ -1,0 +1,17 @@
+Papo 1.0.2
+{
+  "os": "windows",
+  "credential_store": "windows_credential_store",
+  "desktop_notifications": false,
+  "screen_capture": false,
+  "isolated_media_helpers": false
+}
+{"status": "ok", "control_icons": 47, "desktop_themes": 3, "scales": [1, 2], "gtk": "4.24.1"}
+{"status": "ok", "python": "3.14.8", "prefix": "C:\\Users\\PapoTester\\PV9241a3\\Papo portable á é ç f0b98af72a274570b18fcb4d682a82b1\\Papo-1.0.2-windows-x86_64-dev\\runtime", "gtk": "4.24.1", "gstreamer": "GStreamer 1.28.8", "checked_files": 7824, "loaded_modules": 606, "media_fixtures": 4, "os_codec_modules": [], "runtime_cache": "C:\\Users\\PapoTester\\AppData\\Local\\papo-gtk\\runtime\\ad2500dea77caad2\\registry.bin"}
+
+Papo 1.0.2: packaged runtime OK
+{"status": "ok", "control_icons": 47, "desktop_themes": 3, "scales": [1, 2], "gtk": "4.24.1"}
+{"status": "ok", "python": "3.14.8", "prefix": "C:\\Users\\PapoTester\\PV9241a3\\Papo portable á é ç f0b98af72a274570b18fcb4d682a82b1\\Papo-1.0.2-windows-x86_64-dev relocated\\runtime", "gtk": "4.24.1", "gstreamer": "GStreamer 1.28.8", "checked_files": 7824, "loaded_modules": 609, "media_fixtures": 4, "os_codec_modules": ["C:\\Program Files\\WindowsApps\\Microsoft.HEVCVideoExtension_2.0.61931.0_x64__8wekyb3d8bbwe\\x64\\mfH265Enc.dll", "C:\\Program Files\\WindowsApps\\Microsoft.VP9VideoExtensions_1.1.451.0_x64__8wekyb3d8bbwe\\x64\\msvpxenc.dll"], "runtime_cache": "C:\\Users\\PapoTester\\AppData\\Local\\papo-gtk\\runtime\\460dcb047ec25e37\\registry.bin"}
+
+Papo 1.0.2: packaged runtime OK
+Portable runtime, relocation, immutable files and missing-component checks passed.

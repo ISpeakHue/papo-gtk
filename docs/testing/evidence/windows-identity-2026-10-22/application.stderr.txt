@@ -1,0 +1,2 @@
+
+(Papo:600): GLib-GIO-WARNING **: 15:09:24.241: win32 session dbus binary not found

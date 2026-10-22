@@ -2,9 +2,13 @@
 //! PT-BR: Fronteiras de integração com o sistema; protocolo, histórico e componentes GTK continuam compartilhados.
 #[cfg(not(test))]pub mod credentials;
 pub mod runtime;
+pub mod files;
+#[cfg(all(windows,not(test)))] pub mod storage_check;
 pub mod sandbox;
 pub mod capture;
 pub mod shortcuts;
+#[cfg(windows)] pub mod startup;
+#[cfg(any(windows,test))] pub mod activation;
 
 #[cfg(not(any(target_os="linux",target_os="windows",target_os="macos")))]
 compile_error!("Papo currently targets Linux, Windows and macOS only.");

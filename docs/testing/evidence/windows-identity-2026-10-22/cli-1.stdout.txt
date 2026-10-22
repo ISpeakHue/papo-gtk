@@ -1,0 +1,4 @@
+{"status": "ok", "control_icons": 47, "desktop_themes": 3, "scales": [1, 2], "gtk": "4.24.1"}
+{"status": "ok", "python": "3.14.8", "prefix": "C:\\Users\\PapoTester\\WI3e3608\\Papo áéç\\Papo-1.0.2-windows-x86_64-dev\\runtime", "gtk": "4.24.1", "gstreamer": "GStreamer 1.28.8", "checked_files": 7828, "loaded_modules": 606, "media_fixtures": 4, "os_codec_modules": [], "runtime_cache": "C:\\Users\\PapoTester\\AppData\\Local\\papo-gtk\\runtime\\484a26fc85d9d0dd\\registry.bin"}
+
+Papo 1.0.2: packaged runtime OK

@@ -1,0 +1,20 @@
+Packaged runtime check failed: Packaged Python/GI/media check failed: {"status": "ok", "control_icons": 47, "desktop_themes": 3, "scales": [1, 2], "gtk": "4.24.1"}
+
+
+(python.exe:2816): GStreamer-WARNING **: 19:50:42.032: External plugin loader failed. This most likely means that the plugin loader helper binary was not found or could not be run. You might need to set the GST_PLUGIN_SCANNER environment variable if your setup is unusual. This should normally not be required though.
+Traceback (most recent call last):
+  File "C:\Users\PapoTester\PV16f842\Papo portable á é ç e31b682d3a9b4e888d29b16c9e0e02dd\Papo-1.0.2-windows-x86_64-dev relocated\runtime\share/papo-gtk/runtime_check.py", line 111, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\PapoTester\PV16f842\Papo portable á é ç e31b682d3a9b4e888d29b16c9e0e02dd\Papo-1.0.2-windows-x86_64-dev relocated\runtime\share/papo-gtk/runtime_check.py", line 102, in main
+    assert not external, ('External runtime DLLs loaded', external)
+           ^^^^^^^^^^^^
+AssertionError: ('External runtime DLLs loaded', [WindowsPath('C:/Program Files/WindowsApps/Microsoft.HEVCVideoExtension_2.0.61931.0_x64__8wekyb3d8bbwe/x64/mfH265Enc.dll'), WindowsPath('C:/Program Files/WindowsApps/Microsoft.VP9VideoExtensions_1.1.451.0_x64__8wekyb3d8bbwe/x64/msvpxenc.dll')])
+
+Portable check failed: --check-packaged-runtime (1)
+At G:\check-portable.ps1:34 char:32
++ ... ODE -ne 0) { throw "Portable check failed: $option ($LASTEXITCODE)" }
++                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Portable check ...ged-runtime (1):String) [], RuntimeException
+    + FullyQualifiedErrorId : Portable check failed: --check-packaged-runtime (1)
+ 

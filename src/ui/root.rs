@@ -489,6 +489,7 @@ pub struct RootModel {
     // Authenticated session state
     current_user: Option<WhoamiResponse>,
     api_client: Option<ApiClient>,
+    #[cfg(windows)] native_activation:crate::platform::activation::Router,
 }
 
 // ── Messages ──────────────────────────────────────────────────────────────────
@@ -511,6 +512,7 @@ pub enum RootMsg {
     /// EN-US: Triggered when token validation fails or session expires, redirecting to login.
     /// PT-BR: Disparado quando a validação de token falha ou a sessão expira, redirecionando para a tela de login.
     SessionExpired,
+    #[cfg(windows)] NativeActivation(crate::platform::activation::Activation),
 }
 
 // ── Relm4 Component ───────────────────────────────────────────────────────────
@@ -567,6 +569,15 @@ impl Component for RootModel {
 
 
     fn init(_init: (), root: Self::Root, sender: ComponentSender<Self>) -> ComponentParts<Self> {
+        #[cfg(windows)] {
+            let window=root.downgrade();let activation_sender=sender.input_sender().clone();
+            gtk::glib::timeout_add_local(std::time::Duration::from_millis(50),move ||{
+                let Some(window)=window.upgrade()else{return gtk::glib::ControlFlow::Break;};
+                let _=window;
+                for activation in crate::platform::startup::drain(){let _=activation_sender.send(RootMsg::NativeActivation(activation));}
+                gtk::glib::ControlFlow::Continue
+            });
+        }
         crate::app::branding::install();
         crate::ui::style::install();
         crate::ui::chat::input::configure_desktop_im();
@@ -592,6 +603,7 @@ impl Component for RootModel {
             main_controller: None,
             current_user: None,
             api_client: None,
+            #[cfg(windows)] native_activation:Default::default(),
         };
 
         let widgets = view_output!();
@@ -632,11 +644,13 @@ impl Component for RootModel {
                 widgets.stack.add_named(main_controller.widget(), Some("main"));
 
                 self.main_controller = Some(main_controller);
+                #[cfg(windows)] self.native_activation.account(Some(crate::platform::activation::Account{server:client.base_url().into(),user:whoami.id,session:client.session_owner()}));
                 self.current_user = Some(whoami);
                 self.api_client = Some(client);
                 self.view = View::Main;
             }
             RootMsg::SessionExpired => {
+                #[cfg(windows)] self.native_activation.account(None);
                 if let (Some(client),Some(user))=(&self.api_client,&self.current_user){let client=client.clone();let user=user.username.clone();tokio::spawn(async move{let _=crate::session::forget(&client,&user).await;});}
                 if let Some(controller) = self.main_controller.take() { widgets.stack.remove(controller.widget()); }
                 self.current_user = None;
@@ -647,6 +661,7 @@ impl Component for RootModel {
                     "Sua sessão terminou. Entre novamente e informe a senha atual do servidor, se necessário.".into()));
             }
             RootMsg::Logout => {
+                #[cfg(windows)] self.native_activation.account(None);
                 info!("Root logging out");
                 self.login_controller.emit(LoginMsg::ClearCredentials);
                 if let Some(client) = &self.api_client {
@@ -665,6 +680,19 @@ impl Component for RootModel {
                 self.current_user = None;
                 self.api_client = None;
                 self.view = View::Login;
+            }
+            #[cfg(windows)] RootMsg::NativeActivation(activation)=>{
+                _root.present();
+                if let crate::platform::activation::Activation::Ticket(id)=activation {
+                    // EN-US: Step 9 will issue trusted tickets; unknown/cold tickets currently only focus the login/window.
+                    // PT-BR: A etapa 9 emitirá tickets confiáveis; tickets desconhecidos/iniciais só mostram a janela/login.
+                    let now=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+                    if let Some(controller)=self.main_controller.as_ref(){
+                        if let Some(target)=self.native_activation.resolve(id,now,|channel|controller.model().can_read_target(channel)){
+                            controller.emit(crate::ui::main_window::MainWindowMsg::Navigate{channel_id:target.channel,message_id:target.message});
+                        }
+                    }
+                }
             }
         }
         self.update_view(widgets, sender);

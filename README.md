@@ -22,6 +22,11 @@ also redact secrets in debug output.
 
 Windows-first port development and macOS groundwork are described in
 [MULTIPLATFORM.md](MULTIPLATFORM.md). Windows builds on this branch are experimental.
+See the [Windows support policy](WINDOWS_SUPPORT.md) and
+[release acceptance checklist](docs/testing/windows.md) for the planned targets
+and remaining validation. The portable preview bundles its own native runtime;
+see [Windows runtime checks](docs/testing/windows-runtime.md) and
+[identity, GUI launch and diagnostics](docs/testing/windows-identity.md).
 
 ## Build and run (Linux)
 

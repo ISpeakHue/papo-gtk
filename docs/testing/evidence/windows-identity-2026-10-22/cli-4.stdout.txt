@@ -1,0 +1,1 @@
+{"app_id":"br.com.papo.gtk","shortcut":true,"activator":true,"target":true,"protocol":true}

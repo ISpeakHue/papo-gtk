@@ -55,7 +55,7 @@ impl MainWindowModel {
     }
     pub(super) fn direct_cancel_selection(&mut self){self.direct.selection=None;}
     pub(super) fn direct_selection_pending(&self)->bool{self.direct.selection.is_some()}
-    pub(super) fn can_read_target(&self,id:Uuid)->bool{
+    pub(crate) fn can_read_target(&self,id:Uuid)->bool{
         self.direct.items.iter().any(|d|d.id==id)||self.access.get(&id).is_some_and(|a|a.read)&&self.channels.iter().any(|c|c.id==id)
     }
     pub(super) fn publish_direct(&self){self.sidebar.emit(SidebarMsg::SetDirect(self.direct.items.clone()));}

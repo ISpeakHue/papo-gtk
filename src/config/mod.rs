@@ -1,11 +1,11 @@
-//! Persistent application configuration stored in `~/.config/papo-gtk/config.toml`.
+//! Persistent application configuration stored in the native OS configuration directory.
 //! EN-US: Manages user preferences, server URL, credentials retention, theme settings, and motion mode.
 //! PT-BR: Configuração persistente da aplicação armazenada em `~/.config/papo-gtk/config.toml`. Gerencia preferências do usuário, URL do servidor, retenção de credenciais, configurações de tema e modo de movimento.
 
 use anyhow::{Context, Result};
 use dirs::config_dir;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path,PathBuf};
 
 /// User-editable app config that survives restarts.
 /// EN-US: Serializable configuration struct representing stored user options.
@@ -46,21 +46,23 @@ impl Motion{
 impl AppConfig {
     /// EN-US: Returns the native configuration path (XDG, AppData or Application Support).
     /// PT-BR: Retorna o caminho nativo de configuração (XDG, AppData ou Application Support).
-    pub fn path() -> PathBuf {
+    pub fn path() -> Result<PathBuf> {
         // EN-US: GUI tests must isolate settings on every OS, regardless of XDG support.
         // PT-BR: Testes da interface isolam as configurações em todos os sistemas, independentemente do suporte XDG.
-        #[cfg(test)]if let Some(root)=std::env::var_os("PAPO_TEST_CONFIG_DIR"){return PathBuf::from(root).join("config.toml");}
-        config_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
+        #[cfg(test)]if let Some(root)=std::env::var_os("PAPO_TEST_CONFIG_DIR"){return Ok(PathBuf::from(root).join("config.toml"));}
+        Ok(config_dir().context("Diretório de configuração indisponível.")?
             .join("papo-gtk")
-            .join("config.toml")
+            .join("config.toml"))
     }
 
     /// EN-US: Load config from disk; returns `Default::default()` if the file does not exist or fails parsing.
     /// PT-BR: Carrega a configuração do disco; retorna `Default::default()` caso o arquivo não exista ou falhe na análise.
     pub fn load() -> Self {
-        let p = Self::path();
-        std::fs::read_to_string(&p)
+        Self::path().ok().map(|p|Self::load_at(&p)).unwrap_or_default()
+    }
+
+    pub(crate) fn load_at(path:&Path)->Self {
+        std::fs::read_to_string(path)
             .ok()
             .and_then(|s| toml::from_str(&s).ok())
             .unwrap_or_default()
@@ -69,12 +71,17 @@ impl AppConfig {
     /// EN-US: Persist config to disk, automatically creating parent directories if needed.
     /// PT-BR: Salva a configuração no disco, criando diretórios pai automaticamente se necessário.
     pub fn save(&self) -> Result<()> {
-        let p = Self::path();
-        if let Some(parent) = p.parent() {
+        self.save_at(&Self::path()?)
+    }
+
+    /// EN-US: A supplied path keeps acceptance tests out of the user's real configuration.
+    /// PT-BR: Um caminho explícito isola os testes de aceitação da configuração real do usuário.
+    pub(crate) fn save_at(&self,path:&Path)->Result<()> {
+        if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).context("creating config dir")?;
         }
         let toml_str = toml::to_string_pretty(self).context("serialising config")?;
-        std::fs::write(&p, toml_str).context("writing config")?;
+        crate::platform::files::atomic_write(path,toml_str.as_bytes()).context("writing config")?;
         Ok(())
     }
 }

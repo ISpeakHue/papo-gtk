@@ -6,6 +6,12 @@ experimental developer build; macOS has platform boundaries prepared but no
 supported build or `.app` bundle yet. There is one application and protocol
 implementation, rather than separate operating-system forks.
 
+The first release targets and dependency constraints are defined in
+[WINDOWS_SUPPORT.md](WINDOWS_SUPPORT.md). The
+[Windows acceptance matrix](docs/testing/windows.md) records required cases,
+historical CI evidence and pending desktop tests. These documents complete step 1
+of [the implementation plan](MULTIPLATFORM_PLAN.md); Windows remains experimental.
+
 ## Current boundaries
 
 | Integration | Linux | Windows | Future macOS |
@@ -53,21 +59,46 @@ pacman -S --needed git \
   mingw-w64-ucrt-x86_64-gst-plugins-base mingw-w64-ucrt-x86_64-gst-plugins-good \
   mingw-w64-ucrt-x86_64-gst-plugins-bad mingw-w64-ucrt-x86_64-gst-libav \
   mingw-w64-ucrt-x86_64-libnice
+export PAPO_RUNTIME_DIR="$(cygpath -w "$MINGW_PREFIX")"
 cargo run --locked
-python packaging/windows/build.py
+python packaging/windows/native_inputs.py capture target/windows-native-inputs
+python packaging/windows/build.py --native-inputs target/windows-native-inputs
 ```
 
-Git is required to record the matching source revision; the script checks it
-before compiling.
+Git is required to record the source revision. Packaging requires a clean checkout
+by default; `--allow-dirty` is an explicit local-preview override. The source state
+is checked before/after compilation and staging. Exact MSYS2 packages and their
+hashes are retained separately from the preview ZIP. See
+[build provenance and CI diagnostics](docs/testing/build-provenance.md) for the
+original line-ending diagnosis, toolchain metadata, input restoration and limits.
+Byte-identical rebuilds have not been demonstrated.
 
 The build script produces `dist/Papo-1.0.2-windows-x86_64-dev.zip`.
-It contains the executable, license and `Papo.cmd`, **not the native runtime**.
-Launch it with `Papo.cmd`; its default external runtime directory is
-`C:\msys64\ucrt64`. Set `PAPO_RUNTIME_DIR` if your installation lives elsewhere.
-This directory must contain the same packages as the build environment.
-The launcher sets DLL search paths before process startup; Rust configures
-Python, GI typelibs, GSettings schemas and GStreamer paths from that runtime.
-`PAPO_PYTHON` remains an explicit interpreter override.
+It includes an application-owned UCRT64 runtime: GTK/libadwaita, Python/GI,
+GStreamer plugins/codecs, schemas, icons, loaders and dependency licenses. Extract
+the whole archive and launch `Papo.exe` without a console. Use `Papo.com` for
+intentional CLI output and `Papo.com --diagnostics` for application diagnostics;
+`Papo.cmd` forwards there for compatibility.
+The native bootstrap establishes DLL lookup before the GTK executable starts.
+Neither a default `C:\msys64` installation nor a system Python is searched.
+`PAPO_RUNTIME_DIR` explicitly selects a complete alternate packaged runtime;
+source-tree development uses an explicit UCRT64 prefix as above. `PAPO_PYTHON`
+remains an explicit helper interpreter override.
+
+Run `Papo.com --check-packaged-runtime` for the offline dependency, Python/GI,
+icon, schema and codec probe. See [runtime packaging](docs/testing/windows-runtime.md)
+for layout, relocation, manifest and validation limits.
+
+Step 3's [clean-VM runtime acceptance](docs/testing/evidence/windows-runtime-2026-10-21/README.md)
+passed with the self-contained ZIP under a standard Windows 11 account, including
+accented/spaced relocation and normal startup/shutdown. This is runtime evidence;
+the Home/Pro release matrix and remaining native integrations are still pending.
+
+Step 4's [Windows identity and startup contract](docs/testing/windows-identity.md)
+defines executable resources, the stable `br.com.papo.gtk` identity, explicit
+per-user desktop registration, a native notification prototype and account-bound
+activation policy. Production desktop message notifications remain disabled until
+step 9 integrates and validates them.
 
 The Windows workflow also compiles the macOS foundation against Homebrew GTK
 and libadwaita, without claiming runtime or bundle validation. Its Windows job
@@ -84,8 +115,9 @@ configuration directory on every OS, including systems that ignore XDG variables
 
 Before a supported Windows release: implement an isolated decoder process,
 permission-aware screen/window selection, native notifications with activation
-and revocation, a complete redistributable runtime/DLL closure, an installer,
-application icon/metadata and signing. Validate real media devices, dead-key/IME
+and revocation, full Windows desktop acceptance, an installer,
+signing. Application icon/metadata and the native identity/activation prototype
+passed step 4's offline VM gate. Validate real media devices, dead-key/IME
 input, DPI scaling, reconnects and fullscreen media on Windows.
 
 The same adapters leave room for macOS Keychain, native notification activation,
@@ -117,11 +149,11 @@ and focused icon/call-control GUI checks. Notification and backend-GIF GUI
 assertions passed with GTK warnings nonfatal; the notification window still
 produces a height-measurement warning under the host GTK version.
 
-The [Linux container workflow](https://github.com/ISpeakHue/papo-gtk/actions/runs/39536236637)
-still fails during the icon test when its glycin SVG loader exits inside
-Bubblewrap. The complete Linux GUI CI
-workflow remains unverified. Local GUI limitations are described in
-[desktop testing](docs/testing/desktop.md).
+The initial [Linux container workflow](https://github.com/ISpeakHue/papo-gtk/actions/runs/39536236637)
+failed during the icon test when its Glycin SVG loader exited inside Bubblewrap.
+At that point the complete Linux GUI workflow was unverified. Step 2 below records
+the subsequent runtime repair and complete case sweep; remaining GUI limitations
+are tracked in [desktop testing](docs/testing/desktop.md) and the provenance record.
 
 The [successful packaging rerun](https://github.com/ISpeakHue/papo-gtk/actions/runs/39537643269)
 provides the **Papo-Windows-x86_64-developer-preview** artifact. The downloaded ZIP
@@ -133,3 +165,18 @@ clean-source release.
 
 ZIP SHA-256:
 `c44ca68449e8bd6eeb75115b4224f26cf0447defc3dfedf8a121c140c0708b3c`
+
+## Build provenance (step 2)
+
+The original dirty preview was reproduced as a Git for Windows/MSYS2 line-ending
+configuration mismatch. `.gitattributes` now gives both implementations a clean
+checkout; unexpected source edits fail packaging. The
+[clean-source packaging run](https://github.com/ISpeakHue/papo-gtk/actions/runs/39615565000)
+retained 352 exact MSYS2 package archives, toolchain/build metadata and checksums.
+It was packaging-only and does not replace native application or desktop tests.
+Byte-identical rebuilding remains unproven.
+
+Linux CI now uses rootless Fedora with decoder isolation preserved and retains
+every GUI case's result. See the [provenance and CI record](docs/testing/build-provenance.md)
+for diagnosed container/codec failures, verification and remaining GUI assertions.
+The initial results above remain historical evidence.

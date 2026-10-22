@@ -41,6 +41,16 @@ the token's AppContainer SID, capability SID/count and low integrity level, and
 successfully assigns the process to its job. Setup failures never launch an
 unrestricted fallback.
 
+Initial extraction can require runtime ACL propagation and cold DLL/codec
+loading. Trusted ACL preparation runs on a blocking worker with a 60-second
+await deadline, before creating any decoder. The native cache reuses completed
+grants. Cancelling this await starts no helper; an already-running synchronous
+Windows ACL call may finish its trusted work in the background. It never parses
+media. Windows callers allow 30 seconds for the existing 25-second native
+wall-clock limit and cleanup; Linux retains its nine-second poster and
+20-second animation timeouts. CPU, memory, output and process limits are
+unchanged. This avoids spending the short conversion budget on first-use setup.
+
 The private plugin directory contains only the software conversion subset:
 core elements/typefind/playback/appsink, video conversion/rate, MP4/WebM demuxing,
 libav/VPx, video/audio parsers, audio conversion, Opus and Vorbis. DLLs are copied

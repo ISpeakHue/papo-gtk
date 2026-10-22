@@ -38,7 +38,7 @@ else:
     raise AssertionError('decoder can reach parent network')
 print('isolated')
 "#,marker=marker.to_string_lossy());
-        let output=tokio::time::timeout(std::time::Duration::from_secs(12),super::sandbox::command(&path,&script)?.output()).await.with_context(||format!("Isolation probe timed out for {name}"))??;
+        let output=tokio::time::timeout(super::sandbox::timeout(std::time::Duration::from_secs(12)),super::sandbox::command(&path,&script)?.output()).await.with_context(||format!("Isolation probe timed out for {name}"))??;
         anyhow::ensure!(output.status.success()&&String::from_utf8_lossy(&output.stdout).trim()=="isolated","Media sandbox isolation failed: {}",String::from_utf8_lossy(&output.stderr));
         let poster=super::poster::extract(&path).await.with_context(||format!("Poster conversion failed for {name}"))?;anyhow::ensure!(poster.starts_with(b"\x89PNG"),"Invalid video poster");
         let animation=super::animation::PreparedAnimation::video(&path).await.with_context(||format!("Animation conversion failed for {name}"))?;anyhow::ensure!(!animation.frames.is_empty(),"Empty converted animation");

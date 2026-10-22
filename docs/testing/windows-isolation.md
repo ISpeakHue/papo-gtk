@@ -44,7 +44,10 @@ unrestricted fallback.
 The private plugin directory contains only the software conversion subset:
 core elements/typefind/playback/appsink, video conversion/rate, MP4/WebM demuxing,
 libav/VPx, video/audio parsers, audio conversion, Opus and Vorbis. DLLs are copied
-from the verified runtime into the read-only subtree. Plugin scanning stays in
+from the verified runtime into a private, read-only codec directory in the
+disposable profile, separately from the sealed media input. These copies are
+executed only by the contained process; the unrestricted application never loads
+them. The original runtime remains protected from writes. Plugin scanning stays in
 the container process; the registry is private scratch. Hardware/device/network
 plugin discovery is unnecessary for these silent conversions. A compromised
 decoder's direct socket calls remain subject to AppContainer network policy.
@@ -85,6 +88,13 @@ TCP6 and UDP loopback probes, channel overflow, committed-memory quota, internal
 deadline, cancellation of a root and descendant, abrupt parent exit and cleanup.
 The listeners must see no successful traffic. Credential acceptance creates and
 deletes only one random synthetic entry and never enumerates real credentials.
+
+The handle probe compares the fixture's volume/file identity, without resolving
+DOS drive links. The pinned MinGW Python can terminate with native
+`STATUS_INVALID_HANDLE` or `STATUS_OBJECT_TYPE_MISMATCH` when querying a missing
+handle. Only those exact statuses after the readiness marker count as denial;
+unrelated crashes fail. This probe runs separately so it cannot skip credential,
+network or other access assertions.
 
 The private `--windows-media-parent-probe` argument is only a synthetic process
 lifecycle fixture; it does not start normal session/UI code. Ordinary tests do

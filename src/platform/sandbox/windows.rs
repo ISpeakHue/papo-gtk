@@ -151,6 +151,8 @@ assert not valid or (info.volume,info.index_high,info.index_low)!=({volume},{hig
 print('handle-denied')
 "#,handle=handle.as_raw_handle() as usize,volume=information.dwVolumeSerialNumber,high=information.nFileIndexHigh,low=information.nFileIndexLow);
     let mut cmd=command(&source,&script)?;let name=cmd.name.clone();let output=cmd.output().await?;
+    // EN-US: Strict handle faults prove this value is not the inherited file; unrelated crashes still fail.
+    // PT-BR: Falhas estritas de handle provam que não é o arquivo herdado; outros crashes continuam falhando.
     let native_invalid=matches!(output.status.code().map(|code|code as u32),Some(0xc0000008|0xc0000024));
     let text=String::from_utf8_lossy(&output.stdout);
     anyhow::ensure!((output.status.success()&&text.lines().last().is_some_and(|s|s.trim()=="handle-denied"))||(native_invalid&&text.trim()=="handle-ready"),"Private handle inheritance probe failed: {:?}",output.status.code());

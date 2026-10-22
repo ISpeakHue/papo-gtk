@@ -191,13 +191,14 @@ struct Job {
     ~Job() { stop(); }
 };
 using Sink=void (*)(void*,int,const unsigned char*,size_t);
-void drain(HANDLE pipe,int channel,size_t& total,size_t limit,Sink sink,void* context) {
-    DWORD available=0; if(!PeekNamedPipe(pipe,nullptr,0,nullptr,&available,nullptr)) { require(GetLastError()==ERROR_BROKEN_PIPE); return; }
+bool drain(HANDLE pipe,int channel,size_t& total,size_t limit,Sink sink,void* context) {
+    DWORD available=0; if(!PeekNamedPipe(pipe,nullptr,0,nullptr,&available,nullptr)) { require(GetLastError()==ERROR_BROKEN_PIPE); return false; }
     char bytes[65536]; DWORD read=0;
     if(available) { require(ReadFile(pipe,bytes,std::min<DWORD>(available,sizeof(bytes)),&read,nullptr));
         if(read>limit-total) throw Failure{ERROR_BUFFER_OVERFLOW};
         total+=read;
-        sink(context,channel,reinterpret_cast<unsigned char*>(bytes),read); }
+        sink(context,channel,reinterpret_cast<unsigned char*>(bytes),read); return read!=0; }
+    return false;
 }
 }
 
@@ -264,8 +265,11 @@ extern "C" DWORD papo_media_run(const wchar_t* runtime,const wchar_t* source,con
         size_t out=0,err=0;
         for(;;) {
             cancelled(cancel); if(GetTickCount64()-started>timeout) throw Failure{WAIT_TIMEOUT};
-            drain(stdout_read.value,1,out,(48ULL<<20)+4096,sink,context); drain(stderr_read.value,2,err,65536,sink,context);
-            if(WaitForSingleObject(process.value,10)==WAIT_OBJECT_0) break;
+            // EN-US: Drain available output immediately; only idle pipes need a timed wait.
+            // PT-BR: Drena a saída disponível imediatamente; só pipes ociosos precisam de espera.
+            const bool data=drain(stdout_read.value,1,out,(48ULL<<20)+4096,sink,context);
+            const bool errors=drain(stderr_read.value,2,err,65536,sink,context);
+            if(WaitForSingleObject(process.value,data||errors?0:10)==WAIT_OBJECT_0) break;
         }
         require(GetExitCodeProcess(process.value,exit_code)); job.stop();
         // EN-US: After tree termination there can be at most the bounded pipe-buffer remainder.

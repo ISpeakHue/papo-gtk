@@ -2,9 +2,9 @@ name: Windows developer preview
 
 on:
   push:
-    branches: [multiplatform, ci/windows-storage-step5]
+    branches: [multiplatform]
   pull_request:
-    branches: [multiplatform, ci/windows-storage-step5]
+    branches: [multiplatform]
   workflow_dispatch:
     inputs:
       packaging_only:
@@ -120,8 +120,9 @@ jobs:
       - name: Exercise disposable native credentials, files and dialogs
         run: |
           mkdir -p target/windows-build/storage
-          dist/Papo-*-windows-x86_64-dev/Papo.com --check-windows-storage > target/windows-build/storage/stdout.json
+          env -u PAPO_RUNTIME_DIR -u PAPO_PYTHON -u PYTHONHOME -u PYTHONPATH dist/Papo-*-windows-x86_64-dev/Papo.com --check-windows-storage > target/windows-build/storage/stdout.json
       - uses: actions/upload-artifact@v4
+        if: ${{ always() && hashFiles('dist/Papo-*-windows-x86_64-dev.zip') != '' }}
         with:
           name: Papo-Windows-x86_64-developer-preview
           path: |

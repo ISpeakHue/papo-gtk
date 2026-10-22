@@ -1,6 +1,6 @@
 //! Persistent application configuration stored in the native OS configuration directory.
 //! EN-US: Manages user preferences, server URL, credentials retention, theme settings, and motion mode.
-//! PT-BR: Configuração persistente da aplicação armazenada em `~/.config/papo-gtk/config.toml`. Gerencia preferências do usuário, URL do servidor, retenção de credenciais, configurações de tema e modo de movimento.
+//! PT-BR: Configuração persistente no diretório nativo do SO. Gerencia preferências, servidor, retenção de sessão, tema e movimento.
 
 use anyhow::{Context, Result};
 use dirs::config_dir;

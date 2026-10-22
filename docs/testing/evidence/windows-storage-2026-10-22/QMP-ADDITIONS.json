@@ -1,0 +1,19 @@
+{
+  "blockdev_add": {
+    "driver": "raw",
+    "node-name": "papo_fixture_update",
+    "read-only": true,
+    "file": {
+      "driver": "file",
+      "filename": "${WORKSPACE}/target/windows-clean-vm/step5/input.img"
+    }
+  },
+  "device_add": {
+    "driver": "usb-storage",
+    "bus": "usb.0",
+    "drive": "papo_fixture_update",
+    "id": "papo_fixture_update_usb",
+    "removable": true
+  },
+  "note": "USB keyboard present at boot. Updated fixtures read-only; no NIC, host directory or guest agent."
+}

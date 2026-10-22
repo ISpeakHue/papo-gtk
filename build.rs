@@ -1,6 +1,7 @@
 use std::{env, path::PathBuf, process::Command};
 
 fn main() {
+    println!("cargo:rerun-if-changed=src/platform/sandbox/windows.cpp");
     println!("cargo:rerun-if-changed=data/windows");
     println!("cargo:rerun-if-changed=packaging/windows/resources.py");
     if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
@@ -12,6 +13,17 @@ fn main() {
             .args(["--original", "papo-gtk.exe"]).status().expect("UCRT64 Python/windres required");
         assert!(status.success(), "Windows resource compilation failed");
         println!("cargo:rustc-link-arg-bin=papo-gtk={}", directory.join("papo.o").display());
+        // EN-US: Compile the narrow Win32 isolation bridge for both application and native tests.
+        // PT-BR: Compila a ponte restrita de isolamento Win32 para o aplicativo e os testes nativos.
+        let object=directory.join("media.o");
+        assert!(Command::new("g++").args(["-std=c++17","-O2","-Wall","-Wextra","-Werror","-c","src/platform/sandbox/windows.cpp","-o"])
+            .arg(&object).status().expect("UCRT64 g++ required").success(),"Windows isolation compilation failed");
+        assert!(Command::new("ar").arg("crs").arg(directory.join("libpapo_media.a")).arg(object)
+            .status().expect("UCRT64 ar required").success(),"Windows isolation archive failed");
+        println!("cargo:rustc-link-search=native={}",directory.display());
+        for library in ["static=papo_media","dylib=stdc++","dylib=userenv","dylib=advapi32","dylib=ole32"] {
+            println!("cargo:rustc-link-lib={library}");
+        }
     }
     println!("cargo:rerun-if-changed=assets/papo.gresource.xml");
     println!("cargo:rerun-if-changed=assets/icons/hicolor");

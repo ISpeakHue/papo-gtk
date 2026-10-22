@@ -140,7 +140,7 @@ remaining GUI assertions are tracked in the provenance record.
    Production alerts/trusted cold-start message navigation remain step 9; the
    Home/Pro matrix, mixed-DPI desktop qualification and installer remain later gates.
 
-5. [ ] **Validate credentials, configuration and Windows file operations.**
+5. [x] **Validate credentials, configuration and Windows file operations.**
 
    Exercise `src/platform/credentials.rs`, `src/session.rs`, `src/config/mod.rs`
    and attachment saving on Windows. Verify native credential save/resume,
@@ -155,6 +155,19 @@ remaining GUI assertions are tracked in the provenance record.
    **Complete when:** restart/remember/logout work with the Windows store, no
    plaintext credential fallback exists, and file tests pass under a standard
    user account without touching an existing user's settings or credentials.
+
+   **Completed 2026-10-22:** native Windows CI and offline standard-user Windows
+   11 VM acceptance passed. Disposable Credential Manager entries verified 15
+   process phases covering remember/restart/rotation/logout/revocation and safe
+   store failures. Exact account targets prevent Windows case collisions, and
+   guarded migration preserves legacy entries belonging to another account.
+   Native paths, atomic configuration replacement, 345-unit Unicode paths,
+   reserved names, overwrite/locks, cancellation, clipboard and temporary cleanup
+   passed. No plaintext credential fallback was added; ordinary tests retain
+   memory storage. macOS compilation/test linking also passed. See the
+   [storage/file contract](docs/testing/windows-storage.md) and
+   [reports and input hashes](docs/testing/evidence/windows-storage-2026-10-22/README.md).
+   Home/Pro qualification and real-backend acceptance remain later release gates.
 
 6. [ ] **Implement the Windows isolated media-helper backend.**
 

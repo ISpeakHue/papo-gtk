@@ -122,3 +122,20 @@ the wrapper under `PapoTester`. The wrapper stops only the obsolete fixture's
 startup test script and shuts down Windows after recording results. Keep each
 attempt's inputs and output separate; never read or modify an attached writable
 FAT results image while QEMU is running.
+
+## Step 5 storage acceptance
+
+Use `prepare.py --test storage` for native credential, configuration, clipboard,
+dialog and file acceptance. The wrapper runs `check-storage.ps1` under the same
+standard fixture account and shuts Windows down after saving `storage.json`,
+`storage.stdout.json`, `storage.stderr.txt` and the child exit status. No operator
+clicks or server account are required. A local synthetic server and fresh random
+credential namespace exercise cross-process restart/rotation/logout/revocation.
+
+This explicit test replaces only the disposable desktop's clipboard. It never
+loads existing Papo settings, enumerates saved accounts or writes production
+credential entries. See the [storage contract](../../../docs/testing/windows-storage.md).
+For a resumed fixture, put `check-storage.ps1`, `storage-acceptance.ps1`, the updated
+ZIP and its checksum on a new read-only input disk, use a fresh writable results
+disk, and run the storage wrapper as `PapoTester`. The scripts are staged with a
+UTF-8 BOM for Windows PowerShell 5.1.

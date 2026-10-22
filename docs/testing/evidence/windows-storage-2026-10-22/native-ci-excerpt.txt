@@ -1,0 +1,27 @@
+CI run: https://github.com/ISpeakHue/papo-gtk/actions/runs/39809350784
+Source: 23fd2b7e00b6966c299c365f2b3554c4b882012c
+
+windows	Test source provenance and package archive verification	2026-10-22T15:57:45.9608635Z Ran 24 tests in 6.264s
+windows	Check every Rust target on Windows	2026-10-22T16:01:37.3862155Z     Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 53s
+windows	Test platform policy and native worker lifecycle with synthetic audio	2026-10-22T16:04:15.5144583Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 2m 37s
+windows	Test platform policy and native worker lifecycle with synthetic audio	2026-10-22T16:04:15.7736773Z test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 286 filtered out; finished in 0.16s
+windows	Test platform policy and native worker lifecycle with synthetic audio	2026-10-22T16:04:16.1710200Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.28s
+windows	Test platform policy and native worker lifecycle with synthetic audio	2026-10-22T16:04:18.8099540Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 299 filtered out; finished in 2.59s
+windows	Test embedded icon coverage and native GTK rendering	2026-10-22T16:04:19.5961245Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.28s
+windows	Test embedded icon coverage and native GTK rendering	2026-10-22T16:04:20.1697894Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 299 filtered out; finished in 0.53s
+windows	Test embedded icon coverage and native GTK rendering	2026-10-22T16:04:20.5555428Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.28s
+windows	Test embedded icon coverage and native GTK rendering	2026-10-22T16:04:27.6048933Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 299 filtered out; finished in 7.00s
+windows	Test embedded icon coverage and native GTK rendering	2026-10-22T16:04:28.0167420Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.29s
+windows	Test embedded icon coverage and native GTK rendering	2026-10-22T16:04:29.3696894Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 299 filtered out; finished in 1.29s
+windows	Test session persistence policies with memory storage	2026-10-22T16:04:30.0018767Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.31s
+windows	Test session persistence policies with memory storage	2026-10-22T16:04:33.0813160Z test result: ok. 10 passed; 0 failed; 1 ignored; 0 measured; 289 filtered out; finished in 3.02s
+windows	Test session persistence policies with memory storage	2026-10-22T16:04:33.5015169Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.32s
+windows	Test session persistence policies with memory storage	2026-10-22T16:04:33.5541855Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.01s
+windows	Build and validate self-contained portable preview	2026-10-22T16:09:20.2683858Z     Finished `release` profile [optimized] target(s) in 4m 44s
+windows	Build and validate self-contained portable preview	2026-10-22T16:09:38.5366630Z Papo 1.0.2: packaged runtime OK
+windows	Exercise disposable native credentials, files and dialogs	2026-10-22T16:10:00.0791261Z env -u PAPO_RUNTIME_DIR -u PAPO_PYTHON -u PYTHONHOME -u PYTHONPATH dist/Papo-*-windows-x86_64-dev/Papo.com --check-windows-storage > target/windows-build/storage/stdout.json
+macos-foundation	Compile and link tests and the native Keychain adapter (no macOS bundle yet)	2026-10-22T15:57:39.7321170Z     Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 25s
+macos-foundation	Compile and link tests and the native Keychain adapter (no macOS bundle yet)	2026-10-22T16:00:02.5668140Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 2m 22s
+portable-runtime	Validate portable ZIP without developer discovery paths	2026-10-22T16:10:54.9169134Z Papo 1.0.2: packaged runtime OK
+portable-runtime	Validate portable ZIP without developer discovery paths	2026-10-22T16:11:00.0687627Z Papo 1.0.2: packaged runtime OK
+portable-runtime	Validate portable ZIP without developer discovery paths	2026-10-22T16:11:02.2772521Z Portable runtime, relocation, immutable files and missing-component checks passed.

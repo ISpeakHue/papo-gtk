@@ -1,0 +1,46 @@
+{
+  "inputs": [
+    {
+      "path": "target/windows-clean-vm/step5/input.img",
+      "sha256": "3455a70f957b0151c79831ce9c41607a0763fc70968c38a22cb65b33dc9e859c",
+      "size": 268435456
+    },
+    {
+      "path": "packaging/windows/check-storage.ps1",
+      "sha256": "467b7074dc030064da598b986fbbdd8124b13d847228a6b7e0e933c678ab572b",
+      "size": 3841
+    },
+    {
+      "path": "packaging/windows/clean-vm/storage-acceptance.ps1",
+      "sha256": "8ddf27f6e0e4d171bf5fc18795e1fe94b1b10cee9a79ed4069173628963310e9",
+      "size": 1138
+    },
+    {
+      "path": "packaging/windows/clean-vm/prepare.py",
+      "sha256": "81cccc7d99d8f3201ec084db34865622dd60fc213b895986c6c3a75cd3639796",
+      "size": 10809
+    },
+    {
+      "path": "packaging/windows/clean-vm/run.py",
+      "sha256": "8f2f4022e8810e049cd15da91d6e44fe98f093e1970aa757893a384bebffd80a",
+      "size": 6438
+    },
+    {
+      "path": "packaging/windows/clean-vm/control.py",
+      "sha256": "5c7fe9e2525107841328c77109149eb910cac4b88db9088eaa2fe3a444e287c7",
+      "size": 5868
+    },
+    {
+      "path": "target/windows-clean-vm/step5/input/check-storage.ps1",
+      "sha256": "6036db5cfc90b8f3a3cffab476ef41b814f5f763bbce23c71f2b072b149eda5e",
+      "size": 3844,
+      "matches_source_without_utf8_bom": true
+    },
+    {
+      "path": "target/windows-clean-vm/step5/input/storage-acceptance.ps1",
+      "sha256": "4adbfbf9175518d3d47d0e70951e2788712f7057f5c550db6d2dae56114766f0",
+      "size": 1141,
+      "matches_source_without_utf8_bom": true
+    }
+  ]
+}

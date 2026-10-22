@@ -100,6 +100,15 @@ per-user desktop registration, a native notification prototype and account-bound
 activation policy. Production desktop message notifications remain disabled until
 step 9 integrates and validates them.
 
+Step 5's [credentials, configuration and file contract](docs/testing/windows-storage.md)
+passed native CI and offline standard-user Windows 11 VM acceptance. Disposable
+Credential Manager entries cover restart, rotation, logout, revocation and safe
+failure; native paths, Unicode/long filenames, locks, cancellation and clipboard
+cleanup passed. Exact-account hashed targets avoid Windows case collisions;
+legacy migration verifies account ownership. No plaintext credential fallback
+exists. [Reports and hashes](docs/testing/evidence/windows-storage-2026-10-22/README.md)
+record this gate independently of the remaining Home/Pro release qualification.
+
 The Windows workflow also compiles the macOS foundation against Homebrew GTK
 and libadwaita, without claiming runtime or bundle validation. Its Windows job
 checks all Rust targets with warnings treated as errors,
@@ -107,7 +116,8 @@ runs platform policy, synthetic voice worker, native icon and chat/member startu
 tests, and uploads
 a developer preview artifact. A manual `packaging_only` workflow dispatch rebuilds packaging for a source
 revision already covered by the native checks. This does not replace testing on real Windows
-hardware. Native credential integration is compiled but ordinary tests never
+hardware. Native credential acceptance runs only through the explicit disposable
+storage probe; ordinary tests use memory and never
 read or change the developer's real keyring. GUI tests use an isolated
 configuration directory on every OS, including systems that ignore XDG variables.
 

@@ -121,6 +121,10 @@ jobs:
         run: |
           mkdir -p target/windows-build/storage
           env -u PAPO_RUNTIME_DIR -u PAPO_PYTHON -u PYTHONHOME -u PYTHONPATH dist/Papo-*-windows-x86_64-dev/Papo.com --check-windows-storage > target/windows-build/storage/stdout.json
+      - name: Verify packaged AppContainer isolation and healthy media conversion
+        run: |
+          mkdir -p target/windows-build/media
+          env -u PAPO_RUNTIME_DIR -u PAPO_PYTHON -u PYTHONHOME -u PYTHONPATH dist/Papo-*-windows-x86_64-dev/Papo.com --check-media-runtime > target/windows-build/media/stdout.txt 2> target/windows-build/media/stderr.txt
       - uses: actions/upload-artifact@v4
         if: ${{ always() && hashFiles('dist/Papo-*-windows-x86_64-dev.zip') != '' }}
         with:
@@ -139,6 +143,7 @@ jobs:
             target/windows-build/*.json
             target/windows-build/checkout-git.txt
             target/windows-build/storage/
+            target/windows-build/media/
           if-no-files-found: warn
       - name: Retain native rebuild inputs separately from the preview ZIP
         if: ${{ always() && hashFiles('target/windows-native-inputs/NATIVE-INPUTS.json') != '' }}

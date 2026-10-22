@@ -7,7 +7,7 @@ pub fn python() -> tokio::process::Command {
 
 /// Offline package acceptance using synthetic media and no physical devices.
 pub async fn check()->anyhow::Result<()>{
-    anyhow::ensure!(crate::platform::CURRENT.isolated_media_helpers,"Isolated media helpers are not implemented on this platform yet.");
+    anyhow::ensure!(crate::platform::CURRENT.isolated_media_helpers||cfg!(windows),"Isolated media helpers are not implemented on this platform yet.");
     struct Scratch(std::path::PathBuf);
     impl Drop for Scratch{fn drop(&mut self){let _=std::fs::remove_dir_all(&self.0);}}
     let scratch=Scratch(std::env::temp_dir().join(format!("papo-runtime-{}",uuid::Uuid::new_v4())));
@@ -37,9 +37,11 @@ else:
 print('isolated')
 "#,marker=marker.to_string_lossy());
         let output=tokio::time::timeout(std::time::Duration::from_secs(12),super::sandbox::command(&path,&script)?.output()).await??;
-        anyhow::ensure!(output.status.success()&&output.stdout==b"isolated\n","Media sandbox isolation failed: {}",String::from_utf8_lossy(&output.stderr));
+        anyhow::ensure!(output.status.success()&&String::from_utf8_lossy(&output.stdout).trim()=="isolated","Media sandbox isolation failed: {}",String::from_utf8_lossy(&output.stderr));
         let poster=super::poster::extract(&path).await?;anyhow::ensure!(poster.starts_with(b"\x89PNG"),"Invalid video poster");
         let animation=super::animation::PreparedAnimation::video(&path).await?;anyhow::ensure!(!animation.frames.is_empty(),"Empty converted animation");
     }
+    anyhow::ensure!(tokio::time::timeout(std::time::Duration::from_millis(50),listener.accept()).await.is_err(),"Sandbox reached parent TCP listener");
+    #[cfg(windows)]crate::platform::sandbox::check().await?;
     Ok(())
 }

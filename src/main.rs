@@ -48,6 +48,18 @@ fn main() {
         println!("Papo {}: isolated media runtime OK",env!("CARGO_PKG_VERSION"));return;
     }
 
+    // EN-US: Private synthetic parent-exit fixture; never starts normal UI or reads real sessions.
+    // PT-BR: Fixture sintética privada de saída do processo pai; não inicia a interface nem lê sessões reais.
+    #[cfg(windows)]
+    if argument.as_deref()==Some("--windows-media-parent-probe"){
+        let args:Vec<_>=std::env::args_os().skip(2).collect();
+        if args.len()!=2{std::process::exit(2);}
+        if let Err(error)=rt.block_on(platform::sandbox::parent_probe(std::path::Path::new(&args[0]),std::path::Path::new(&args[1]))){
+            eprintln!("Media parent probe failed: {error}");std::process::exit(1);
+        }
+        return;
+    }
+
     // EN-US: Explicit acceptance uses disposable namespaces and loopback fixtures before GUI/session startup.
     // PT-BR: A aceitação explícita usa namespaces descartáveis e testes locais antes de iniciar a interface/sessão.
     #[cfg(all(windows,not(test)))]

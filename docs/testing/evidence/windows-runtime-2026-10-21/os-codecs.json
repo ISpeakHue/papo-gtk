@@ -1,0 +1,42 @@
+﻿[
+    {
+        "Name":  "Microsoft.AV1VideoExtension",
+        "PackageFamilyName":  "Microsoft.AV1VideoExtension_8wekyb3d8bbwe",
+        "PublisherId":  "8wekyb3d8bbwe",
+        "InstallLocation":  "C:\\Program Files\\WindowsApps\\Microsoft.AV1VideoExtension_1.1.61781.0_x64__8wekyb3d8bbwe",
+        "SignatureKind":  "Store",
+        "Status":  "Ok"
+    },
+    {
+        "Name":  "Microsoft.AVCEncoderVideoExtension",
+        "PackageFamilyName":  "Microsoft.AVCEncoderVideoExtension_8wekyb3d8bbwe",
+        "PublisherId":  "8wekyb3d8bbwe",
+        "InstallLocation":  "C:\\Program Files\\WindowsApps\\Microsoft.AVCEncoderVideoExtension_1.0.271.0_x64__8wekyb3d8bbwe",
+        "SignatureKind":  "Store",
+        "Status":  "Ok"
+    },
+    {
+        "Name":  "Microsoft.HEVCVideoExtension",
+        "PackageFamilyName":  "Microsoft.HEVCVideoExtension_8wekyb3d8bbwe",
+        "PublisherId":  "8wekyb3d8bbwe",
+        "InstallLocation":  "C:\\Program Files\\WindowsApps\\Microsoft.HEVCVideoExtension_2.0.61931.0_x64__8wekyb3d8bbwe",
+        "SignatureKind":  "Store",
+        "Status":  "Ok"
+    },
+    {
+        "Name":  "Microsoft.MPEG2VideoExtension",
+        "PackageFamilyName":  "Microsoft.MPEG2VideoExtension_8wekyb3d8bbwe",
+        "PublisherId":  "8wekyb3d8bbwe",
+        "InstallLocation":  "C:\\Program Files\\WindowsApps\\Microsoft.MPEG2VideoExtension_1.0.61931.0_x64__8wekyb3d8bbwe",
+        "SignatureKind":  "Store",
+        "Status":  "Ok"
+    },
+    {
+        "Name":  "Microsoft.VP9VideoExtensions",
+        "PackageFamilyName":  "Microsoft.VP9VideoExtensions_8wekyb3d8bbwe",
+        "PublisherId":  "8wekyb3d8bbwe",
+        "InstallLocation":  "C:\\Program Files\\WindowsApps\\Microsoft.VP9VideoExtensions_1.1.451.0_x64__8wekyb3d8bbwe",
+        "SignatureKind":  "Store",
+        "Status":  "Ok"
+    }
+]

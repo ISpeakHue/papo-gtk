@@ -24,6 +24,10 @@ pub fn run() {
     // EN-US: Create Relm4 application using the unique reverse-DNS application ID.
     // PT-BR: Cria a aplicação Relm4 utilizando o identificador único reverso de DNS (APP_ID).
     let app = RelmApp::new(APP_ID);
+    // EN-US: Windows uses the per-user native pipe rather than a session D-Bus daemon.
+    // PT-BR: Windows usa o pipe nativo por usuário, sem depender de um daemon D-Bus.
+    #[cfg(windows)]
+    let app = { app.allow_multiple_instances(true); app.with_args(vec!["Papo".into()]) };
 
     // EN-US: Run the application with `RootModel` as the root component.
     // PT-BR: Executa a aplicação com `RootModel` como o componente raiz.

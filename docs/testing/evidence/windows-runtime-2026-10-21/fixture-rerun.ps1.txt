@@ -1,0 +1,5 @@
+# Fixture-only rerun after updating the read-only input disk; no application/runtime installation.
+$ErrorActionPreference='Stop'
+if ($env:COMPUTERNAME -ne 'PAPO-CLEAN-VM' -or $env:USERNAME -ne 'PapoTester') { throw 'Disposable fixture account required' }
+Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -like '*C:\PapoAcceptance\*.ps1*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+& (Join-Path $PSScriptRoot 'acceptance.ps1')

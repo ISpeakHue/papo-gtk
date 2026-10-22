@@ -1,0 +1,2 @@
+
+(papo-gtk.exe:2452): GLib-GIO-WARNING **: 20:12:16.525: win32 session dbus binary not found

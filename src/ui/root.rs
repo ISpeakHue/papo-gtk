@@ -567,6 +567,18 @@ impl Component for RootModel {
 
 
     fn init(_init: (), root: Self::Root, sender: ComponentSender<Self>) -> ComponentParts<Self> {
+        #[cfg(windows)] {
+            let window=root.downgrade();
+            gtk::glib::timeout_add_local(std::time::Duration::from_millis(50),move ||{
+                let Some(window)=window.upgrade()else{return gtk::glib::ControlFlow::Break;};
+                for activation in crate::platform::startup::drain(){
+                    // EN-US: Unknown opaque tickets only present the app; step 9 supplies authenticated destination resolution.
+                    // PT-BR: Tickets opacos desconhecidos só mostram o app; a etapa 9 fornecerá resolução autenticada de destinos.
+                    match activation{crate::platform::activation::Activation::Present|crate::platform::activation::Activation::Ticket(_)=>window.present()}
+                }
+                gtk::glib::ControlFlow::Continue
+            });
+        }
         crate::app::branding::install();
         crate::ui::style::install();
         crate::ui::chat::input::configure_desktop_im();

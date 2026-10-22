@@ -5,6 +5,8 @@ pub mod runtime;
 pub mod sandbox;
 pub mod capture;
 pub mod shortcuts;
+#[cfg(windows)] pub mod startup;
+#[cfg(any(windows,test))] pub mod activation;
 
 #[cfg(not(any(target_os="linux",target_os="windows",target_os="macos")))]
 compile_error!("Papo currently targets Linux, Windows and macOS only.");

@@ -1,0 +1,14 @@
+{
+  "source_commit": "b5566289e586c9047b5765271d8ed1d4014a6fea",
+  "archive_sha256": "aa8a4e10f1bae62a74d022ce125099c588cec0770ef3e7ea99a4d04ed62078ef",
+  "runtime_manifest_sha256": "f05833e598867363b42e605ac96418b05835f2238bb27f915880048cd5bee0da",
+  "files": 7824,
+  "fixture_sha256": {
+    "Papo-1.0.2-windows-x86_64-dev.zip": "aa8a4e10f1bae62a74d022ce125099c588cec0770ef3e7ea99a4d04ed62078ef",
+    "Papo-1.0.2-windows-x86_64-dev.zip.sha256": "8fb95c6e363f785f46e39ad238127c97835c93bc5d5d28ba8aa3f52c50ed5635",
+    "check-portable.ps1": "5ccd5c9d44a0047735ffec8d664e0b1c2be00ea0006ffa44e912f93542e5548d",
+    "acceptance.ps1": "ed23d987d820a8411c1a0c209b7d3203f40080917f18073f9137fe6d24e04526",
+    "rerun.ps1": "a872b4a21e0492c8c65c9d5edf4ebcda5fcce5c41fe4f325e7925e29d8b7f2ca"
+  },
+  "input_disk_sha256": "d49e8440b853bb4eeb623147619949007af8e0f9d3fc49d5fa469117256dba19"
+}

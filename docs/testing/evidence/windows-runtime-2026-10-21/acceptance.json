@@ -1,0 +1,101 @@
+﻿{
+    "schema":  1,
+    "status":  "pass",
+    "started_utc":  "2026-10-21T20:10:58.8650977Z",
+    "user":  {
+                 "profile":  "C:\\Users\\PapoTester",
+                 "groups":  [
+                                "S-1-5-21-187056987-2274430606-431529889-513",
+                                "S-1-1-0",
+                                "S-1-5-32-545",
+                                "S-1-5-4",
+                                "S-1-2-1",
+                                "S-1-5-11",
+                                "S-1-5-15",
+                                "S-1-5-113",
+                                "S-1-2-0",
+                                "S-1-5-64-10"
+                            ],
+                 "name":  "PAPO-CLEAN-VM\\PapoTester",
+                 "administrator":  false
+             },
+    "os":  {
+               "display_version":  "26H2",
+               "ubr":  9457,
+               "architecture":  "64-bit",
+               "build":  "26300",
+               "version":  "10.0.26300",
+               "build_lab":  "26100.1.amd64fre.ge_release.240331-1435",
+               "edition":  "EnterpriseEval",
+               "caption":  "Microsoft Windows 11 Enterprise Evaluation"
+           },
+    "hotfixes":  [
+                     {
+                         "HotFixID":  "KB5126052",
+                         "Description":  "Update"
+                     },
+                     {
+                         "HotFixID":  "KB5121794",
+                         "Description":  "Update"
+                     },
+                     {
+                         "HotFixID":  "KB5129195",
+                         "Description":  "Security Update"
+                     },
+                     {
+                         "HotFixID":  "KB5124007",
+                         "Description":  "Security Update"
+                     }
+                 ],
+    "network_adapters":  [
+
+                         ],
+    "machine_path_before":  "C:\\WINDOWS\\system32;C:\\WINDOWS;C:\\WINDOWS\\System32\\Wbem;C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\;C:\\WINDOWS\\System32\\OpenSSH\\",
+    "external_commands":  [
+                              {
+                                  "path":  "C:\\Users\\PapoTester\\AppData\\Local\\Microsoft\\WindowsApps\\python.exe",
+                                  "name":  "python.exe",
+                                  "app_execution_alias":  true
+                              },
+                              {
+                                  "path":  "C:\\Users\\PapoTester\\AppData\\Local\\Microsoft\\WindowsApps\\python3.exe",
+                                  "name":  "python3.exe",
+                                  "app_execution_alias":  true
+                              }
+                          ],
+    "installed_applications":  [
+                                   {
+                                       "DisplayName":  "Microsoft Edge",
+                                       "DisplayVersion":  "152.0.4191.66"
+                                   },
+                                   {
+                                       "DisplayName":  "Microsoft Edge Update",
+                                       "DisplayVersion":  "1.3.265.7"
+                                   },
+                                   {
+                                       "DisplayName":  "Microsoft Edge WebView2 Runtime",
+                                       "DisplayVersion":  "152.0.4191.66"
+                                   },
+                                   {
+                                       "DisplayName":  "Microsoft OneDrive",
+                                       "DisplayVersion":  "25.087.0506.0001"
+                                   }
+                               ],
+    "archive":  {
+                    "sha256":  "aa8a4e10f1bae62a74d022ce125099c588cec0770ef3e7ea99a4d04ed62078ef",
+                    "name":  "Papo-1.0.2-windows-x86_64-dev.zip"
+                },
+    "runtime_checks":  "pass",
+    "source_commit":  "b5566289e586c9047b5765271d8ed1d4014a6fea",
+    "source_dirty":  false,
+    "runtime_manifest_sha256":  "f05833e598867363b42e605ac96418b05835f2238bb27f915880048cd5bee0da",
+    "package":  "C:\\Users\\PapoTester\\PV9241a3\\Papo portable á é ç f0b98af72a274570b18fcb4d682a82b1\\Papo-1.0.2-windows-x86_64-dev relocated",
+    "normal_startup":  {
+                           "status":  "pass",
+                           "window_title":  "Papo",
+                           "screenshot":  "application.png",
+                           "renderer":  "cairo"
+                       },
+    "machine_path_unchanged":  true,
+    "finished_utc":  "2026-10-21T20:12:20.2998726Z"
+}

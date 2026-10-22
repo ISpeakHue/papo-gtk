@@ -1,6 +1,7 @@
 //! Papo GTK — Application entry point.
 //! EN-US: Initializes tracing/logging, Tokio multi-threaded async runtime, and hands off execution to the Relm4/GTK4 application.
 //! PT-BR: Ponto de entrada da aplicação. Inicializa rastreamento/logs, runtime assíncrono multi-thread do Tokio e transfere o controle para a aplicação Relm4/GTK4.
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 mod api;
 mod app;
@@ -33,10 +34,22 @@ fn main() {
         .build()
         .expect("Failed to create Tokio runtime");
 
+    if argument.as_deref()==Some("--check-packaged-runtime"){
+        if let Err(error)=rt.block_on(platform::runtime::check_packaged()){eprintln!("Packaged runtime check failed: {error}");std::process::exit(1);}
+        println!("Papo {}: packaged runtime OK",env!("CARGO_PKG_VERSION"));return;
+    }
+
     if argument.as_deref()==Some("--check-media-runtime"){
         if let Err(error)=rt.block_on(media::runtime::check()){eprintln!("Media runtime check failed: {error}");std::process::exit(1);}
         println!("Papo {}: isolated media runtime OK",env!("CARGO_PKG_VERSION"));return;
     }
+
+    #[cfg(windows)]
+    let _windows_startup = match rt.block_on(platform::startup::start()) {
+        Ok(Some(guard)) => guard,
+        Ok(None) => return,
+        Err(error) => { eprintln!("Windows startup failed: {error}"); std::process::exit(1); }
+    };
 
     // EN-US: Enter the runtime context. The guard will keep it active for the thread.
     // PT-BR: Entra no contexto do runtime Tokio. A guarda mantém o contexto ativo para a thread principal.

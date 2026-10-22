@@ -135,6 +135,26 @@ async fn access_check()->anyhow::Result<()>{
     let udp=std::net::UdpSocket::bind("127.0.0.1:0")?;udp.set_nonblocking(true)?;
     // EN-US: This explicit CLI creates/deletes only its random synthetic native entry, never enumerates credentials.
     // PT-BR: Esta CLI explícita cria/remove só a entrada nativa sintética aleatória, sem enumerar credenciais.
+    use windows_sys::Win32::Storage::FileSystem::{GetFileInformationByHandle,BY_HANDLE_FILE_INFORMATION};
+    let mut information:BY_HANDLE_FILE_INFORMATION=unsafe{std::mem::zeroed()};
+    anyhow::ensure!(unsafe{GetFileInformationByHandle(handle.as_raw_handle().cast(),&mut information)}!=0,"Cannot inspect synthetic fixture identity");
+    let script=format!(r#"import ctypes, sys
+from ctypes import wintypes as w
+class Info(ctypes.Structure):
+    _fields_=[('attributes',w.DWORD),('created',w.FILETIME),('accessed',w.FILETIME),('written',w.FILETIME),('volume',w.DWORD),('size_high',w.DWORD),('size_low',w.DWORD),('links',w.DWORD),('index_high',w.DWORD),('index_low',w.DWORD)]
+kernel=ctypes.WinDLL('kernel32', use_last_error=True)
+kernel.GetFileInformationByHandle.argtypes=[w.HANDLE,ctypes.POINTER(Info)]
+info=Info()
+print('handle-ready', flush=True)
+valid=kernel.GetFileInformationByHandle(w.HANDLE({handle}),ctypes.byref(info))
+assert not valid or (info.volume,info.index_high,info.index_low)!=({volume},{high},{low}), 'private handle inherited'
+print('handle-denied')
+"#,handle=handle.as_raw_handle() as usize,volume=information.dwVolumeSerialNumber,high=information.nFileIndexHigh,low=information.nFileIndexLow);
+    let mut cmd=command(&source,&script)?;let name=cmd.name.clone();let output=cmd.output().await?;
+    let native_invalid=matches!(output.status.code().map(|code|code as u32),Some(0xc0000008|0xc0000024));
+    let text=String::from_utf8_lossy(&output.stdout);
+    anyhow::ensure!((output.status.success()&&text.lines().last().is_some_and(|s|s.trim()=="handle-denied"))||(native_invalid&&text.trim()=="handle-ready"),"Private handle inheritance probe failed: {:?}",output.status.code());
+    anyhow::ensure!(!profile_exists(&name),"Handle probe cleanup failed");
     let target=format!("Papo.Media.Probe.{}",uuid::Uuid::new_v4());
     struct Credential(keyring::Entry);impl Drop for Credential{fn drop(&mut self){let _=self.0.delete_credential();}}
     let credential=Credential(keyring::Entry::new_with_target(&target,"Papo media acceptance","Papo")?);credential.0.set_password("synthetic fixture only")?;
@@ -172,12 +192,6 @@ else:
 print('access: scratch', file=sys.stderr, flush=True)
 with tempfile.TemporaryFile() as f:
     f.write(b'private writable scratch')
-print('access: handles', file=sys.stderr, flush=True)
-kernel=ctypes.WinDLL('kernel32', use_last_error=True)
-kernel.GetFinalPathNameByHandleW.argtypes=[w.HANDLE,w.LPWSTR,w.DWORD,w.DWORD]
-buffer=ctypes.create_unicode_buffer(32768)
-length=kernel.GetFinalPathNameByHandleW(w.HANDLE({handle}), buffer, len(buffer), 0)
-assert not length or not buffer.value.casefold().endswith('private.txt'), 'inherited private handle'
 print('access: credentials', file=sys.stderr, flush=True)
 cred=ctypes.WinDLL('advapi32', use_last_error=True)
 cred.CredReadW.argtypes=[w.LPCWSTR,w.DWORD,w.DWORD,ctypes.POINTER(ctypes.c_void_p)]
@@ -203,7 +217,7 @@ except OSError:
 finally:
     s.close()
 print('access-denied')
-"#,private=private.to_string_lossy(),source=source.to_string_lossy(),marker=marker.to_string_lossy(),handle=handle.as_raw_handle() as usize,tcp=tcp.local_addr()?.port(),tcp6=tcp6.local_addr()?.port(),udp=udp.local_addr()?.port());
+"#,private=private.to_string_lossy(),source=source.to_string_lossy(),marker=marker.to_string_lossy(),tcp=tcp.local_addr()?.port(),tcp6=tcp6.local_addr()?.port(),udp=udp.local_addr()?.port());
     let mut cmd=command(&source,&script)?;let name=cmd.name.clone();let output=cmd.output().await?;
     anyhow::ensure!(output.status.success()&&String::from_utf8_lossy(&output.stdout).trim()=="access-denied","Native access probe failed (exit {:?}, stdout {} bytes): {}",output.status.code(),output.stdout.len(),String::from_utf8_lossy(&output.stderr));
     tokio::time::sleep(Duration::from_millis(50)).await;

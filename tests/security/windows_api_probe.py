@@ -5,11 +5,6 @@ from ctypes import wintypes as w
 import socket
 import sys
 
-print('handle API', flush=True)
-kernel = ctypes.WinDLL('kernel32', use_last_error=True)
-kernel.GetFinalPathNameByHandleW.argtypes = [w.HANDLE, w.LPWSTR, w.DWORD, w.DWORD]
-buffer = ctypes.create_unicode_buffer(32768)
-print('handle result', kernel.GetFinalPathNameByHandleW(w.HANDLE(555555), buffer, len(buffer), 0), flush=True)
 print('credential API', flush=True)
 cred = ctypes.WinDLL('advapi32', use_last_error=True)
 cred.CredReadW.argtypes = [w.LPCWSTR, w.DWORD, w.DWORD, ctypes.POINTER(ctypes.c_void_p)]

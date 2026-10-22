@@ -69,7 +69,8 @@ sudo dnf install bubblewrap python3-gobject python3-gstreamer1 gstreamer1-plugin
 
 Screen sharing also requires a working desktop portal. Media playback depends
 on the installed codecs; a backend configured for voice is required for calls.
-Video preview/animation helpers require Bubblewrap and working user namespaces.
+On Linux, video preview/animation helpers require Bubblewrap and working user namespaces.
+Windows uses the [AppContainer/Job backend](docs/testing/windows-isolation.md).
 See [SECURITY_REVIEW.md](SECURITY_REVIEW.md) for media isolation and supported containers.
 
 ## Downloads

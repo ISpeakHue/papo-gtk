@@ -23,15 +23,15 @@ of [the implementation plan](MULTIPLATFORM_PLAN.md); Windows remains experimenta
 | Voice/camera GStreamer engine and remote stream viewing | Existing implementation | Shared engine; synthetic worker lifecycle tested by Windows CI | Shared engine, not yet validated |
 | Screen publication | Consent through desktop portal/PipeWire | Disabled; native source picker pending | Disabled; native capture/permission integration pending |
 | Desktop notification alerts/actions | freedesktop D-Bus | Pending; in-app inbox/badges still active | Pending; in-app inbox/badges still active |
-| Isolated video poster/GIF conversion | Bubblewrap / nested Flatpak sandbox | Disabled until a Windows isolation backend exists | Disabled until a macOS isolation backend exists |
+| Isolated video poster/GIF conversion | Bubblewrap / nested Flatpak sandbox | AppContainer + bounded Job Objects; native security/conversion checks passed | Disabled until a macOS isolation backend exists |
 
 `src/platform` owns OS policy, native credential access, helper/runtime paths,
 primary shortcut modifiers, decoder isolation and screen capture selection.
 The UI selects a desktop notification adapter separately. Unsupported adapters
 never fall back to Linux commands or execute media converters without isolation.
 Backend-provided images/thumbnails and ordinary image/GIF decoding remain shared.
-Some providers supply GIFs as video; those animations need the pending conversion
-backend on Windows/macOS. Video playback still depends on GTK/GStreamer codecs;
+Some providers supply GIFs as video; Linux and Windows have isolated conversion
+backends, while macOS still requires one. Video playback still depends on GTK/GStreamer codecs;
 real audio devices, cameras, fullscreen playback and live calls need native testing.
 
 `papo-gtk --platform-info` prints the selected integration capabilities without
@@ -123,7 +123,7 @@ configuration directory on every OS, including systems that ignore XDG variables
 
 ## Roadmap and macOS groundwork
 
-Before a supported Windows release: implement an isolated decoder process,
+Before a supported Windows release: complete packaged media/UI qualification,
 permission-aware screen/window selection, native notifications with activation
 and revocation, full Windows desktop acceptance, an installer,
 signing. Application icon/metadata and the native identity/activation prototype

@@ -17,12 +17,24 @@ runtime/RUNTIME-MANIFEST.json records package versions, file hashes and DLL impo
 THIRD-PARTY-NOTICES.txt points to upstream notices and included license texts.
 Byte-identical rebuilds have not been demonstrated.
 
-Native desktop alerts, local screen sharing and isolated video poster/GIF
-conversion remain unavailable on Windows. Those integrations are later port steps;
-installing codecs does not enable an unsandboxed conversion fallback.
+Native desktop alerts and local screen sharing remain unavailable on Windows.
+Video poster/GIF conversion uses AppContainer and bounded Job Objects. Failed
+isolation never falls back to an unrestricted converter. Complete media/UI and
+real-device qualification remain later port steps.
+
+Explicit synthetic decoder isolation acceptance in a disposable account:
+    Papo.com --check-media-runtime
+This creates/removes its own test credential, temporary files and container
+profiles, checks native access denial/limits/cleanup and converts three fixtures.
+It never reads existing Papo settings or saved sessions.
+Aceitacao sintetica explicita do isolamento em uma conta descartavel:
+    Papo.com --check-media-runtime
+Cria/remove apenas credenciais, arquivos e perfis proprios de teste. Nao le
+configuracoes existentes nem sessoes salvas do Papo.
 
 Developer overrides: PAPO_RUNTIME_DIR selects a complete alternate Papo runtime;
-PAPO_PYTHON explicitly selects a helper interpreter. Normal users need neither.
+PAPO_PYTHON selects an ordinary worker interpreter. Isolated decoders always use
+the selected runtime's bin/python.exe. Normal users need neither override.
 
 Windows desktop identity / Identidade do desktop Windows:
     Papo.com --register-desktop

@@ -109,6 +109,13 @@ legacy migration verifies account ownership. No plaintext credential fallback
 exists. [Reports and hashes](docs/testing/evidence/windows-storage-2026-10-22/README.md)
 record this gate independently of the remaining Home/Pro release qualification.
 
+Step 6 implements [AppContainer media isolation](docs/testing/windows-isolation.md)
+with bounded Job Objects, sealed input, private scratch and restricted handle
+inheritance. [Native CI](https://github.com/ISpeakHue/papo-gtk/actions/runs/39838842551)
+passed the security/lifecycle probes and three poster plus three GIF conversions
+before Windows `isolated_media_helpers` was enabled. macOS converters remain
+disabled. Full packaged media UX remains step 7.
+
 The Windows workflow also compiles the macOS foundation against Homebrew GTK
 and libadwaita, without claiming runtime or bundle validation. Its Windows job
 checks all Rust targets with warnings treated as errors,

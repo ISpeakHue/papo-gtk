@@ -6,6 +6,8 @@
 #[cfg(windows)]pub(crate) use windows::command;
 #[cfg(windows)]pub(crate) use windows::check;
 #[cfg(windows)]pub(crate) use windows::parent_probe;
+#[cfg(windows)]pub(crate) use windows::prepare;
+#[cfg(not(windows))]pub(crate) async fn prepare()->anyhow::Result<()>{Ok(())}
 
 #[cfg(not(any(target_os="linux",windows)))]
 pub(crate) struct Command;

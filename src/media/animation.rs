@@ -58,6 +58,7 @@ impl PreparedAnimation{
 
     pub async fn video(path:&std::path::Path)->anyhow::Result<Self>{
         let checked=path.to_owned();tokio::task::spawn_blocking(move||super::container::validate(&checked)).await??;
+        super::sandbox::prepare().await?;
         let mut command=super::sandbox::command(path,include_str!("gif_video.py"))?;
         let output=tokio::time::timeout(Duration::from_secs(20),command.output()).await??;
         anyhow::ensure!(output.status.success(),"Não foi possível decodificar o vídeo do GIF: {}",String::from_utf8_lossy(&output.stderr).trim());

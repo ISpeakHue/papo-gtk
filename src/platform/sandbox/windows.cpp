@@ -204,6 +204,11 @@ bool drain(HANDLE pipe,int channel,size_t& total,size_t limit,Sink sink,void* co
 
 // EN-US: This C ABI stays narrow; Rust owns cancellation and bounded result buffers.
 // PT-BR: Esta ABI C é restrita; o Rust controla cancelamento e buffers limitados de resultado.
+extern "C" DWORD papo_media_prepare_runtime(const wchar_t* runtime) noexcept {
+    try { Capability capability; runtime_access(runtime,capability.sid); return 0; }
+    catch(const Failure& error) { return error.code; }
+    catch(...) { return ERROR_GEN_FAILURE; }
+}
 extern "C" DWORD papo_media_run(const wchar_t* runtime,const wchar_t* source,const wchar_t* name,
     const wchar_t* script,HANDLE cancel,DWORD timeout,Sink sink,void* context,DWORD* exit_code) noexcept {
     try {

@@ -1,0 +1,27 @@
+﻿{
+    "schema":  1,
+    "status":  "fail",
+    "started_utc":  "2026-10-22T22:38:54.5859109Z",
+    "user":  {
+                 "name":  "PAPO-CLEAN-VM\\PapoTester",
+                 "administrator":  false
+             },
+    "os":  {
+               "build":  "26300",
+               "version":  "10.0.26300",
+               "caption":  "Microsoft Windows 11 Enterprise Evaluation",
+               "edition":  "EnterpriseEval",
+               "display_version":  "26H2",
+               "ubr":  9457
+           },
+    "archive":  {
+                    "sha256":  "013ff3af6b7ca0c9288f12ab5fd0a6724b08606432d0ec362219aa9ca027b656",
+                    "name":  "Papo-1.0.2-windows-x86_64-dev.zip"
+                },
+    "source_commit":  "e6865e6cafe310b70fac66ca3208519be39572e6",
+    "runtime_manifest_sha256":  "c214ff2b80b94004dd2d72ef3fe9f7d7e46280682b8daea5e06a5ca9d4115d68",
+    "exit_code":  1,
+    "error":  "Isolation acceptance failed; see native stderr",
+    "extracted_package_removed":  true,
+    "finished_utc":  "2026-10-22T22:41:28.2442759Z"
+}

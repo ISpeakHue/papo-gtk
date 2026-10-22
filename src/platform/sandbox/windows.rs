@@ -4,12 +4,27 @@ use std::{ffi::{c_void,OsStr},io,os::windows::{ffi::OsStrExt,process::ExitStatus
 use windows_sys::Win32::{Foundation::{CloseHandle,HANDLE},System::Threading::{CreateEventW,SetEvent}};
 
 unsafe extern "C" {
+    fn papo_media_prepare_runtime(runtime:*const u16)->u32;
     fn papo_media_run(runtime:*const u16,source:*const u16,name:*const u16,script:*const u16,cancel:HANDLE,timeout:u32,
         sink:extern "C" fn(*mut c_void,i32,*const u8,usize),context:*mut c_void,exit_code:*mut u32)->u32;
     fn papo_media_profile_exists(name:*const u16)->u32;
     fn papo_media_profile_remove(name:*const u16)->u32;
 }
 fn wide(value:impl AsRef<OsStr>)->Vec<u16>{value.as_ref().encode_wide().chain(Some(0)).collect()}
+pub(crate) async fn prepare()->anyhow::Result<()>{
+    use anyhow::Context;
+    let runtime=crate::platform::runtime::directory().context("Media runtime unavailable")?.canonicalize()?;
+    let runtime=wide(runtime);
+    // EN-US: First-extraction ACL propagation is trusted setup, before any decoder starts.
+    // PT-BR: A propagação inicial das ACLs é preparação confiável, antes de iniciar decodificadores.
+    // EN-US: Keep it off GTK and outside the shorter conversion budgets; failures stay closed.
+    // PT-BR: Executa fora do GTK e dos prazos menores da conversão; falhas continuam bloqueando.
+    tokio::time::timeout(Duration::from_secs(60),tokio::task::spawn_blocking(move||{
+        let error=unsafe{papo_media_prepare_runtime(runtime.as_ptr())};
+        if error==0{Ok(())}else{Err(io::Error::from_raw_os_error(error as i32))}
+    })).await.context("Windows media runtime permission setup timed out")???;
+    Ok(())
+}
 struct Event(usize);
 impl Event{fn new()->io::Result<Self>{let handle=unsafe{CreateEventW(std::ptr::null(),1,0,std::ptr::null())};if handle.is_null(){Err(io::Error::last_os_error())}else{Ok(Self(handle as usize))}}fn handle(&self)->HANDLE{self.0 as HANDLE}}
 impl Drop for Event{fn drop(&mut self){unsafe{CloseHandle(self.handle());}}}

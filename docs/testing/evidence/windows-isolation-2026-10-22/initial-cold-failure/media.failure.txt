@@ -1,0 +1,8 @@
+﻿Isolation acceptance failed; see native stderr
+At D:\check-media.ps1:32 char:30
++ ... itCode -ne 0){throw 'Isolation acceptance failed; see native stderr'}
++                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Isolation accep...e native stderr:String) [], RuntimeException
+    + FullyQualifiedErrorId : Isolation acceptance failed; see native stderr
+ 
+

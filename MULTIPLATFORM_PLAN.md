@@ -190,6 +190,19 @@ remaining GUI assertions are tracked in the provenance record.
    See [AppContainer isolation](https://learn.microsoft.com/en-us/windows/win32/secauthz/appcontainer-isolation)
    and [Job Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects).
 
+   **Native CI passed 2026-10-22; cold VM timeout under investigation:** The Windows AppContainer/Job Objects adapter now
+   backs the shared poster/GIF helpers and fails closed. Protected input, private
+   scratch, restricted inherited handles, clean runtime environment, process-tree
+   cleanup and output/time/memory limits passed native security probes alongside
+   three poster and three animation conversions (MP4/MOV/WebM). The Windows
+   capability was enabled after the gate passed; macOS remains disabled.
+   [Full native CI](https://github.com/ISpeakHue/papo-gtk/actions/runs/39838842551)
+   also passed ZIP-only runtime acceptance and macOS compile/link. The
+   [implementation contract](docs/testing/windows-isolation.md) and
+   [source/results evidence](docs/testing/evidence/windows-isolation-2026-10-22/README.md)
+   record the exact scope. Linux conversion/isolation regression checks passed.
+   Full media UI and Home/Pro release qualification remain step 7/later work.
+
 7. [ ] **Restore and validate all packaged media paths.**
 
    Integrate the isolated helper with posters, video-backed GIF animations and

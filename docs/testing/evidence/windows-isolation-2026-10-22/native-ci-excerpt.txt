@@ -1,0 +1,21 @@
+windows	UNKNOWN STEP	2026-10-22T19:20:19.8387977Z Ran 24 tests in 5.679s
+windows	UNKNOWN STEP	2026-10-22T19:26:34.8240239Z test platform::activation::tests::account_permission_logout_and_expiration_policy ... ok
+windows	UNKNOWN STEP	2026-10-22T19:26:34.8243948Z test platform::activation::tests::cold_start_unknown_ticket_has_no_trusted_destination ... ok
+windows	UNKNOWN STEP	2026-10-22T19:26:34.8247756Z test platform::activation::tests::shell_uri_rejects_extra_data_and_noncanonical_identifiers ... ok
+windows	UNKNOWN STEP	2026-10-22T19:26:34.8261902Z test platform::credential_key::tests::case_paths_unicode_and_service_boundaries_remain_distinct ... ok
+windows	UNKNOWN STEP	2026-10-22T19:26:34.8292097Z test platform::files::tests::failed_atomic_replace_preserves_destination_and_cleans_stage ... ok
+windows	UNKNOWN STEP	2026-10-22T19:26:34.8298730Z test platform::files::tests::windows_suggestions_handle_devices_ads_unicode_and_component_limits ... ok
+windows	UNKNOWN STEP	2026-10-22T19:26:34.8303116Z test platform::runtime::tests::missing_windows_runtime_never_uses_path_python ... ok
+windows	UNKNOWN STEP	2026-10-22T19:26:34.8305394Z test platform::runtime::tests::other_platform_development_fallbacks_are_preserved ... ok
+windows	UNKNOWN STEP	2026-10-22T19:26:34.8308463Z test platform::runtime::tests::packaged_python_keeps_spaces_and_explicit_overrides ... ok
+windows	UNKNOWN STEP	2026-10-22T19:26:34.8310038Z test platform::shortcuts::tests::command_on_mac_and_control_on_linux_and_windows ... ok
+windows	UNKNOWN STEP	2026-10-22T19:26:34.8658657Z test platform::startup::tests::native_activation_pipe_is_bounded_and_exclusive ... ok
+windows	UNKNOWN STEP	2026-10-22T19:26:34.9748201Z test platform::startup::tests::native_activation_rejects_forged_reply_identity ... ok
+windows	UNKNOWN STEP	2026-10-22T19:26:34.9752736Z test platform::tests::native_credentials_and_unfinished_features_are_explicit ... ok
+windows	UNKNOWN STEP	2026-10-22T19:26:34.9753834Z test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 286 filtered out; finished in 0.15s
+windows	UNKNOWN STEP	2026-10-22T19:26:38.7119600Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 298 filtered out; finished in 3.34s
+windows	UNKNOWN STEP	2026-10-22T19:26:40.1330015Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 298 filtered out; finished in 0.61s
+windows	UNKNOWN STEP	2026-10-22T19:26:46.6520996Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 298 filtered out; finished in 6.12s
+windows	UNKNOWN STEP	2026-10-22T19:26:48.2703049Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 298 filtered out; finished in 1.17s
+windows	UNKNOWN STEP	2026-10-22T19:26:51.6169634Z test result: ok. 10 passed; 0 failed; 1 ignored; 0 measured; 288 filtered out; finished in 2.72s
+windows	UNKNOWN STEP	2026-10-22T19:26:52.0287018Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 295 filtered out; finished in 0.01s

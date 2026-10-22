@@ -75,8 +75,10 @@ decoding without devices; embedded SVG icons across three theme names and two
 scales; compiled schemas; loaded Python-process DLL origins and plugin origins.
 Rust also maps a small GTK window with accented text. It reads no session/settings
 and contacts no server. This is runtime assembly evidence, not complete playback,
-call or isolation acceptance. `--check-media-runtime` still requires the future
-Windows sandbox backend and must remain unavailable.
+call or isolation acceptance. Step 6 adds the separate `--check-media-runtime`
+[AppContainer isolation gate](windows-isolation.md), which now passes native
+security/lifecycle checks and healthy poster/GIF conversion. This command does
+not replace complete media UI or real-device acceptance.
 
 Windows may load its Microsoft HEVC/VP9 codec extensions from `Program Files\WindowsApps`
 while enumerating Media Foundation factories. The DLL audit recognizes only the

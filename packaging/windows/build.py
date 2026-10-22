@@ -82,7 +82,7 @@ def toolchain():
     versions = {}
     for name, arguments in {
         "cargo.exe": ["--version", "--verbose"], "rustc.exe": ["-vV"],
-        "gcc.exe": ["--version"], "pkg-config.exe": ["--version"],
+        "gcc.exe": ["--version"], "g++.exe": ["--version"], "ar.exe": ["--version"], "pkg-config.exe": ["--version"],
         "glib-compile-resources.exe": ["--version"],
     }.items():
         executable = shutil.which(name)

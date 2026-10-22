@@ -181,6 +181,14 @@ extern "C" DWORD papo_media_run(const wchar_t* runtime,const wchar_t* source,con
         PACL acl=nullptr; status(SetEntriesInAclW(2,entries,nullptr,&acl)); Local acl_owner; acl_owner.value=acl;
         status(SetNamedSecurityInfoW(const_cast<LPWSTR>(input.c_str()),SE_FILE_OBJECT,DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION,nullptr,nullptr,acl,nullptr));
         const auto media=input+L"\\media"; copy_input(source,media,cancel);
+        // EN-US: Scan only software conversion plugins; device/network discovery is unnecessary and may hang in a container.
+        // PT-BR: Examina só plugins de conversão por software; descoberta de dispositivos/rede é desnecessária e pode travar no contêiner.
+        const auto plugins=input+L"\\plugins"; require(CreateDirectoryW(plugins.c_str(),nullptr));
+        for(const wchar_t* plugin:{L"coreelements",L"typefindfunctions",L"playback",L"app",L"videoconvertscale",L"videorate",L"isomp4",L"matroska",L"libav",L"vpx",L"videoparsersbad",L"audioparsers",L"audioconvert",L"opus",L"vorbis"}) {
+            const auto filename=L"libgst"+std::wstring(plugin)+L".dll";
+            copy_input((std::wstring(runtime)+L"\\lib\\gstreamer-1.0\\"+filename).c_str(),plugins+L"\\"+filename,cancel);
+        }
+
         const auto scratch=profile.folder+L"\\AC\\Temp"; CreateDirectoryW((profile.folder+L"\\AC").c_str(),nullptr); CreateDirectoryW(scratch.c_str(),nullptr);
         grant(scratch,profile.sid,FILE_ALL_ACCESS,SUB_CONTAINERS_AND_OBJECTS_INHERIT);
         pipe(stdout_read,stdout_write); pipe(stderr_read,stderr_write); pipe(stdin_read,stdin_write); stdin_write.reset();
@@ -192,10 +200,10 @@ extern "C" DWORD papo_media_run(const wchar_t* runtime,const wchar_t* source,con
         STARTUPINFOEXW startup{}; startup.StartupInfo.cb=sizeof(startup); startup.lpAttributeList=attributes.list;
         startup.StartupInfo.dwFlags=STARTF_USESTDHANDLES; startup.StartupInfo.hStdInput=inherited[0]; startup.StartupInfo.hStdOutput=inherited[1]; startup.StartupInfo.hStdError=inherited[2];
         const std::wstring root(runtime),python=root+L"\\bin\\python.exe";
-        auto line=quote(python)+L" -I -B -u -c "+quote(script)+L" "+quote(media);
+        auto line=quote(python)+L" -s -P -B -u -c "+quote(script)+L" "+quote(media);
         require(line.size()<30000);
         wchar_t windows[MAX_PATH]; require(GetWindowsDirectoryW(windows,MAX_PATH)>0);
-        std::vector<std::wstring> variables={L"GI_TYPELIB_PATH="+root+L"\\lib\\girepository-1.0",L"GST_DEBUG=0",L"GST_PLUGIN_SYSTEM_PATH_1_0="+root+L"\\lib\\gstreamer-1.0",L"GST_REGISTRY_1_0="+scratch+L"\\registry.bin",L"GST_REGISTRY_FORK=no",L"HOME="+scratch,L"LOCALAPPDATA="+scratch,L"PATH="+root+L"\\bin;"+windows+L"\\System32",L"SYSTEMROOT="+std::wstring(windows),L"TEMP="+scratch,L"TMP="+scratch,L"USERPROFILE="+scratch};
+        std::vector<std::wstring> variables={L"GI_TYPELIB_PATH="+root+L"\\lib\\girepository-1.0",L"GST_DEBUG=0",L"GST_PLUGIN_SYSTEM_PATH_1_0="+plugins,L"GST_REGISTRY_1_0="+scratch+L"\\registry.bin",L"GST_REGISTRY_FORK=no",L"HOME="+scratch,L"LOCALAPPDATA="+scratch,L"PATH="+root+L"\\bin;"+windows+L"\\System32",L"PYTHONHOME="+root,L"SYSTEMROOT="+std::wstring(windows),L"TEMP="+scratch,L"TMP="+scratch,L"USERPROFILE="+scratch};
         std::vector<wchar_t> environment; for(const auto& value:variables) { environment.insert(environment.end(),value.begin(),value.end()); environment.push_back(0); } environment.push_back(0);
         PROCESS_INFORMATION child{}; cancelled(cancel);
         require(CreateProcessW(python.c_str(),line.data(),nullptr,nullptr,TRUE,CREATE_SUSPENDED|CREATE_NO_WINDOW|CREATE_UNICODE_ENVIRONMENT|EXTENDED_STARTUPINFO_PRESENT,environment.data(),scratch.c_str(),&startup.StartupInfo,&child));

@@ -42,6 +42,8 @@ print('isolated')
         let animation=super::animation::PreparedAnimation::video(&path).await?;anyhow::ensure!(!animation.frames.is_empty(),"Empty converted animation");
     }
     anyhow::ensure!(tokio::time::timeout(std::time::Duration::from_millis(50),listener.accept()).await.is_err(),"Sandbox reached parent TCP listener");
-    #[cfg(windows)]crate::platform::sandbox::check().await?;
+    #[cfg(windows)]let isolation=crate::platform::sandbox::check().await?;
+    #[cfg(not(windows))]let isolation=serde_json::json!({"backend":"linux","private_files_denied":true,"input_writes_denied":true,"network_requests":0});
+    println!("{}",serde_json::json!({"schema":1,"status":"pass","posters":3,"animations":3,"isolation":isolation}));
     Ok(())
 }

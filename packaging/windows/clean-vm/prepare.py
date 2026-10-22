@@ -124,7 +124,7 @@ def main():
     parser.add_argument('--iso-sha256', required=True)
     parser.add_argument('--archive', required=True, type=Path)
     parser.add_argument('--directory', type=Path, default=ROOT / 'target/windows-clean-vm')
-    parser.add_argument('--test', choices=['runtime','identity','storage'], default='runtime')
+    parser.add_argument('--test', choices=['runtime','identity','storage','media'], default='runtime')
     parser.add_argument('--firmware', type=Path, default=Path('/usr/share/qemu/firmware/30-edk2-ovmf-4m-qcow2-x64-sb-enrolled.json'))
     args = parser.parse_args()
     directory = args.directory.resolve()
@@ -140,7 +140,7 @@ def main():
     media = directory / 'input'
     media.mkdir(exist_ok=True)
     answer_file(media / 'Autounattend.xml')
-    for source in (archive, checksum, ROOT / 'packaging/windows/check-portable.ps1', ROOT / 'packaging/windows/check-identity.ps1', ROOT / 'packaging/windows/check-storage.ps1', Path(__file__).with_name('acceptance.ps1'), Path(__file__).with_name('identity-acceptance.ps1'), Path(__file__).with_name('storage-acceptance.ps1')):
+    for source in (archive, checksum, ROOT / 'packaging/windows/check-portable.ps1', ROOT / 'packaging/windows/check-identity.ps1', ROOT / 'packaging/windows/check-storage.ps1', ROOT / 'packaging/windows/check-media.ps1', Path(__file__).with_name('acceptance.ps1'), Path(__file__).with_name('identity-acceptance.ps1'), Path(__file__).with_name('storage-acceptance.ps1'), Path(__file__).with_name('media-acceptance.ps1')):
         if source.suffix == '.ps1':
             # EN-US: PowerShell 5.1 needs the BOM to preserve bilingual fixture text.
             # PT-BR: O PowerShell 5.1 precisa do BOM para preservar os textos bilíngues.
@@ -150,7 +150,7 @@ def main():
     (media / 'setup.ps1').write_text(r'''$ErrorActionPreference = 'Stop'
 $destination = 'C:\PapoAcceptance'
 New-Item -ItemType Directory -Force $destination | Out-Null
-foreach ($pattern in @('acceptance.ps1', 'identity-acceptance.ps1', 'storage-acceptance.ps1', 'check-portable.ps1', 'check-identity.ps1', 'check-storage.ps1', '*.zip', '*.sha256')) {
+foreach ($pattern in @('acceptance.ps1', 'identity-acceptance.ps1', 'storage-acceptance.ps1', 'check-portable.ps1', 'check-identity.ps1', 'check-storage.ps1', 'check-media.ps1', 'media-acceptance.ps1', '*.zip', '*.sha256')) {
     Copy-Item (Join-Path $PSScriptRoot $pattern) $destination
 }
 $startup = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Startup\PapoAcceptance.cmd"
@@ -159,7 +159,7 @@ $startup = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Startup\PapoA
 # PT-BR: Só esta entrada descartável de teste deve poder ser removida pela conta padrão de teste.
 & icacls.exe $startup /grant '*S-1-5-32-545:M' | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Cannot make the fixture startup entry one-shot' }
-'''.replace('ACCEPTANCE_ENTRY', {'runtime':'acceptance.ps1','identity':'identity-acceptance.ps1','storage':'storage-acceptance.ps1'}[args.test]), encoding='utf-8')
+'''.replace('ACCEPTANCE_ENTRY', {'runtime':'acceptance.ps1','identity':'identity-acceptance.ps1','storage':'storage-acceptance.ps1','media':'media-acceptance.ps1'}[args.test]), encoding='utf-8')
     run('xorriso', '-as', 'mkisofs', '-quiet', '-J', '-r', '-V', 'PAPO_INPUT', '-o', directory / 'input.iso', media)
     run('qemu-img', 'create', '-f', 'qcow2', directory / 'os.qcow2', '80G')
     results = directory / 'results.img'

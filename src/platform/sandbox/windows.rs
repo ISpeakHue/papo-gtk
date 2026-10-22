@@ -47,7 +47,7 @@ pub(crate) fn command(path:&Path,script:&str)->anyhow::Result<Command>{
 
 /// EN-US: Explicit disposable acceptance; no user settings, credentials, or media are inspected.
 /// PT-BR: Aceitação explícita descartável; não inspeciona configurações, credenciais ou mídias do usuário.
-pub(crate) async fn check()->anyhow::Result<()>{
+pub(crate) async fn check()->anyhow::Result<serde_json::Value>{
     use anyhow::ensure;
     access_check().await?;
     struct Scratch(PathBuf);impl Drop for Scratch{fn drop(&mut self){let _=std::fs::remove_dir_all(&self.0);}}
@@ -65,7 +65,8 @@ pub(crate) async fn check()->anyhow::Result<()>{
     ensure!(cmd.output().await.is_err()&&before.elapsed()<Duration::from_secs(6),"Internal deadline not bounded");ensure!(!profile_exists(&name),"Timeout profile leaked");
     cancellation(&input).await?;
     parent_exit(&scratch.0,&input).await?;
-    println!("Windows AppContainer limits, cancellation, descendant and parent-exit checks passed");Ok(())
+    println!("Windows AppContainer limits, cancellation, descendant and parent-exit checks passed");
+    Ok(serde_json::json!({"backend":"appcontainer_job","private_files_denied":true,"input_runtime_writes_denied":true,"credential_read_denied":true,"handle_inheritance_denied":true,"tcp4_tcp6_udp_requests":0,"stdout_stderr_limits":true,"committed_memory_limit":true,"internal_deadline":true,"cancellation_tree_cleanup":true,"parent_exit_tree_cleanup":true,"orphan_reaping":true}))
 }
 fn profile_exists(name:&str)->bool{unsafe{papo_media_profile_exists(wide(name).as_ptr())!=0}}
 fn alive(pid:u32)->bool{
@@ -113,7 +114,10 @@ async fn parent_exit(directory:&Path,input:&Path)->anyhow::Result<()>{
     tokio::time::timeout(Duration::from_secs(3),async{while tree.pids.iter().any(|pid|alive(*pid)){tokio::time::sleep(Duration::from_millis(20)).await;}}).await?;
     // EN-US: Abrupt host exit closes the kernel job. Remove only this known disposable orphan profile.
     // PT-BR: A saída abrupta fecha o job no kernel. Remove somente o perfil órfão descartável conhecido.
-    anyhow::ensure!(unsafe{papo_media_profile_remove(wide(&tree.profile).as_ptr())}==0,"Orphan profile cleanup failed");
+    let reaped=command(input,"print('reaped')")?.output().await?;
+    let removed=!profile_exists(&tree.profile);
+    if !removed{unsafe{papo_media_profile_remove(wide(&tree.profile).as_ptr());}}
+    anyhow::ensure!(reaped.status.success()&&removed,"Orphan profile reaper failed");
     anyhow::ensure!(tree.pids.len()==2&&!profile_exists(&tree.profile),"Parent exit left a process/profile");Ok(())
 }
 
@@ -150,6 +154,18 @@ for path, mode in [({private:?}, 'rb'), ({source:?}, 'rb'), (sys.argv[1], 'ab'),
     else:
         f.close()
         raise AssertionError('private file/input/runtime boundary failed')
+try:
+    os.chmod(sys.argv[1], 0o777)
+except OSError:
+    pass
+else:
+    raise AssertionError('input attributes writable')
+try:
+    os.rename(os.path.dirname(sys.argv[1]), os.path.dirname(sys.argv[1])+'-replaced')
+except OSError:
+    pass
+else:
+    raise AssertionError('input directory replaceable')
 with tempfile.TemporaryFile() as f:
     f.write(b'private writable scratch')
 kernel=ctypes.WinDLL('kernel32', use_last_error=True)
@@ -182,6 +198,7 @@ print('access-denied')
 "#,private=private.to_string_lossy(),source=source.to_string_lossy(),marker=marker.to_string_lossy(),handle=handle.as_raw_handle() as usize,tcp=tcp.local_addr()?.port(),tcp6=tcp6.local_addr()?.port(),udp=udp.local_addr()?.port());
     let mut cmd=command(&source,&script)?;let name=cmd.name.clone();let output=cmd.output().await?;
     anyhow::ensure!(output.status.success()&&String::from_utf8_lossy(&output.stdout).trim()=="access-denied","Native access probe failed: {}",String::from_utf8_lossy(&output.stderr));
+    tokio::time::sleep(Duration::from_millis(50)).await;
     let mut bytes=[0;64];anyhow::ensure!(tcp.accept().is_err()&&tcp6.accept().is_err()&&udp.recv_from(&mut bytes).is_err(),"Sandbox made a network request");
     anyhow::ensure!(!profile_exists(&name)&&!marker.exists(),"Access probe cleanup failed");
     anyhow::ensure!(std::fs::read(&source)?==include_bytes!("../../../tests/fixtures/chat-h264.mp4"),"Original source changed");

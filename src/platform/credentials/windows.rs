@@ -18,7 +18,7 @@ fn legacy(service:&str,key:&str)->Result<Option<(keyring::Entry,String)>>{
     if key.len()>513{return Ok(None);}
     let entry=keyring::Entry::new(service,key).map_err(|_|anyhow!("Chaveiro indisponível."))?;
     let bytes=match entry.get_secret(){Ok(bytes)=>bytes,Err(keyring::Error::NoEntry)=>return Ok(None),Err(_)=>return Err(anyhow!("Não foi possível abrir a sessão no chaveiro."))};
-    let value=if bytes.starts_with(MAGIC){decode(bytes)?}else{entry.get_password().map_err(|_|anyhow!("Não foi possível abrir a sessão no chaveiro."))?};
+    let value=if bytes.starts_with(MAGIC){match decode(bytes){Ok(value)=>value,Err(_)=>return Ok(None)}}else{match entry.get_password(){Ok(value)=>value,Err(keyring::Error::BadEncoding(_))=>return Ok(None),Err(_)=>return Err(anyhow!("Não foi possível abrir a sessão no chaveiro."))}};
     // EN-US: The old lookup folds case. Never use/delete another account's colliding entry.
     // PT-BR: A busca antiga ignora caixa. Nunca usa/remove a entrada conflitante de outra conta.
     let matches=serde_json::from_str::<serde_json::Value>(&value).ok().is_some_and(|v|v["version"]==1&&v["base"].as_str().zip(v["username"].as_str()).is_some_and(|(base,user)|format!("{base}\n{user}")==key));

@@ -15,6 +15,10 @@ fn token(store:Store,api:&ApiClient)->Result<Option<String>>{
 }
 struct CredentialCleanup{store:Store,key:String}
 impl Drop for CredentialCleanup{fn drop(&mut self){let _=self.store.write(&self.key,None);}}
+// EN-US: Raw legacy fixtures also need cleanup when their intentionally invalid payload cannot prove ownership.
+// PT-BR: Testes antigos brutos precisam de limpeza quando a carga propositalmente inválida não comprova posse.
+struct LegacyCleanup{service:String,key:String}
+impl Drop for LegacyCleanup{fn drop(&mut self){if let Ok(entry)=keyring::Entry::new(&self.service,&self.key){let _=entry.delete_credential();}}}
 struct Scratch(PathBuf);
 impl Drop for Scratch{fn drop(&mut self){let _=std::fs::remove_dir_all(&self.0);}}
 
@@ -66,6 +70,7 @@ async fn credentials()->Result<serde_json::Value>{
     // EN-US: Verify migration from earlier UTF-16 keyring entries and the UTF-8 blob budget.
     // PT-BR: Verifica migração de entradas UTF-16 antigas e o limite de blobs UTF-8.
     let service=format!("br.com.papo.gtk.session.v1.test.{id}");let entry=keyring::Entry::new(&service,&key(&api))?;
+    let _legacy=LegacyCleanup{service:service.clone(),key:key(&api)};
     let legacy=serde_json::json!({"version":1,"base":api.base_url(),"username":USER,"auth":"disposable legacy áéç"}).to_string();
     entry.set_password(&legacy)?;anyhow::ensure!(store.read(&key(&api))?.as_deref()==Some(legacy.as_str()),"Legacy credential read failed");
     let large=format!("{}áéç","x".repeat(1800));store.write(&key(&api),Some(large.as_str()))?;anyhow::ensure!(store.read(&key(&api))?.as_deref()==Some(large.as_str()),"UTF-8 credential read failed");
@@ -85,6 +90,8 @@ async fn credentials()->Result<serde_json::Value>{
     store.write(&upper,None)?;anyhow::ensure!(store.read(&lower)?.as_deref()==Some("lower fixture"),"Deletion crossed hashed accounts");store.write(&lower,None)?;
     let long_key=format!("{}{}\nLongUser",api.base_url(),"x".repeat(1000));let _long=CredentialCleanup{store,key:long_key.clone()};
     store.write(&long_key,Some("long key fixture"))?;anyhow::ensure!(store.read(&long_key)?.as_deref()==Some("long key fixture"),"Long credential key failed");store.write(&long_key,None)?;
+    entry.set_secret(b"PAPO-UTF8\0\xff")?;anyhow::ensure!(store.read(&key(&api))?.is_none(),"Malformed legacy value was returned");
+    store.write(&key(&api),Some("valid fixture"))?;store.write(&key(&api),None)?;anyhow::ensure!(store.read(&key(&api))?.is_none(),"Malformed legacy value blocked logout");entry.delete_credential()?;
     let mode=Arc::new(AtomicUsize::new(0));let control=mode.clone();let count=Arc::new(AtomicUsize::new(0));let requests=count.clone();
     let server=tokio::spawn(async move{
         loop{let(mut socket,_)=listener.accept().await?;let mut request=Vec::new();
@@ -111,7 +118,7 @@ async fn credentials()->Result<serde_json::Value>{
     }
     anyhow::ensure!(count.load(Ordering::SeqCst)==6,"Unexpected auth request count");
     store.write(&key(&api),None)?;anyhow::ensure!(store.read(&key(&api))?.is_none(),"Probe cleanup failed");
-    Ok(serde_json::json!({"status":"pass","probe_id":id,"phases":phases,"requests":count.load(Ordering::SeqCst),"legacy_utf16":true,"legacy_case_guard":true,"exact_account_targets":true,"long_credential_key":true,"utf8_blob":true,"oversized_rejected":true,"unavailable_injected":true,"removed":true}))
+    Ok(serde_json::json!({"status":"pass","probe_id":id,"phases":phases,"requests":count.load(Ordering::SeqCst),"legacy_utf16":true,"legacy_case_guard":true,"malformed_legacy_ignored":true,"exact_account_targets":true,"long_credential_key":true,"utf8_blob":true,"oversized_rejected":true,"unavailable_injected":true,"removed":true}))
 }
 
 fn temporary(path:&Path,bytes:&[u8])->Result<TemporaryFile>{std::fs::write(path,bytes)?;Ok(TemporaryFile(path.to_owned()))}

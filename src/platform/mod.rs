@@ -1,6 +1,7 @@
 //! EN-US: OS integration boundaries; protocol, history and GTK components remain shared.
 //! PT-BR: Fronteiras de integração com o sistema; protocolo, histórico e componentes GTK continuam compartilhados.
 #[cfg(not(test))]pub mod credentials;
+#[cfg(any(windows,test))]mod credential_key;
 pub mod runtime;
 pub mod files;
 #[cfg(all(windows,not(test)))] pub mod storage_check;

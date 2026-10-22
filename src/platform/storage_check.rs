@@ -66,10 +66,25 @@ async fn credentials()->Result<serde_json::Value>{
     // EN-US: Verify migration from earlier UTF-16 keyring entries and the UTF-8 blob budget.
     // PT-BR: Verifica migração de entradas UTF-16 antigas e o limite de blobs UTF-8.
     let service=format!("br.com.papo.gtk.session.v1.test.{id}");let entry=keyring::Entry::new(&service,&key(&api))?;
-    entry.set_password("disposable legacy áéç")?;anyhow::ensure!(store.read(&key(&api))?.as_deref()==Some("disposable legacy áéç"),"Legacy credential read failed");
+    let legacy=serde_json::json!({"version":1,"base":api.base_url(),"username":USER,"auth":"disposable legacy áéç"}).to_string();
+    entry.set_password(&legacy)?;anyhow::ensure!(store.read(&key(&api))?.as_deref()==Some(legacy.as_str()),"Legacy credential read failed");
     let large=format!("{}áéç","x".repeat(1800));store.write(&key(&api),Some(large.as_str()))?;anyhow::ensure!(store.read(&key(&api))?.as_deref()==Some(large.as_str()),"UTF-8 credential read failed");
+    anyhow::ensure!(matches!(entry.get_password(),Err(keyring::Error::NoEntry)),"Legacy entry was not migrated");
     let rejected=store.write(&key(&api),Some(&"x".repeat(10000))).err().context("Oversized Windows credential was accepted")?;
     anyhow::ensure!(!rejected.to_string().contains(&"x".repeat(20))&&store.read(&key(&api))?.as_deref()==Some(large.as_str()),"Rejected credential leaked or replaced data");store.write(&key(&api),None)?;
+    // EN-US: WinCred folds target case; guarded legacy lookup and hashed targets must preserve both accounts.
+    // PT-BR: WinCred ignora caixa; a busca antiga protegida e os hashes devem preservar ambas as contas.
+    let upper=format!("{}\nCaseUser",api.base_url());let lower=format!("{}\ncaseuser",api.base_url());
+    let _upper=CredentialCleanup{store,key:upper.clone()};let _lower=CredentialCleanup{store,key:lower.clone()};
+    let old=keyring::Entry::new(&service,&upper)?;
+    let old_value=serde_json::json!({"version":1,"base":api.base_url(),"username":"CaseUser","auth":"disposable case fixture"}).to_string();old.set_password(&old_value)?;
+    anyhow::ensure!(store.read(&lower)?.is_none(),"Legacy lookup crossed account case");store.write(&lower,None)?;
+    anyhow::ensure!(old.get_password()?==old_value,"Legacy deletion crossed account case");
+    store.write(&lower,Some("lower fixture"))?;store.write(&upper,Some("upper fixture"))?;
+    anyhow::ensure!(store.read(&lower)?.as_deref()==Some("lower fixture")&&store.read(&upper)?.as_deref()==Some("upper fixture"),"Hashed account targets collided");
+    store.write(&upper,None)?;anyhow::ensure!(store.read(&lower)?.as_deref()==Some("lower fixture"),"Deletion crossed hashed accounts");store.write(&lower,None)?;
+    let long_key=format!("{}{}\nLongUser",api.base_url(),"x".repeat(1000));let _long=CredentialCleanup{store,key:long_key.clone()};
+    store.write(&long_key,Some("long key fixture"))?;anyhow::ensure!(store.read(&long_key)?.as_deref()==Some("long key fixture"),"Long credential key failed");store.write(&long_key,None)?;
     let mode=Arc::new(AtomicUsize::new(0));let control=mode.clone();let count=Arc::new(AtomicUsize::new(0));let requests=count.clone();
     let server=tokio::spawn(async move{
         loop{let(mut socket,_)=listener.accept().await?;let mut request=Vec::new();
@@ -96,7 +111,7 @@ async fn credentials()->Result<serde_json::Value>{
     }
     anyhow::ensure!(count.load(Ordering::SeqCst)==6,"Unexpected auth request count");
     store.write(&key(&api),None)?;anyhow::ensure!(store.read(&key(&api))?.is_none(),"Probe cleanup failed");
-    Ok(serde_json::json!({"status":"pass","probe_id":id,"phases":phases,"requests":count.load(Ordering::SeqCst),"legacy_utf16":true,"utf8_blob":true,"oversized_rejected":true,"unavailable_injected":true,"removed":true}))
+    Ok(serde_json::json!({"status":"pass","probe_id":id,"phases":phases,"requests":count.load(Ordering::SeqCst),"legacy_utf16":true,"legacy_case_guard":true,"exact_account_targets":true,"long_credential_key":true,"utf8_blob":true,"oversized_rejected":true,"unavailable_injected":true,"removed":true}))
 }
 
 fn temporary(path:&Path,bytes:&[u8])->Result<TemporaryFile>{std::fs::write(path,bytes)?;Ok(TemporaryFile(path.to_owned()))}
@@ -129,7 +144,7 @@ async fn files(root:&Path)->Result<serde_json::Value>{
         tokio::time::sleep(Duration::from_millis(1)).await;
     }
     anyhow::ensure!(saw_stage,"Copy stage was not observed");task.abort();let _=task.await;
-    for _ in 0..100{if !source.exists(){break;}tokio::time::sleep(Duration::from_millis(10)).await;}
+    for _ in 0..100{if !source.exists()&&!std::fs::read_dir(&long)?.filter_map(|r|r.ok()).any(|entry|entry.file_name().to_string_lossy().starts_with(".papo-download-")){break;}tokio::time::sleep(Duration::from_millis(10)).await;}
     anyhow::ensure!(!source.exists()&&std::fs::read(&destination)?==b"replacement","Cancelled save changed destination or leaked input");
     anyhow::ensure!(!std::fs::read_dir(&long)?.filter_map(|r|r.ok()).any(|entry|entry.file_name().to_string_lossy().starts_with(".papo-download-")),"Cancelled stage leaked");
     let clipboard=UploadFile::clipboard_png(bytes).await?;let path=clipboard.path.clone();let owner=clipboard.clone();drop(clipboard);anyhow::ensure!(path.exists(),"Draft owner lost staged clipboard");drop(owner);anyhow::ensure!(!path.exists(),"Clipboard temporary leaked");

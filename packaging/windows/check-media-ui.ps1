@@ -3,15 +3,18 @@
 param(
  [Parameter(Mandatory=$true)][string]$Archive,
  [Parameter(Mandatory=$true)][string]$OutputDirectory,
- [string]$TestDirectory=$PSScriptRoot,
+ [string]$TestDirectory='',
  [ValidateSet('cairo','auto')][string]$Renderer='cairo',
  [ValidateSet('discard','device')][string]$AudioOutput='discard',
  [string[]]$Cases=@('media-emojis','draft-previews','attachment-media','mov-media','backend-gifs','media-cache','recent-media','status-viewer','send-video','video-audio')
 )
 $ErrorActionPreference='Stop'
+# EN-US: Windows PowerShell 5.1 initializes script location after parameter defaults.
+# PT-BR: O Windows PowerShell 5.1 inicializa o local do script após os valores padrão dos parâmetros.
+if(!$TestDirectory){$TestDirectory=$PSScriptRoot}
 New-Item -ItemType Directory -Force $OutputDirectory|Out-Null
 $OutputDirectory=(Get-Item $OutputDirectory).FullName
-$report=[ordered]@{schema=1;status='running';started_utc=[DateTime]::UtcNow.ToString('o');renderer_request=$Renderer;audio_output=$AudioOutput;cases=@()}
+$report=[ordered]@{schema=1;status='running';started_utc=[DateTime]::UtcNow.ToString('o');renderer_request=$Renderer;audio_output=$AudioOutput;driver_sha256=(Get-FileHash $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant();cases=@()}
 $work=$null;$process=$null
 try {
  if(Get-Process -Name papo-gtk,papo-media-tests -ErrorAction SilentlyContinue){throw 'Close Papo before the explicit disposable media UI check'}

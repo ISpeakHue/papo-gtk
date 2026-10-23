@@ -198,29 +198,39 @@ jobs:
 
   media-ui-runtime:
     needs: windows
-    if: ${{ needs.windows.result == 'success' && !inputs.packaging_only && !inputs.bridge_probe }}
+    if: ${{ always() && !cancelled() && !inputs.packaging_only && !inputs.bridge_probe && (needs.windows.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.runtime_artifact_run != '')) }}
+    permissions:
+      contents: read
+      actions: read
     runs-on: windows-2022
     timeout-minutes: 45
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
           name: Papo-Windows-x86_64-developer-preview
           path: download
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.runtime_artifact_run || github.run_id }}
       - uses: actions/download-artifact@v4
         with:
           name: Windows-media-acceptance
           path: media-checks
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.runtime_artifact_run || github.run_id }}
       - name: Exercise packaged media with software rendering
-        shell: pwsh
+        shell: powershell
         run: |
           $archive=(Get-ChildItem download -Filter '*.zip'|Select-Object -First 1).FullName
-          & ./media-checks/check-media-ui.ps1 -Archive $archive -OutputDirectory target/windows-media-ui/cairo
+          & ./packaging/windows/check-media-ui.ps1 -Archive $archive -TestDirectory ./media-checks -OutputDirectory target/windows-media-ui/cairo
       - name: Exercise automatic renderer selection without forcing a GPU driver
         if: ${{ !cancelled() }}
-        shell: pwsh
+        shell: powershell
         run: |
           $archive=(Get-ChildItem download -Filter '*.zip'|Select-Object -First 1).FullName
-          & ./media-checks/check-media-ui.ps1 -Archive $archive -OutputDirectory target/windows-media-ui/auto -Renderer auto -Cases @('mov-media','backend-gifs','status-viewer','video-audio')
+          & ./packaging/windows/check-media-ui.ps1 -Archive $archive -TestDirectory ./media-checks -OutputDirectory target/windows-media-ui/auto -Renderer auto -Cases @('mov-media','backend-gifs','status-viewer','video-audio')
       - uses: actions/upload-artifact@v4
         if: always()
         with:

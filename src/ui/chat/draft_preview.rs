@@ -121,7 +121,7 @@ fn decode_image(path:&Path)->Option<crate::media::PreparedImage>{
     let mut source=|extension:&str|{let file=crate::api::features::TemporaryFile(std::env::temp_dir().join(format!("papo-preview-{}.{extension}",Uuid::new_v4())));let path=file.0.clone();sources.push(file);path};
     let png=source("png");image::DynamicImage::new_rgb8(640,320).save(&png).unwrap();
     let gif=source("gif");std::fs::write(&gif,crate::media::animation::fixture()).unwrap();
-    let video=source("webm");std::fs::copy("tests/fixtures/chat-video.webm",&video).unwrap();
+    let video=source("webm");std::fs::write(&video,include_bytes!("../../../tests/fixtures/chat-video.webm")).unwrap();
     let file=source("pdf");std::fs::write(&file,b"%PDF-1.4 fixture").unwrap();
     let broken=source("jpg");std::fs::write(&broken,b"not an image").unwrap();
     let files:Vec<_>=[&png,&gif,&video,&file,&broken,&png].into_iter().map(|path|tokio::runtime::Handle::current().block_on(UploadFile::inspect(path.clone())).unwrap()).collect();

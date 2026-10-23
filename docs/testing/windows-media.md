@@ -58,6 +58,18 @@ stdout/stderr and make the overall report fail. Renderer type and sampled UI
 working-set peaks are recorded. Instrumented-process memory and timing are not
 release-build performance measurements.
 
+The driver mirrors the launcher's font, schema, GI, plugin-scanner and private
+registry paths before loading GTK. By default `-AudioOutput discard` gives the
+bundled `fakeaudiosink` a test-process-only autoplugging rank. This permits real
+audio decoding and stream-volume behavior on device-free runners; it does not
+establish audible playback. Use `-AudioOutput device` for a separate physical
+output test. Production audio selection is unchanged. See GStreamer's
+[automatic sink selection](https://gstreamer.freedesktop.org/documentation/autodetect/autoaudiosink.html),
+[CI audio sink](https://gstreamer.freedesktop.org/documentation/debugutilsbad/fakeaudiosink.html)
+and [feature-rank override](https://gstreamer.freedesktop.org/documentation/gstreamer/running.html).
+Draft fixture bytes are embedded in the harness; an installed check never needs
+the source checkout or a particular working directory.
+
 | Case | Required assertions |
 | --- | --- |
 | `media-emojis` | Animated GIF paintables and server custom emojis advance frames, pause offscreen/reduced-motion, and release timers. Picker resizing remains a separate regression. |

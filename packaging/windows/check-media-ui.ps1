@@ -5,12 +5,13 @@ param(
  [Parameter(Mandatory=$true)][string]$OutputDirectory,
  [string]$TestDirectory=$PSScriptRoot,
  [ValidateSet('cairo','auto')][string]$Renderer='cairo',
+ [ValidateSet('discard','device')][string]$AudioOutput='discard',
  [string[]]$Cases=@('media-emojis','draft-previews','attachment-media','mov-media','backend-gifs','media-cache','recent-media','status-viewer','send-video','video-audio')
 )
 $ErrorActionPreference='Stop'
 New-Item -ItemType Directory -Force $OutputDirectory|Out-Null
 $OutputDirectory=(Get-Item $OutputDirectory).FullName
-$report=[ordered]@{schema=1;status='running';started_utc=[DateTime]::UtcNow.ToString('o');renderer_request=$Renderer;cases=@()}
+$report=[ordered]@{schema=1;status='running';started_utc=[DateTime]::UtcNow.ToString('o');renderer_request=$Renderer;audio_output=$AudioOutput;cases=@()}
 $work=$null;$process=$null
 try {
  if(Get-Process -Name papo-gtk,papo-media-tests -ErrorAction SilentlyContinue){throw 'Close Papo before the explicit disposable media UI check'}
@@ -36,8 +37,17 @@ try {
  # PT-BR: Replica caminhos privados de DLLs/módulos do launcher; não expõe MSYS2 nem altera ajustes do sistema.
  Get-ChildItem Env:|Where-Object Name -Match '^(PAPO_|PYTHON|GST_|GI_|GTK_|GSK_|GDK_|GIO_|GSETTINGS_SCHEMA_DIR|FONTCONFIG_|XDG_)'|ForEach-Object{Remove-Item "Env:$($_.Name)"}
  $env:PATH="$runtime\bin;$env:SystemRoot\System32;$env:SystemRoot;$env:SystemRoot\System32\WindowsPowerShell\v1.0"
- $env:GTK_PATH=Join-Path $runtime 'lib/gtk-4.0';$env:GIO_EXTRA_MODULES=Join-Path $runtime 'lib/gio/modules'
- $env:XDG_DATA_DIRS=Join-Path $runtime 'share';$env:FONTCONFIG_PATH=Join-Path $runtime 'etc/fonts'
+ $env:PAPO_RUNTIME_DIR=$runtime;$env:PYTHONHOME=$runtime;$env:PYTHONNOUSERSITE='1';$env:PYTHONSAFEPATH='1';$env:PYTHONDONTWRITEBYTECODE='1'
+ $env:GI_TYPELIB_PATH=Join-Path $runtime 'lib/girepository-1.0';$env:GSETTINGS_SCHEMA_DIR=Join-Path $runtime 'share/glib-2.0/schemas'
+ $env:GTK_PATH=Join-Path $runtime 'lib/gtk-4.0';$env:GIO_MODULE_DIR=Join-Path $runtime 'lib/gio/modules'
+ $env:XDG_DATA_DIRS=Join-Path $runtime 'share';$env:FONTCONFIG_PATH=Join-Path $runtime 'etc/fonts';$env:FONTCONFIG_FILE=Join-Path $runtime 'etc/fonts/fonts.conf'
+ $cache=Join-Path $work 'cache';New-Item -ItemType Directory $cache|Out-Null;$env:XDG_CACHE_HOME=$cache
+ $env:GST_PLUGIN_SYSTEM_PATH_1_0=Join-Path $runtime 'lib/gstreamer-1.0';$env:GST_PLUGIN_SCANNER_1_0=Join-Path $runtime 'libexec/gstreamer-1.0/gst-plugin-scanner.exe';$env:GST_REGISTRY_1_0=Join-Path $cache 'registry.bin'
+ $loaders=Get-ChildItem (Join-Path $runtime 'lib/gdk-pixbuf-2.0') -Filter loaders.cache -Recurse|Select-Object -First 1
+ if($loaders){$env:GDK_PIXBUF_MODULE_FILE=$loaders.FullName}
+ # EN-US: Decode audio into the bundled test sink on device-free runners; never claim audible output.
+ # PT-BR: Decodifica áudio no sink de teste distribuído em runners sem dispositivo; não comprova saída audível.
+ if($AudioOutput -eq 'discard'){$env:GST_PLUGIN_FEATURE_RANK='fakeaudiosink:512'}
  $env:GTK_A11Y='none';$env:PYTHONUTF8='1';$env:PAPO_NATIVE_FULLSCREEN_TEST='1'
  if($Renderer -eq 'auto'){Remove-Item Env:GSK_RENDERER -ErrorAction SilentlyContinue}else{$env:GSK_RENDERER=$Renderer}
  $beforePath=[Environment]::GetEnvironmentVariable('PATH','Machine')

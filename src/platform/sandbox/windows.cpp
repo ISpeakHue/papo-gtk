@@ -146,7 +146,11 @@ struct Attributes {
 };
 void cancelled(HANDLE event) { if(WaitForSingleObject(event,0)==WAIT_OBJECT_0) throw Failure{ERROR_CANCELLED}; }
 void copy_input(const wchar_t* source,const std::wstring& destination,HANDLE cancel) {
-    Handle input(CreateFileW(source,GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_FLAG_SEQUENTIAL_SCAN,nullptr)); require(input.value!=INVALID_HANDLE_VALUE);
+    // EN-US: Cancelling a caller may unlink its temporary original while this reader finishes closing.
+    // PT-BR: O cancelamento pode remover o original temporário enquanto este leitor termina de fechar.
+    // EN-US: Allow delete sharing only here; the separate staged input remains sealed against writes/deletion.
+    // PT-BR: Permite compartilhar exclusão só aqui; a cópia isolada continua selada contra escrita/exclusão.
+    Handle input(CreateFileW(source,GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,FILE_FLAG_SEQUENTIAL_SCAN,nullptr)); require(input.value!=INVALID_HANDLE_VALUE);
     LARGE_INTEGER length{}; require(GetFileSizeEx(input.value,&length)); require(length.QuadPart>=0&&length.QuadPart<=256LL*1024*1024);
     Handle output(CreateFileW(destination.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr)); require(output.value!=INVALID_HANDLE_VALUE);
     char bytes[65536]; DWORD read=0,written=0; ULONGLONG total=0;

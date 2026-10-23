@@ -106,8 +106,17 @@ def main():
             assert Path(filename).resolve().is_relative_to(root), ('External GStreamer plugin', filename)
     fixtures = root / 'share/papo-gtk/check-fixtures'
 
-    def decode(description):
+    decode_runs = []
+    def decode(description, fixture, mode='auto'):
         pipeline = Gst.parse_launch(description)
+        decoders = set()
+        def observe(_pipeline, _subbin, element):
+            factory = element.get_factory()
+            if factory and 'Decoder' in (factory.get_metadata('klass') or ''):
+                decoders.add(factory.get_name())
+        pipeline.connect('deep-element-added', observe)
+        for element in pipeline.iterate_elements():
+            observe(pipeline, pipeline, element)
         try:
             pipeline.set_state(Gst.State.PLAYING)
             message = pipeline.get_bus().timed_pop_filtered(12 * Gst.SECOND, Gst.MessageType.ERROR | Gst.MessageType.EOS)
@@ -116,12 +125,19 @@ def main():
                 raise RuntimeError(str(message.parse_error()))
         finally:
             pipeline.set_state(Gst.State.NULL)
+        decode_runs.append({'fixture': fixture, 'mode': mode, 'decoders': sorted(decoders)})
 
     for name in ('chat-h264.mp4', 'chat-video.mov', 'chat-video.webm'):
         uri = Gst.filename_to_uri(str(fixtures / name))
-        decode(f'uridecodebin uri="{uri}" ! videoconvert ! fakesink sync=false')
+        decode(f'uridecodebin uri="{uri}" ! videoconvert ! fakesink sync=false', name)
+        # EN-US: Verify the software fallback separately; automatic selection remains free to use a host GPU.
+        # PT-BR: Verifica separadamente o fallback por software; a seleção automática pode usar a GPU do host.
+        caps, chain = ('video/x-vp8', 'vp8dec') if name.endswith('.webm') else ('video/x-h264', 'h264parse ! avdec_h264')
+        decode(f'uridecodebin uri="{uri}" caps="{caps}" ! {chain} ! videoconvert ! fakesink sync=false', name, 'software')
     uri = Gst.filename_to_uri(str(fixtures / 'voice.wav'))
-    decode(f'uridecodebin uri="{uri}" ! audioconvert ! audioresample ! opusenc ! opusdec ! fakesink sync=false')
+    decode(f'uridecodebin uri="{uri}" ! audioconvert ! audioresample ! opusenc ! opusdec ! fakesink sync=false', 'voice.wav')
+    hardware = sorted(factory.get_name() for factory in Gst.Registry.get().get_feature_list(Gst.ElementFactory)
+                      if all(word in (factory.get_metadata('klass') or '') for word in ('Decoder', 'Hardware')))
     import importlib.util
     spec = importlib.util.spec_from_file_location('runtime_icons', Path(__file__).with_name('runtime_icons.py'))
     runtime_icons = importlib.util.module_from_spec(spec)
@@ -145,6 +161,8 @@ def main():
                       'gtk': f'{Gtk.get_major_version()}.{Gtk.get_minor_version()}.{Gtk.get_micro_version()}',
                       'gstreamer': Gst.version_string(), 'checked_files': len(manifest['files']),
                       'loaded_modules': len(loaded), 'media_fixtures': 4,
+                      'decode_runs': decode_runs, 'hardware_decoder_factories': hardware,
+                      'hardware_scope': 'Available factory names and actual automatic selection; no forced driver or physical-GPU qualification.',
                       'os_codec_modules': [str(path) for path in system_codecs],
                       'runtime_cache': os.environ.get('GST_REGISTRY_1_0')}, ensure_ascii=False))
 

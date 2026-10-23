@@ -1,10 +1,10 @@
 {
-  "code_source": "994a9d517f48883172cb332773a8be67d47cbaff",
-  "package_source": "e6865e6cafe310b70fac66ca3208519be39572e6",
+  "code_source": "61da878a9366e90faa77782a484ca6905e8f7374",
+  "package_source": "61da878a9366e90faa77782a484ca6905e8f7374",
   "files_compared": 190,
   "code_differences": [],
   "package_differences": [],
-  "method": "Byte comparison of local native application/package inputs against the full-tested source and package checkout. The later package commit changes documentation only.",
+  "method": "Byte comparison of native application/package inputs against the final CI snapshot. Documentation and fixture evidence are recorded separately; not a claim of byte-identical builds.",
   "inputs": [
     {
       "path": "Cargo.toml",
@@ -104,7 +104,7 @@
     },
     {
       "path": "src/media/animation.rs",
-      "sha256": "f9727f7326b2ef59f1e9e0082ce2f9083bdfb0814e1406ce11d5830e19a01d35"
+      "sha256": "596f454930c1f7f28641150567899367f4b201d6694b49f801bb20132dfe4fa7"
     },
     {
       "path": "src/media/avatars.rs",
@@ -140,7 +140,7 @@
     },
     {
       "path": "src/media/poster.rs",
-      "sha256": "8a835fe8c4fa8ce9711e2f98218765d912209a40556720bacc968a02c97936a7"
+      "sha256": "18ee912016e39b7a0509052c07f040d41c09f809830f32ffe14762e4bb16a724"
     },
     {
       "path": "src/media/preview.rs",
@@ -148,11 +148,11 @@
     },
     {
       "path": "src/media/runtime.rs",
-      "sha256": "2327bb36a53ab46287cd9b9176b05ac0e008a2d9edc9bd4d34e1f63a060d503f"
+      "sha256": "dbbf74bb150ecb18b6e296872e2987b65227ac3543eb4f079ea76ab93a50f268"
     },
     {
       "path": "src/media/sandbox.rs",
-      "sha256": "086785895fa5ed16767ba82af28e4a028047a5bf75f3dbe54436021ed34faf6c"
+      "sha256": "458b49fd9c3f7624ba402a76b46240b18f8c52d887fbfd5b8323fd96cca75562"
     },
     {
       "path": "src/media/sound.rs",
@@ -264,11 +264,11 @@
     },
     {
       "path": "src/platform/sandbox/mod.rs",
-      "sha256": "d3e6fd4902536802ed085f0c654ac5abc8c09e64e5cddd927a8a9fee87a007dd"
+      "sha256": "0d6b815c0840c46fe94d756c74fa0281b7687c6528115886639439a9e81925b0"
     },
     {
       "path": "src/platform/sandbox/windows.rs",
-      "sha256": "2c26562bb9ecfe200de73847ee4e825c9365c7d13b0da30015207d7ffceed32b"
+      "sha256": "5d84e5b63cef0c882052032ba1ba7d10dbda43fd85fdf0681157c410f2cb4491"
     },
     {
       "path": "src/platform/shortcuts.rs",
@@ -736,7 +736,7 @@
     },
     {
       "path": "src/platform/sandbox/windows.cpp",
-      "sha256": "a138cbbe61b8888e6b0a23cdc2647a1282d6f501e77ab9d35b02ae9d5bc284fe"
+      "sha256": "4db1f51608ff09ecda5b55ddd14beaef911fbac5648a6c409d913fc6cf9503ed"
     },
     {
       "path": "packaging/windows/launcher.c",

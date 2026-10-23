@@ -38,12 +38,17 @@ extern "C" fn collect(context:*mut c_void,channel:i32,bytes:*const u8,size:usize
     let target=if channel==1{&mut buffers.stdout}else{&mut buffers.stderr};target.extend_from_slice(unsafe{std::slice::from_raw_parts(bytes,size)});
 }
 pub(crate) struct Command{runtime:PathBuf,source:PathBuf,script:String,name:String,timeout:u32,buffers:Arc<Mutex<Buffers>>}
+static MEDIA_SLOTS:std::sync::LazyLock<Arc<tokio::sync::Semaphore>>=std::sync::LazyLock::new(||Arc::new(tokio::sync::Semaphore::new(2)));
 impl Command{
     pub async fn output(&mut self)->io::Result<Output>{
+        let slot=MEDIA_SLOTS.clone().acquire_owned().await.map_err(io::Error::other)?;
         let event=Arc::new(Event::new()?);let _cancel=Cancel(event.clone());
         let runtime=wide(&self.runtime);let source=wide(&self.source);let name=wide(&self.name);let script=wide(&self.script);
         let timeout=self.timeout;let buffers=self.buffers.clone();
         tokio::task::spawn_blocking(move||{
+            // EN-US: Cancellation retains this slot until native process-tree and profile cleanup finishes.
+            // PT-BR: O cancelamento mantém esta vaga até terminar a limpeza nativa dos processos e do perfil.
+            let _slot=slot;
             let mut exit_code=1;let error=unsafe{papo_media_run(runtime.as_ptr(),source.as_ptr(),name.as_ptr(),script.as_ptr(),event.handle(),timeout,
                 collect,Arc::as_ptr(&buffers).cast_mut().cast(),&mut exit_code)};
             let mut buffers=buffers.lock().unwrap_or_else(|e|e.into_inner());buffers.done=true;buffers.error=error;
@@ -78,9 +83,10 @@ pub(crate) async fn check()->anyhow::Result<serde_json::Value>{
     let mut cmd=command(&input,"import time; time.sleep(60)")?;cmd.timeout=2000;let name=cmd.name.clone();let before=std::time::Instant::now();
     ensure!(cmd.output().await.is_err()&&before.elapsed()<Duration::from_secs(6),"Internal deadline not bounded");ensure!(!profile_exists(&name),"Timeout profile leaked");
     cancellation(&input).await?;
+    concurrency(&input).await?;
     parent_exit(&scratch.0,&input).await?;
     println!("Windows AppContainer limits, cancellation, descendant and parent-exit checks passed");
-    Ok(serde_json::json!({"backend":"appcontainer_job","private_files_denied":true,"input_runtime_writes_denied":true,"credential_read_denied":true,"handle_inheritance_denied":true,"tcp4_tcp6_udp_requests":0,"stdout_stderr_limits":true,"committed_memory_limit":true,"internal_deadline":true,"cancellation_tree_cleanup":true,"parent_exit_tree_cleanup":true,"orphan_reaping":true}))
+    Ok(serde_json::json!({"backend":"appcontainer_job","private_files_denied":true,"input_runtime_writes_denied":true,"credential_read_denied":true,"handle_inheritance_denied":true,"tcp4_tcp6_udp_requests":0,"stdout_stderr_limits":true,"committed_memory_limit":true,"internal_deadline":true,"cancellation_tree_cleanup":true,"parent_exit_tree_cleanup":true,"orphan_reaping":true,"concurrent_helpers":2,"cancellation_slot_cleanup":true}))
 }
 fn profile_exists(name:&str)->bool{unsafe{papo_media_profile_exists(wide(name).as_ptr())!=0}}
 fn alive(pid:u32)->bool{
@@ -107,6 +113,28 @@ async fn cancellation(input:&Path)->anyhow::Result<()>{
     let mut cmd=command(input,TREE)?;let buffers=cmd.buffers.clone();let name=cmd.name.clone();
     let task=tokio::spawn(async move{cmd.output().await});let result=pids(&buffers).await;
     task.abort();let _=task.await;let pids=result?;anyhow::ensure!(pids.len()==2,"Expected root and descendant");gone(&pids,&name).await
+}
+// EN-US: Replacements queue until cancelled native jobs finish cleanup, even across UI limiters.
+// PT-BR: Substitutos aguardam a limpeza dos jobs nativos cancelados, mesmo entre limitadores da interface.
+async fn concurrency(input:&Path)->anyhow::Result<()>{
+    let mut running=Vec::new();
+    for _ in 0..2{
+        let mut cmd=command(input,TREE)?;let buffers=cmd.buffers.clone();let name=cmd.name.clone();
+        let task=tokio::spawn(async move{cmd.output().await});
+        let ids=pids(&buffers).await?;running.push((task,name,ids));
+    }
+    let mut queued=command(input,TREE)?;let name=queued.name.clone();let buffers=queued.buffers.clone();
+    let task=tokio::spawn(async move{queued.output().await});
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    anyhow::ensure!(MEDIA_SLOTS.available_permits()==0&&!profile_exists(&name)&&buffers.lock().unwrap().stdout.is_empty(),"Queued helper started beyond the process budget");
+    let (first,first_name,first_ids)=running.remove(0);first.abort();let _=first.await;
+    let ids=pids(&buffers).await?;
+    anyhow::ensure!(!profile_exists(&first_name),"Replacement started before cancelled helper cleanup");
+    gone(&first_ids,&first_name).await?;
+    task.abort();let _=task.await;gone(&ids,&name).await?;
+    for (task,name,ids) in running{task.abort();let _=task.await;gone(&ids,&name).await?;}
+    let slots=tokio::time::timeout(Duration::from_secs(4),MEDIA_SLOTS.clone().acquire_many_owned(2)).await??;
+    drop(slots);Ok(())
 }
 #[derive(serde::Serialize,serde::Deserialize)]struct Tree{pids:Vec<u32>,profile:String}
 // EN-US: Private test child writes only synthetic process IDs after its sandbox descendant is alive.

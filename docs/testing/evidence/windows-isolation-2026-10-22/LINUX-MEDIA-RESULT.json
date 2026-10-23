@@ -1,0 +1,6 @@
+{
+  "exit_code": 0,
+  "elapsed_seconds": 6.667,
+  "stdout": "{\"animations\":3,\"isolation\":{\"backend\":\"linux\",\"input_writes_denied\":true,\"network_requests\":0,\"private_files_denied\":true},\"posters\":3,\"schema\":1,\"status\":\"pass\"}\nPapo 1.0.2: isolated media runtime OK\n",
+  "stderr": ""
+}

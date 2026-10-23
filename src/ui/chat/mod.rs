@@ -1757,6 +1757,7 @@ fn find_media_box(widget:&gtk::Widget)->Option<gtk::Box>{
 }
 
 #[cfg(test)]pub(crate) fn exercise_animated_emojis(context:&gtk::glib::MainContext){emoji::exercise_resize(context);emoji::exercise(context);}
+#[cfg(test)]pub(crate) fn exercise_media_emojis(context:&gtk::glib::MainContext){emoji::exercise(context);}
 
 #[cfg(test)]pub(crate) fn exercise_read_candidate(context:&gtk::glib::MainContext){
     use adw::prelude::*;

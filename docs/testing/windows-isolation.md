@@ -113,12 +113,14 @@ separate isolation adapter is implemented. Linux retains Bubblewrap/Flatpak
 isolation and the existing media validation rules.
 
 Native CI executes the explicit check against the assembled package, clearing
-development runtime overrides first. The [full native run](https://github.com/ISpeakHue/papo-gtk/actions/runs/39838842551)
+development runtime overrides first. The [full native run](https://github.com/ISpeakHue/papo-gtk/actions/runs/39868216963)
 passed every access/lifecycle assertion and all six conversions, plus independent
 ZIP-only runtime acceptance. Windows `isolated_media_helpers` was enabled only
 after the preceding full security/conversion gate passed; the final enabled code
 then passed this complete run. [Results and source comparison](evidence/windows-isolation-2026-10-22/README.md)
-record the exact revisions and acceptance scope. Full media UI is step 7.
+record the exact revisions and acceptance scope. A fresh-extraction offline
+standard-user Windows 11 VM also passed all assertions, immutable-runtime and
+cleanup checks. Full media UI is step 7.
 
 ## References
 

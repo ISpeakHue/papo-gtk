@@ -22,6 +22,6 @@
     }
   },
   "launch": "Read-only PAPOISOLATE volume -> start.ps1 -> media-acceptance.ps1 -> check-media.ps1",
-  "prior_prototype_cleanup": "start.ps1 removes only C:\\Users\\PapoTester\\PapoIsolationPrototype before accepting the new package",
+  "prior_prototype_cleanup": "start.ps1 removes only the earlier disposable PapoIsolationPrototype and PapoTiming directories under the fixture user profile",
   "input_method": "QMP fixture-only keyboard and USB mouse; no guest agent or host share"
 }

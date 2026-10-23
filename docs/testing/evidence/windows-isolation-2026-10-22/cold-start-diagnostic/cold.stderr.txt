@@ -1,0 +1,9 @@
+runtime-access start 0 ms
+runtime-access done 3562 ms
+profile ready 3625 ms
+codecs ready 3671 ms
+child resumed 3968 ms
+Failed to find real location of C:\Users\PapoTester\PapoTiming\Papo-1.0.2-windows-x86_64-dev\runtime\bin\python.exe
+child exited 18921 ms
+
+Native sandbox result=0 child=0

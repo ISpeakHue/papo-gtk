@@ -145,6 +145,15 @@ mod tests {
 #[cfg(test)]
 mod prepared_image_tests {
     #[test]
+    fn supported_still_formats_decode_to_shared_rgba_thumbnails(){
+        for format in [image::ImageFormat::Png,image::ImageFormat::Jpeg,image::ImageFormat::WebP,image::ImageFormat::Gif]{
+            let mut bytes=std::io::Cursor::new(Vec::new());
+            image::DynamicImage::new_rgb8(32,16).write_to(&mut bytes,format).unwrap();
+            let image=super::PreparedImage::decode_thumbnail(bytes.get_ref(),680,460).unwrap();
+            assert_eq!((image.width,image.height,image.pixels.len()),(32,16,32*16*4),"{format:?}");
+        }
+    }
+    #[test]
     fn viewer_preserves_native_detail_and_bounds_large_or_invalid_sources(){
         let path=std::env::temp_dir().join(format!("papo-viewer-test-{}",uuid::Uuid::new_v4()));
         let file=crate::api::features::TemporaryFile(path);

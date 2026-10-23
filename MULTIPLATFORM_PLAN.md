@@ -169,7 +169,7 @@ remaining GUI assertions are tracked in the provenance record.
    [reports and input hashes](docs/testing/evidence/windows-storage-2026-10-22/README.md).
    Home/Pro qualification and real-backend acceptance remain later release gates.
 
-6. [ ] **Implement the Windows isolated media-helper backend.**
+6. [x] **Implement the Windows isolated media-helper backend.**
 
    Add a Windows adapter beneath `src/platform/sandbox/`. Prototype AppContainer
    or an equivalent enforceable Windows boundary with the bundled Python/GI/
@@ -190,17 +190,20 @@ remaining GUI assertions are tracked in the provenance record.
    See [AppContainer isolation](https://learn.microsoft.com/en-us/windows/win32/secauthz/appcontainer-isolation)
    and [Job Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects).
 
-   **Native CI passed 2026-10-22; cold VM timeout under investigation:** The Windows AppContainer/Job Objects adapter now
+   **Completed 2026-10-22:** The Windows AppContainer/Job Objects adapter now
    backs the shared poster/GIF helpers and fails closed. Protected input, private
    scratch, restricted inherited handles, clean runtime environment, process-tree
    cleanup and output/time/memory limits passed native security probes alongside
    three poster and three animation conversions (MP4/MOV/WebM). The Windows
    capability was enabled after the gate passed; macOS remains disabled.
-   [Full native CI](https://github.com/ISpeakHue/papo-gtk/actions/runs/39838842551)
+   [Full native CI](https://github.com/ISpeakHue/papo-gtk/actions/runs/39868216963)
    also passed ZIP-only runtime acceptance and macOS compile/link. The
    [implementation contract](docs/testing/windows-isolation.md) and
    [source/results evidence](docs/testing/evidence/windows-isolation-2026-10-22/README.md)
    record the exact scope. Linux conversion/isolation regression checks passed.
+   A fresh-extraction standard-user Windows 11 VM run also passed all assertions,
+   runtime integrity and cleanup. Cold runtime setup now has a separate trusted
+   preparation phase; Windows callers honor the unchanged native decoder limits.
    Full media UI and Home/Pro release qualification remain step 7/later work.
 
 7. [ ] **Restore and validate all packaged media paths.**

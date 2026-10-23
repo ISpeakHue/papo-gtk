@@ -14,9 +14,12 @@ impl Kind {
         // Recognize supported image extensions without reading the file on GTK.
         // GIO can classify PNG as an empty file when given an empty sniff buffer.
         if image::ImageFormat::from_path(&file.path).is_ok(){return Self::Image;}
+        // EN-US: Windows MIME databases need not know MOV/WebM; supported suffixes are UI hints only.
+        // PT-BR: A base MIME do Windows pode desconhecer MOV/WebM; extensões compatíveis são só pistas visuais.
+        if Attachment::video_type("",&file.name){return Self::Video;}
         let (kind,_)=gtk::gio::content_type_guess(Some(file.path.as_path()),&[]);
         let mime=gtk::gio::content_type_get_mime_type(&kind);
-        match mime.as_deref(){Some(v) if v.starts_with("image/")=>Self::Image,Some(v) if v.starts_with("video/")=>Self::Video,_=>Self::File}
+        match mime.as_deref(){Some(v) if v.starts_with("image/")=>Self::Image,Some(v) if Attachment::video_type(v,&file.name)=>Self::Video,_=>Self::File}
     }
     fn icon(self)->&'static str{match self{Self::Image=>"papo-image-x-generic-symbolic",Self::Video=>"papo-video-x-generic-symbolic",Self::File=>"papo-text-x-generic-symbolic"}}
 }
@@ -88,6 +91,16 @@ fn decode_image(path:&Path)->Option<crate::media::PreparedImage>{
 
 #[cfg(test)]mod tests {
     use super::*;
+    #[test]fn staged_supported_videos_do_not_depend_on_a_desktop_mime_database(){
+        for name in ["phone.MOV","clip.mp4","clip.m4v","clip.WEBM"]{
+            let file=UploadFile{path:PathBuf::from(name),name:name.into(),size:0,_temporary:None};
+            assert!(Kind::of(&file)==Kind::Video,"{name}");
+        }
+        for name in ["clip.mov.exe","notes.txt"]{
+            let file=UploadFile{path:PathBuf::from(name),name:name.into(),size:0,_temporary:None};
+            assert!(Kind::of(&file)==Kind::File,"{name}");
+        }
+    }
     #[test]fn local_image_preview_bounds_dimensions_and_rejects_invalid_files(){
         let file=crate::api::features::TemporaryFile(std::env::temp_dir().join(format!("papo-preview-{}.png",Uuid::new_v4())));
         for (width,height,expected) in [(640,320,(128,64)),(60,120,(40,80)),(4,2,(4,2))] {

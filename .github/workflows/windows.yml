@@ -114,6 +114,15 @@ jobs:
         run: |
           cargo test --locked session:: -- --test-threads=1
           cargo test --locked api::features::tests:: -- --test-threads=1
+      - name: Test media classification, decoded bounds and cache budgets
+        if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only
+        run: |
+          cargo test --locked media:: -- --test-threads=1
+          cargo test --locked ui::chat::transfers::encoded:: -- --test-threads=1
+          cargo test --locked ui::chat::draft_preview::tests:: -- --test-threads=1
+          cargo test --locked models::message::attachment_tests:: -- --test-threads=1
+          cargo test --locked --no-run --message-format=json > target/windows-build/media-test-artifacts.jsonl
+          python packaging/windows/media_tests.py --artifacts target/windows-build/media-test-artifacts.jsonl --directory target/windows-media-tests
       - name: Build and validate self-contained portable preview
         run: |
           papo_build_options=()
@@ -136,6 +145,12 @@ jobs:
           path: |
             dist/Papo-*-windows-x86_64-dev.zip
             dist/Papo-*-windows-x86_64-dev.zip.sha256
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: ${{ success() && (github.event_name != 'workflow_dispatch' || !inputs.packaging_only) }}
+        with:
+          name: Windows-media-acceptance
+          path: target/windows-media-tests/
           if-no-files-found: error
 
       - name: Retain source and toolchain diagnostics even on failure
@@ -180,6 +195,38 @@ jobs:
       - name: Validate portable ZIP without developer discovery paths
         shell: pwsh
         run: ./packaging/windows/check-portable.ps1
+
+  media-ui-runtime:
+    needs: windows
+    if: ${{ needs.windows.result == 'success' && !inputs.packaging_only && !inputs.bridge_probe }}
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Papo-Windows-x86_64-developer-preview
+          path: download
+      - uses: actions/download-artifact@v4
+        with:
+          name: Windows-media-acceptance
+          path: media-checks
+      - name: Exercise packaged media with software rendering
+        shell: pwsh
+        run: |
+          $archive=(Get-ChildItem download -Filter '*.zip'|Select-Object -First 1).FullName
+          & ./media-checks/check-media-ui.ps1 -Archive $archive -OutputDirectory target/windows-media-ui/cairo
+      - name: Exercise automatic renderer selection without forcing a GPU driver
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: |
+          $archive=(Get-ChildItem download -Filter '*.zip'|Select-Object -First 1).FullName
+          & ./media-checks/check-media-ui.ps1 -Archive $archive -OutputDirectory target/windows-media-ui/auto -Renderer auto -Cases @('mov-media','backend-gifs','status-viewer','video-audio')
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Windows-media-UI-results
+          path: target/windows-media-ui/
+          if-no-files-found: warn
 
   macos-foundation:
     if: (github.event_name != 'workflow_dispatch' || (!inputs.packaging_only && inputs.runtime_artifact_run == '')) && !inputs.bridge_probe

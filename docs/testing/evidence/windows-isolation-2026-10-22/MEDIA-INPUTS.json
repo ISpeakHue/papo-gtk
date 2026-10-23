@@ -2,17 +2,17 @@
   "inputs": [
     {
       "path": "target/windows-clean-vm/step6/final-input.img",
-      "sha256": "5edf6cfec42f3f2adad0db9dca4d5d6f2db90448f4fafadd362eacb7db24293a",
+      "sha256": "959112e402f6fe913cafe9bfceedc11d4bf5c9b8b3652fbe30ae3473935b8659",
       "size": 268435456
     },
     {
       "path": "target/windows-step6-final-package/Papo-1.0.2-windows-x86_64-dev.zip",
-      "sha256": "013ff3af6b7ca0c9288f12ab5fd0a6724b08606432d0ec362219aa9ca027b656",
-      "size": 178263083
+      "sha256": "7914456e7fed0f469ca7f9b9fabad8438e1524d397c8fc2476d8eb7a5d4156b1",
+      "size": 178284739
     },
     {
       "path": "target/windows-step6-final-package/Papo-1.0.2-windows-x86_64-dev.zip.sha256",
-      "sha256": "440d7efeb82929197d42554975e88459357a7c384d7e09ac0b2fef300a601122",
+      "sha256": "f2534d95ca6461a60c8b41b3d505e26d50a1949478dea38f63bbc319f117a124",
       "size": 101
     },
     {
@@ -54,8 +54,8 @@
     },
     {
       "path": "target/windows-clean-vm/step6/final-input/start.ps1",
-      "sha256": "e4dc8ff8b9cfea60d0522655078752df0e32727d5ccbc9a1b4499b8af1881565",
-      "size": 524
+      "sha256": "7a5e244700ec75ece49710b41d0a1cc93e22212b5f25f38a254acdf8c1069b76",
+      "size": 578
     },
     {
       "path": "tests/fixtures/chat-h264.mp4",

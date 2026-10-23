@@ -111,10 +111,12 @@ record this gate independently of the remaining Home/Pro release qualification.
 
 Step 6 implements [AppContainer media isolation](docs/testing/windows-isolation.md)
 with bounded Job Objects, sealed input, private scratch and restricted handle
-inheritance. [Native CI](https://github.com/ISpeakHue/papo-gtk/actions/runs/39838842551)
+inheritance. [Native CI](https://github.com/ISpeakHue/papo-gtk/actions/runs/39868216963)
 passed the security/lifecycle probes and three poster plus three GIF conversions
 before Windows `isolated_media_helpers` was enabled. macOS converters remain
-disabled. Full packaged media UX remains step 7.
+disabled. [Cold Windows VM acceptance](docs/testing/evidence/windows-isolation-2026-10-22/README.md)
+also passed all security/conversion checks and runtime/package cleanup. Full
+packaged media UX remains step 7.
 
 The Windows workflow also compiles the macOS foundation against Homebrew GTK
 and libadwaita, without claiming runtime or bundle validation. Its Windows job

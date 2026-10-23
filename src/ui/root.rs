@@ -49,6 +49,7 @@ mod tests {
     fn ui_smoke_window_has_header_controls_and_server_password() {
         let _config=IsolatedConfig::new();
         let _report=crate::performance::Report;
+        crate::platform::runtime::configure();
         adw::init().unwrap();
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let _guard = runtime.enter();
@@ -56,6 +57,7 @@ mod tests {
         let window = controller.widget();
         window.present();
         let context = gtk::glib::MainContext::default();
+        if let Some(renderer)=window.renderer(){println!("Papo GUI renderer: {}",renderer.type_().name());}
         for _ in 0..100 {
             if !context.pending() { break; }
             context.iteration(false);
@@ -131,6 +133,7 @@ mod tests {
         }
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("emoji-details"){crate::ui::chat::exercise_emoji_details(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("emoji-notifications"){crate::media::animation::exercise(&context);crate::ui::chat::exercise_animated_emojis(&context);crate::ui::main_window::notifications::exercise_tabs(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("media-emojis"){crate::media::animation::exercise(&context);crate::ui::chat::exercise_media_emojis(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("account-notices"){crate::ui::main_window::bugs7::exercise(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("account-settings"){crate::ui::main_window::account::settings::exercise(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("webhooks"){crate::ui::main_window::webhooks::exercise(&context);window.close();return;}

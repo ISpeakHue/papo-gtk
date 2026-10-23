@@ -1,0 +1,5 @@
+python started
+file permissions and scratch passed
+GI imported
+GStreamer initialized
+native AppContainer Python/GI/GStreamer prototype passed

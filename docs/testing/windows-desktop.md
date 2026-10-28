@@ -69,6 +69,19 @@ does not mean a Windows run has taken place.
 
 ## Packaged desktop test driver
 
+During executable preparation on 2026-10-28, the Windows runner passed all 310
+regular Rust tests but exposed an access violation while reopening the mention
+editor with GTK 4.24.1. That GTK version leaves a native IME filter registered
+when its context is disposed without a usable client surface. The corresponding
+[upstream fix](https://github.com/GNOME/gtk/commit/2a50bd4af856d9297f0c569cfc8ad871fcd056c7)
+is absent from the available UCRT64 4.24.1 package. Papo now releases keyboard
+focus before Windows surfaces/editors are torn down, while their native IME
+clients can still unregister. Native IME remains enabled. The desktop CI step
+treats critical diagnostics as failures so a dangling callback cannot count as
+a passing test merely because it has not crashed yet. This workaround still
+requires the new native run and attended IME acceptance; the older crash is not
+recorded as a pass.
+
 Step 7's instrumented UI artifact now includes `check-desktop-ui.ps1` and the
 hashed Windows input helper. It reuses the verified portable ZIP and existing
 `MEDIA-TESTS.json` source/runtime checks. Do not use an old test artifact with a

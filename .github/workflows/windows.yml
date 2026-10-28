@@ -162,6 +162,10 @@ jobs:
           cargo test --locked api::features::tests:: -- --test-threads=1
       - name: Test desktop editing and dialog policies with disposable fixtures
         if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only
+        # EN-US: A stale native IME callback must fail immediately, even before it causes an access violation.
+        # PT-BR: Um callback IME nativo inválido deve falhar imediatamente, mesmo antes de causar acesso inválido.
+        env:
+          G_DEBUG: fatal-criticals
         run: |
           python -m unittest discover -s tests -p desktop_input_test.py -v
           PAPO_UI_CASE=desktop-input PAPO_NATIVE_INPUT_TEST=1 GTK_A11Y=test cargo test --locked ui_smoke -- --ignored --test-threads=1

@@ -37,9 +37,14 @@ class WindowsNativeCapture(unittest.TestCase):
                 kernel.FreeLibrary.restype = ctypes.c_int
                 self.assertTrue(kernel.FreeLibrary(dll._handle))
             binary = path / 'capture-test.exe'
-            subprocess.run(['g++', '-std=c++17', '-O2', '-Wall', '-Wextra', '-Werror',
-                            str(ROOT / 'tests/windows_capture_native.cpp'), '-static',
-                            '-lole32', '-lruntimeobject', '-ld3d11', '-ldxgi', '-luuid', '-o', str(binary)], check=True)
+            # EN-US: Build in the toolchain's temporary path, then test execution under the accented path.
+            # PT-BR: Compila no caminho temporário da toolchain e testa a execução no caminho acentuado.
+            with tempfile.TemporaryDirectory(prefix='papo-capture-probe-') as compilation:
+                compiled = Path(compilation) / binary.name
+                subprocess.run(['g++', '-std=c++17', '-O2', '-Wall', '-Wextra', '-Werror',
+                                str(ROOT / 'tests/windows_capture_native.cpp'), '-static',
+                                '-lole32', '-lruntimeobject', '-ld3d11', '-ldxgi', '-luuid', '-o', str(compiled)], check=True)
+                shutil.copy2(compiled, binary)
             result = subprocess.run([str(binary)], timeout=15, capture_output=True, text=True, check=True)
             self.assertIn('no capture performed', result.stdout)
 

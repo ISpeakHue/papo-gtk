@@ -12,7 +12,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "packaging/windows"))
 from build import source_state, require_source, sha256, write_json
-from native_inputs import verify_archive, package_set, local_packages
+from native_inputs import verify_archive, package_set, local_packages, restore_gtk
 
 
 class SourceProvenance(unittest.TestCase):
@@ -149,6 +149,31 @@ class NativeInputIntegrity(unittest.TestCase):
                 local_packages([self.path], {"example": "2-1"})
             with self.assertRaisesRegex(RuntimeError, "duplicated"):
                 local_packages([self.path, self.path], {"example": "1-1"})
+
+    def test_gtk_reuse_requires_exact_recipe_dependencies_and_archive_integrity(self):
+        name = "mingw-w64-ucrt-x86_64-gtk4"
+        self.manifest["installed"] = {name: "4.24.1-1.1", "dependency": "1-1"}
+        self.manifest["locally_built"] = {name: {"version": "4.24.1-1.1", "archive": self.path.name}}
+        recipes = ROOT / "packaging/windows/gtk"
+        for source in recipes.iterdir():
+            (self.root / source.name).write_bytes(source.read_bytes())
+        (self.root / "gtk-4.24.1.tar.xz").write_bytes(b"synthetic source")
+        def save_inputs():
+            self.manifest["files"] = [{"file": path.name, "size": path.stat().st_size, "sha256": sha256(path)}
+                                      for path in self.root.iterdir() if path.name != "NATIVE-INPUTS.json"]
+            self.save()
+        save_inputs()
+        installed = {name: "4.24.1-1", "dependency": "1-1"}
+        with tempfile.TemporaryDirectory() as output, patch("native_inputs.msys_path", return_value="/fixture/package"), patch("native_inputs.run", return_value=f"{name} 4.24.1-1.1"):
+            self.assertTrue(restore_gtk(self.root, output, installed))
+            self.assertEqual((Path(output) / self.path.name).read_bytes(), self.path.read_bytes())
+            self.assertFalse(restore_gtk(self.root, output, {**installed, "dependency": "2-1"}))
+            (self.root / "PKGBUILD").write_text("different recipe", encoding="utf-8")
+            save_inputs()
+            self.assertFalse(restore_gtk(self.root, output, installed))
+            self.path.write_bytes(b"corrupted")
+            with self.assertRaisesRegex(RuntimeError, "checksum mismatch"):
+                restore_gtk(self.root, output, installed)
 
 
 if __name__ == "__main__":

@@ -115,14 +115,38 @@ jobs:
             mingw-w64-ucrt-x86_64-sassc
             mingw-w64-ucrt-x86_64-shaderc
             mingw-w64-ucrt-x86_64-vulkan-headers
+      # EN-US: Reuse only dependency bytes, never test results, from the initial audited GTK build.
+      # PT-BR: Reutiliza só dependências, nunca resultados de testes, da compilação GTK inicial auditada.
+      # Artifact expiry or different native inputs falls back to building the pinned recipe.
+      # A expiração do artefato ou entradas nativas diferentes recompilam a receita fixada.
+      - name: Fetch the retained GTK backport build when available
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: Windows-UCRT64-native-inputs
+          path: target/windows-gtk-restore
+          github-token: ${{ github.token }}
+          run-id: '40687585032'
       - name: Backport the upstream native GTK IME disposal fix
         run: |
           test "$(pacman -Q mingw-w64-ucrt-x86_64-gtk4)" = 'mingw-w64-ucrt-x86_64-gtk4 4.24.1-1'
           papo_gtk_build="$(cygpath -u "$RUNNER_TEMP")/papo-gtk-ime"
           mkdir -p "$papo_gtk_build"
-          cp packaging/windows/gtk/* "$papo_gtk_build/"
+          python - "$papo_gtk_build" <<'PYCODE'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path('packaging/windows').resolve()))
+          from native_inputs import restore_gtk, package_set, run
+          saved = Path('target/windows-gtk-restore')
+          if (saved / 'NATIVE-INPUTS.json').exists():
+              reused = restore_gtk(saved, Path(sys.argv[1]), package_set(run('pacman', '-Q')))
+              print('Reused exact GTK dependency build' if reused else 'Native inputs changed; rebuilding GTK')
+          PYCODE
+          if [[ ! -f "$papo_gtk_build/mingw-w64-ucrt-x86_64-gtk4-4.24.1-1.1-any.pkg.tar.zst" ]]; then
+            cp packaging/windows/gtk/* "$papo_gtk_build/"
+            (cd "$papo_gtk_build" && MINGW_INSTALLS=ucrt64 makepkg-mingw --noconfirm --nodeps --nocheck)
+          fi
           cd "$papo_gtk_build"
-          MINGW_INSTALLS=ucrt64 makepkg-mingw --noconfirm --nodeps --nocheck
           pacman -U --noconfirm mingw-w64-ucrt-x86_64-gtk4-4.24.1-1.1-any.pkg.tar.zst
       - name: Diagnose source differences with MSYS2 Git before compiling
         run: |

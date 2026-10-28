@@ -62,6 +62,30 @@ def local_packages(paths, installed):
     return result
 
 
+def restore_gtk(directory, destination, installed):
+    """EN-US: Reuse only the same GTK recipe and complete native dependency set.
+    PT-BR: Reutiliza apenas a mesma receita GTK e o conjunto completo de dependências nativas.
+    """
+    directory, destination = Path(directory), Path(destination)
+    manifest = verify_archive(directory)
+    name = "mingw-w64-ucrt-x86_64-gtk4"
+    expected = dict(installed)
+    expected[name] = "4.24.1-1.1"
+    if manifest["installed"] != expected:
+        return False
+    recipe = ROOT / "packaging/windows/gtk"
+    names = ["PKGBUILD", "001-fix-font-rendering.patch", "002-fix-ime-dispose.patch"]
+    if any(sha256(recipe / name) != sha256(directory / name) for name in names):
+        return False
+    package = manifest["locally_built"][name]["archive"]
+    if set(local_packages([directory / package], expected)) != {name}:
+        raise RuntimeError("Wrong GTK backport archive")
+    destination.mkdir(parents=True, exist_ok=True)
+    for name in [*names, package, "gtk-4.24.1.tar.xz"]:
+        shutil.copy2(directory / name, destination / name)
+    return True
+
+
 def capture(directory, local=(), sources=()):
     if sys.platform != "win32":
         raise RuntimeError("Archive native inputs from MSYS2 on Windows")

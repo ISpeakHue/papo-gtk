@@ -44,7 +44,12 @@ pub(crate) fn until(context: &gtk::glib::MainContext, condition: impl Fn() -> bo
     // EN-US: Cold packaged Windows codecs have a bounded startup budget beyond five seconds.
     // PT-BR: Codecs frios do pacote Windows têm um prazo limitado de início maior que cinco segundos.
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(if cfg!(windows){60}else{5});
-    loop { pump(context); if condition() { return; } assert!(std::time::Instant::now() < deadline,"GTK workflow timed out"); std::thread::sleep(std::time::Duration::from_millis(5)); }
+    loop { pump(context); if condition() { return; }
+        // EN-US: Keep synthetic window geometry when native layout differs from the virtual-display fixture.
+        // PT-BR: Preserva a geometria das janelas sintéticas quando o layout nativo difere do display virtual.
+        assert!(std::time::Instant::now() < deadline,"GTK workflow timed out; windows: {:?}",gtk::Window::list_toplevels().into_iter().filter_map(|w|w.downcast::<gtk::Window>().ok()).map(|w|(w.title(),w.width(),w.height(),w.default_size(),w.is_maximized(),w.child().map(|child|(child.width(),child.height())))).collect::<Vec<_>>());
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
 }
 pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::JoinHandle<()>) {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

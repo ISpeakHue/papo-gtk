@@ -80,14 +80,22 @@ rebuilds the MSYS2 GTK recipe as `4.24.1-1.1` with that upstream patch and the
 existing MSYS2 font-rendering patch. It installs the resulting package before
 compiling or testing Papo. Native IME remains enabled; no private GTK ABI or
 Compose-only replacement is used. The desktop CI step treats critical diagnostics
-as failures. The patched runtime requires a successful new native CI run and
-attended IME acceptance; the older crash is not recorded as a pass.
+as failures. The patched runtime passed native desktop input, login, mention editing and
+search in [run 40687585032](https://github.com/ISpeakHue/papo-gtk/actions/runs/40687585032),
+with critical diagnostics fatal. That run then exposed an account-settings sizing
+fixture failure; it did not produce an installer or pass the candidate gate.
+The resize fixture now measures client content rather than including native CSD
+shadows. Full packaged checks and attended IME acceptance remain required.
 
 The recipe and patches live in `packaging/windows/gtk/`. Its upstream source tarball,
 recipe, both patches and exact locally built package are retained in the
 `Windows-UCRT64-native-inputs` artifact and hashed in `NATIVE-INPUTS.json` alongside
 the official repository packages. The manifest identifies the locally built
 package explicitly; it does not claim an MSYS2 signature for that package.
+Subsequent builds may reuse the dependency from that retained run only after
+verifying all archive hashes, the complete installed native package set, matching
+recipe/patch hashes and the package identity. Unavailable or incompatible inputs
+rebuild the recipe. Test results are never reused.
 
 Step 7's instrumented UI artifact now includes `check-desktop-ui.ps1` and the
 hashed Windows input helper. It reuses the verified portable ZIP and existing

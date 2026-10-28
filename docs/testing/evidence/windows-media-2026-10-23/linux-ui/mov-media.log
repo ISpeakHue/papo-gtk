@@ -1,0 +1,133 @@
+
+running 1 test
+test ui::root::tests::ui_smoke_window_has_header_controls_and_server_password ... MESA-EGL: warning: DRI3 error: Could not get DRI3 device
+MESA-EGL: warning: Ensure your X server supports DRI3 to get accelerated rendering
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Activating service name='org.freedesktop.portal.Desktop' requested by ':1.2' (uid=1000 pid=567 comm="target/windows-step7-linux-ui-tests ui_smoke --ign" label="unconfined_u:unconfined_r:spc_t:s0")
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Activating service name='org.freedesktop.impl.portal.PermissionStore' requested by ':1.3' (uid=1000 pid=608 comm="/usr/libexec/xdg-desktop-portal" label="unconfined_u:unconfined_r:spc_t:s0")
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Successfully activated service 'org.freedesktop.impl.portal.PermissionStore'
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Activating service name='org.freedesktop.portal.Documents' requested by ':1.3' (uid=1000 pid=608 comm="/usr/libexec/xdg-desktop-portal" label="unconfined_u:unconfined_r:spc_t:s0")
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Successfully activated service 'org.freedesktop.portal.Documents'
+fuse: device /dev/fuse not found. Kernel module not loaded?
+error: fuse init failed: Can't mount path /tmp/.cache/doc
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Activating service name='org.freedesktop.portal.Documents' requested by ':1.3' (uid=1000 pid=608 comm="/usr/libexec/xdg-desktop-portal" label="unconfined_u:unconfined_r:spc_t:s0")
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Successfully activated service 'org.freedesktop.portal.Documents'
+fuse: device /dev/fuse not found. Kernel module not loaded?
+error: fuse init failed: Can't mount path /tmp/.cache/doc
+
+(/usr/libexec/xdg-desktop-portal:608): xdg-desktop-portal-WARNING **: 00:38:57.346: Document portal fuse mount point unknown: GDBus.Error:org.freedesktop.DBus.Error.NoReply: Message recipient disconnected from message bus without replying
+
+(/usr/libexec/xdg-desktop-portal:608): xdg-desktop-portal-WARNING **: 00:38:57.346: Choosing gtk.portal for org.freedesktop.impl.portal.Access as a last-resort fallback
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Activating service name='org.freedesktop.impl.portal.desktop.gtk' requested by ':1.3' (uid=1000 pid=608 comm="/usr/libexec/xdg-desktop-portal" label="unconfined_u:unconfined_r:spc_t:s0")
+
+(xdg-desktop-portal-gtk:634): Gtk-WARNING **: 00:38:57.362: cannot open display: 
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Activated service 'org.freedesktop.impl.portal.desktop.gtk' failed: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:608): xdg-desktop-portal-WARNING **: 00:38:57.375: Failed to create RealtimeKit proxy: Could not connect: No such file or directory
+
+(/usr/libexec/xdg-desktop-portal:608): xdg-desktop-portal-WARNING **: 00:38:57.375: Choosing gtk.portal for org.freedesktop.impl.portal.Settings as a last-resort fallback
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Activating service name='org.freedesktop.impl.portal.desktop.gtk' requested by ':1.3' (uid=1000 pid=608 comm="/usr/libexec/xdg-desktop-portal" label="unconfined_u:unconfined_r:spc_t:s0")
+
+(xdg-desktop-portal-gtk:639): Gtk-WARNING **: 00:38:57.391: cannot open display: 
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Activated service 'org.freedesktop.impl.portal.desktop.gtk' failed: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:608): xdg-desktop-portal-WARNING **: 00:38:57.393: Failed to create settings proxy: Error calling StartServiceByName for org.freedesktop.impl.portal.desktop.gtk: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:608): xdg-desktop-portal-WARNING **: 00:38:57.393: Not providing Settings portal: No working backend
+
+(/usr/libexec/xdg-desktop-portal:608): xdg-desktop-portal-WARNING **: 00:38:57.394: Choosing gtk.portal for org.freedesktop.impl.portal.FileChooser as a last-resort fallback
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Activating service name='org.freedesktop.impl.portal.desktop.gtk' requested by ':1.3' (uid=1000 pid=608 comm="/usr/libexec/xdg-desktop-portal" label="unconfined_u:unconfined_r:spc_t:s0")
+
+(xdg-desktop-portal-gtk:642): Gtk-WARNING **: 00:38:57.408: cannot open display: 
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Activated service 'org.freedesktop.impl.portal.desktop.gtk' failed: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:608): xdg-desktop-portal-WARNING **: 00:38:57.411: Failed to create file chooser proxy: Error calling StartServiceByName for org.freedesktop.impl.portal.desktop.gtk: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:608): xdg-desktop-portal-WARNING **: 00:38:57.411: Choosing gtk.portal for org.freedesktop.impl.portal.AppChooser as a last-resort fallback
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Activating service name='org.freedesktop.impl.portal.desktop.gtk' requested by ':1.3' (uid=1000 pid=608 comm="/usr/libexec/xdg-desktop-portal" label="unconfined_u:unconfined_r:spc_t:s0")
+
+(xdg-desktop-portal-gtk:645): Gtk-WARNING **: 00:38:57.425: cannot open display: 
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Activated service 'org.freedesktop.impl.portal.desktop.gtk' failed: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:608): xdg-desktop-portal-WARNING **: 00:38:57.428: Failed to create app chooser proxy: Error calling StartServiceByName for org.freedesktop.impl.portal.desktop.gtk: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:608): xdg-desktop-portal-WARNING **: 00:38:57.428: Choosing gtk.portal for org.freedesktop.impl.portal.Print as a last-resort fallback
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Activating service name='org.freedesktop.impl.portal.desktop.gtk' requested by ':1.3' (uid=1000 pid=608 comm="/usr/libexec/xdg-desktop-portal" label="unconfined_u:unconfined_r:spc_t:s0")
+
+(xdg-desktop-portal-gtk:648): Gtk-WARNING **: 00:38:57.444: cannot open display: 
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Activated service 'org.freedesktop.impl.portal.desktop.gtk' failed: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:608): xdg-desktop-portal-WARNING **: 00:38:57.446: Failed to create print proxy: Error calling StartServiceByName for org.freedesktop.impl.portal.desktop.gtk: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:608): xdg-desktop-portal-WARNING **: 00:38:57.446: Choosing gtk.portal for org.freedesktop.impl.portal.Notification as a last-resort fallback
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Activating service name='org.freedesktop.impl.portal.desktop.gtk' requested by ':1.3' (uid=1000 pid=608 comm="/usr/libexec/xdg-desktop-portal" label="unconfined_u:unconfined_r:spc_t:s0")
+
+(xdg-desktop-portal-gtk:651): Gtk-WARNING **: 00:38:57.462: cannot open display: 
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Activated service 'org.freedesktop.impl.portal.desktop.gtk' failed: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:608): xdg-desktop-portal-WARNING **: 00:38:57.464: Failed to create notification proxy: Error calling StartServiceByName for org.freedesktop.impl.portal.desktop.gtk: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:608): xdg-desktop-portal-WARNING **: 00:38:57.464: Choosing gtk.portal for org.freedesktop.impl.portal.Inhibit as a last-resort fallback
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Activating service name='org.freedesktop.impl.portal.desktop.gtk' requested by ':1.3' (uid=1000 pid=608 comm="/usr/libexec/xdg-desktop-portal" label="unconfined_u:unconfined_r:spc_t:s0")
+
+(xdg-desktop-portal-gtk:654): Gtk-WARNING **: 00:38:57.480: cannot open display: 
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Activated service 'org.freedesktop.impl.portal.desktop.gtk' failed: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:608): xdg-desktop-portal-WARNING **: 00:38:57.483: Failed to create inhibit proxy: Error calling StartServiceByName for org.freedesktop.impl.portal.desktop.gtk: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:608): xdg-desktop-portal-WARNING **: 00:38:57.483: The location portal requires an access impl
+
+(/usr/libexec/xdg-desktop-portal:608): xdg-desktop-portal-WARNING **: 00:38:57.483: The camera portal requires an access impl
+
+(/usr/libexec/xdg-desktop-portal:608): xdg-desktop-portal-WARNING **: 00:38:57.483: Choosing gtk.portal for org.freedesktop.impl.portal.Account as a last-resort fallback
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Activating service name='org.freedesktop.impl.portal.desktop.gtk' requested by ':1.3' (uid=1000 pid=608 comm="/usr/libexec/xdg-desktop-portal" label="unconfined_u:unconfined_r:spc_t:s0")
+
+(xdg-desktop-portal-gtk:657): Gtk-WARNING **: 00:38:57.497: cannot open display: 
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Activated service 'org.freedesktop.impl.portal.desktop.gtk' failed: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:608): xdg-desktop-portal-WARNING **: 00:38:57.500: Failed to create account proxy: Error calling StartServiceByName for org.freedesktop.impl.portal.desktop.gtk: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:608): xdg-desktop-portal-WARNING **: 00:38:57.500: Choosing gtk.portal for org.freedesktop.impl.portal.Email as a last-resort fallback
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Activating service name='org.freedesktop.impl.portal.desktop.gtk' requested by ':1.3' (uid=1000 pid=608 comm="/usr/libexec/xdg-desktop-portal" label="unconfined_u:unconfined_r:spc_t:s0")
+
+(xdg-desktop-portal-gtk:660): Gtk-WARNING **: 00:38:57.515: cannot open display: 
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Activated service 'org.freedesktop.impl.portal.desktop.gtk' failed: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:608): xdg-desktop-portal-WARNING **: 00:38:57.517: Failed to create email proxy: Error calling StartServiceByName for org.freedesktop.impl.portal.desktop.gtk: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:608): xdg-desktop-portal-WARNING **: 00:38:57.517: Choosing gtk.portal for org.freedesktop.impl.portal.DynamicLauncher as a last-resort fallback
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Activating service name='org.freedesktop.impl.portal.desktop.gtk' requested by ':1.3' (uid=1000 pid=608 comm="/usr/libexec/xdg-desktop-portal" label="unconfined_u:unconfined_r:spc_t:s0")
+
+(xdg-desktop-portal-gtk:663): Gtk-WARNING **: 00:38:57.533: cannot open display: 
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Activated service 'org.freedesktop.impl.portal.desktop.gtk' failed: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:608): xdg-desktop-portal-WARNING **: 00:38:57.536: Failed to create dynamic_launcher proxy: Error calling StartServiceByName for org.freedesktop.impl.portal.desktop.gtk: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+dbus-daemon[542]: [session uid=1000 pid=542 pidfd=5] Successfully activated service 'org.freedesktop.portal.Desktop'
+Papo GUI renderer: GskCairoRenderer
+
+(windows-step7-linux-ui-tests:567): Gdk-WARNING **: 00:39:02.501: Vulkan: ../src/imagination/vulkan/pvr_instance.c:75: Failed to enumerate drm devices (errno 2: No such file or directory) (VK_ERROR_INITIALIZATION_FAILED)
+
+(windows-step7-linux-ui-tests:567): Gdk-WARNING **: 00:39:02.502: Vulkan: Loader Message: setup_loader_term_phys_devs: Call to 'vkEnumeratePhysicalDevices' in ICD /usr/lib64/libvulkan_powervr_mesa.so failed with error code -3
+
+(windows-step7-linux-ui-tests:567): Gdk-WARNING **: 00:39:02.504: Vulkan: ../src/imagination/vulkan/pvr_instance.c:75: Failed to enumerate drm devices (errno 2: No such file or directory) (VK_ERROR_INITIALIZATION_FAILED)
+
+(windows-step7-linux-ui-tests:567): Gdk-WARNING **: 00:39:02.505: Vulkan: Loader Message: setup_loader_term_phys_devs: Call to 'vkEnumeratePhysicalDevices' in ICD /usr/lib64/libvulkan_powervr_mesa.so failed with error code -3
+
+(windows-step7-linux-ui-tests:567): Gdk-WARNING **: 00:39:02.505: Vulkan: ../src/imagination/vulkan/pvr_instance.c:75: Failed to enumerate drm devices (errno 2: No such file or directory) (VK_ERROR_INITIALIZATION_FAILED)
+
+(windows-step7-linux-ui-tests:567): Gdk-WARNING **: 00:39:02.505: Vulkan: Loader Message: setup_loader_term_phys_devs: Call to 'vkEnumeratePhysicalDevices' in ICD /usr/lib64/libvulkan_powervr_mesa.so failed with error code -3
+
+(windows-step7-linux-ui-tests:567): Gdk-WARNING **: 00:39:02.505: Vulkan: ../src/imagination/vulkan/pvr_instance.c:75: Failed to enumerate drm devices (errno 2: No such file or directory) (VK_ERROR_INITIALIZATION_FAILED)
+
+(windows-step7-linux-ui-tests:567): Gdk-WARNING **: 00:39:02.505: Vulkan: Loader Message: setup_loader_term_phys_devs: Call to 'vkEnumeratePhysicalDevices' in ICD /usr/lib64/libvulkan_powervr_mesa.so failed with error code -3
+
+(windows-step7-linux-ui-tests:567): GStreamer-WARNING **: 00:39:03.706: ../gst/gstpad.c:4569:gst_pad_chain_data_unchecked:<multiqueue10:sink_1> Got data flow before stream-start event
+
+(windows-step7-linux-ui-tests:567): GStreamer-WARNING **: 00:39:03.706: ../gst/gstpad.c:4574:gst_pad_chain_data_unchecked:<multiqueue10:sink_1> Got data flow before segment event
+
+(windows-step7-linux-ui-tests:567): GStreamer-WARNING **: 00:39:03.706: ../gst/gstpad.c:4859:gst_pad_push_data:<multiqueue10:src_1> Got data flow before stream-start event
+
+(windows-step7-linux-ui-tests:567): GStreamer-WARNING **: 00:39:03.706: ../gst/gstpad.c:4864:gst_pad_push_data:<multiqueue10:src_1> Got data flow before segment event
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 299 filtered out; finished in 6.77s
+

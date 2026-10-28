@@ -45,32 +45,99 @@ except (ImportError, ValueError):
 # PT-BR: A execução direta de desenvolvimento/testes seleciona o mesmo adaptador do processo embutido.
 if "create_screen_capture" not in globals():
     from pathlib import Path
-    backend = Path(__file__).resolve().parents[1] / "platform" / "capture" / ("linux.py" if sys.platform.startswith("linux") else "unavailable.py")
+    backend = Path(__file__).resolve().parents[1] / "platform" / "capture" / ("linux.py" if sys.platform.startswith("linux") else "windows.py" if sys.platform == "win32" else "unavailable.py")
+    if sys.platform.startswith("linux"):
+        portal = Path(__file__).resolve().with_name("screen_portal.py")
+        exec(compile(portal.read_text(encoding="utf-8"), str(portal), "exec"))
     exec(compile(backend.read_text(encoding="utf-8"), str(backend), "exec"))
 
 
-def devices(kind="Audio/Source"):
-    monitor = Gst.DeviceMonitor.new()
-    monitor.add_filter(kind, None)
-    monitor.start()
-    result = []
+def device_identifier(device):
+    properties = device.get_properties()
+    # EN-US: WASAPI IDs identify endpoints; friendly names are not unique or stable.
+    # PT-BR: IDs WASAPI identificam endpoints; nomes amigáveis não são únicos nem estáveis.
+    keys = ("device.strid", "device.path", "device-path", "device.uid", "object.path", "api.v4l2.path", "device.id")
+    for key in keys:
+        if properties and properties.has_field(key):
+            value = properties.get_value(key)
+            if value is not None and str(value):
+                return str(value)
+    if sys.platform == "win32":
+        source = device.create_element(None)
+        for key in ("device-path", "device"):
+            if source and source.find_property(key):
+                value = source.get_property(key)
+                if value:
+                    return str(value)
+    for key in ("device.name", "device", "node.name"):
+        if properties and properties.has_field(key):
+            value = properties.get_value(key)
+            if value is not None and str(value):
+                return str(value)
+    return device.get_display_name()
+
+
+def device_snapshot(monitor):
+    result = {}
     for device in monitor.get_devices():
-        properties = device.get_properties()
-        identifier = None
-        for key in ("device.path", "api.v4l2.path", "device.name", "device", "node.name"):
-            if properties and properties.has_field(key):
-                identifier = str(properties.get_value(key))
-                break
-        result.append((identifier or device.get_display_name(), device.get_display_name(), device))
-    monitor.stop()
-    return result
+        identifier = device_identifier(device)
+        # EN-US: Multiple providers may expose one endpoint; retain one selectable entry.
+        # PT-BR: Vários provedores podem expor o mesmo endpoint; mantém uma entrada selecionável.
+        result.setdefault(identifier, (identifier, device.get_display_name(), device))
+    return list(result.values())
+
+
+def device_monitor(*kinds):
+    monitor = Gst.DeviceMonitor.new()
+    for kind in kinds:
+        monitor.add_filter(kind, None)
+    if not monitor.start():
+        monitor.stop()
+        raise RuntimeError("device monitor unavailable")
+    return monitor
+
+
+def devices(kind="Audio/Source"):
+    monitor = device_monitor(kind)
+    try:
+        return device_snapshot(monitor)
+    finally:
+        monitor.stop()
+
+
+def select_device(identifier, entries):
+    selected = next((device for key, _, device in entries if key == identifier), None)
+    if selected is None:
+        # EN-US: Migrate an old display-name selection only when it identifies one device.
+        # PT-BR: Migra uma seleção antiga por nome somente quando ela identifica um dispositivo.
+        matches = [device for _, name, device in entries if name == identifier]
+        selected = matches[0] if len(matches) == 1 else None
+    return selected
+
 
 if "--devices" in sys.argv or "--cameras" in sys.argv:
     try:
         emit({"type": "devices", "devices": [{"id": i, "name": n} for i, n, _ in devices("Video/Source" if "--cameras" in sys.argv else "Audio/Source")]})
     except Exception:
-        emit({"type": "error", "message": "Não foi possível listar microfones."})
+        emit({"type": "error", "message": "Não foi possível listar dispositivos."})
+        sys.exit(1)
     sys.exit(0)
+
+
+def link_camera(source, codec, capture, failed):
+    # EN-US: Decode either raw frames or MJPEG from USB/Media Foundation cameras.
+    # PT-BR: Decodifica quadros brutos ou MJPEG de câmeras USB/Media Foundation.
+    decoder = Gst.ElementFactory.make("decodebin")
+    if not decoder:
+        raise ValueError("camera decoder unavailable")
+    capture.add(decoder)
+    def decoded(_decoder, pad):
+        sink = codec.get_static_pad("sink")
+        if not sink.is_linked() and pad.link(sink) != Gst.PadLinkReturn.OK:
+            failed()
+    decoder.connect("pad-added", decoded)
+    if not source.link(decoder):
+        raise ValueError("camera source could not link")
 
 
 class Engine:
@@ -92,11 +159,18 @@ class Engine:
         self.media_recovery = None
         self.retired_bins = []
         self.portal = None
+        self.capture_generation = 0
         self.video_enabled = False
         self.video_epoch = 0
         self.frame_pending = False
         self.video_receivers = []
         self.last_frame = 0
+        self.monitor = None
+        self.monitor_bus = None
+        self.device_ids = set()
+        self.microphone_id = None
+        self.camera_id = None
+        self.default_microphone = False
 
 
     def fail(self, message):
@@ -108,12 +182,57 @@ class Engine:
         if self.closed:
             return
         self.closed = True
+        self.capture_generation += 1
+        if self.monitor:
+            if self.monitor_bus:
+                self.monitor_bus.remove_signal_watch()
+            self.monitor.stop()
+            self.monitor = None
         if self.pipeline:
             self.pipeline.set_state(Gst.State.NULL)
         if self.portal:
             self.portal.close()
             self.portal = None
         self.loop.quit()
+
+    def monitor_devices(self):
+        if self.monitor:
+            return
+        self.monitor = device_monitor("Audio/Source", "Video/Source")
+        self.device_ids = {key for key, _, _ in device_snapshot(self.monitor)}
+        self.monitor_bus = self.monitor.get_bus()
+        self.monitor_bus.add_signal_watch()
+        self.monitor_bus.connect("message", self.device_message)
+
+    def device_message(self, _bus, message):
+        if self.closed:
+            return
+        changed = message.type == Gst.MessageType.DEVICE_CHANGED
+        if message.type == Gst.MessageType.DEVICE_ADDED:
+            device = message.parse_device_added()
+        elif message.type == Gst.MessageType.DEVICE_REMOVED:
+            device = message.parse_device_removed()
+        elif changed:
+            device, old = message.parse_device_changed()
+        else:
+            return
+        identifier = device_identifier(device)
+        if message.type == Gst.MessageType.DEVICE_ADDED and identifier in self.device_ids:
+            return
+        if message.type == Gst.MessageType.DEVICE_REMOVED:
+            self.device_ids.discard(identifier)
+        else:
+            self.device_ids.add(identifier)
+        emit({"type": "devices_changed"})
+        removed = message.type == Gst.MessageType.DEVICE_REMOVED
+        affected = {identifier, device_identifier(old)} if changed else {identifier}
+        if "Audio/Source" in device.get_device_class() and (
+                ((removed or changed) and self.microphone_id in affected) or self.default_microphone):
+            # EN-US: Never switch a live microphone silently or resume it unmuted.
+            # PT-BR: Nunca troca um microfone ativo silenciosamente nem o retoma sem silenciamento.
+            self.fail("Os dispositivos de áudio mudaram. Escolha o microfone e entre novamente na chamada.")
+        elif (removed or changed) and self.camera_id in affected:
+            self.media_failed("video", "A câmera foi desconectada. Escolha uma câmera disponível.")
 
     def start(self, config):
         if self.pipeline:
@@ -123,6 +242,8 @@ class Engine:
             self.fail("Faltam plugins GStreamer: WebRTC, libnice, Opus ou áudio.")
             return
         self.test_sink = bool(config.get("test_sink"))
+        if not config.get("test_source"):
+            self.monitor_devices()
         self.pipeline = Gst.Pipeline.new("papo-audio")
         self.webrtc = Gst.ElementFactory.make("webrtcbin", "connection")
         self.webrtc.set_property("bundle-policy", GstWebRTC.WebRTCBundlePolicy.MAX_BUNDLE)
@@ -149,13 +270,16 @@ class Engine:
             source.set_property("freq", config.get("frequency", 440))
             source.set_property("volume", 0.25)
         elif config.get("device"):
-            selected = next((d for i, _, d in devices() if i == config["device"]), None)
+            selected = select_device(config["device"], device_snapshot(self.monitor))
             if selected is None:
                 self.fail("O microfone escolhido não está disponível.")
                 return
+            self.microphone_id = device_identifier(selected)
             source = selected.create_element("capture")
         else:
-            source = Gst.ElementFactory.make("autoaudiosrc", "capture")
+            self.default_microphone = True
+            factory = next((name for name in ("wasapi2src", "wasapisrc") if Gst.ElementFactory.find(name)), "autoaudiosrc") if sys.platform == "win32" else "autoaudiosrc"
+            source = Gst.ElementFactory.make(factory, "capture")
         if not source:
             self.fail("Não foi possível abrir o microfone.")
             return
@@ -176,7 +300,7 @@ class Engine:
         if not source.link(capture):
             raise ValueError("capture could not link")
         self.microphone = capture.get_by_name("microphone")
-        self.microphone.set_property("mute", bool(config.get("muted", False)))
+        self.microphone.set_property("mute", bool(config.get("muted", True)))
         self.set_microphone_gain(config.get("microphone_gain", 1.5))
         extension = Gst.ElementFactory.make("rtphdrextclientaudiolevel")
         if extension:
@@ -375,6 +499,10 @@ class Engine:
         emit({"type": "media_intent", "kind": kind, "on": on})
 
     def stop_capture(self, kind):
+        if kind == "screen":
+            self.capture_generation += 1
+        if kind == "video":
+            self.camera_id = None
         item = self.video.get(kind)
         if item:
             # Keep the negotiated sender reusable; intent=false in the next
@@ -412,22 +540,33 @@ class Engine:
                 source.set_property("pattern", event.get("pattern", 0))
                 self.publish_video(kind, source)
             elif kind == "video":
-                selected = next((d for i, _, d in devices("Video/Source") if i == event.get("device")), None)
+                self.monitor_devices()
+                selected = select_device(event.get("device"), device_snapshot(self.monitor))
                 if selected is None:
                     raise ValueError("missing camera")
-                self.publish_video(kind, selected.create_element(None))
+                self.camera_id = device_identifier(selected)
+                self.publish_video(kind, selected.create_element(None), decode_camera=True)
             else:
+                self.capture_generation += 1
+                generation = self.capture_generation
                 def ready(source):
+                    # EN-US: A consent reply queued before leave/stop may never revive capture.
+                    # PT-BR: Resposta de consentimento enfileirada antes de sair/parar nunca reativa captura.
+                    if self.closed or generation != self.capture_generation:
+                        return
                     try:
                         self.publish_video(kind, source)
                     except Exception:
                         self.media_failed(kind, "Não foi possível iniciar a captura de tela.")
-                self.portal = create_screen_capture(ready, lambda: self.media_failed(kind, "Compartilhamento encerrado, cancelado ou negado pelo desktop."))
+                def ended():
+                    if not self.closed and generation == self.capture_generation:
+                        self.media_failed(kind, "Compartilhamento encerrado, cancelado ou negado pelo desktop.")
+                self.portal = create_screen_capture(ready, ended)
                 self.portal.start()
         except Exception:
-            self.media_failed(kind, "Câmera indisponível ou plugins de vídeo/portal ausentes.")
+            self.media_failed(kind, "Compartilhamento de tela indisponível neste desktop ou runtime." if kind == "screen" else "Câmera indisponível ou plugins de vídeo ausentes.")
 
-    def publish_video(self, kind, source):
+    def publish_video(self, kind, source, decode_camera=False):
         if self.closed:
             return
         # Keep each publishing MID. A restarted encoder needs a fresh SSRC so
@@ -449,7 +588,9 @@ class Engine:
         codec.get_by_name("rtpcaps").set_property("caps", Gst.Caps.from_string(self.video_caps().to_string() + ",ssrc=(uint)" + str(item["ssrc"])))
         capture.add(source)
         capture.add(codec)
-        if not source.link(codec):
+        if decode_camera:
+            link_camera(source, codec, capture, lambda: GLib.idle_add(self.media_failed, kind, "Não foi possível decodificar a câmera."))
+        elif not source.link(codec):
             raise ValueError("video source could not link")
         capture.add_pad(Gst.GhostPad.new("src", codec.get_static_pad("src")))
         if capture.get_static_pad("src").link(item["pad"]) != Gst.PadLinkReturn.OK:
@@ -585,19 +726,39 @@ class Engine:
             self.fail("Configuração ou sinalização de áudio inválida.")
         return False
 
-engine = Engine()
-def reader():
+def main():
+    engine = Engine()
+    pending = threading.BoundedSemaphore(64)
+
+    def reader():
+        try:
+            while True:
+                line = sys.stdin.buffer.readline(128 * 1024 + 1)
+                if not line:
+                    break
+                if len(line) > 128 * 1024 or not line.endswith(b"\n"):
+                    raise ValueError("oversized or truncated command")
+                event = json.loads(line)
+                if not pending.acquire(timeout=5):
+                    raise ValueError("worker command queue full")
+                def dispatch(event=event):
+                    try:
+                        return engine.dispatch(event)
+                    finally:
+                        pending.release()
+                # EN-US: Bound queued work and mutate GStreamer only on its GLib loop.
+                # PT-BR: Limita tarefas enfileiradas e altera GStreamer apenas no loop GLib.
+                GLib.idle_add(dispatch)
+        except (ValueError, OSError):
+            GLib.idle_add(engine.fail, "Comando de áudio inválido.")
+        finally:
+            GLib.idle_add(engine.close)
+    threading.Thread(target=reader, daemon=True).start()
     try:
-        for line in sys.stdin:
-            # EN-US: Dispatch on GLib's main loop; the stdin reader must not mutate GStreamer state directly.
-            # PT-BR: Executa no loop principal do GLib; a leitura de stdin não deve alterar o estado do GStreamer diretamente.
-            GLib.idle_add(engine.dispatch, json.loads(line))
-    except (ValueError, OSError):
-        GLib.idle_add(engine.fail, "Comando de áudio inválido.")
+        engine.loop.run()
     finally:
-        GLib.idle_add(engine.close)
-threading.Thread(target=reader, daemon=True).start()
-try:
-    engine.loop.run()
-finally:
-    engine.close()
+        engine.close()
+
+
+if __name__ == "__main__":
+    main()

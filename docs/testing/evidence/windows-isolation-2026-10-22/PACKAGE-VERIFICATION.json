@@ -1,0 +1,9 @@
+{
+  "archive": "Papo-1.0.2-windows-x86_64-dev.zip",
+  "archive_sha256": "7914456e7fed0f469ca7f9b9fabad8438e1524d397c8fc2476d8eb7a5d4156b1",
+  "source": "61da878a9366e90faa77782a484ca6905e8f7374",
+  "source_dirty": false,
+  "runtime_manifest_sha256": "152d7177bc4d7717072089803f849066283d09f66e36a928ebf26b1495aee3e1",
+  "files_verified": 7828,
+  "updated_readme": true
+}

@@ -3,6 +3,7 @@
 use super::*;
 mod diagnostics;
 pub(super) mod shortcuts;
+#[cfg(test)] pub(crate) mod desktop_tests;
 /// Choose one input transport before any login/chat editable is constructed.
 /// Mixing a protocol-backed login field with a Compose-only composer can leave
 /// the compositor handling dead keys for the old field during view changes.

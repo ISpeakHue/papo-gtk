@@ -4,6 +4,11 @@ import ctypes as c
 import sys
 import time
 
+# EN-US: Fail explicitly before loading X11 on Windows or macOS.
+# PT-BR: Falha explicitamente antes de carregar X11 no Windows ou macOS.
+if sys.platform != 'linux':
+    raise SystemExit('Linux-only X11/XTest fixture; use the native platform input helper')
+
 x11=c.CDLL('libX11.so.6');xtst=c.CDLL('libXtst.so.6')
 ptr=c.c_void_p;window=c.c_ulong
 x11.XOpenDisplay.argtypes=[c.c_char_p];x11.XOpenDisplay.restype=ptr

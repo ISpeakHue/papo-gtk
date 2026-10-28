@@ -253,9 +253,9 @@ as the composer. Choosing an emoji never submits the message or saves an edit.
 `PAPO_UI_CASE=report11` checks inline insertion, Unicode offsets, deletion,
 copy/cut/paste, rich undo/redo, draft restoration, independent editor completion, reopening the
 picker, failed-save retries and exact request content. It also checks Page Up,
-Page Down and End from the composer: pages move the chat with overlap, and End
-returns to the recent head. Modified shortcuts and other windows keep native
-editing behavior.
+Page Down and End with focus in the message pane: pages move the chat with
+overlap, and End returns to the recent head. The composer and other editable
+fields keep native caret movement, selection and scrolling behavior.
 
 Channel rows retain a blue unread dot and show notification counts separately
 in red. Author/mention filters use a searchable, recycled list: typing filters

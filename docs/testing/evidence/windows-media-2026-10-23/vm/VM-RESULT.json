@@ -1,0 +1,12 @@
+﻿{
+    "schema":  1,
+    "started_utc":  "2026-10-23T03:53:36.8250971Z",
+    "status":  "pass",
+    "child_exits":  [
+                        {
+                            "exit_code":  0,
+                            "name":  "cairo"
+                        }
+                    ],
+    "finished_utc":  "2026-10-23T04:00:08.5810971Z"
+}

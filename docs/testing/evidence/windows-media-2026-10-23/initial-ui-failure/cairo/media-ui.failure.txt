@@ -1,0 +1,7 @@
+Exception: D:\a\papo-gtk\papo-gtk\media-checks\check-media-ui.ps1:63
+Line |
+  63 |  … ount -gt 0){throw 'Media UI acceptance failed; inspect individual cas …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Media UI acceptance failed; inspect individual case logs
+
+

@@ -1,0 +1,41 @@
+{
+  "scope": "Diagnostic only, not package acceptance. Metadata-only phase timings were added to the native bridge and its prototype timeout raised to 90 seconds. The subsequent full package CLI used its unchanged production limits after warming.",
+  "source_before_instrumentation": "e6865e6cafe310b70fac66ca3208519be39572e6",
+  "cold_runtime_acl_ms": 3562,
+  "cold_child_resumed_ms": 3968,
+  "cold_child_exited_ms": 18921,
+  "warm_child_resumed_ms": 78,
+  "warm_child_exited_ms": 3687,
+  "inputs": [
+    {
+      "path": "target/windows-step6-timing/bridge.cpp",
+      "sha256": "3226b138232e3e259a2b478311091b16a5f889136a0ee910f8bd456323e69996",
+      "size": 26198
+    },
+    {
+      "path": "target/windows-step6-timing/probe.cpp",
+      "sha256": "6504138be85234f556a072a4487eb4f75297f8271fd286cb454a60dd4b0f9407",
+      "size": 1735
+    },
+    {
+      "path": "target/windows-step6-timing/prototype.exe",
+      "sha256": "c8f3eefd1055bb69fbd62a9cf06814b78af1684e49a7873b695c57354885e718",
+      "size": 13749403
+    },
+    {
+      "path": "target/windows-step6-timing/input.img",
+      "sha256": "e2ce5f37c45332194b30a7e56736b532291a7b69732559a021489f1de6e8018f",
+      "size": 268435456
+    },
+    {
+      "path": "target/windows-step6-timing/input/start.ps1",
+      "sha256": "5e7d93e682a340e612068cffe2c624d662128f70404c45ca1d8cadcd36a71ccd",
+      "size": 2042
+    },
+    {
+      "path": "target/windows-step6-timing/input/prototype.py",
+      "sha256": "3aea54763b2c6188428fafbeea037d9d577ec5a5f4e52530fd12dc28ae82ba56",
+      "size": 929
+    }
+  ]
+}

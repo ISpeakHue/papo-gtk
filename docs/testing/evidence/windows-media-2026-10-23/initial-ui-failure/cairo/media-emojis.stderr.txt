@@ -1,0 +1,64 @@
+couldn't load font "emoji Bold Not-Rotated With-Color 21.6px", falling back to "Sans Bold Not-Rotated With-Color 21.6px", expect ugly output.couldn't load font "Sans Bold Not-Rotated With-Color 21.6px", falling back to "Sans Not-Rotated With-Color 21.6px", expect ugly output.
+(process:1504): Pango-WARNING **: 00:32:08.188: All font fallbacks failed!!!!
+
+(process:1504): Pango-WARNING **: 00:32:08.224: All font fallbacks failed!!!!
+
+(process:1504): Pango-WARNING **: 00:32:08.237: All font fallbacks failed!!!!
+
+(process:1504): Pango-WARNING **: 00:32:08.241: All font fallbacks failed!!!!
+
+(process:1504): Pango-WARNING **: 00:32:08.246: All font fallbacks failed!!!!
+
+(process:1504): Pango-WARNING **: 00:32:08.292: All font fallbacks failed!!!!
+
+(process:1504): Pango-WARNING **: 00:32:08.300: All font fallbacks failed!!!!
+
+(process:1504): Pango-WARNING **: 00:32:08.315: All font fallbacks failed!!!!
+
+(process:1504): Pango-WARNING **: 00:32:08.320: All font fallbacks failed!!!!
+
+(process:1504): Pango-WARNING **: 00:32:08.327: All font fallbacks failed!!!!
+
+(process:1504): Pango-WARNING **: 00:32:08.328: All font fallbacks failed!!!!
+couldn't load font "emoji Bold Not-Rotated With-Color 14.4px", falling back to "Sans Bold Not-Rotated With-Color 14.4px", expect ugly output.couldn't load font "Sans Bold Not-Rotated With-Color 14.4px", falling back to "Sans Not-Rotated With-Color 14.4px", expect ugly output.
+(process:1504): Pango-WARNING **: 00:32:08.343: All font fallbacks failed!!!!
+
+(process:1504): Gtk-CRITICAL **: 00:32:08.520: gtk_im_context_ime_message_filter: assertion 'GTK_IS_IM_CONTEXT_IME (data)' failed
+
+(process:1504): Gtk-CRITICAL **: 00:32:08.520: gtk_im_context_ime_message_filter: assertion 'GTK_IS_IM_CONTEXT_IME (data)' failed
+
+(process:1504): Gtk-CRITICAL **: 00:32:08.521: gtk_im_context_ime_message_filter: assertion 'GTK_IS_IM_CONTEXT_IME (data)' failed
+
+(process:1504): Gtk-CRITICAL **: 00:32:08.522: gtk_im_context_ime_message_filter: assertion 'GTK_IS_IM_CONTEXT_IME (data)' failed
+
+(process:1504): Gtk-CRITICAL **: 00:32:08.522: gtk_im_context_ime_message_filter: assertion 'GTK_IS_IM_CONTEXT_IME (data)' failed
+
+(process:1504): Gtk-CRITICAL **: 00:32:08.523: gtk_im_context_ime_message_filter: assertion 'GTK_IS_IM_CONTEXT_IME (data)' failed
+
+(process:1504): Gtk-CRITICAL **: 00:32:08.523: gtk_im_context_ime_message_filter: assertion 'GTK_IS_IM_CONTEXT_IME (data)' failed
+
+(process:1504): Gtk-CRITICAL **: 00:32:08.524: gtk_im_context_ime_message_filter: assertion 'GTK_IS_IM_CONTEXT_IME (data)' failed
+
+(process:1504): Gtk-CRITICAL **: 00:32:08.525: gtk_im_context_ime_message_filter: assertion 'GTK_IS_IM_CONTEXT_IME (data)' failed
+
+(process:1504): Gtk-CRITICAL **: 00:32:08.525: gtk_im_context_ime_message_filter: assertion 'GTK_IS_IM_CONTEXT_IME (data)' failed
+
+(process:1504): Gtk-CRITICAL **: 00:32:08.527: gtk_im_context_ime_message_filter: assertion 'GTK_IS_IM_CONTEXT_IME (data)' failed
+
+(process:1504): Gtk-CRITICAL **: 00:32:08.528: gtk_im_context_ime_message_filter: assertion 'GTK_IS_IM_CONTEXT_IME (data)' failed
+
+(process:1504): Gtk-CRITICAL **: 00:32:08.536: gtk_im_context_ime_message_filter: assertion 'GTK_IS_IM_CONTEXT_IME (data)' failed
+
+(process:1504): Gtk-CRITICAL **: 00:32:08.538: gtk_im_context_ime_message_filter: assertion 'GTK_IS_IM_CONTEXT_IME (data)' failed
+
+(process:1504): Gtk-CRITICAL **: 00:32:08.539: gtk_im_context_ime_message_filter: assertion 'GTK_IS_IM_CONTEXT_IME (data)' failed
+
+(process:1504): Gtk-CRITICAL **: 00:32:08.540: gtk_im_context_ime_message_filter: assertion 'GTK_IS_IM_CONTEXT_IME (data)' failed
+
+(process:1504): Gtk-CRITICAL **: 00:32:08.542: gtk_im_context_ime_message_filter: assertion 'GTK_IS_IM_CONTEXT_IME (data)' failed
+
+(process:1504): Gtk-CRITICAL **: 00:32:08.542: gtk_im_context_ime_message_filter: assertion 'GTK_IS_IM_CONTEXT_IME (data)' failed
+
+(process:1504): Gtk-CRITICAL **: 00:32:08.542: gtk_im_context_ime_message_filter: assertion 'GTK_IS_IM_CONTEXT_IME (data)' failed
+
+(process:1504): Gtk-CRITICAL **: 00:32:08.542: gtk_im_context_ime_message_filter: assertion 'GTK_IS_IM_CONTEXT_IME (data)' failed

@@ -26,11 +26,8 @@ impl UploadFile {
     pub async fn clipboard_png(bytes: &[u8]) -> Result<Self> {
         anyhow::ensure!(!bytes.is_empty() && bytes.len() as u64 <= MAX_FILE, "Imagem muito grande (máximo 100 MiB).");
         let path=std::env::temp_dir().join(format!("papo-clipboard-{}.png",Uuid::new_v4()));
-        let mut options=tokio::fs::OpenOptions::new();
-        options.write(true).create_new(true);
-        #[cfg(unix)] options.mode(0o600);
-        let mut file=options.open(&path).await?;
-        let temporary=Arc::new(TemporaryFile(path.clone()));
+        let (temporary,mut file)=create_temporary(path.clone()).await?;
+        let temporary=Arc::new(temporary);
         file.write_all(bytes).await?;
         file.flush().await?;
         Ok(Self{path,name:"imagem-colada.png".into(),size:bytes.len() as u64,_temporary:Some(temporary)})
@@ -58,14 +55,21 @@ impl Drop for TemporaryFile {
         let _ = std::fs::remove_file(&self.0);
     }
 }
+/// EN-US: Own the path inside the blocking open, including cancellation before it returns.
+/// PT-BR: Assume o caminho dentro da abertura bloqueante, inclusive se houver cancelamento antes do retorno.
+pub(crate) async fn create_temporary(path:PathBuf)->Result<(TemporaryFile,tokio::fs::File)>{
+    let (temporary,file)=tokio::task::spawn_blocking(move||->Result<_>{
+        let mut options=std::fs::OpenOptions::new();options.write(true).create_new(true);
+        #[cfg(unix)] {use std::os::unix::fs::OpenOptionsExt;options.mode(0o600);}
+        let file=options.open(&path)?;Ok((TemporaryFile(path),file))
+    }).await??;
+    Ok((temporary,tokio::fs::File::from_std(file)))
+}
 /// Stage in the destination directory so a cancelled save never truncates an existing file.
 pub async fn save_download(source: TemporaryFile, destination: PathBuf) -> Result<()> {
+    crate::platform::files::validate_destination(&destination)?;
     let stage = destination.parent().context("Pasta de destino inválida")?.join(format!(".papo-download-{}", Uuid::new_v4()));
-    let mut options = tokio::fs::OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)] options.mode(0o600);
-    let mut output = options.open(&stage).await?;
-    let stage = TemporaryFile(stage);
+    let (stage,mut output)=create_temporary(stage).await?;
     let mut input = tokio::fs::File::open(&source.0).await?;
     let mut buffer = vec![0;
     65536];
@@ -139,11 +143,7 @@ impl ApiClient {
         let response = Self::check_response(self.inner.get(self.url(endpoint)).timeout(Duration::from_secs(600)).send_paced(&self.requests).await?, "baixar mídia").await?;
         anyhow::ensure!(response.content_length().unwrap_or(0) <= maximum, "Arquivo muito grande.");
         let path = std::env::temp_dir().join(format!("papo-media-{}", Uuid::new_v4()));
-        let mut options = tokio::fs::OpenOptions::new();
-        options.write(true).create_new(true);
-        #[cfg(unix)] options.mode(0o600);
-        let mut file = options.open(&path).await?;
-        let temporary = TemporaryFile(path);
+        let (temporary,mut file)=create_temporary(path).await?;
         let mut stream = response.bytes_stream();
         let mut total = 0;
         while let Some(chunk) = stream.next().await {

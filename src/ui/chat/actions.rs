@@ -230,6 +230,7 @@ impl ChatModel {
                 if let Some(old) = self.actions.edit.take() { old.window.close(); }
                 let token = Uuid::new_v4(); let (w, outer) = window(root, "Editar mensagem");
                 let text = gtk::TextView::new(); text.set_wrap_mode(gtk::WrapMode::WordChar);
+                text.update_property(&[gtk::accessible::Property::Label("Editar mensagem")]);
                 w.set_default_size(440,-1);
                 text.set_top_margin(8);text.set_bottom_margin(8);text.set_left_margin(8);text.set_right_margin(8);
                 super::input::configure_im(&text);
@@ -262,7 +263,7 @@ impl ChatModel {
                         }
                         if key==gtk::gdk::Key::Down{if let Some(panel)=active_panel{panel.child_focus(gtk::DirectionType::TabForward);}return gtk::glib::Propagation::Stop;}
                     }
-                    if matches!(key,gtk::gdk::Key::Return|gtk::gdk::Key::KP_Enter)&&!mods.intersects(gtk::gdk::ModifierType::SHIFT_MASK|gtk::gdk::ModifierType::CONTROL_MASK|gtk::gdk::ModifierType::ALT_MASK|gtk::gdk::ModifierType::SUPER_MASK){
+                    if matches!(key,gtk::gdk::Key::Return|gtk::gdk::Key::KP_Enter)&&unmodified{
                         if let(Some(text),Some(event))=(weak.upgrade(),controller.current_event()){if text.im_context_filter_keypress(&event){return gtk::glib::Propagation::Stop;}}
                         let _=output.send(ChatMsg::Action(ActionMsg::SaveEdit(token)));return gtk::glib::Propagation::Stop;
                     }gtk::glib::Propagation::Proceed

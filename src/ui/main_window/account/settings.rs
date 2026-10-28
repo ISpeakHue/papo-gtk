@@ -183,6 +183,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     tabs.set_visible_child_name("preferences");
     until(context,||main.model().account.preferences.as_ref().unwrap().toggles.iter().all(|row|row.compute_bounds(&window).is_some_and(|b|b.width()>0.0&&b.x()>=0.0&&b.x()+b.width()<=window.width() as f32)));
     crate::ui::main_window::layout::tests::preview(&window,"account-settings-preferences-narrow",context);
+    {let model=main.model();let save=&model.account.preferences.as_ref().unwrap().save;let bounds=save.compute_bounds(&window).unwrap();assert!(bounds.y()>=0.0&&bounds.y()+bounds.height()<=window.height() as f32,"the narrow preferences form keeps Save visible");}
     tabs.set_visible_child_name("security");crate::ui::main_window::layout::tests::preview(&window,"account-settings-narrow",context);
     until(context,||passwords.iter().all(|entry|entry.compute_bounds(&window).is_some_and(|b|b.width()>0.0&&b.x()>=0.0&&b.x()+b.width()<=window.width() as f32)));
     for entry in &passwords{let bounds=entry.compute_bounds(&window).unwrap();assert!(bounds.x()>=0.0&&bounds.x()+bounds.width()<=window.width() as f32,"password fields must fit the narrow settings window");assert!(entry.shows_peek_icon());}

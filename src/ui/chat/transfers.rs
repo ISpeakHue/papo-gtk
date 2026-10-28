@@ -980,7 +980,7 @@ impl ChatModel {
                 let parent = root.root().and_then(|r|r.downcast::<gtk::Window>().ok());
                 let s = sender.clone();
                 gtk::glib::spawn_future_local(async move {
-                    if let Ok(file) = gtk::FileDialog::builder().title("Salvar arquivo").initial_name(&attachment.original_file_name).build().save_future(parent.as_ref()).await {
+                    if let Ok(file) = gtk::FileDialog::builder().title("Salvar arquivo").initial_name(crate::platform::files::suggested_filename(&attachment.original_file_name)).build().save_future(parent.as_ref()).await {
                         if let Some(path) = file.path() {
                             s.input(ChatMsg::Transfer(TransferMsg::Save {
                                 epoch, message, attachment: attachment.id, path
@@ -1123,9 +1123,7 @@ impl ChatModel {
 async fn gif_file(bytes:std::sync::Arc<[u8]>)->anyhow::Result<TemporaryFile>{
     use tokio::io::AsyncWriteExt;
     let path=std::env::temp_dir().join(format!("papo-gif-{}",Uuid::new_v4()));
-    let mut options=tokio::fs::OpenOptions::new();options.write(true).create_new(true);
-    #[cfg(unix)] options.mode(0o600);
-    let mut file=options.open(&path).await?;let temporary=TemporaryFile(path);file.write_all(&bytes).await?;file.flush().await?;drop(file);Ok(temporary)
+    let (temporary,mut file)=crate::api::features::create_temporary(path).await?;file.write_all(&bytes).await?;file.flush().await?;drop(file);Ok(temporary)
 }
 pub(super) fn attachment_context(row:&gtk::Widget,message:Uuid,x:f64,y:f64,messages:&[Message],media:&Transfers,sender:&ComponentSender<ChatModel>)->bool {
     let mut picked=row.pick(x,y,gtk::PickFlags::DEFAULT);

@@ -1,0 +1,770 @@
+{
+  "code_source": "61da878a9366e90faa77782a484ca6905e8f7374",
+  "package_source": "61da878a9366e90faa77782a484ca6905e8f7374",
+  "files_compared": 190,
+  "code_differences": [],
+  "package_differences": [],
+  "method": "Byte comparison of native application/package inputs against the final CI snapshot. Documentation and fixture evidence are recorded separately; not a claim of byte-identical builds.",
+  "inputs": [
+    {
+      "path": "Cargo.toml",
+      "sha256": "48890fbeafa823f795dee42f8fcfb6ad63f0256d8c3e1b5ab56e9f8904951114"
+    },
+    {
+      "path": "Cargo.lock",
+      "sha256": "6adc4b0bdae904d2514526c59b0816887de8406c7db721db05ae05506dc233b1"
+    },
+    {
+      "path": "build.rs",
+      "sha256": "8ffd5cac728ee410ac2031af6c6565e2add21a4e4490a0e83b72b2fae3e8bf67"
+    },
+    {
+      "path": "data/windows/identity.json",
+      "sha256": "43f7017cc56184a1e5cd11c18d051c33dc1a12b1d27b7c8f6917b88d8c37a477"
+    },
+    {
+      "path": "src/api/administration.rs",
+      "sha256": "1125435f711d8fcf63d40cfc0cec30bb2fe64c98f757fd8793579d2e663d50be"
+    },
+    {
+      "path": "src/api/body.rs",
+      "sha256": "2bb1e556e3a4d7da825665ef14b6c977d305a3c611dd4a448db7bbd2ad19d578"
+    },
+    {
+      "path": "src/api/contract_tests.rs",
+      "sha256": "d0b38288b59b7315ddef6b75ddce48df898992014d16d22b242149e141edcf30"
+    },
+    {
+      "path": "src/api/discovery.rs",
+      "sha256": "e4c89b0274dbbe576a768c4be646efafb9ce1a286e9ee8d9b4abd162594c7702"
+    },
+    {
+      "path": "src/api/features.rs",
+      "sha256": "d4c05591e36d95a7675982b81cad603cf2e7eec2b0ac0ae5d23a71a34a38df8d"
+    },
+    {
+      "path": "src/api/hardening_tests.rs",
+      "sha256": "d7fed64b052b957c5be89b3fa5d25b65af4e8d3733937fc1bef1279fb5d86068"
+    },
+    {
+      "path": "src/api/mod.rs",
+      "sha256": "57f02ff2af7ba67c0e2273d1c2adf441ea7df3123f613db1e0d4d09f3b175120"
+    },
+    {
+      "path": "src/api/moderation.rs",
+      "sha256": "787b4944d07e8cca275f2b142489c19765803d2c0d4cf3a4026af9b7863890ae"
+    },
+    {
+      "path": "src/api/poster.rs",
+      "sha256": "d2c6403a0c8d5bdc542d9bbe3d59a199adfacb85d844fa15ed04183977b403fc"
+    },
+    {
+      "path": "src/api/public_dns.rs",
+      "sha256": "b0b06b50ee8d22c5117e8d65cd1e4eb2dbb0399b260c7c28829649b122f07919"
+    },
+    {
+      "path": "src/api/requests/tests.rs",
+      "sha256": "02e6153a57e21963192fcd22eea2808c62d94e08c5caa720143cb9566c2a67a6"
+    },
+    {
+      "path": "src/api/requests.rs",
+      "sha256": "d98debdec2a7a7c05025b188fef767c24613df719cb09e34acdd89b3acc16d50"
+    },
+    {
+      "path": "src/api/security.rs",
+      "sha256": "530f413cc89106176ef4aff7e6d9c84159276eff909f8eefe38fdd9957d40119"
+    },
+    {
+      "path": "src/api/voice.rs",
+      "sha256": "730d9a7d8aac37050d2bc17c046a77f643253897d348b9a282fe81fb31f6b1ac"
+    },
+    {
+      "path": "src/api/webhooks.rs",
+      "sha256": "e8297256896fdc229fc86d5e5f4a24114ab967bb6b14a0059e8b95064aa33357"
+    },
+    {
+      "path": "src/app/branding.rs",
+      "sha256": "860a414be6bc7e6674ba9a5ce0f184991525d1174ba5eeb591728b1bd1e3d2de"
+    },
+    {
+      "path": "src/app/mod.rs",
+      "sha256": "04bfeb77a36ac496a12d40ca422c8371c9024476f2c17029766c24c4bcfbe39c"
+    },
+    {
+      "path": "src/config/mod.rs",
+      "sha256": "d6d10c4f80e18e6eaa179b17f370f6f1d6598b3a809ca62f87c30747f95dd1d6"
+    },
+    {
+      "path": "src/logging.rs",
+      "sha256": "aeef73a8646adf95e842c26e16d1a1c54f2ed92b9001b408251442d1030e5709"
+    },
+    {
+      "path": "src/main.rs",
+      "sha256": "a3d424e11f6b3f43f1ef264eb512863f9588652511b20ab19ed45f89466ad27d"
+    },
+    {
+      "path": "src/media/animation.rs",
+      "sha256": "596f454930c1f7f28641150567899367f4b201d6694b49f801bb20132dfe4fa7"
+    },
+    {
+      "path": "src/media/avatars.rs",
+      "sha256": "4f79d297d9c2fa24dc01accd9257949b85741545d750ad81b60fa00bba400a3b"
+    },
+    {
+      "path": "src/media/container.rs",
+      "sha256": "cbe785f4a229ce4eb17c8e023dec4138540ee537d1fda68e61fbc55807aa3d7d"
+    },
+    {
+      "path": "src/media/emoji.rs",
+      "sha256": "d2caab91b93ba4de170f96974ea73f3ead26d7ecad64db0ebfbc8d6d7a92dc44"
+    },
+    {
+      "path": "src/media/frame.rs",
+      "sha256": "a89c9d16a760a960a2e55f07fe09213dcafd42064801c1d0f85043ecec385fbb"
+    },
+    {
+      "path": "src/media/gif_links.rs",
+      "sha256": "0a28f44f22e08d5d7de2f17bd69d3d908a328f24ee9457330222cb401627ba68"
+    },
+    {
+      "path": "src/media/giphy.rs",
+      "sha256": "cd673e4cf1141ab41c0e6685a39812bab7f85a6b591fd73a8a1fea376e5f628c"
+    },
+    {
+      "path": "src/media/inline.rs",
+      "sha256": "be9f437b04012f328dbe40ae5cfbba52bf1b50e04ef4a29f37c46b90a20e2a7e"
+    },
+    {
+      "path": "src/media/mod.rs",
+      "sha256": "597429a90b3ae0d5b9b316bc917a76d689348ccb5254cdbe26527d9420385e88"
+    },
+    {
+      "path": "src/media/poster.rs",
+      "sha256": "18ee912016e39b7a0509052c07f040d41c09f809830f32ffe14762e4bb16a724"
+    },
+    {
+      "path": "src/media/preview.rs",
+      "sha256": "11f0bd1c08cc23be9a70bae5d7f6e7b26f481cd8bd5d441535cb25714087091f"
+    },
+    {
+      "path": "src/media/runtime.rs",
+      "sha256": "dbbf74bb150ecb18b6e296872e2987b65227ac3543eb4f079ea76ab93a50f268"
+    },
+    {
+      "path": "src/media/sandbox.rs",
+      "sha256": "458b49fd9c3f7624ba402a76b46240b18f8c52d887fbfd5b8323fd96cca75562"
+    },
+    {
+      "path": "src/media/sound.rs",
+      "sha256": "1b890e9cdda7026bcf8902a0a0c8629396188ea695f8a9d102b507d8b4dadfa9"
+    },
+    {
+      "path": "src/models/auth.rs",
+      "sha256": "8f5d6fb0c964a9fa02285ddc51a243728cbd3dd075c3cb3c3fbdf56272c774ac"
+    },
+    {
+      "path": "src/models/channel.rs",
+      "sha256": "debb53819b4f96c5b2f13971f68aaa15685fe7c9f3a58af53b7413db1d8c03fe"
+    },
+    {
+      "path": "src/models/contract_fields.rs",
+      "sha256": "3b868a911db852415cce4d3d5fdb589c83bd3c1ca0ab0cd361dc035c58be209d"
+    },
+    {
+      "path": "src/models/direct.rs",
+      "sha256": "7c89522f2aee5f221e0b5f49450e1271c5f33cf34e08fe89fd73c08801f34cd7"
+    },
+    {
+      "path": "src/models/discovery.rs",
+      "sha256": "0e43e143130632d10215060ec4d396776c22ecbde3cd66d7ddf78996a5471e55"
+    },
+    {
+      "path": "src/models/embed.rs",
+      "sha256": "f53cbafec3cccccf1af6d5e3c9d4ac78360cc76b753c641ccaed1d5e04005311"
+    },
+    {
+      "path": "src/models/emoji.rs",
+      "sha256": "7960d9561199c4d9d39b759fac0813692dee48634ce0a71335f4cc27c1e61d1e"
+    },
+    {
+      "path": "src/models/message.rs",
+      "sha256": "f08a7c65a19698be193912140aa3fdd9f75636099a9552c7a9bc1ce13397bfe1"
+    },
+    {
+      "path": "src/models/mod.rs",
+      "sha256": "409cb76436127cec1fbf3bc8878e0db02700eae9e7e89c4e33eeeed069454286"
+    },
+    {
+      "path": "src/models/moderation.rs",
+      "sha256": "f4dee35aef7b1bdec56f4f5b774873fbf4dceb426132b9e0cf6f9f04519faae8"
+    },
+    {
+      "path": "src/models/permissions.rs",
+      "sha256": "ded3af445091b2175e9a43ae30b21c890fc6f9aaa92f03cfe77417c89437896a"
+    },
+    {
+      "path": "src/models/role.rs",
+      "sha256": "d26796460e0c3865140f5bce99ad923bc6f7d8e54f00afa0f9619c2499cc288e"
+    },
+    {
+      "path": "src/models/server.rs",
+      "sha256": "f9cf3ad2d71aa16baef4dad94acced38e4f4b31c4b045c4b2ce110ef98d57293"
+    },
+    {
+      "path": "src/models/user.rs",
+      "sha256": "6d25479dd41b49aa26250f5d2307ba4662ec7d9ffc7da82adcae9b9d186b2bf1"
+    },
+    {
+      "path": "src/models/voice.rs",
+      "sha256": "3e075fc6438ec4e74cee81b50db210bbf5df7377907c6407a48368784b283948"
+    },
+    {
+      "path": "src/models/webhook.rs",
+      "sha256": "ac581afa295f1a66474f695257f512dcfe3076a2047def77f4aa07ccf9fb8b9b"
+    },
+    {
+      "path": "src/performance.rs",
+      "sha256": "734a8979d9dd590c759ce24f5975008dd7fc9596c8c7698e02f7cf9e62f53a74"
+    },
+    {
+      "path": "src/platform/activation.rs",
+      "sha256": "caac908395fffb94088e615582ea02c032ef22f3fe71e1135fa62646b47e8853"
+    },
+    {
+      "path": "src/platform/capture/mod.rs",
+      "sha256": "12ee4172a3d6d19c38ee825df86266c996f48135b3e66df350dfd2a588c25f92"
+    },
+    {
+      "path": "src/platform/credential_key.rs",
+      "sha256": "ef977fe529b3aea8f025d5df26f8195f5eaaa9527517c3bf54c77132f307637f"
+    },
+    {
+      "path": "src/platform/credentials/windows.rs",
+      "sha256": "f723fc405bc34e15158818098774cf7d1abf369d936308048c6b831463440f1a"
+    },
+    {
+      "path": "src/platform/credentials.rs",
+      "sha256": "2d13783261db629375ab7a60f7b80daba93844dfdc3fb3304106001e798d3b23"
+    },
+    {
+      "path": "src/platform/files.rs",
+      "sha256": "f048e52b1a47751e2acfdff94dea892846f694221ab26cfac6514626b6f0544e"
+    },
+    {
+      "path": "src/platform/mod.rs",
+      "sha256": "5514fc012801dd757a60fde06e1e85e9f22815e7cd0addbb776bdeea0af8e41a"
+    },
+    {
+      "path": "src/platform/runtime.rs",
+      "sha256": "fd5515b3e84c47008158e0d7f93fd6b4fc4d62c401f989c05786cde425b83593"
+    },
+    {
+      "path": "src/platform/sandbox/linux.rs",
+      "sha256": "503820173536acbc016cd3a62c432f776a85c81f2ebd21706e25526ade6d6962"
+    },
+    {
+      "path": "src/platform/sandbox/mod.rs",
+      "sha256": "0d6b815c0840c46fe94d756c74fa0281b7687c6528115886639439a9e81925b0"
+    },
+    {
+      "path": "src/platform/sandbox/windows.rs",
+      "sha256": "5d84e5b63cef0c882052032ba1ba7d10dbda43fd85fdf0681157c410f2cb4491"
+    },
+    {
+      "path": "src/platform/shortcuts.rs",
+      "sha256": "6b609c3eab4b9d5a9b6864f93cb051039b8be3dd88daa050bd7074448db55af6"
+    },
+    {
+      "path": "src/platform/startup.rs",
+      "sha256": "b53cc1cfbde3af9a666800197105a66621b3231a9a92670b6dab2a33a0d9ac0f"
+    },
+    {
+      "path": "src/platform/storage_check.rs",
+      "sha256": "eccfcaf2950abeade48b9271096369dec1af2316ec827f55b224279a4e704745"
+    },
+    {
+      "path": "src/session/refresh.rs",
+      "sha256": "9ccddd7bef9606cdfcbea0fa412f6f87578e11f03beaf6cae8ea9fb0aebdb2b9"
+    },
+    {
+      "path": "src/session.rs",
+      "sha256": "7e87ba103b2d10cc14a174ba79fc26a4ba605edce9dfa71a820993ed7a059a5d"
+    },
+    {
+      "path": "src/ui/chat/actions/edit_emojis.rs",
+      "sha256": "98f9af51b2cb93e136d735a98a706cf4e67bf7aa6ae50192ef5b9e1279e4ed74"
+    },
+    {
+      "path": "src/ui/chat/actions/edit_mentions.rs",
+      "sha256": "3352117fa155e3fd6c5964c340af2b222d6d642b08842f5d13f4a73e4b4a9f16"
+    },
+    {
+      "path": "src/ui/chat/actions/participants.rs",
+      "sha256": "63046fc2195dbd8b2875bd51dd4d89bfd1a289577458b64b6fd750ad744ccbb9"
+    },
+    {
+      "path": "src/ui/chat/actions/pins.rs",
+      "sha256": "5af0d416b1aad628c58634c34b3176068ee04598059512635778ee75c248142b"
+    },
+    {
+      "path": "src/ui/chat/actions/tests.rs",
+      "sha256": "c57331777c7b7460e0461ddbfe1eeb3130a7fc84d95a1544703fdbc7d6e00c8b"
+    },
+    {
+      "path": "src/ui/chat/actions.rs",
+      "sha256": "9bfecc2801658d762179e38569c1bf4fcf8f583b5b47cbc6399af0b3054e87b5"
+    },
+    {
+      "path": "src/ui/chat/bugs.rs",
+      "sha256": "dcc276bd078282b4a9ea111fd0de127e222045e7a507d010ad240bc75f887c62"
+    },
+    {
+      "path": "src/ui/chat/bugs5.rs",
+      "sha256": "32fc9a3cc00142db94d8cff1ea7b41deb50f7e4bebf0a6ab6206071ed6621e3f"
+    },
+    {
+      "path": "src/ui/chat/bugs6.rs",
+      "sha256": "f458f71a4ce15589bc4da3a5ab599ab60effe7172b34bbc1152d8438d6d7e95b"
+    },
+    {
+      "path": "src/ui/chat/bugs7.rs",
+      "sha256": "ce20e4be57c930d2f7d68812bfbb2e993ff88bc95e30bfd1790f9f795ee7ab29"
+    },
+    {
+      "path": "src/ui/chat/bugs8.rs",
+      "sha256": "b5699f2f8faecf8dc457c9d65f6974ff4a26b4d9aad47e31e59e1f941aa4b144"
+    },
+    {
+      "path": "src/ui/chat/bugs9.rs",
+      "sha256": "f31ad8cc209d0451cf90804bf64fc10fbac3ad97e57aed2b9edc78b783bd49e0"
+    },
+    {
+      "path": "src/ui/chat/cache.rs",
+      "sha256": "2f94615f3bc49fd9842abf6ff55cfac498236e0c29fb0c1105f595aa3b26b8d0"
+    },
+    {
+      "path": "src/ui/chat/clipboard.rs",
+      "sha256": "61c84854ae00ac9cc43fe9ff23e8ffde1b74915ed0109bfaff2712f657468c6c"
+    },
+    {
+      "path": "src/ui/chat/composer/history.rs",
+      "sha256": "1ea23adc69ef09587f5a521cfcb44db1762c360430dee4ccf7e6608e3f1cf2f5"
+    },
+    {
+      "path": "src/ui/chat/composer/inline.rs",
+      "sha256": "3b853f7b3b7bb99da37b2a3bcb8d2f6bab972e336c182ecdd25b9f01050d40c7"
+    },
+    {
+      "path": "src/ui/chat/composer/inline_tests.rs",
+      "sha256": "f0300e62d0276a40650d6f78a87d996adeb5dfd2b218af7419c7af795109f898"
+    },
+    {
+      "path": "src/ui/chat/composer.rs",
+      "sha256": "ecf0087e0835d779943544eda74697ee179156bfcff9f9049aced10b5e81b9d0"
+    },
+    {
+      "path": "src/ui/chat/display_frames.rs",
+      "sha256": "a1856ba0495d1f2c49e12407f539bdcad4a50d71c7aa64729febcb8539cd50f9"
+    },
+    {
+      "path": "src/ui/chat/draft_preview.rs",
+      "sha256": "1ff9f1873bef21cd21385eb7473751ba2bd9a4dbd7cbebd86e30aaac33441a25"
+    },
+    {
+      "path": "src/ui/chat/embed_editor.rs",
+      "sha256": "3ddfad5da907aea1d8c88e17d7fda7e3b73096ccffd58af3599e6e7d021ea537"
+    },
+    {
+      "path": "src/ui/chat/emoji/categories.rs",
+      "sha256": "456620e3a718c2cf65047f541305cd91893a2173463d0b3ea94379c4e298c7d1"
+    },
+    {
+      "path": "src/ui/chat/emoji.rs",
+      "sha256": "d75b6963c321c532ea6a9af017a30eb34f8255e1f84cc82e7166961ae2ab180f"
+    },
+    {
+      "path": "src/ui/chat/emoji_details/tests.rs",
+      "sha256": "19784f57534bcef78908d37acd5080481ae0e10ba2a5d82e3627b6ca87b2f6fa"
+    },
+    {
+      "path": "src/ui/chat/emoji_details.rs",
+      "sha256": "00516b69da2e635eba64fcd3600e4dffe835a70c0e45f4ffdacf5a6048e98acb"
+    },
+    {
+      "path": "src/ui/chat/input/diagnostics.rs",
+      "sha256": "d3bc0742d15ad295a7e7d56756fae4e5ae4ec804ac3dc7ed171e392c5de8fd5d"
+    },
+    {
+      "path": "src/ui/chat/input/shortcuts.rs",
+      "sha256": "651301edeb8eeafd5e215a3088de67a0a46a962a8a8f684effd237059ebf7197"
+    },
+    {
+      "path": "src/ui/chat/input.rs",
+      "sha256": "8bd64b940b335d59d9f12058f2968958940d6d8cbd4e53fd32d8135d19550e7b"
+    },
+    {
+      "path": "src/ui/chat/markdown.rs",
+      "sha256": "7cd201d90d86e148dee86463b43cc0e1acb962f24ab108376b5b0c6e0c5487b9"
+    },
+    {
+      "path": "src/ui/chat/mention_background.rs",
+      "sha256": "22c97ffb54996a1dd42a6808fc88afc54a8591ee7e2ac8e1d7298bc4bb75c3dc"
+    },
+    {
+      "path": "src/ui/chat/mentions.rs",
+      "sha256": "ba88b7e7b5c114149347d9ba287be5c66ba9cce31afb2081c25ef2391da275db"
+    },
+    {
+      "path": "src/ui/chat/mod.rs",
+      "sha256": "a9a13e34bf9125209ee47cec9d6eb858614f76bdf6ad5a9df51248fc1a7e213c"
+    },
+    {
+      "path": "src/ui/chat/moderation.rs",
+      "sha256": "ddbe5a240fb338569ca3d726dfb711626afee4a68be29274ee36282972cc1c27"
+    },
+    {
+      "path": "src/ui/chat/multiline.rs",
+      "sha256": "0eaad415d0c8a19f5eabb6ecd092216af0c74ede8a895a94991f1b9ede13b879"
+    },
+    {
+      "path": "src/ui/chat/navigation.rs",
+      "sha256": "3d7eaa9d016c247f955bc8ed5690d46c983039a5f90e99219b7633783c9cc161"
+    },
+    {
+      "path": "src/ui/chat/performance.rs",
+      "sha256": "c1bd33297af6ef5da1a62afce6cad14e75212fe726e9dc99c65347a26a58a017"
+    },
+    {
+      "path": "src/ui/chat/polish_tests.rs",
+      "sha256": "cbd2c306e3050055745d0fcafea5271e664265205d80df842d2c81bf59ad21b0"
+    },
+    {
+      "path": "src/ui/chat/rich/flow.rs",
+      "sha256": "cc774b63fc383a6958e2cdce0d2524f4ee989dbd796d8ecefac428d341ce3d08"
+    },
+    {
+      "path": "src/ui/chat/rich.rs",
+      "sha256": "fd557825268856ff5acfe46a8410cf5b14f829ffac08a8e9b8382f0910c03cd3"
+    },
+    {
+      "path": "src/ui/chat/state.rs",
+      "sha256": "485dd7ce7adfc5ccaf24ea8e28942a18c8d4d315a257ab86b25d46c3e84befbe"
+    },
+    {
+      "path": "src/ui/chat/surface_cache.rs",
+      "sha256": "ff8b2e27dda3fa5590444b7c96984133c17222687e8f3d830365371471cdc531"
+    },
+    {
+      "path": "src/ui/chat/syntax.rs",
+      "sha256": "a6360157f87c160cbdbcd032dcdd738eb186026fb36c83a3a4da14f68e0457d0"
+    },
+    {
+      "path": "src/ui/chat/text.rs",
+      "sha256": "d0b567bbd2369b9210162234786149a59f351a59f8a0093601da61c1e0eefe51"
+    },
+    {
+      "path": "src/ui/chat/transfers/attachments.rs",
+      "sha256": "7f70d17cd145c08114f4da6b3a71a70166b5c04f0ec8a83c014a970b119c886e"
+    },
+    {
+      "path": "src/ui/chat/transfers/author.rs",
+      "sha256": "421381db5044525b10266ab7c074e04dcddae5f80ac4be8e1c3706b025fdac71"
+    },
+    {
+      "path": "src/ui/chat/transfers/cache_checks.rs",
+      "sha256": "9cff8c4bbc5b4d4d290e336af70f026e523056139edecbd765d3957ef747418e"
+    },
+    {
+      "path": "src/ui/chat/transfers/encoded.rs",
+      "sha256": "9f57f57d6b856cafe154ec4741768f56fea5b0a6c974ac255c19a78cb25c080e"
+    },
+    {
+      "path": "src/ui/chat/transfers/external.rs",
+      "sha256": "fd25454e1d23208565f857934c95ac1e16c9755d8ecc9d3878c768b419206354"
+    },
+    {
+      "path": "src/ui/chat/transfers/fixes9.rs",
+      "sha256": "d6013050128a781081e30201077d827fbe11850f8fb83c9b3b4c0a0400f457be"
+    },
+    {
+      "path": "src/ui/chat/transfers/geometry.rs",
+      "sha256": "b2ec084173276e2b0fe1e55c9b752141f0a3fbd53875dce411ff0cf915497a7e"
+    },
+    {
+      "path": "src/ui/chat/transfers/gifs.rs",
+      "sha256": "05e065a324573e61ac8db22ab28d688fe838432420ed717ec0b27b79d4d913cb"
+    },
+    {
+      "path": "src/ui/chat/transfers/loading.rs",
+      "sha256": "b18b1fbb1ea6d4a4af0f4318c0f6106f25651e372713702968fb769723d7275d"
+    },
+    {
+      "path": "src/ui/chat/transfers/mov_tests.rs",
+      "sha256": "0b39ae5736e33c09b632ca36312587bfcc9e8d46b019b378373df4c7b8ae9f29"
+    },
+    {
+      "path": "src/ui/chat/transfers/pins_tests.rs",
+      "sha256": "d1c6e3a4dfba4d819779f81ed65639f57ee1564d96b51ddab8aa1629511cd46c"
+    },
+    {
+      "path": "src/ui/chat/transfers/recent_tests.rs",
+      "sha256": "74535b25877127b8cfcc135b061324c5724ff796511c8f701fac4ddb3820a6d8"
+    },
+    {
+      "path": "src/ui/chat/transfers/resident.rs",
+      "sha256": "f8db9ff8be6ccd747efa4710b60a32356ab0c4a037fe8964d996b786fe9d8eff"
+    },
+    {
+      "path": "src/ui/chat/transfers/viewer/controls.rs",
+      "sha256": "7e72d8fa4b78b590e0df18aa62ec5e1872603e5cf1aef4cdd4b2f51ff051b66c"
+    },
+    {
+      "path": "src/ui/chat/transfers/viewer.rs",
+      "sha256": "97a63a904a63377fea870e7684a6a656830928911ed09bc6bf060a1d608a3a31"
+    },
+    {
+      "path": "src/ui/chat/transfers.rs",
+      "sha256": "062f29c6a6372b6a627f40b50c80a90e18a3282bfdfd97224fc50f5b2a69cbfa"
+    },
+    {
+      "path": "src/ui/chat/video/fullscreen.rs",
+      "sha256": "b05d3780a84bd8dbb06e6e3b3964215ea0773077323070d5f4a4d67f6ee2087f"
+    },
+    {
+      "path": "src/ui/chat/video/tests.rs",
+      "sha256": "83c8371e13236daa9c21421db08ca64895bbea62effead80df96a547fcb0fd29"
+    },
+    {
+      "path": "src/ui/chat/video.rs",
+      "sha256": "b66b1fe875998727a32b0d8bbda0f5a17ee0ac7fe6591a3adfd07462bb061844"
+    },
+    {
+      "path": "src/ui/chat/viewport.rs",
+      "sha256": "e7c3f79496294c7d723224ff486698f1a8a7bfe71bd87ef807564a37ac8828b7"
+    },
+    {
+      "path": "src/ui/chat/window.rs",
+      "sha256": "be436345ef7b1279fb4d3f418f5a84b6403acc80ffd92d0d5cd970c4536709ec"
+    },
+    {
+      "path": "src/ui/dialogs.rs",
+      "sha256": "2fc3317d4fa799b1ea5a33f5a79d0dfebbbdf3cd4630b75a40a3a4b5f686ab3c"
+    },
+    {
+      "path": "src/ui/login/authenticate.rs",
+      "sha256": "8f9155434450a800dab0e18097007f98a692c5ea73e83869e2e90ab24884f75a"
+    },
+    {
+      "path": "src/ui/login/mod.rs",
+      "sha256": "d56025d6ce5c90ebb02270f4d99f4d795cdca419db51682a6efc3910afee81d8"
+    },
+    {
+      "path": "src/ui/login/recovery.rs",
+      "sha256": "bd4a09656da8b1171fe94b9d87960ec2af4ece582b3ce3fffba06b6403a0918d"
+    },
+    {
+      "path": "src/ui/login/tests.rs",
+      "sha256": "e8e417cc88b85a64dc2347d2a5dd10d8be91d09aa1b6a0b07d585ca31a2e8e03"
+    },
+    {
+      "path": "src/ui/main_window/account/preferences.rs",
+      "sha256": "f09a118e79ef5f39e2b7be470e75168a50232a08f478b21cd46445b4aeaac355"
+    },
+    {
+      "path": "src/ui/main_window/account/profile.rs",
+      "sha256": "e17b8d7fcb026ef5871d8bccdb7209bc98d63efa0bf0fc2241df838942291b29"
+    },
+    {
+      "path": "src/ui/main_window/account/settings.rs",
+      "sha256": "13cfe0fcd822a0a139db63a77dcdbc16933f7b80e76dc9c432e190df4d16348a"
+    },
+    {
+      "path": "src/ui/main_window/account.rs",
+      "sha256": "5376994bac24feeb0b7ee7e7fc3ecce25187b1866ee0fb07c445a4c30e53c33c"
+    },
+    {
+      "path": "src/ui/main_window/administration.rs",
+      "sha256": "b2a98594c2e3bbebd2099949fd05fc0e8bec648aa6655b1ab7fb7b98ef1a08ff"
+    },
+    {
+      "path": "src/ui/main_window/bugs7.rs",
+      "sha256": "dfcefed5797215b9dd097640c66aa277032479289e064ea2ab30163b19a97efe"
+    },
+    {
+      "path": "src/ui/main_window/bugs8.rs",
+      "sha256": "3d582ed5fbaeb71d00a3288478f876592c1761347c9446674107ecf18e3bac51"
+    },
+    {
+      "path": "src/ui/main_window/direct.rs",
+      "sha256": "4008babb5de89a92611c358a28fe2a34ec49f8044541f0c1fa984e0a0d1f9f39"
+    },
+    {
+      "path": "src/ui/main_window/layout.rs",
+      "sha256": "7e66bc47e8cc8046dc1fb1c35defbe9159f1fcc6afa2cce06a5e868d1808f8e3"
+    },
+    {
+      "path": "src/ui/main_window/members.rs",
+      "sha256": "b7d5983ce798acc7cf50ffab7cd9179ecd3e4102c38870d9d74b3ac3bd90e7e2"
+    },
+    {
+      "path": "src/ui/main_window/mod.rs",
+      "sha256": "e00b4950809da80e7eff4a0d7b4bbba65ccff681d3b2be1861835d666a421ec0"
+    },
+    {
+      "path": "src/ui/main_window/moderation.rs",
+      "sha256": "2d93c14a92fd8940afba58684b4c7aa90a87c7a1fc60939a1904092a1f7b5f59"
+    },
+    {
+      "path": "src/ui/main_window/notifications/desktop.rs",
+      "sha256": "d3cde5c4f4b9af8b28ce0708e8532edc492b0ab4684567f4d6c2d0ba5979b265"
+    },
+    {
+      "path": "src/ui/main_window/notifications/desktop_pending.rs",
+      "sha256": "48f4ef6e0cd7915ab797a9b3a78ed3d612e0948d268599a8eb7fafb9c703ca9a"
+    },
+    {
+      "path": "src/ui/main_window/notifications/filters.rs",
+      "sha256": "5daae441a39d1c98560b2911566b7eda413365ed4603efd8146d0feeb5a69f2d"
+    },
+    {
+      "path": "src/ui/main_window/notifications/mod.rs",
+      "sha256": "79d0a851a36a2a80b6cd2363c2b860328f616699a17042a67a7c008fb5278042"
+    },
+    {
+      "path": "src/ui/main_window/notifications/read.rs",
+      "sha256": "e5ceace27459cd6dcda544c01259882e527f9043fd8c960ceec4fa6736ffcda8"
+    },
+    {
+      "path": "src/ui/main_window/notifications/state.rs",
+      "sha256": "1c389e329877a70119e67766023bd295e215f3142f02d50f3799ae65d8fed239"
+    },
+    {
+      "path": "src/ui/main_window/recovery.rs",
+      "sha256": "0473d8f938e292f02c6d0636332feaae525df7615713cb3b5aa752f6489bac5d"
+    },
+    {
+      "path": "src/ui/main_window/search/choice.rs",
+      "sha256": "33436505dc9c392a2864e81619264cdb32806116a0d87364bebf637884e545db"
+    },
+    {
+      "path": "src/ui/main_window/search/rows.rs",
+      "sha256": "2f9ba8fa68803d7ac6146e43ff0324a93e848e68f58a885e60def638577109cf"
+    },
+    {
+      "path": "src/ui/main_window/search.rs",
+      "sha256": "4d2ec084327587f8dec48e9d7f5e3c5de8fbf29da30b192bc1c125dfb136997a"
+    },
+    {
+      "path": "src/ui/main_window/security/design.rs",
+      "sha256": "8239c5da43294422e6a9e6b965d720c4a85a954d5f6a75b09aae8d096b403506"
+    },
+    {
+      "path": "src/ui/main_window/security.rs",
+      "sha256": "aa8ec83e7944c0cc9edba2e8f2763586ab9dad48575c482b01067fc8c85ea120"
+    },
+    {
+      "path": "src/ui/main_window/voice/chat_tests.rs",
+      "sha256": "54368bf09ae86db7b74b15e31596ea2154cf0af8bcebe9b59daf0fb16cc9dec7"
+    },
+    {
+      "path": "src/ui/main_window/voice/settings.rs",
+      "sha256": "82316905d320210fed28ed3b5769f44dfe7b7b342d619eb4997e783c3c97197f"
+    },
+    {
+      "path": "src/ui/main_window/voice/tests.rs",
+      "sha256": "cc6322e0614bb528f0606f00359623ccdc0aaec728d4b70c6addc272b7b53b9e"
+    },
+    {
+      "path": "src/ui/main_window/voice/video.rs",
+      "sha256": "bcae94b34d9b95063469cf51abcf07e620612f8eda35e1def5f4023cd546d1ec"
+    },
+    {
+      "path": "src/ui/main_window/voice.rs",
+      "sha256": "5d5d84586e85fd22681a3a9c78b0f584a8cb110289082d0c862ace6237cfa0d3"
+    },
+    {
+      "path": "src/ui/main_window/webhooks.rs",
+      "sha256": "cefe294e73cbb802f3173f574c8e1656c2c262b4937219240ba615a964b5d2e5"
+    },
+    {
+      "path": "src/ui/mod.rs",
+      "sha256": "981c6bb0bf5110373ff81793f7c0dcaad60ebcb01ca3d66744a31fc60c4767b8"
+    },
+    {
+      "path": "src/ui/root.rs",
+      "sha256": "80203d7f3fe05d98ebda8f5911b32edf83489f516be89e1f7cc3f7ec95e7339e"
+    },
+    {
+      "path": "src/ui/sidebar/mod.rs",
+      "sha256": "6f50f8d0ea71a70ab830c9960845d383df63f44d78a7e4c8ba49d231556706d6"
+    },
+    {
+      "path": "src/ui/smooth_scroll.rs",
+      "sha256": "0838416e4157aa95da895802967dc423550e5949badf74709192340cff1818e1"
+    },
+    {
+      "path": "src/ui/status.rs",
+      "sha256": "925caaf9fea7b6cf2e690fbc712e5b30e7e93c864c9a4bcc161437915d0cb18c"
+    },
+    {
+      "path": "src/ui/style/accents.rs",
+      "sha256": "9513a241d323606bf4c3d91ef691c80a8baa17b06890fbebad3bce8f4ec13460"
+    },
+    {
+      "path": "src/ui/style.rs",
+      "sha256": "39e6561a33cd4badeb82ff203de14bfbfeaa51739659d5f5a80bcb311f17a648"
+    },
+    {
+      "path": "src/ui/user_list/mod.rs",
+      "sha256": "d9154fe73c0ed4736a7d40b5165decfef8577f7030c65fc81e3a2cde029f94f8"
+    },
+    {
+      "path": "src/ui/user_list/recycled.rs",
+      "sha256": "523c8c0e67d27e3173e744845790db27ac18761ba9391abca4b06a677dd9fe47"
+    },
+    {
+      "path": "src/ui/user_list/scrolling.rs",
+      "sha256": "be3a02a92c72aacd6b7b6c414c2cfc0a3b4833bb1647c5569331f281cb41d331"
+    },
+    {
+      "path": "src/voice/mod.rs",
+      "sha256": "7510f842e27d798049c1062934ccd5103d6758746ed685370512c160b67402d1"
+    },
+    {
+      "path": "src/ws/mod.rs",
+      "sha256": "16152b5b52173e6c46e146ed807384883b9944e3c5d614b45dc3f8297e61455c"
+    },
+    {
+      "path": "src/platform/sandbox/windows.cpp",
+      "sha256": "4db1f51608ff09ecda5b55ddd14beaef911fbac5648a6c409d913fc6cf9503ed"
+    },
+    {
+      "path": "packaging/windows/launcher.c",
+      "sha256": "77ab258cc9ff737dd21577db90039874a2a6c2c7969e25eb6c8cb5a5dddf5ae9"
+    },
+    {
+      "path": "packaging/windows/shell.cpp",
+      "sha256": "0476056214b053e5971bbd0d4f5567bddf3274f3ae79d5f8f27863f37fd29dc3"
+    },
+    {
+      "path": "packaging/windows/toast_abi.h",
+      "sha256": "2b1b304bd541eeceb03d52344e4b954eaad0987c042ec8a82ea6984c256c061b"
+    },
+    {
+      "path": "packaging/windows/resources.py",
+      "sha256": "223e9accb3918d58eb9837c0d8d1cd0246c3d6cca0673e89893419d8cbb95054"
+    },
+    {
+      "path": "packaging/windows/bundle.py",
+      "sha256": "a8ac844122d39961ba682f8e7d28e8f6e2244c3bf8b078672f92ecfbcc593386"
+    },
+    {
+      "path": "packaging/windows/runtime_check.py",
+      "sha256": "01a073de759ea6cf843e74d7a418db7a36535ce21c4ad0760fceb73d32fc1b61"
+    },
+    {
+      "path": "packaging/windows/build.py",
+      "sha256": "b27309d7908587146f22ffc18f9814bbe1ce0cc7a48998a550110b2982799e0c"
+    }
+  ]
+}

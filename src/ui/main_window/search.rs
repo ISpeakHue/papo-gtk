@@ -43,7 +43,7 @@ impl MainWindowModel {
                 if let Some(parent)=root.root().and_downcast::<gtk::Window>(){window.set_transient_for(Some(&parent));}
                 let toolbar=adw::ToolbarView::new();let header=adw::HeaderBar::new();header.set_title_widget(Some(&adw::WindowTitle::new("Pesquisar mensagens","")));toolbar.add_top_bar(&header);native.set_content(Some(&toolbar));
                 let body=gtk::Box::new(gtk::Orientation::Vertical,12);body.set_margin_top(16);body.set_margin_bottom(16);body.set_margin_start(16);body.set_margin_end(16);toolbar.set_content(Some(&body));
-                let fields:Vec<_>=["Pesquisar nas mensagens", "De (AAAA-MM-DD)", "Até (AAAA-MM-DD)"].iter().map(|label|{let e=gtk::Entry::new();e.set_placeholder_text(Some(label));e.set_tooltip_text(Some(label));e}).collect();
+                let fields:Vec<_>=["Pesquisar nas mensagens", "De (AAAA-MM-DD)", "Até (AAAA-MM-DD)"].iter().map(|label|{let e=gtk::Entry::new();e.set_placeholder_text(Some(label));e.set_tooltip_text(Some(label));e.update_property(&[gtk::accessible::Property::Label(label)]);e}).collect();
                 fields[0].set_primary_icon_name(Some("papo-edit-find-symbolic"));fields[0].set_hexpand(true);let input=sender.input_sender().clone();fields[0].connect_activate(move |_|{let _=input.send(MainWindowMsg::Search(SearchMsg::Submit));});body.append(&fields[0]);
                 let members=|label:&str|Choice::members(label,&self.users,&self.avatars.textures,sender.input_sender().clone(),view_token);
                 let author=members("Qualquer autor");let mention=members("Qualquer menção");let mut channel=Choice::new();channel.append(Some(""),"Todos os canais permitidos");for c in &self.channels{channel.append(Some(&c.id.to_string()),&c.name);}for d in &self.direct.items{channel.append(Some(&d.id.to_string()),&format!("DM · {}",d.user.display_name()));}channel.set_active(Some(0));
@@ -58,7 +58,9 @@ impl MainWindowModel {
                 let status=gtk::Label::new(Some("Digite um termo ou escolha filtros para pesquisar."));status.set_wrap(true);status.set_xalign(0.0);status.add_css_class("dim-label");body.append(&status);
                 let(results,result_view)=rows::view(&sender,view_token);let scroll=gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).child(&result_view).build();scroll.set_widget_name("message-search-results");body.append(&scroll);
                 let more=gtk::Button::with_label("Mais resultados");more.set_visible(false);let input=sender.input_sender().clone();more.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Search(SearchMsg::More));});body.append(&more);
-                let keys=gtk::EventControllerKey::new();keys.set_propagation_phase(gtk::PropagationPhase::Capture);let weak=window.downgrade();
+                // EN-US: Bubble after the native IM and filter popovers handle Escape.
+                // PT-BR: Propaga após o método de entrada nativo e os popovers de filtro tratarem Escape.
+                let keys=gtk::EventControllerKey::new();let weak=window.downgrade();
                 keys.connect_key_pressed(move |_,key,_,_|{if key==gtk::gdk::Key::Escape{if let Some(window)=weak.upgrade(){window.close();}gtk::glib::Propagation::Stop}else{gtk::glib::Propagation::Proceed}});window.add_controller(keys);
                 let input=sender.input_sender().clone();window.connect_close_request(move |_|{let _=input.send(MainWindowMsg::Search(SearchMsg::Cancel(view_token)));gtk::glib::Propagation::Proceed});window.present();fields[0].grab_focus();
                 for field in &fields{let input=sender.input_sender().clone();field.connect_changed(move |_|{let _=input.send(MainWindowMsg::Search(SearchMsg::Changed));});}

@@ -1,5 +1,5 @@
-//! Authentication cookies live in the desktop keyring, never application files.
-//! EN-US: Secure desktop session management using the OS keyring (libsecret/KWallet). Never stores plain tokens on disk.
+//! Authentication cookies live in the native credential store, never application files.
+//! EN-US: Secure desktop session management using the native OS credential store. Never stores plain tokens on disk.
 //! PT-BR: Gerenciamento seguro de sessão desktop usando o chaveiro do SO (libsecret/KWallet). Nunca armazena tokens em texto puro no disco.
 
 use crate::{api::ApiClient,models::WhoamiResponse};
@@ -24,53 +24,65 @@ struct SavedSession{version:u8,base:String,username:String,auth:String,#[serde(d
 // PT-BR: Formata a chave composta de busca no chaveiro a partir da URL base do servidor e nome de usuário.
 fn account(base:&str,user:&str)->String{format!("{base}\n{user}")}
 
-#[cfg(not(test))]
-// EN-US: Read a credential from the OS keyring by key.
-// PT-BR: Lê uma credencial do chaveiro do SO pela chave informada.
-fn read(key:&str)->Result<Option<String>>{
-    crate::platform::credentials::read(SERVICE,key)
+// EN-US: Explicit probe namespaces exercise production storage without accessing saved accounts.
+// PT-BR: Namespaces explícitos de teste exercitam o armazenamento real sem acessar contas salvas.
+#[derive(Clone,Copy,Default)]
+pub(crate) struct Store { probe:Option<uuid::Uuid>, unavailable:bool }
+impl Store {
+    #[cfg(all(windows,not(test)))]
+    pub(crate) fn probe(id:uuid::Uuid)->Self{Self{probe:Some(id),unavailable:false}}
+    #[cfg(any(windows,test))]
+    pub(crate) fn unavailable()->Self{Self{probe:None,unavailable:true}}
+    fn service(self)->String{self.probe.map_or_else(||SERVICE.to_owned(),|id|format!("{SERVICE}.test.{id}"))}
+    pub(crate) fn read(self,key:&str)->Result<Option<String>>{
+        anyhow::ensure!(!self.unavailable,"Chaveiro indisponível.");
+        #[cfg(not(test))] {crate::platform::credentials::read(&self.service(),key)}
+        #[cfg(test)] {let key=format!("{}\n{key}",self.service());Ok(MEMORY.lock().unwrap().as_ref().and_then(|m|m.get(&key).cloned()))}
+    }
+    pub(crate) fn write(self,key:&str,value:Option<&str>)->Result<()>{
+        anyhow::ensure!(!self.unavailable,"Chaveiro indisponível.");
+        #[cfg(not(test))] {crate::platform::credentials::write(&self.service(),key,value)}
+        #[cfg(test)] {let key=format!("{}\n{key}",self.service());let mut memory=MEMORY.lock().unwrap();let map=memory.get_or_insert_with(Default::default);if let Some(value)=value{map.insert(key,value.into());}else{map.remove(&key);}Ok(())}
+    }
 }
-
-#[cfg(not(test))]
-// EN-US: Write or delete a credential in the OS keyring.
-// PT-BR: Grava ou remove uma credencial no chaveiro do SO.
-fn write(key:&str,value:Option<&str>)->Result<()>{
-    crate::platform::credentials::write(SERVICE,key,value)
-}
-
-// UI/protocol tests must never read a real user's credentials or modify their keyring.
-// EN-US: In-memory mock storage for testing environments.
-// PT-BR: Armazenamento simulado em memória para ambientes de teste.
+// EN-US: Ordinary tests always use memory, including on Windows and macOS.
+// PT-BR: Testes comuns sempre usam memória, inclusive no Windows e macOS.
 #[cfg(test)]static MEMORY:std::sync::Mutex<Option<std::collections::HashMap<String,String>>>=std::sync::Mutex::new(None);
-#[cfg(test)]fn read(key:&str)->Result<Option<String>>{Ok(MEMORY.lock().unwrap().as_ref().and_then(|m|m.get(key).cloned()))}
-#[cfg(test)]fn write(key:&str,value:Option<&str>)->Result<()>{let mut memory=MEMORY.lock().unwrap();let map=memory.get_or_insert_with(Default::default);if let Some(value)=value{map.insert(key.into(),value.into());}else{map.remove(key);}Ok(())}
+#[cfg(test)]fn read(key:&str)->Result<Option<String>>{Store::default().read(key)}
 
+pub async fn save(api:&ApiClient,user:&str)->Result<()>{Store::default().save(api,user).await}
+pub async fn forget_account(api:&ApiClient,user:&str)->Result<()>{Store::default().forget_account(api,user).await}
+pub async fn forget(api:&ApiClient,user:&str)->Result<()>{Store::default().forget(api,user).await}
+pub async fn rotated(api:&ApiClient,user:&str,previous:&str)->Result<()>{Store::default().rotated(api,user,previous).await}
+pub async fn resume(api:&ApiClient,user:&str)->Result<Option<WhoamiResponse>>{Store::default().resume(api,user).await}
+
+impl Store {
 /// EN-US: Save current authenticated session cookie to the desktop keyring.
 /// PT-BR: Salva o cookie de sessão autenticada atual no chaveiro do sistema operacional.
-pub async fn save(api:&ApiClient,user:&str)->Result<()>{
+pub(crate) async fn save(self,api:&ApiClient,user:&str)->Result<()>{
     let Some(auth)=api.auth_cookie()else{return Ok(());};
     let saved=SavedSession{version:1,base:api.base_url().into(),username:user.into(),auth,owner:Some(api.session_owner())};
     let key=account(&saved.base,user);let encoded=serde_json::to_string(&saved).map_err(|_|anyhow!("Não foi possível preparar a sessão."))?;
-    tokio::task::spawn_blocking(move ||{let _guard=STORAGE.lock().map_err(|_|anyhow!("Chaveiro indisponível."))?;write(&key,Some(&encoded))}).await.map_err(|_|anyhow!("Chaveiro indisponível."))?
+    tokio::task::spawn_blocking(move ||{let _guard=STORAGE.lock().map_err(|_|anyhow!("Chaveiro indisponível."))?;self.write(&key,Some(&encoded))}).await.map_err(|_|anyhow!("Chaveiro indisponível."))?
 }
 
 /// Explicit user choice (e.g. unchecking Remember) clears any saved account.
 /// EN-US: Explicitly removes any saved credential for this account from the keyring.
 /// PT-BR: Escolha explícita do usuário (ex: desmarcar Lembrar-me) remove qualquer conta salva do chaveiro.
-pub async fn forget_account(api:&ApiClient,user:&str)->Result<()>{
-    let key=account(api.base_url(),user);tokio::task::spawn_blocking(move ||{let _guard=STORAGE.lock().map_err(|_|anyhow!("Chaveiro indisponível."))?;write(&key,None)}).await.map_err(|_|anyhow!("Chaveiro indisponível."))?
+pub(crate) async fn forget_account(self,api:&ApiClient,user:&str)->Result<()>{
+    let key=account(api.base_url(),user);tokio::task::spawn_blocking(move ||{let _guard=STORAGE.lock().map_err(|_|anyhow!("Chaveiro indisponível."))?;self.write(&key,None)}).await.map_err(|_|anyhow!("Chaveiro indisponível."))?
 }
 
 /// Delayed logout may remove only the credential owned by this session.
 /// EN-US: Removes the session only if it belongs to the current session owner, preventing race conditions with newer logins.
 /// PT-BR: O logout atrasado só remove a credencial pertencente a esta sessão, evitando apagar um login mais recente.
-pub async fn forget(api:&ApiClient,user:&str)->Result<()>{
+pub(crate) async fn forget(self,api:&ApiClient,user:&str)->Result<()>{
     let key=account(api.base_url(),user);let owner=api.session_owner();let auth=api.auth_cookie();
     tokio::task::spawn_blocking(move ||{
         let _guard=STORAGE.lock().map_err(|_|anyhow!("Chaveiro indisponível."))?;
-        let Some(encoded)=read(&key)? else{return Ok(());};
+        let Some(encoded)=self.read(&key)? else{return Ok(());};
         let Ok(saved)=serde_json::from_str::<SavedSession>(&encoded) else{return Ok(());};
-        if saved.owner==Some(owner)||(saved.owner.is_none()&&Some(saved.auth)==auth){write(&key,None)?;}
+        if saved.owner==Some(owner)||(saved.owner.is_none()&&Some(saved.auth)==auth){self.write(&key,None)?;}
         Ok(())
     }).await.map_err(|_|anyhow!("Chaveiro indisponível."))?
 }
@@ -79,25 +91,25 @@ pub async fn forget(api:&ApiClient,user:&str)->Result<()>{
 /// must not recreate a logged-out credential or overwrite a newer login.
 /// EN-US: Synchronizes a refreshed auth cookie into the keyring without overwriting newer sessions.
 /// PT-BR: Mantém o cookie salvo sincronizado com a rotação de refresh. Um refresh tardio não deve recriar uma credencial deslogada.
-pub async fn rotated(api:&ApiClient,user:&str,previous:&str)->Result<()>{
+pub(crate) async fn rotated(self,api:&ApiClient,user:&str,previous:&str)->Result<()>{
     let Some(auth)=api.auth_cookie()else{return Ok(());};let base=api.base_url().to_owned();let user=user.to_owned();let key=account(&base,&user);let previous=previous.to_owned();let owner=api.session_owner();
     tokio::task::spawn_blocking(move ||{
         let _guard=STORAGE.lock().map_err(|_|anyhow!("Chaveiro indisponível."))?;
-        let Some(encoded)=read(&key)?else{return Ok(());};let Ok(mut saved)=serde_json::from_str::<SavedSession>(&encoded)else{return Ok(());};
+        let Some(encoded)=self.read(&key)?else{return Ok(());};let Ok(mut saved)=serde_json::from_str::<SavedSession>(&encoded)else{return Ok(());};
         if saved.version!=1||saved.base!=base||saved.username!=user||saved.auth!=previous||saved.owner.is_some_and(|id|id!=owner){return Ok(());}
-        saved.auth=auth;saved.owner=Some(owner);let encoded=serde_json::to_string(&saved).map_err(|_|anyhow!("Não foi possível preparar a sessão."))?;write(&key,Some(&encoded))
+        saved.auth=auth;saved.owner=Some(owner);let encoded=serde_json::to_string(&saved).map_err(|_|anyhow!("Não foi possível preparar a sessão."))?;self.write(&key,Some(&encoded))
     }).await.map_err(|_|anyhow!("Chaveiro indisponível."))?
 }
 
 /// EN-US: Resume a saved session from the keyring, validating and proactively refreshing tokens.
 /// PT-BR: Retoma uma sessão salva do chaveiro, validando-a e renovando proativamente os tokens.
-pub async fn resume(api:&ApiClient,user:&str)->Result<Option<WhoamiResponse>>{
+pub(crate) async fn resume(self,api:&ApiClient,user:&str)->Result<Option<WhoamiResponse>>{
     let key=account(api.base_url(),user);let copy=key.clone();
-    let Some(encoded)=tokio::task::spawn_blocking(move ||read(&copy)).await.map_err(|_|anyhow!("Chaveiro indisponível."))?? else{return Ok(None);};
+    let Some(encoded)=tokio::task::spawn_blocking(move ||self.read(&copy)).await.map_err(|_|anyhow!("Chaveiro indisponível."))?? else{return Ok(None);};
     let saved=serde_json::from_str::<SavedSession>(&encoded).ok().filter(|s|s.version==1&&s.base==api.base_url()&&s.username==user);
     let Some(saved)=saved else{return Ok(None);};
     if let Some(owner)=saved.owner{api.adopt_session_owner(owner);}
-    if api.restore_auth_cookie(&saved.auth).is_err(){forget(api,user).await?;return Ok(None);}
+    if api.restore_auth_cookie(&saved.auth).is_err(){self.forget(api,user).await?;return Ok(None);}
     match api.whoami().await{
         Ok(profile) if profile.username==user=>{
             // A remembered cookie may be close to expiry. Refresh before the
@@ -105,20 +117,28 @@ pub async fn resume(api:&ApiClient,user:&str)->Result<Option<WhoamiResponse>>{
             // EN-US: Proactively refresh token before WebSocket connection to avoid expiration mid-session.
             // PT-BR: Renova o token proativamente antes do handshake WebSocket para evitar expiração durante o uso.
             match api.refresh().await{
-                Ok(_)=>{if rotated(api,user,&saved.auth).await.is_err(){tracing::warn!("Could not update remembered session in desktop keyring");}Ok(Some(profile))},
-                Err(error) if crate::api::is_session_error(&error)=>{forget(api,user).await?;Ok(None)},
+                Ok(_)=>{if self.rotated(api,user,&saved.auth).await.is_err(){tracing::warn!("Could not update remembered session in desktop keyring");}Ok(Some(profile))},
+                Err(error) if crate::api::is_session_error(&error)=>{self.forget(api,user).await?;Ok(None)},
                 Err(_)=>Err(anyhow!("Não foi possível renovar a sessão salva. Verifique a conexão e tente novamente.")),
             }
         },
-        Ok(_)=>{forget(api,user).await?;Ok(None)},
-        Err(error) if crate::api::is_session_error(&error)=>{forget(api,user).await?;Ok(None)},
+        Ok(_)=>{self.forget(api,user).await?;Ok(None)},
+        Err(error) if crate::api::is_session_error(&error)=>{self.forget(api,user).await?;Ok(None)},
         Err(_)=>Err(anyhow!("Não foi possível retomar a sessão salva. Verifique a conexão e tente novamente.")),
     }
 }
 
 
+}
+
 #[cfg(test)]mod tests{
     use super::*;
+    #[tokio::test]async fn unavailable_store_fails_closed_without_altering_saved_session(){
+        let api=ApiClient::new(&format!("https://{}.test",uuid::Uuid::new_v4())).unwrap();api.restore_auth_cookie("unavailable-fixture").unwrap();
+        save(&api,"Alice").await.unwrap();let before=read(&account(api.base_url(),"Alice")).unwrap();let unavailable=Store::unavailable();
+        assert!(unavailable.save(&api,"Alice").await.is_err());assert!(unavailable.resume(&api,"Alice").await.is_err());assert!(unavailable.forget(&api,"Alice").await.is_err());
+        assert_eq!(read(&account(api.base_url(),"Alice")).unwrap(),before);forget_account(&api,"Alice").await.unwrap();
+    }
     #[test]fn restored_cookies_require_safe_transport_and_never_appear_in_debug(){
         let api=ApiClient::new("https://example.test/api").unwrap();api.restore_auth_cookie("test-secret.jwt-value").unwrap();assert_eq!(api.auth_cookie().as_deref(),Some("test-secret.jwt-value"));assert!(!format!("{api:?}").contains("test-secret"));
         for token in ["","x; Domain=example.test","x\r\nAuthorization: bad"]{assert!(api.restore_auth_cookie(token).is_err());}

@@ -1,0 +1,23 @@
+{
+  "url": "https://github.com/ISpeakHue/papo-gtk/actions/runs/39809350784",
+  "source": "23fd2b7e00b6966c299c365f2b3554c4b882012c",
+  "conclusion": "success",
+  "jobs": [
+    {
+      "name": "windows",
+      "conclusion": "success",
+      "completed_utc": "2026-10-22T16:10:24Z"
+    },
+    {
+      "name": "macos-foundation",
+      "conclusion": "success",
+      "completed_utc": "2026-10-22T16:00:10Z"
+    },
+    {
+      "name": "portable-runtime",
+      "conclusion": "success",
+      "completed_utc": "2026-10-22T16:11:05Z"
+    }
+  ],
+  "method": "Recorded from gh run view --json conclusion,headSha,url,jobs after all jobs completed"
+}

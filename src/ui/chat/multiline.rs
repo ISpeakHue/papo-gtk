@@ -7,8 +7,14 @@ fn keys(sequence:&[&str]){
     keys_for("Papo input test",sequence);
 }
 pub(crate) fn keys_for(title:&str,sequence:&[&str]){
-    let result=std::process::Command::new("python3").arg(concat!(env!("CARGO_MANIFEST_DIR"),"/tests/helpers/input_keys.py"))
-        .arg(title).args(sequence).status().unwrap();assert!(result.success());
+    let python=crate::platform::runtime::python();let mut command=std::process::Command::new(python.as_std().get_program());
+    let directory=std::env::var_os("PAPO_TEST_HELPERS_DIR").map(std::path::PathBuf::from).unwrap_or_else(||std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"),"/tests/helpers")));
+    #[cfg(windows)]{
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000).arg(directory.join("windows_input.py")).arg(std::process::id().to_string());
+    }
+    #[cfg(not(windows))]command.arg(directory.join("input_keys.py"));
+    let result=command.arg(title).args(sequence).status().unwrap();assert!(result.success());
 }
 
 /// Exercise the actual initially disabled chat embedded in the main window,

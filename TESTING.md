@@ -19,10 +19,10 @@ execution environment must permit local sockets. Dependencies must already be
 cached when using `cargo test --locked --offline`.
 
 GitHub Actions runs the same suite on pushes, pull requests, and manual dispatches
-using `.github/workflows/test.yml`. Its Fedora container supplies the GTK and
+using `.github/workflows/test.yml`. Its rootless Fedora container supplies the GTK and
 libadwaita versions required by `Cargo.toml`. Compilation includes all UI components,
-so errors such as the invalid application-window child assignment fail CI. A second
-CI step runs the GTK smoke test in Xvfb to verify the header bar, window controls,
+so errors such as the invalid application-window child assignment fail CI. Focused
+CI cases run the GTK smoke test in Xvfb to verify the header bar, window controls,
 separate account/server password fields, history pagination/retry controls,
 presence status icons, login/main view transitions, and the session-expired login message.
 It edits the actual login fields, including Unicode typing, paste, deletion,
@@ -43,6 +43,16 @@ All ordinary fixtures use synthetic data; real device/server checks are opt-in.
 
 | Guide | Coverage |
 | --- | --- |
+| [Build provenance and CI diagnostics](docs/testing/build-provenance.md) | Windows source/toolchain/native inputs, sandboxed Fedora runtime and per-case GUI failures |
+| [Windows acceptance matrix](docs/testing/windows.md) | Target desktop builds, feature checklist, existing CI evidence and packaged-release gates |
+| [Windows storage acceptance](docs/testing/windows-storage.md) | Disposable native credentials, cross-process persistence, file names, locks, cancellation and clipboard |
+| [Windows decoder isolation](docs/testing/windows-isolation.md) | AppContainer/Job policy, resource limits, adversarial probes and packaged media-runtime acceptance |
+| [Windows packaged media](docs/testing/windows-media.md) | Instrumented standalone GTK media matrix, cache/player lifetime, fullscreen and renderer/decoder observations |
+| [Windows screen sharing](docs/testing/windows-capture.md) | WGC picker ownership, bounded frame handoff, synthetic checks and deferred attended capture/SFU acceptance |
+| [Windows desktop and input](docs/testing/windows-desktop.md) | Native editing/shortcut policies, packaged desktop fixtures, keyboard/accessibility/DPI acceptance |
+| [Windows packaged CI gate](docs/testing/windows-release-gate.md) | Required cross-platform jobs, source/ZIP-bound evidence, explicit skips and tested-input rebuild restrictions |
+| [Windows installer and beta](docs/testing/windows-beta.md) | Per-user NSIS lifecycle/recovery, standalone ZIP identity, preservation checks and opt-in beta/Linux measurements |
+| [Windows signing and publication](docs/testing/windows-publication.md) | Owner-key signing, final signed-file rechecks, full native qualification and explicit guarded publication |
 | [Desktop integration and layout](docs/testing/desktop.md) | Icons, adaptive navigation, header geometry and AppImage media plugins |
 | [Feature workflows and acceptance checks](docs/testing/workflows.md) | Requirements, manual scenarios and account/admin feature walkthroughs |
 | [Accounts and profiles](docs/testing/account.md) | Login request budgets, remembered sessions, profiles, settings and status |

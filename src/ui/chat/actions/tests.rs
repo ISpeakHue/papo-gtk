@@ -40,7 +40,9 @@ pub(crate) fn find_button(w: &gtk::Widget, text: &str) -> gtk::Button {
 pub(crate) fn pump(context: &gtk::glib::MainContext) { for _ in 0..500 { if !context.pending() { break; } context.iteration(false); } }
 #[track_caller]
 pub(crate) fn until(context: &gtk::glib::MainContext, condition: impl Fn() -> bool) {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    // EN-US: Cold packaged Windows codecs have a bounded startup budget beyond five seconds.
+    // PT-BR: Codecs frios do pacote Windows têm um prazo limitado de início maior que cinco segundos.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(if cfg!(windows){60}else{5});
     loop { pump(context); if condition() { return; } assert!(std::time::Instant::now() < deadline,"GTK workflow timed out"); std::thread::sleep(std::time::Duration::from_millis(5)); }
 }
 pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::JoinHandle<()>) {

@@ -1,0 +1,76 @@
+﻿{
+    "schema":  1,
+    "status":  "pass",
+    "started_utc":  "2026-10-23T03:39:36.9868652Z",
+    "renderer_request":  "auto",
+    "audio_output":  "discard",
+    "driver_sha256":  "df19dc0078d51c1d6afc3f0c94ca68bf50fbf01ae7e60899257847ab1d0e647c",
+    "cases":  [
+                  {
+                      "exit_code":  0,
+                      "name":  "mov-media",
+                      "timed_out":  false,
+                      "ui_peak_working_set_bytes":  164839424,
+                      "renderer":  "test ui::root::tests::ui_smoke_window_has_header_controls_and_server_password ... Papo GUI renderer: GskCairoRenderer",
+                      "status":  "pass",
+                      "seconds":  10.8221876
+                  },
+                  {
+                      "exit_code":  0,
+                      "name":  "backend-gifs",
+                      "timed_out":  false,
+                      "ui_peak_working_set_bytes":  106606592,
+                      "renderer":  "test ui::root::tests::ui_smoke_window_has_header_controls_and_server_password ... Papo GUI renderer: GskCairoRenderer",
+                      "status":  "pass",
+                      "seconds":  7.9739923999999993
+                  },
+                  {
+                      "exit_code":  0,
+                      "name":  "status-viewer",
+                      "timed_out":  false,
+                      "ui_peak_working_set_bytes":  106762240,
+                      "renderer":  "test ui::root::tests::ui_smoke_window_has_header_controls_and_server_password ... Papo GUI renderer: GskCairoRenderer",
+                      "status":  "pass",
+                      "seconds":  5.0785852
+                  },
+                  {
+                      "exit_code":  0,
+                      "name":  "video-audio",
+                      "timed_out":  false,
+                      "ui_peak_working_set_bytes":  54820864,
+                      "renderer":  "test ui::root::tests::ui_smoke_window_has_header_controls_and_server_password ... Papo GUI renderer: GskCairoRenderer",
+                      "status":  "pass",
+                      "seconds":  0.4587481
+                  }
+              ],
+    "user":  {
+                 "name":  "runnervmgnbhw\\runneradmin",
+                 "administrator":  true
+             },
+    "os":  {
+               "build":  "20348",
+               "version":  "10.0.20348",
+               "caption":  "Microsoft Windows Server 2022 Datacenter",
+               "edition":  "ServerDatacenter",
+               "display_version":  "21H2",
+               "ubr":  5622
+           },
+    "archive":  {
+                    "sha256":  "0539a4bb623595d93513c8bd8cdc0a6242c6c07f1300722dd26f45b3654021b6",
+                    "name":  "Papo-1.0.2-windows-x86_64-dev.zip"
+                },
+    "instrumented_ui":  {
+                            "schema":  1,
+                            "source_commit":  "ee3097dc525d3f3797b5270fecd563eda894d8e9",
+                            "source_dirty":  false,
+                            "executable":  "papo-media-tests.exe",
+                            "sha256":  "5085ae0187c2cd76616d03d168d84a6ab95c3071ab3e79c757d753cfa93f0476",
+                            "scope":  "Instrumented shared UI tests; uses the separately verified portable ZIP runtime. Not a release executable."
+                        },
+    "source_commit":  "ee3097dc525d3f3797b5270fecd563eda894d8e9",
+    "runtime_manifest_sha256":  "b6fb63b893cc2212b0e205f2e70da2887e98761bb4937760112179df592d913d",
+    "immutable_runtime":  true,
+    "machine_path_unchanged":  true,
+    "extracted_package_removed":  true,
+    "finished_utc":  "2026-10-23T03:40:21.3985886Z"
+}

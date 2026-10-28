@@ -1,0 +1,57 @@
+﻿{
+    "schema":  1,
+    "status":  "pass",
+    "started_utc":  "2026-10-23T00:38:01.0114906Z",
+    "renderer_request":  "auto",
+    "audio_output":  "discard",
+    "cases":  [
+                  {
+                      "exit_code":  0,
+                      "name":  "media-emojis",
+                      "timed_out":  false,
+                      "ui_peak_working_set_bytes":  121004032,
+                      "renderer":  "test ui::root::tests::ui_smoke_window_has_header_controls_and_server_password ... Papo GUI renderer: GskCairoRenderer",
+                      "status":  "pass",
+                      "seconds":  16.4224386
+                  },
+                  {
+                      "exit_code":  0,
+                      "name":  "mov-media",
+                      "timed_out":  false,
+                      "ui_peak_working_set_bytes":  179322880,
+                      "renderer":  "test ui::root::tests::ui_smoke_window_has_header_controls_and_server_password ... Papo GUI renderer: GskCairoRenderer",
+                      "status":  "pass",
+                      "seconds":  58.6993733
+                  }
+              ],
+    "user":  {
+                 "name":  "PAPO-CLEAN-VM\\PapoTester",
+                 "administrator":  false
+             },
+    "os":  {
+               "build":  "26300",
+               "version":  "10.0.26300",
+               "caption":  "Microsoft Windows 11 Enterprise Evaluation",
+               "edition":  "EnterpriseEval",
+               "display_version":  "26H2",
+               "ubr":  9457
+           },
+    "archive":  {
+                    "sha256":  "4be7e057b7259051261d51762e03f7cd0aa4b965ed8e65c0415ef2d54d846dc1",
+                    "name":  "Papo-1.0.2-windows-x86_64-dev.zip"
+                },
+    "instrumented_ui":  {
+                            "schema":  1,
+                            "source_commit":  "5b27e0be5b1f6ba8fada0b20adbdf40fe364b736",
+                            "source_dirty":  false,
+                            "executable":  "papo-media-tests.exe",
+                            "sha256":  "e6f029ae8f514b56ab19bc0d4c406e40bb5656284b953a4a46acb443cbae8fad",
+                            "scope":  "Instrumented shared UI tests; uses the separately verified portable ZIP runtime. Not a release executable."
+                        },
+    "source_commit":  "5b27e0be5b1f6ba8fada0b20adbdf40fe364b736",
+    "runtime_manifest_sha256":  "32eaed7c845bbe29b523a0ba5086b49864627ca672bbc30d1cae7a1e3194781d",
+    "immutable_runtime":  true,
+    "machine_path_unchanged":  true,
+    "extracted_package_removed":  true,
+    "finished_utc":  "2026-10-23T00:46:42.4675521Z"
+}

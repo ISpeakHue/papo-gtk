@@ -1,0 +1,26 @@
+{
+  "device_add": [
+    {
+      "driver": "usb-storage",
+      "bus": "usb.0",
+      "drive": "papo_fixture_update",
+      "id": "papo_fixture_update_usb",
+      "removable": true
+    },
+    {
+      "driver": "usb-kbd",
+      "bus": "usb.0",
+      "id": "fixture_keyboard"
+    }
+  ],
+  "blockdev_add": {
+    "driver": "raw",
+    "node-name": "papo_fixture_update",
+    "read-only": true,
+    "file": {
+      "driver": "file",
+      "filename": "${WORKSPACE}/target/windows-clean-vm/step4/input.img"
+    }
+  },
+  "note": "USB keyboard hot-plug restored legacy keyboard input; run.py now includes usb-kbd at boot. No guest agent, NIC or host directory was added."
+}

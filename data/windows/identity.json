@@ -1,0 +1,7 @@
+{
+  "app_id": "br.com.papo.gtk",
+  "name": "Papo",
+  "protocol": "papo-notification",
+  "toast_clsid": "{DBE5A52E-3D00-553D-94AB-21403BD46288}",
+  "installer": "NSIS per-user"
+}

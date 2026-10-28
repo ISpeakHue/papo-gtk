@@ -1,0 +1,125 @@
+﻿{
+    "schema":  1,
+    "status":  "pass",
+    "started_utc":  "2026-10-22T17:15:14.8340898Z",
+    "user":  {
+                 "name":  "PAPO-CLEAN-VM\\PapoTester",
+                 "administrator":  false
+             },
+    "os":  {
+               "build":  "26300",
+               "version":  "10.0.26300",
+               "caption":  "Microsoft Windows 11 Enterprise Evaluation",
+               "edition":  "EnterpriseEval",
+               "display_version":  "26H2",
+               "ubr":  9457
+           },
+    "archive":  {
+                    "sha256":  "af5094352341ae9c1da611f608dd7f1e920e238a4514b905071bc5446b81f794",
+                    "name":  "Papo-1.0.2-windows-x86_64-dev.zip"
+                },
+    "source_commit":  "23fd2b7e00b6966c299c365f2b3554c4b882012c",
+    "runtime_manifest_sha256":  "533b3cf39467b7453b335599325826410d380ac885a578e27b626634100f4043",
+    "exit_code":  0,
+    "probe":  {
+                  "credentials":  {
+                                      "exact_account_targets":  true,
+                                      "legacy_case_guard":  true,
+                                      "legacy_utf16":  true,
+                                      "long_credential_key":  true,
+                                      "malformed_legacy_ignored":  true,
+                                      "oversized_rejected":  true,
+                                      "phases":  [
+                                                     {
+                                                         "phase":  "save",
+                                                         "status":  "pass"
+                                                     },
+                                                     {
+                                                         "phase":  "resume",
+                                                         "status":  "pass"
+                                                     },
+                                                     {
+                                                         "phase":  "logout",
+                                                         "status":  "pass"
+                                                     },
+                                                     {
+                                                         "phase":  "empty",
+                                                         "status":  "pass"
+                                                     },
+                                                     {
+                                                         "phase":  "save",
+                                                         "status":  "pass"
+                                                     },
+                                                     {
+                                                         "phase":  "revoked",
+                                                         "status":  "pass"
+                                                     },
+                                                     {
+                                                         "phase":  "empty",
+                                                         "status":  "pass"
+                                                     },
+                                                     {
+                                                         "phase":  "save",
+                                                         "status":  "pass"
+                                                     },
+                                                     {
+                                                         "phase":  "revoked",
+                                                         "status":  "pass"
+                                                     },
+                                                     {
+                                                         "phase":  "empty",
+                                                         "status":  "pass"
+                                                     },
+                                                     {
+                                                         "phase":  "save",
+                                                         "status":  "pass"
+                                                     },
+                                                     {
+                                                         "phase":  "offline",
+                                                         "status":  "pass"
+                                                     },
+                                                     {
+                                                         "phase":  "ownership",
+                                                         "status":  "pass"
+                                                     },
+                                                     {
+                                                         "phase":  "unavailable",
+                                                         "status":  "pass"
+                                                     },
+                                                     {
+                                                         "phase":  "empty",
+                                                         "status":  "pass"
+                                                     }
+                                                 ],
+                                      "probe_id":  "ec296b32-f659-482b-847e-112f07639d79",
+                                      "removed":  true,
+                                      "requests":  6,
+                                      "status":  "pass",
+                                      "unavailable_injected":  true,
+                                      "utf8_blob":  true
+                                  },
+                  "desktop":  {
+                                  "native_clipboard_texture":  true,
+                                  "native_save_cancel":  true,
+                                  "status":  "pass"
+                              },
+                  "files":  {
+                                "cache":  "LocalAppData",
+                                "cancel_copy_cleanup":  true,
+                                "clipboard_lifetime":  true,
+                                "config":  "RoamingAppData/papo-gtk/config.toml",
+                                "locked_config":  true,
+                                "locked_download":  true,
+                                "long_path_units":  345,
+                                "overwrite":  true,
+                                "reserved_names":  true,
+                                "status":  "pass",
+                                "unicode":  true
+                            },
+                  "schema":  1,
+                  "scratch_removed":  true,
+                  "status":  "pass"
+              },
+    "extracted_package_removed":  true,
+    "finished_utc":  "2026-10-22T17:15:46.0371839Z"
+}

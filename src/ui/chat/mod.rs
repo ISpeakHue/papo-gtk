@@ -611,6 +611,7 @@ impl Component for ChatModel {
         let controller=outside.clone();root.connect_root_notify(move |root|{if let Some(parent)=root.root().and_downcast::<gtk::Window>(){if controller.widget().is_none(){parent.add_controller(controller.clone());}}else if let Some(parent)=controller.widget(){parent.remove_controller(&controller);}});
 
         model.composer.connect(&widgets.message_entry,&sender);
+        widgets.message_entry.update_property(&[gtk::accessible::Property::Label("Mensagem"),gtk::accessible::Property::Description("Enter envia; Shift+Enter insere uma nova linha. Ctrl+Tab muda o foco.")]);
         model.composer.set_emojis(&widgets.message_entry,&model.actions);
         input::configure_im(&widgets.message_entry);
         widgets.message_entry.bind_property("top-margin",&widgets.composer_placeholder,"margin-top").sync_create().build();
@@ -625,13 +626,12 @@ impl Component for ChatModel {
         clipboard::connect(&widgets.message_entry,&sender,model.viewport.input_epoch_flag());
         let input=sender.input_sender().clone();let mentions=widgets.mention_panel.downgrade();let emojis=widgets.emoji_panel.downgrade();let entry=widgets.message_entry.downgrade();let epoch=model.viewport.input_epoch_flag();let composing=model.composer.clone();
         keys.connect_key_pressed(move |controller,key,_,mods|{
-            let modifiers=mods & (gtk::gdk::ModifierType::SHIFT_MASK|gtk::gdk::ModifierType::CONTROL_MASK|gtk::gdk::ModifierType::ALT_MASK|gtk::gdk::ModifierType::SUPER_MASK|gtk::gdk::ModifierType::META_MASK|gtk::gdk::ModifierType::HYPER_MASK);
-            let paste=(matches!(key,gtk::gdk::Key::v|gtk::gdk::Key::V)&&mods.contains(gtk::gdk::ModifierType::CONTROL_MASK)&&!mods.intersects(gtk::gdk::ModifierType::ALT_MASK|gtk::gdk::ModifierType::SUPER_MASK))
-                || (key==gtk::gdk::Key::Insert&&mods==gtk::gdk::ModifierType::SHIFT_MASK);
+            let modifiers=crate::platform::shortcuts::modifiers(mods);
+            let paste=crate::platform::shortcuts::paste(key,mods);
             if paste&&entry.upgrade().is_some_and(|entry|clipboard::intercept(&entry,&input,epoch.get())){return gtk::glib::Propagation::Stop;}
             // Let native IM contexts commit/cancel candidates before shortcuts.
             if composing.is_composing(){return gtk::glib::Propagation::Proceed;}
-            if matches!(key,gtk::gdk::Key::Return|gtk::gdk::Key::KP_Enter)&&mods.contains(gtk::gdk::ModifierType::SHIFT_MASK){return gtk::glib::Propagation::Proceed;}
+            if !modifiers.is_empty(){return gtk::glib::Propagation::Proceed;}
             let selected=emojis.upgrade().filter(|p|p.is_visible()).map(|p|(p,true)).or_else(||mentions.upgrade().filter(|p|p.is_visible()).map(|p|(p,false)));
             // An engine can consume Enter/Tab without visible inline preedit.
             // Let it handle the real event before sending or autocompleting.
@@ -1757,6 +1757,7 @@ fn find_media_box(widget:&gtk::Widget)->Option<gtk::Box>{
 }
 
 #[cfg(test)]pub(crate) fn exercise_animated_emojis(context:&gtk::glib::MainContext){emoji::exercise_resize(context);emoji::exercise(context);}
+#[cfg(test)]pub(crate) fn exercise_media_emojis(context:&gtk::glib::MainContext){emoji::exercise(context);}
 
 #[cfg(test)]pub(crate) fn exercise_read_candidate(context:&gtk::glib::MainContext){
     use adw::prelude::*;

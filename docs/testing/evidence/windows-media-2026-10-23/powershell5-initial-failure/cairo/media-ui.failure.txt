@@ -1,0 +1,9 @@
+﻿Join-Path : Cannot bind argument to parameter 'Path' because it is an empty string.
+At D:\check-media-ui.ps1:24 char:46
++  $metadata=[IO.File]::ReadAllText((Join-Path $TestDirectory 'MEDIA-TE ...
++                                              ~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidData: (:) [Join-Path], ParameterBindingValidationException
+    + FullyQualifiedErrorId : ParameterArgumentValidationErrorEmptyStringNotAllowed,Microsoft.PowerShell.Commands.Join 
+   PathCommand
+ 
+

@@ -1,0 +1,8 @@
+﻿Media UI acceptance failed; inspect individual case logs
+At D:\check-media-ui.ps1:76 char:102
++ ... ount -gt 0){throw 'Media UI acceptance failed; inspect individual cas ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Media UI accept...idual case logs:String) [], RuntimeException
+    + FullyQualifiedErrorId : Media UI acceptance failed; inspect individual case logs
+ 
+

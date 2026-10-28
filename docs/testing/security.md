@@ -36,8 +36,10 @@ WebSocket connection and request pacing/retry tests exercise the same paths.
 ## Security boundaries
 
 The fixes and remaining limitations are documented in [SECURITY_REVIEW.md](../../SECURITY_REVIEW.md).
-Local video conversion requires Bubblewrap (`bubblewrap` on Fedora/Arch) and
-working user namespaces. The AppImage already bundles Bubblewrap. Helpers fail
+On Linux, local video conversion requires Bubblewrap (`bubblewrap` on Fedora/Arch)
+and working user namespaces. The AppImage already bundles Bubblewrap. Windows
+uses the [AppContainer/Job backend](windows-isolation.md); macOS conversion remains
+disabled until its own isolation backend is implemented. Helpers fail
 safely when isolation is unavailable; voice workers retain their own device and
 network access. Inline file playback supports self-contained MP4/QuickTime and
 WebM; other files can still be downloaded. Remote APIs require HTTPS, with HTTP

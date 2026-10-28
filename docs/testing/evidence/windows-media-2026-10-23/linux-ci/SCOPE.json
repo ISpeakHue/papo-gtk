@@ -1,0 +1,9 @@
+{
+  "run": "https://github.com/ISpeakHue/papo-gtk/actions/runs/39879167086",
+  "result": "failure",
+  "gui_cases": 38,
+  "gui_passes": 30,
+  "gui_failures": 8,
+  "baseline": "All eight failure names and assertion locations match docs/testing/build-provenance.md tracked baseline. Full Linux GUI qualification remains open; individual focused step 7 media checks are recorded separately.",
+  "source_commit": "ee3097dc525d3f3797b5270fecd563eda894d8e9"
+}

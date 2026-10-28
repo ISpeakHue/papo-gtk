@@ -1,0 +1,13 @@
+﻿{
+    "schema":  1,
+    "started_utc":  "2026-10-23T03:34:44.6425206Z",
+    "status":  "fail",
+    "child_exits":  [
+                        {
+                            "exit_code":  1,
+                            "name":  "cairo"
+                        }
+                    ],
+    "error":  "Packaged media acceptance failed",
+    "finished_utc":  "2026-10-23T03:35:32.1712511Z"
+}

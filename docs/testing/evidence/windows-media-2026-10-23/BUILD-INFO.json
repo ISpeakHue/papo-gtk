@@ -1,0 +1,3998 @@
+{
+  "schema": 1,
+  "version": "1.0.2",
+  "source": {
+    "untracked_sha256": {},
+    "index_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "commit": "ee3097dc525d3f3797b5270fecd563eda894d8e9",
+    "status": "",
+    "diff_stat": "",
+    "diff_summary": "",
+    "diff_numstat": "",
+    "line_endings": "i/lf    w/lf    attr/text=auto eol=lf \t.gitattributes\ni/lf    w/lf    attr/text=auto eol=lf \t.github/workflows/test.yml\ni/lf    w/lf    attr/text=auto eol=lf \t.github/workflows/windows.yml\ni/lf    w/lf    attr/text=auto eol=lf \t.gitignore\ni/lf    w/lf    attr/text=auto eol=lf \tAPPIMAGE.md\ni/lf    w/lf    attr/text=auto eol=lf \tCargo.lock\ni/lf    w/lf    attr/text=auto eol=lf \tCargo.toml\ni/lf    w/lf    attr/text=auto eol=lf \tDESIGN.md\ni/lf    w/lf    attr/text=auto eol=lf \tEMBEDS.md\ni/lf    w/lf    attr/text=auto eol=lf \tFLATPAK.md\ni/lf    w/lf    attr/text=auto eol=lf \tLICENSE\ni/lf    w/lf    attr/text=auto eol=lf \tMULTIPLATFORM.md\ni/lf    w/lf    attr/text=auto eol=lf \tMULTIPLATFORM_PLAN.md\ni/lf    w/lf    attr/text=auto eol=lf \tPERFORMANCE.md\ni/lf    w/lf    attr/text=auto eol=lf \tREADME.md\ni/lf    w/lf    attr/text=auto eol=lf \tSECURITY_REVIEW.md\ni/lf    w/lf    attr/text=auto eol=lf \tTESTING.md\ni/lf    w/lf    attr/text=auto eol=lf \tWEBHOOKS.md\ni/lf    w/lf    attr/text=auto eol=lf \tWINDOWS_SUPPORT.md\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/README.md\ni/-text w/-text attr/-text            \tassets/icons/hicolor/128x128/apps/br.com.papo.gtk.png\ni/-text w/-text attr/-text            \tassets/icons/hicolor/256x256/apps/br.com.papo.gtk.png\ni/-text w/-text attr/-text            \tassets/icons/papo-pelican-head-neck.png\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/papo-pelican-head-neck.prompt.txt\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/audio-volume-high-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/audio-volume-muted-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/avatar-default-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/call-stop-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/camera-video-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/chat-message-new-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/document-edit-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/document-properties-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/edit-copy-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/edit-delete-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/edit-find-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/emblem-system-symbolic.svg\ni/none  w/none  attr/text=auto eol=lf \tassets/icons/symbolic/face-smile-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/folder-download-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/image-missing-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/image-x-generic-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/licenses/COPYING\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/licenses/COPYING_CCBYSA3\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/licenses/COPYING_LGPL\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/licenses/README.md\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/licenses/sources.json\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/mail-attachment-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/mail-reply-sender-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/mail-send-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/media-playback-pause-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/media-playback-start-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/microphone-disabled-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/microphone-sensitivity-high-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/network-server-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/pan-down-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/preferences-system-notifications-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/preferences-system-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/security-high-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/sidebar-show-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/system-log-out-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/system-search-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/system-users-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/text-x-generic-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/video-display-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/video-x-generic-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/view-fullscreen-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/view-grid-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/view-more-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/view-pin-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/view-refresh-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/view-restore-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/window-close-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/zoom-fit-best-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/zoom-in-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/zoom-original-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/icons/symbolic/zoom-out-symbolic.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/papo.gresource.xml\ni/lf    w/lf    attr/text=auto eol=lf \tassets/status/away.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/status/busy.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/status/offline.svg\ni/lf    w/lf    attr/text=auto eol=lf \tassets/status/online.svg\ni/lf    w/lf    attr/text=auto eol=lf \tbuild.rs\ni/lf    w/lf    attr/text=auto eol=lf \tdata/br.com.papo.gtk.desktop\ni/lf    w/lf    attr/text=auto eol=lf \tdata/br.com.papo.gtk.metainfo.xml\ni/lf    w/lf    attr/text=auto eol=lf \tdata/windows/identity.json\ni/lf    w/lf    attr/text=auto eol=lf \tdocs/FOLLOW_UPS.md\ni/lf    w/lf    attr/text=auto eol=lf \tdocs/archive/CRASH_ANALYSIS_2026-10-13.md\ni/lf    w/lf    attr/text=auto eol=lf \tdocs/testing/account.md\ni/lf    w/lf    attr/text=auto eol=lf \tdocs/testing/backend.md\ni/lf    w/lf    attr/text=auto eol=lf \tdocs/testing/build-provenance.md\ni/lf    w/lf    attr/text=auto eol=lf \tdocs/testing/chat.md\ni/lf    w/lf    attr/text=auto eol=lf \tdocs/testing/desktop.md\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-identity-2026-10-22/IDENTITY-INPUTS.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-identity-2026-10-22/PACKAGE-VERIFICATION.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-identity-2026-10-22/PHYSICAL-CLICKS.jsonl\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-identity-2026-10-22/QEMU-COMMAND.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-identity-2026-10-22/QMP-ADDITIONS.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-identity-2026-10-22/README.md\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-identity-2026-10-22/SHA256SUMS\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-identity-2026-10-22/SOURCE-COMPARISON.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-identity-2026-10-22/VM-BASE-INPUTS.json\ni/crlf  w/crlf  attr/-text            \tdocs/testing/evidence/windows-identity-2026-10-22/application.stderr.txt\ni/none  w/none  attr/-text            \tdocs/testing/evidence/windows-identity-2026-10-22/application.stdout.txt\ni/mixed w/mixed attr/-text            \tdocs/testing/evidence/windows-identity-2026-10-22/cli-1.stdout.txt\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-identity-2026-10-22/cli-2.stdout.txt\ni/crlf  w/crlf  attr/-text            \tdocs/testing/evidence/windows-identity-2026-10-22/cli-4.stdout.txt\ni/-text w/-text attr/-text            \tdocs/testing/evidence/windows-identity-2026-10-22/cold-toast-activated.png\ni/-text w/-text attr/-text            \tdocs/testing/evidence/windows-identity-2026-10-22/explorer.png\ni/-text w/-text attr/-text            \tdocs/testing/evidence/windows-identity-2026-10-22/history-cold.png\ni/-text w/-text attr/-text            \tdocs/testing/evidence/windows-identity-2026-10-22/history-warm.png\ni/crlf  w/crlf  attr/-text            \tdocs/testing/evidence/windows-identity-2026-10-22/identity-child-exit.txt\ni/crlf  w/crlf  attr/-text            \tdocs/testing/evidence/windows-identity-2026-10-22/identity.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-identity-2026-10-22/native-ci-excerpt.txt\ni/-text w/-text attr/-text            \tdocs/testing/evidence/windows-identity-2026-10-22/normal-window.png\ni/crlf  w/crlf  attr/-text            \tdocs/testing/evidence/windows-identity-2026-10-22/stages.txt\ni/-text w/-text attr/-text            \tdocs/testing/evidence/windows-identity-2026-10-22/start-menu.png\ni/-text w/-text attr/-text            \tdocs/testing/evidence/windows-identity-2026-10-22/warm-toast-activated.png\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/CODE-CI-RESULT.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/LINUX-MEDIA-RESULT.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/MEDIA-INPUTS.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/PACKAGE-VERIFICATION.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/QEMU-COMMAND.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/QMP-ADDITIONS.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/README.md\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/SHA256SUMS\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/SOURCE-COMPARISON.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/VM-BASE-INPUTS.json\ni/none  w/none  attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/ci-media.stderr.txt\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/ci-media.stdout.txt\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/cold-start-diagnostic/DIAGNOSTIC.json\ni/crlf  w/crlf  attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/cold-start-diagnostic/cold.exit.txt\ni/crlf  w/crlf  attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/cold-start-diagnostic/cold.start.txt\ni/crlf  w/crlf  attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/cold-start-diagnostic/cold.stderr.txt\ni/crlf  w/crlf  attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/cold-start-diagnostic/cold.stdout.txt\ni/crlf  w/crlf  attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/cold-start-diagnostic/warm.exit.txt\ni/crlf  w/crlf  attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/cold-start-diagnostic/warm.start.txt\ni/crlf  w/crlf  attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/cold-start-diagnostic/warm.stderr.txt\ni/crlf  w/crlf  attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/cold-start-diagnostic/warm.stdout.txt\ni/crlf  w/crlf  attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/cold-start-diagnostic/warmed-media.exit.txt\ni/none  w/none  attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/cold-start-diagnostic/warmed-media.stderr.txt\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/cold-start-diagnostic/warmed-media.stdout.txt\ni/crlf  w/crlf  attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/initial-cold-failure/media-child-exit.txt\ni/none  w/none  attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/initial-cold-failure/media-driver.log\ni/crlf  w/crlf  attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/initial-cold-failure/media.failure.txt\ni/crlf  w/crlf  attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/initial-cold-failure/media.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/initial-cold-failure/media.stderr.txt\ni/none  w/none  attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/initial-cold-failure/media.stdout.txt\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/initial-native-ci/CODE-CI-RESULT.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/initial-native-ci/PACKAGE-CI-RESULT.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/initial-native-ci/PACKAGE-VERIFICATION.json\ni/none  w/none  attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/initial-native-ci/ci-media.stderr.txt\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/initial-native-ci/ci-media.stdout.txt\ni/none  w/none  attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/initial-native-ci/package-ci-media.stderr.txt\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/initial-native-ci/package-ci-media.stdout.txt\ni/crlf  w/crlf  attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/media-child-exit.txt\ni/none  w/none  attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/media-driver.log\ni/crlf  w/crlf  attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/media.json\ni/none  w/none  attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/media.stderr.txt\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/media.stdout.txt\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-isolation-2026-10-22/native-ci-excerpt.txt\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-runtime-2026-10-21/README.md\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-runtime-2026-10-21/SHA256SUMS\ni/crlf  w/crlf  attr/-text            \tdocs/testing/evidence/windows-runtime-2026-10-21/acceptance.json\ni/-text w/-text attr/-text            \tdocs/testing/evidence/windows-runtime-2026-10-21/application.png\ni/crlf  w/crlf  attr/-text            \tdocs/testing/evidence/windows-runtime-2026-10-21/application.stderr.txt\ni/none  w/none  attr/-text            \tdocs/testing/evidence/windows-runtime-2026-10-21/application.stdout.txt\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-runtime-2026-10-21/final-inputs.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-runtime-2026-10-21/fixture-rerun.ps1.txt\ni/mixed w/mixed attr/-text            \tdocs/testing/evidence/windows-runtime-2026-10-21/initial-audit-failure.txt\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-runtime-2026-10-21/installation-inputs.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-runtime-2026-10-21/installation-results-attachment.json\ni/crlf  w/crlf  attr/-text            \tdocs/testing/evidence/windows-runtime-2026-10-21/os-codecs.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-runtime-2026-10-21/qemu-command.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-runtime-2026-10-21/runtime.stderr.txt\ni/mixed w/mixed attr/-text            \tdocs/testing/evidence/windows-runtime-2026-10-21/runtime.stdout.txt\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-storage-2026-10-22/CI-RESULT.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-storage-2026-10-22/PACKAGE-VERIFICATION.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-storage-2026-10-22/QEMU-COMMAND.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-storage-2026-10-22/QMP-ADDITIONS.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-storage-2026-10-22/README.md\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-storage-2026-10-22/SHA256SUMS\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-storage-2026-10-22/SOURCE-COMPARISON.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-storage-2026-10-22/STORAGE-INPUTS.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-storage-2026-10-22/VM-BASE-INPUTS.json\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-storage-2026-10-22/native-ci-excerpt.txt\ni/crlf  w/crlf  attr/-text            \tdocs/testing/evidence/windows-storage-2026-10-22/storage-child-exit.txt\ni/crlf  w/crlf  attr/-text            \tdocs/testing/evidence/windows-storage-2026-10-22/storage.json\ni/crlf  w/crlf  attr/-text            \tdocs/testing/evidence/windows-storage-2026-10-22/storage.stderr.txt\ni/lf    w/lf    attr/-text            \tdocs/testing/evidence/windows-storage-2026-10-22/storage.stdout.json\ni/lf    w/lf    attr/text=auto eol=lf \tdocs/testing/input.md\ni/lf    w/lf    attr/text=auto eol=lf \tdocs/testing/media.md\ni/lf    w/lf    attr/text=auto eol=lf \tdocs/testing/notifications.md\ni/lf    w/lf    attr/text=auto eol=lf \tdocs/testing/performance.md\ni/lf    w/lf    attr/text=auto eol=lf \tdocs/testing/security.md\ni/lf    w/lf    attr/text=auto eol=lf \tdocs/testing/voice.md\ni/lf    w/lf    attr/text=auto eol=lf \tdocs/testing/windows-identity.md\ni/lf    w/lf    attr/text=auto eol=lf \tdocs/testing/windows-isolation.md\ni/lf    w/lf    attr/text=auto eol=lf \tdocs/testing/windows-media.md\ni/lf    w/lf    attr/text=auto eol=lf \tdocs/testing/windows-runtime.md\ni/lf    w/lf    attr/text=auto eol=lf \tdocs/testing/windows-storage.md\ni/lf    w/lf    attr/text=auto eol=lf \tdocs/testing/windows.md\ni/lf    w/lf    attr/text=auto eol=lf \tdocs/testing/workflows.md\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/appimage/AppRun\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/appimage/Containerfile\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/appimage/TESTER_README.txt\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/appimage/bundle.py\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/appimage/bwrap\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/appimage/font-check.py\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/appimage/loader-config.py\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/appimage/media_policy.py\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/appimage/runtime-check.py\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/appimage/runtime-env.sh\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/appimage/source-archive.py\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/ci/Containerfile\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/ci/gui-checks.sh\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/ci/media-gui-session.sh\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/ci/run-fedora.sh\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/ci/runtime_probe.py\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/flatpak/br.com.papo.gtk.json\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/flatpak/runtime-check.py\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/releases/1.0.0.md\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/releases/1.0.1.md\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/releases/1.0.2.md\ni/lf    w/crlf  attr/text eol=crlf    \tpackaging/windows/Papo.cmd\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/windows/README.txt\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/windows/build.py\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/windows/bundle.py\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/windows/check-identity.ps1\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/windows/check-media-ui.ps1\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/windows/check-media.ps1\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/windows/check-portable.ps1\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/windows/check-storage.ps1\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/windows/clean-vm/README.md\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/windows/clean-vm/acceptance.ps1\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/windows/clean-vm/control.py\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/windows/clean-vm/identity-acceptance.ps1\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/windows/clean-vm/media-acceptance.ps1\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/windows/clean-vm/prepare.py\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/windows/clean-vm/run.py\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/windows/clean-vm/storage-acceptance.ps1\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/windows/launcher.c\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/windows/media_tests.py\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/windows/native_inputs.py\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/windows/pe.py\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/windows/resources.py\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/windows/runtime_check.py\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/windows/shell.cpp\ni/lf    w/lf    attr/text=auto eol=lf \tpackaging/windows/toast_abi.h\ni/lf    w/lf    attr/text=auto eol=lf \tscripts/build-appimage.sh\ni/lf    w/lf    attr/text=auto eol=lf \tscripts/build-flatpak.sh\ni/lf    w/lf    attr/text=auto eol=lf \tscripts/install-desktop.py\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/api/administration.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/api/body.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/api/contract_tests.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/api/discovery.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/api/features.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/api/hardening_tests.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/api/mod.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/api/moderation.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/api/poster.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/api/public_dns.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/api/requests.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/api/requests/tests.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/api/security.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/api/voice.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/api/webhooks.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/app/branding.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/app/mod.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/config/mod.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/logging.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/main.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/media/animation.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/media/avatars.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/media/container.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/media/emoji.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/media/frame.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/media/gif_links.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/media/gif_video.py\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/media/giphy.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/media/inline.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/media/mod.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/media/poster.py\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/media/poster.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/media/preview.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/media/runtime.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/media/sandbox.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/media/sound.py\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/media/sound.rs\ni/-text w/-text attr/-text            \tsrc/media/voice_join.wav\ni/-text w/-text attr/-text            \tsrc/media/voice_leave.wav\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/models/auth.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/models/channel.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/models/contract_fields.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/models/direct.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/models/discovery.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/models/embed.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/models/emoji.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/models/message.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/models/mod.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/models/moderation.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/models/permissions.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/models/role.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/models/server.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/models/user.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/models/voice.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/models/webhook.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/performance.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/platform/activation.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/platform/capture/linux.py\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/platform/capture/mod.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/platform/capture/unavailable.py\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/platform/credential_key.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/platform/credentials.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/platform/credentials/windows.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/platform/files.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/platform/mod.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/platform/runtime.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/platform/sandbox/linux.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/platform/sandbox/mod.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/platform/sandbox/windows.cpp\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/platform/sandbox/windows.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/platform/shortcuts.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/platform/startup.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/platform/storage_check.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/session.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/session/refresh.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/actions.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/actions/edit_emojis.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/actions/edit_mentions.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/actions/participants.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/actions/pins.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/actions/tests.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/bugs.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/bugs5.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/bugs6.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/bugs7.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/bugs8.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/bugs9.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/cache.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/clipboard.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/composer.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/composer/history.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/composer/inline.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/composer/inline_tests.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/display_frames.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/draft_preview.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/embed_editor.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/emoji.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/emoji/categories.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/emoji_details.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/emoji_details/tests.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/input.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/input/diagnostics.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/input/shortcuts.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/markdown.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/mention_background.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/mentions.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/mod.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/moderation.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/multiline.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/navigation.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/performance.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/polish_tests.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/rich.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/rich/flow.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/state.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/surface_cache.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/syntax.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/text.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/transfers.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/transfers/attachments.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/transfers/author.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/transfers/cache_checks.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/transfers/encoded.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/transfers/external.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/transfers/fixes9.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/transfers/geometry.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/transfers/gifs.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/transfers/loading.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/transfers/mov_tests.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/transfers/pins_tests.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/transfers/recent_tests.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/transfers/resident.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/transfers/viewer.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/transfers/viewer/controls.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/video.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/video/fullscreen.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/video/tests.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/viewport.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/chat/window.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/dialogs.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/login/authenticate.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/login/mod.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/login/recovery.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/login/tests.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/account.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/account/preferences.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/account/profile.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/account/settings.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/administration.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/bugs7.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/bugs8.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/direct.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/layout.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/members.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/mod.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/moderation.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/notifications/desktop.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/notifications/desktop_pending.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/notifications/filters.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/notifications/mod.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/notifications/read.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/notifications/state.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/recovery.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/search.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/search/choice.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/search/rows.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/security.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/security/design.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/voice.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/voice/chat_tests.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/voice/settings.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/voice/tests.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/voice/video.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/main_window/webhooks.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/mod.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/root.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/sidebar/mod.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/smooth_scroll.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/status.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/style.css\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/style.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/style/accents.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/user_list/mod.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/user_list/recycled.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ui/user_list/scrolling.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/voice/engine.py\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/voice/mod.rs\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/voice/screen_portal.py\ni/lf    w/lf    attr/text=auto eol=lf \tsrc/ws/mod.rs\ni/lf    w/lf    attr/text=auto eol=lf \ttests/appimage_packaging_test.py\ni/lf    w/lf    attr/text=auto eol=lf \ttests/call_sound_test.py\ni/lf    w/lf    attr/text=auto eol=lf \ttests/fixtures/README.md\ni/-text w/-text attr/-text            \ttests/fixtures/animated-emoji.png\ni/-text w/-text attr/-text            \ttests/fixtures/animated-emoji.webp\ni/-text w/-text attr/-text            \ttests/fixtures/chat-h264.mp4\ni/-text w/-text attr/-text            \ttests/fixtures/chat-video.mov\ni/-text w/-text attr/-text            \ttests/fixtures/chat-video.webm\ni/lf    w/lf    attr/text=auto eol=lf \ttests/helpers/input_keys.py\ni/lf    w/lf    attr/text=auto eol=lf \ttests/icon_assets_test.py\ni/lf    w/lf    attr/text=auto eol=lf \ttests/icon_runtime_probe.py\ni/lf    w/lf    attr/text=auto eol=lf \ttests/platform_capture_test.py\ni/lf    w/lf    attr/text=auto eol=lf \ttests/portal_probe.py\ni/lf    w/lf    attr/text=auto eol=lf \ttests/screen_picker_probe.py\ni/lf    w/lf    attr/text=auto eol=lf \ttests/security/media_network_probe.py\ni/lf    w/lf    attr/text=auto eol=lf \ttests/security/windows_api_probe.py\ni/lf    w/lf    attr/text=auto eol=lf \ttests/security/windows_sandbox_probe.cpp\ni/lf    w/lf    attr/text=auto eol=lf \ttests/video_probe.py\ni/lf    w/lf    attr/text=auto eol=lf \ttests/voice-sfu/go.mod\ni/lf    w/lf    attr/text=auto eol=lf \ttests/voice-sfu/go.sum\ni/lf    w/lf    attr/text=auto eol=lf \ttests/voice-sfu/main.go\ni/lf    w/lf    attr/text=auto eol=lf \ttests/voice_probe.py\ni/lf    w/lf    attr/text=auto eol=lf \ttests/windows_bundle_test.py\ni/lf    w/lf    attr/text=auto eol=lf \ttests/windows_clean_vm_test.py\ni/lf    w/lf    attr/text=auto eol=lf \ttests/windows_identity_test.py\ni/lf    w/lf    attr/text=auto eol=lf \ttests/windows_launcher_test.py\ni/lf    w/lf    attr/text=auto eol=lf \ttests/windows_media_acceptance_test.py\ni/lf    w/lf    attr/text=auto eol=lf \ttests/windows_packaging_test.py\ni/lf    w/lf    attr/text=auto eol=lf \ttests/windows_runtime_check_test.py",
+    "git_config": "file:.git/config\tcore.filemode false\nfile:.git/config\tcore.ignorecase true",
+    "git_version": "git version 2.56.0"
+  },
+  "source_dirty": false,
+  "toolchain": {
+    "cargo.exe": {
+      "path": "D:\\a\\_temp\\msys64\\ucrt64\\bin/cargo.exe",
+      "version": "cargo 1.99.1 (5f94df478 2026-08-27) (Rev1, Built by MSYS2 project)\nrelease: 1.99.1\ncommit-hash: 5f94df4789f005f9a352888e8355ffc645b7ed0e\ncommit-date: 2026-08-27\nhost: x86_64-pc-windows-gnu\nlibgit2: 1.9.7 (sys:0.21.0 system)\nlibcurl: 8.21.0-DEV (sys:0.4.90+curl-8.21.0 vendored ssl:Schannel)\nos: Windows 10.0.20348 (Windows Server 2022 Datacenter) [64-bit]"
+    },
+    "rustc.exe": {
+      "path": "D:\\a\\_temp\\msys64\\ucrt64\\bin/rustc.exe",
+      "version": "rustc 1.99.1 (58cf8f9c3 2026-10-13) (Rev1, Built by MSYS2 project)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-gnu\nrelease: 1.99.1\nLLVM version: 23.1.3"
+    },
+    "gcc.exe": {
+      "path": "D:\\a\\_temp\\msys64\\ucrt64\\bin/gcc.exe",
+      "version": "gcc.exe (Rev6, Built by MSYS2 project) 16.2.0\nCopyright (C) 2026 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."
+    },
+    "g++.exe": {
+      "path": "D:\\a\\_temp\\msys64\\ucrt64\\bin/g++.exe",
+      "version": "g++.exe (Rev6, Built by MSYS2 project) 16.2.0\nCopyright (C) 2026 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."
+    },
+    "ar.exe": {
+      "path": "D:\\a\\_temp\\msys64\\ucrt64\\bin/ar.exe",
+      "version": "GNU ar (GNU Binutils) 2.47.20260726\nCopyright (C) 2026 Free Software Foundation, Inc.\nThis program is free software; you may redistribute it under the terms of\nthe GNU General Public License version 3 or (at your option) any later version.\nThis program has absolutely no warranty."
+    },
+    "pkg-config.exe": {
+      "path": "D:\\a\\_temp\\msys64\\ucrt64\\bin/pkg-config.exe",
+      "version": "3.0.10"
+    },
+    "glib-compile-resources.exe": {
+      "path": "D:\\a\\_temp\\msys64\\ucrt64\\bin/glib-compile-resources.exe",
+      "version": "2.90.1"
+    },
+    "python": {
+      "path": "D:/a/_temp/msys64/ucrt64/bin/python.exe",
+      "version": "3.14.8 (main, Oct  2 2026, 15:15:27)  [MINGW GCC UCRT 16.2.0 64 bit (AMD64)]"
+    }
+  },
+  "native_inputs": {
+    "manifest_sha256": "6bacd27a5952513e796d55cc2e7b27baa15e1b39dfbd4c7a08dbed6a3a2f1e9d",
+    "schema": 1,
+    "installed": {
+      "base": "2022.06-1",
+      "bash": "5.3.20-2",
+      "bash-completion": "2.18.0-1",
+      "brotli": "1.2.0-1",
+      "bsdtar": "3.8.10-1",
+      "bzip2": "1.0.8-4",
+      "ca-certificates": "20260816-2",
+      "coreutils": "8.32-5",
+      "curl": "8.23.0-1",
+      "dash": "0.5.13.5-1",
+      "db": "6.2.32-6",
+      "file": "5.48-1",
+      "filesystem": "2026.03.06-1",
+      "findutils": "4.11.0-2",
+      "gawk": "5.4.1-1",
+      "gcc-libs": "16.2.0-1",
+      "gdbm": "1.26-1",
+      "getent": "2.18.90-6",
+      "gettext": "0.22.5-1",
+      "git": "2.56.0-1",
+      "gmp": "6.3.0-2",
+      "gnupg": "2.4.9-3",
+      "grep": "1~3.0-7",
+      "gzip": "1.15-1",
+      "heimdal": "7.8.0-7",
+      "heimdal-libs": "7.8.0-7",
+      "inetutils": "2.8-1",
+      "info": "7.2-3",
+      "less": "710-1",
+      "libargp": "20260115-1",
+      "libasprintf": "0.22.5-1",
+      "libassuan": "3.0.2-1",
+      "libbz2": "1.0.8-4",
+      "libcbor": "0.14.0-2",
+      "libcurl": "8.23.0-1",
+      "libdb": "6.2.32-6",
+      "libedit": "20240808_3.1-1",
+      "libexpat": "2.9.0-1",
+      "libffi": "3.8.0-1",
+      "libfido2": "1.17.0-1",
+      "libgcrypt": "1.12.4-1",
+      "libgdbm": "1.26-1",
+      "libgettextpo": "0.22.5-1",
+      "libgnutls": "3.8.13-2",
+      "libgpg-error": "1.61-1",
+      "libhogweed": "4.0-1",
+      "libiconv": "1.19-1",
+      "libidn2": "2.3.8-1",
+      "libintl": "0.22.5-1",
+      "libksba": "1.8.1-1",
+      "liblz4": "1.10.0-1",
+      "liblzma": "5.8.4-1",
+      "libnettle": "4.0-1",
+      "libnghttp2": "1.70.0-1",
+      "libnghttp3": "1.18.0-1",
+      "libngtcp2": "1.25.0-1",
+      "libnpth": "1.8-1",
+      "libopenssl": "3.6.5-1",
+      "libp11-kit": "0.26.5-1",
+      "libpcre": "8.45-5",
+      "libpcre2_8": "10.49-1",
+      "libpsl": "0.23.2-1",
+      "libreadline": "8.3.006-1",
+      "libsqlite": "3.54.0-1",
+      "libssh2": "1.11.1-1",
+      "libtasn1": "4.21.0-1",
+      "libunistring": "1.4.2-1",
+      "libutil-linux": "2.40.2-2",
+      "libxcrypt": "4.5.2-1",
+      "libzstd": "1.5.7-1",
+      "mingw-w64-ucrt-x86_64-SDL2": "2.32.10-1",
+      "mingw-w64-ucrt-x86_64-adobe-source-code-pro-fonts": "2.042u+1.062i+1.026vf-1",
+      "mingw-w64-ucrt-x86_64-adwaita-icon-theme": "51.0-1",
+      "mingw-w64-ucrt-x86_64-adwaita-icon-theme-legacy": "46.2-1",
+      "mingw-w64-ucrt-x86_64-aom": "3.15.2-1",
+      "mingw-w64-ucrt-x86_64-binutils": "2.47-4",
+      "mingw-w64-ucrt-x86_64-brotli": "1.2.0-1",
+      "mingw-w64-ucrt-x86_64-bzip2": "1.0.8-4",
+      "mingw-w64-ucrt-x86_64-c-ares": "1.34.9-1",
+      "mingw-w64-ucrt-x86_64-ca-certificates": "20260816-3",
+      "mingw-w64-ucrt-x86_64-cairo": "1.18.6-2",
+      "mingw-w64-ucrt-x86_64-cantarell-fonts": "0.311-1",
+      "mingw-w64-ucrt-x86_64-cc-libs": "16.2.0-6",
+      "mingw-w64-ucrt-x86_64-chromaprint": "1.6.2-1",
+      "mingw-w64-ucrt-x86_64-crt": "14.0.0.r495.g63ebe6cdb-1",
+      "mingw-w64-ucrt-x86_64-crypto++": "8.9.0-2",
+      "mingw-w64-ucrt-x86_64-curl": "8.23.0-1",
+      "mingw-w64-ucrt-x86_64-dav1d": "1.5.4-1",
+      "mingw-w64-ucrt-x86_64-directx-headers": "1~1.619.5-1",
+      "mingw-w64-ucrt-x86_64-directxmath": "3.20.b-1",
+      "mingw-w64-ucrt-x86_64-djvulibre": "3.5.30-1",
+      "mingw-w64-ucrt-x86_64-duktape": "2.7.0-2",
+      "mingw-w64-ucrt-x86_64-egl-headers": "1.5.r284.3ae2b7c-1",
+      "mingw-w64-ucrt-x86_64-expat": "2.9.0-1",
+      "mingw-w64-ucrt-x86_64-faac": "2.1-1",
+      "mingw-w64-ucrt-x86_64-faad2": "2.11.4-1",
+      "mingw-w64-ucrt-x86_64-fdk-aac": "2.0.3-1",
+      "mingw-w64-ucrt-x86_64-ffmpeg": "9.0.2-1",
+      "mingw-w64-ucrt-x86_64-fftw": "3.3.11-2",
+      "mingw-w64-ucrt-x86_64-flac": "1.5.0-2",
+      "mingw-w64-ucrt-x86_64-flif": "0.4-2",
+      "mingw-w64-ucrt-x86_64-fluidsynth": "2.6.1-1",
+      "mingw-w64-ucrt-x86_64-fontconfig": "2.18.3-1",
+      "mingw-w64-ucrt-x86_64-freetype": "2.15.0-1",
+      "mingw-w64-ucrt-x86_64-frei0r-plugins": "3.6.0-1",
+      "mingw-w64-ucrt-x86_64-fribidi": "1.0.17-1",
+      "mingw-w64-ucrt-x86_64-gcc": "16.2.0-6",
+      "mingw-w64-ucrt-x86_64-gdk-pixbuf2": "2.44.8-1",
+      "mingw-w64-ucrt-x86_64-gettext-runtime": "1.0-1",
+      "mingw-w64-ucrt-x86_64-ggml": "0.27.0-1",
+      "mingw-w64-ucrt-x86_64-giflib": "6.1.3-1",
+      "mingw-w64-ucrt-x86_64-gles-headers": "3.2.r1065.7fc154c-1",
+      "mingw-w64-ucrt-x86_64-glib-networking": "2.90.0-1",
+      "mingw-w64-ucrt-x86_64-glib2": "2.90.1-1",
+      "mingw-w64-ucrt-x86_64-glslang": "16.6.0-1",
+      "mingw-w64-ucrt-x86_64-gmp": "6.3.0-2",
+      "mingw-w64-ucrt-x86_64-gnutls": "3.8.13-3",
+      "mingw-w64-ucrt-x86_64-gobject-introspection-runtime": "1.86.0-4",
+      "mingw-w64-ucrt-x86_64-graphene": "1.10.8-3",
+      "mingw-w64-ucrt-x86_64-graphite2": "1.3.15-1",
+      "mingw-w64-ucrt-x86_64-gsettings-desktop-schemas": "51.0-1",
+      "mingw-w64-ucrt-x86_64-gsfonts": "20200910-3",
+      "mingw-w64-ucrt-x86_64-gsm": "1.0.24-1",
+      "mingw-w64-ucrt-x86_64-gst-libav": "1.28.8-1",
+      "mingw-w64-ucrt-x86_64-gst-plugins-bad": "1.28.8-2",
+      "mingw-w64-ucrt-x86_64-gst-plugins-bad-libs": "1.28.8-2",
+      "mingw-w64-ucrt-x86_64-gst-plugins-base": "1.28.8-1",
+      "mingw-w64-ucrt-x86_64-gst-plugins-good": "1.28.8-1",
+      "mingw-w64-ucrt-x86_64-gst-python": "1.28.8-1",
+      "mingw-w64-ucrt-x86_64-gstreamer": "1.28.8-1",
+      "mingw-w64-ucrt-x86_64-gtk-update-icon-cache": "3.24.52-1",
+      "mingw-w64-ucrt-x86_64-gtk4": "4.24.1-1",
+      "mingw-w64-ucrt-x86_64-harfbuzz": "14.6.0-1",
+      "mingw-w64-ucrt-x86_64-headers": "14.0.0.r495.g63ebe6cdb-1",
+      "mingw-w64-ucrt-x86_64-hicolor-icon-theme": "0.18-1",
+      "mingw-w64-ucrt-x86_64-highway": "1.4.0-3",
+      "mingw-w64-ucrt-x86_64-http-parser": "2.9.4-3",
+      "mingw-w64-ucrt-x86_64-imagemagick": "7.1.2.34-1",
+      "mingw-w64-ucrt-x86_64-imath": "3.2.3-3",
+      "mingw-w64-ucrt-x86_64-isl": "0.28-1",
+      "mingw-w64-ucrt-x86_64-iso-codes": "4.20.1-1",
+      "mingw-w64-ucrt-x86_64-jbigkit": "2.1-6",
+      "mingw-w64-ucrt-x86_64-json-glib": "1.10.8-2",
+      "mingw-w64-ucrt-x86_64-kvazaar": "2.3.2-1",
+      "mingw-w64-ucrt-x86_64-lame": "3.100-3",
+      "mingw-w64-ucrt-x86_64-lcms2": "2.19.1-1",
+      "mingw-w64-ucrt-x86_64-lerc": "4.1.1-1",
+      "mingw-w64-ucrt-x86_64-libadwaita": "1.10.0-2",
+      "mingw-w64-ucrt-x86_64-libass": "0.17.5-1",
+      "mingw-w64-ucrt-x86_64-libb2": "0.98.1-3",
+      "mingw-w64-ucrt-x86_64-libbluray": "1.5.0-1",
+      "mingw-w64-ucrt-x86_64-libbs2b": "3.1.0-2",
+      "mingw-w64-ucrt-x86_64-libcaca": "0.99.beta20-8",
+      "mingw-w64-ucrt-x86_64-libcue": "2.3.0-1",
+      "mingw-w64-ucrt-x86_64-libdatrie": "0.2.14-1",
+      "mingw-w64-ucrt-x86_64-libdca": "0.0.7-3",
+      "mingw-w64-ucrt-x86_64-libde265": "1.1.3-1",
+      "mingw-w64-ucrt-x86_64-libdeflate": "1.26-1",
+      "mingw-w64-ucrt-x86_64-libdovi": "3.4.0-1",
+      "mingw-w64-ucrt-x86_64-libdvdcss": "1.6.0-1",
+      "mingw-w64-ucrt-x86_64-libdvdnav": "7.0.0-2",
+      "mingw-w64-ucrt-x86_64-libdvdread": "7.1.1-1",
+      "mingw-w64-ucrt-x86_64-libepoxy": "1.5.10-7",
+      "mingw-w64-ucrt-x86_64-libexif": "0.6.26-1",
+      "mingw-w64-ucrt-x86_64-libffi": "3.8.0-1",
+      "mingw-w64-ucrt-x86_64-libgcc": "16.2.0-6",
+      "mingw-w64-ucrt-x86_64-libgfortran": "16.2.0-6",
+      "mingw-w64-ucrt-x86_64-libgit2": "1.9.7-2",
+      "mingw-w64-ucrt-x86_64-libgme": "0.6.5-2",
+      "mingw-w64-ucrt-x86_64-libgomp": "16.2.0-6",
+      "mingw-w64-ucrt-x86_64-libheif": "1.23.6-1",
+      "mingw-w64-ucrt-x86_64-libiconv": "1.19-1",
+      "mingw-w64-ucrt-x86_64-libidn2": "2.3.8-4",
+      "mingw-w64-ucrt-x86_64-libjpeg-turbo": "3.2.0-1",
+      "mingw-w64-ucrt-x86_64-libjxl": "0.12.0-2",
+      "mingw-w64-ucrt-x86_64-liblc3": "1.1.3-1",
+      "mingw-w64-ucrt-x86_64-liblqr": "0.4.3-3",
+      "mingw-w64-ucrt-x86_64-libltdl": "2.6.2-1",
+      "mingw-w64-ucrt-x86_64-libmicrodns": "0.2.0-4",
+      "mingw-w64-ucrt-x86_64-libmodplug": "0.8.9.0-5",
+      "mingw-w64-ucrt-x86_64-libmpcdec": "1~0.1+r475-2",
+      "mingw-w64-ucrt-x86_64-libmpeg2": "0.5.1-2",
+      "mingw-w64-ucrt-x86_64-libmysofa": "1.3.5-1",
+      "mingw-w64-ucrt-x86_64-libnice": "0.1.24-1",
+      "mingw-w64-ucrt-x86_64-libogg": "1.3.6-1",
+      "mingw-w64-ucrt-x86_64-libopenmpt": "0.8.9-1",
+      "mingw-w64-ucrt-x86_64-libplacebo": "7.360.1-2",
+      "mingw-w64-ucrt-x86_64-libpng": "1.6.59-1",
+      "mingw-w64-ucrt-x86_64-libproxy": "0.5.12-1",
+      "mingw-w64-ucrt-x86_64-libpsl": "0.21.5-3",
+      "mingw-w64-ucrt-x86_64-libquadmath": "16.2.0-6",
+      "mingw-w64-ucrt-x86_64-libraqm": "0.11.0-1",
+      "mingw-w64-ucrt-x86_64-libraw": "0.22.2-2",
+      "mingw-w64-ucrt-x86_64-libreplaygain": "475-3",
+      "mingw-w64-ucrt-x86_64-librsvg": "2.63.3-1",
+      "mingw-w64-ucrt-x86_64-libshout": "2.4.6-6",
+      "mingw-w64-ucrt-x86_64-libsndfile": "1.2.2-1",
+      "mingw-w64-ucrt-x86_64-libsoup3": "3.8.0-1",
+      "mingw-w64-ucrt-x86_64-libsoxr": "0.1.3-6",
+      "mingw-w64-ucrt-x86_64-libsrtp": "2.8.1-1",
+      "mingw-w64-ucrt-x86_64-libssh": "0.12.2-1",
+      "mingw-w64-ucrt-x86_64-libssh2": "1.11.1-2",
+      "mingw-w64-ucrt-x86_64-libstdc++": "16.2.0-6",
+      "mingw-w64-ucrt-x86_64-libsystre": "1.0.2-3",
+      "mingw-w64-ucrt-x86_64-libtasn1": "4.21.0-1",
+      "mingw-w64-ucrt-x86_64-libthai": "0.1.30-1",
+      "mingw-w64-ucrt-x86_64-libtheora": "1.2.0-1",
+      "mingw-w64-ucrt-x86_64-libtiff": "4.7.2-2",
+      "mingw-w64-ucrt-x86_64-libtre": "0.9.0-2",
+      "mingw-w64-ucrt-x86_64-libunibreak": "7.0-1",
+      "mingw-w64-ucrt-x86_64-libunistring": "1.4.2-1",
+      "mingw-w64-ucrt-x86_64-libva": "2.24.1-1",
+      "mingw-w64-ucrt-x86_64-libvorbis": "1.3.7-3",
+      "mingw-w64-ucrt-x86_64-libvpl": "2.17.0-1",
+      "mingw-w64-ucrt-x86_64-libvpx": "1.17.0-1",
+      "mingw-w64-ucrt-x86_64-libwebp": "1.6.0-1",
+      "mingw-w64-ucrt-x86_64-libwinpthread": "14.0.0.r495.g63ebe6cdb-2",
+      "mingw-w64-ucrt-x86_64-libwmf": "0.2.16-1",
+      "mingw-w64-ucrt-x86_64-libx264": "0.165.r3222.b35605a-3",
+      "mingw-w64-ucrt-x86_64-libxml2": "2.15.4-2",
+      "mingw-w64-ucrt-x86_64-llama.cpp": "1~0.7.0-2",
+      "mingw-w64-ucrt-x86_64-llvm-libs": "23.1.3-1",
+      "mingw-w64-ucrt-x86_64-lzo2": "2.10-3",
+      "mingw-w64-ucrt-x86_64-mpc": "1.4.1-1",
+      "mingw-w64-ucrt-x86_64-mpdecimal": "4.0.1-3",
+      "mingw-w64-ucrt-x86_64-mpfr": "4.2.2-3",
+      "mingw-w64-ucrt-x86_64-mpg123": "1.33.7-1",
+      "mingw-w64-ucrt-x86_64-ncurses": "6.6-4",
+      "mingw-w64-ucrt-x86_64-nettle": "4.0-1",
+      "mingw-w64-ucrt-x86_64-nghttp2": "1.70.0-1",
+      "mingw-w64-ucrt-x86_64-nghttp3": "1.18.0-1",
+      "mingw-w64-ucrt-x86_64-ngtcp2": "1.25.0-1",
+      "mingw-w64-ucrt-x86_64-openal": "1.25.2-1",
+      "mingw-w64-ucrt-x86_64-openblas": "0.3.34-1",
+      "mingw-w64-ucrt-x86_64-opencl-icd": "2026.05.29-1",
+      "mingw-w64-ucrt-x86_64-opencore-amr": "0.1.6-1",
+      "mingw-w64-ucrt-x86_64-openexr": "3.5.2-1",
+      "mingw-w64-ucrt-x86_64-openh264": "2.6.0-2",
+      "mingw-w64-ucrt-x86_64-openjpeg2": "2.5.4-2",
+      "mingw-w64-ucrt-x86_64-openjph": "0.32.0-1",
+      "mingw-w64-ucrt-x86_64-openssl": "3.6.5-1",
+      "mingw-w64-ucrt-x86_64-opus": "1.6.1-2",
+      "mingw-w64-ucrt-x86_64-orc": "0.4.44-1",
+      "mingw-w64-ucrt-x86_64-p11-kit": "0.26.5-1",
+      "mingw-w64-ucrt-x86_64-pango": "1.58.2-1",
+      "mingw-w64-ucrt-x86_64-pcre2": "10.49-1",
+      "mingw-w64-ucrt-x86_64-pixman": "0.46.4-3",
+      "mingw-w64-ucrt-x86_64-pkgconf": "1~3.0.10-1",
+      "mingw-w64-ucrt-x86_64-portaudio": "1~19.7.0-7",
+      "mingw-w64-ucrt-x86_64-python": "3.14.8-1",
+      "mingw-w64-ucrt-x86_64-python-cairo": "1.29.2-1",
+      "mingw-w64-ucrt-x86_64-python-gobject": "3.58.1-1",
+      "mingw-w64-ucrt-x86_64-python-packaging": "26.3-1",
+      "mingw-w64-ucrt-x86_64-rav1e": "0.8.1-1",
+      "mingw-w64-ucrt-x86_64-readline": "8.3.003-1",
+      "mingw-w64-ucrt-x86_64-rtmpdump": "2.6-2",
+      "mingw-w64-ucrt-x86_64-rust": "1.99.1-1",
+      "mingw-w64-ucrt-x86_64-sbc": "2.2-1",
+      "mingw-w64-ucrt-x86_64-sdl3": "3.4.18-1",
+      "mingw-w64-ucrt-x86_64-shaderc": "2026.4-1",
+      "mingw-w64-ucrt-x86_64-shared-mime-info": "2.5.1-1",
+      "mingw-w64-ucrt-x86_64-soundtouch": "2.4.1-1",
+      "mingw-w64-ucrt-x86_64-spandsp": "0.0.6-6",
+      "mingw-w64-ucrt-x86_64-speex": "1.2.1-1",
+      "mingw-w64-ucrt-x86_64-speexdsp": "1.2.1-2",
+      "mingw-w64-ucrt-x86_64-spirv-cross": "1~1.4.363.0-1",
+      "mingw-w64-ucrt-x86_64-spirv-tools": "3~1.4.363.0-1",
+      "mingw-w64-ucrt-x86_64-sqlite3": "3.54.0-1",
+      "mingw-w64-ucrt-x86_64-srt": "1.5.7-1",
+      "mingw-w64-ucrt-x86_64-svt-av1": "4.2.0-1",
+      "mingw-w64-ucrt-x86_64-svt-jpeg-xs": "0.9.0-1",
+      "mingw-w64-ucrt-x86_64-taglib": "2.2.1-1",
+      "mingw-w64-ucrt-x86_64-tcl": "8.6.18-1",
+      "mingw-w64-ucrt-x86_64-termcap": "1.3.1-8",
+      "mingw-w64-ucrt-x86_64-tk": "8.6.18-1",
+      "mingw-w64-ucrt-x86_64-ttf-dejavu": "2.37-4",
+      "mingw-w64-ucrt-x86_64-twolame": "0.4.0-3",
+      "mingw-w64-ucrt-x86_64-tzdata": "2026e-1",
+      "mingw-w64-ucrt-x86_64-vid.stab": "1.1.2-1",
+      "mingw-w64-ucrt-x86_64-vmaf": "3.2.1-1",
+      "mingw-w64-ucrt-x86_64-vo-amrwbenc": "0.1.3-2",
+      "mingw-w64-ucrt-x86_64-vulkan-loader": "1~1.4.363.0-1",
+      "mingw-w64-ucrt-x86_64-wavpack": "5.9.0-1",
+      "mingw-w64-ucrt-x86_64-webrtc-audio-processing-1": "1.3-5",
+      "mingw-w64-ucrt-x86_64-whisper.cpp": "1~1.9.5.r2.g0c7be6963-1",
+      "mingw-w64-ucrt-x86_64-windows-default-manifest": "20260815-1",
+      "mingw-w64-ucrt-x86_64-wineditline": "2.208-1",
+      "mingw-w64-ucrt-x86_64-winpthreads": "14.0.0.r495.g63ebe6cdb-2",
+      "mingw-w64-ucrt-x86_64-x265": "4.3-1",
+      "mingw-w64-ucrt-x86_64-xvidcore": "1.3.7-5",
+      "mingw-w64-ucrt-x86_64-xz": "5.8.4-1",
+      "mingw-w64-ucrt-x86_64-zbar": "0.23.95-1",
+      "mingw-w64-ucrt-x86_64-zimg": "3.0.6-3",
+      "mingw-w64-ucrt-x86_64-zlib": "1.3.2-2",
+      "mingw-w64-ucrt-x86_64-zstd": "1.5.7-2",
+      "mingw-w64-ucrt-x86_64-zvbi": "0.2.45-1",
+      "mintty": "1~3.8.3-1",
+      "mpfr": "4.2.2-1",
+      "msys2-keyring": "1~20260814-1",
+      "msys2-launcher": "1.5-3",
+      "msys2-runtime": "3.6.11-4",
+      "nano": "9.2-1",
+      "ncurses": "6.6-2",
+      "nettle": "4.0-1",
+      "openssh": "10.6p1-1",
+      "openssl": "3.6.5-1",
+      "p11-kit": "0.26.5-1",
+      "pacman": "6.1.0-25",
+      "pacman-contrib": "1.10.6-2",
+      "pacman-mirrors": "20260129-1",
+      "perl": "5.42.3-3",
+      "perl-authen-sasl": "2.2100-2",
+      "perl-clone": "0.51-1",
+      "perl-convert-binhex": "1.125-3",
+      "perl-encode-locale": "1.05-3",
+      "perl-error": "0.17030-3",
+      "perl-file-listing": "6.16-2",
+      "perl-html-parser": "3.86-2",
+      "perl-html-tagset": "3.24-2",
+      "perl-http-cookiejar": "0.014-2",
+      "perl-http-cookies": "6.12-2",
+      "perl-http-daemon": "6.17-2",
+      "perl-http-date": "6.08-2",
+      "perl-http-message": "7.04-2",
+      "perl-http-negotiate": "6.01-4",
+      "perl-io-html": "1.004-3",
+      "perl-io-socket-ssl": "2.099-2",
+      "perl-io-stringy": "2.113-4",
+      "perl-libwww": "6.83-3",
+      "perl-lwp-mediatypes": "6.05-2",
+      "perl-mailtools": "2.22-2",
+      "perl-mime-tools": "5.518-2",
+      "perl-net-http": "6.24-2",
+      "perl-net-smtp-ssl": "1.04-3",
+      "perl-net-ssleay": "1.96-2",
+      "perl-termreadkey": "2.38-9",
+      "perl-timedate": "2.35-2",
+      "perl-try-tiny": "0.32-2",
+      "perl-uri": "5.40-1",
+      "perl-www-robotrules": "6.03-2",
+      "pinentry": "1.3.3-1",
+      "rebase": "4.5.0-5",
+      "sed": "4.9-1",
+      "tar": "1.35-3",
+      "time": "1.10-1",
+      "tzcode": "2026e-1",
+      "util-linux": "2.40.2-2",
+      "wget": "1.25.0-4",
+      "which": "2.25-1",
+      "xz": "5.8.4-1",
+      "zlib": "1.3.2-1",
+      "zstd": "1.5.7-1"
+    },
+    "files": [
+      {
+        "file": "base-2022.06-1-any.pkg.tar.zst",
+        "size": 2540,
+        "sha256": "1501b0f9e8859c4cee080cf89ea07dc16bcc5cd490383484bbff861ed88c3f4f"
+      },
+      {
+        "file": "base-2022.06-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "a158ff272a7e4ea90f88e4ffbd79d6fb45ef966fceb77c8703af05cfc66ca7d3"
+      },
+      {
+        "file": "bash-5.3.20-2-x86_64.pkg.tar.zst",
+        "size": 2579823,
+        "sha256": "0951e809c552dd7dd2835df1b2d590822187f14e717d809e942e4eb677d0adfd"
+      },
+      {
+        "file": "bash-5.3.20-2-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "080f53a6e31c91d93f4247fcb6746e60a6df87d8152f87ec62c1c9d7e9ad82e9"
+      },
+      {
+        "file": "bash-completion-2.18.0-1-any.pkg.tar.zst",
+        "size": 234160,
+        "sha256": "1babcc1d94e5e0d4e96d18c532ea2c5a6841dc64709cbe8365385511df5e932d"
+      },
+      {
+        "file": "bash-completion-2.18.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "5533e3e222ad32481d778a37086b0d5d630c902446a13b56223c8e28f7773ada"
+      },
+      {
+        "file": "brotli-1.2.0-1-x86_64.pkg.tar.zst",
+        "size": 381349,
+        "sha256": "6642bd8fcb238119b167038614ad4eaf44a25b4978a34f74349e0359565ac671"
+      },
+      {
+        "file": "brotli-1.2.0-1-x86_64.pkg.tar.zst.sig",
+        "size": 565,
+        "sha256": "22fb9bea320e78cf82d827ea82f2538d03bccc0c6cd6617a62039d3d12fa4daa"
+      },
+      {
+        "file": "bsdtar-3.8.10-1-x86_64.pkg.tar.zst",
+        "size": 394493,
+        "sha256": "d6519b1e0c62a868abf8c1cc5982be69f8d92cfa6badbf4f7de6102c72bcb009"
+      },
+      {
+        "file": "bsdtar-3.8.10-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "716df353a07f3dcdcf9399a1b4b3bad926dbba6f160447a9658cfcb56060c970"
+      },
+      {
+        "file": "bzip2-1.0.8-4-x86_64.pkg.tar.zst",
+        "size": 58549,
+        "sha256": "635c483775de60663bd38859bb4624e6aaa1086354acf8e36513b75c24f64b3c"
+      },
+      {
+        "file": "bzip2-1.0.8-4-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "3bff08c011162a3a1c800a12b3c422b59c36127f9df267b14fe8e9bd4b2ba3da"
+      },
+      {
+        "file": "ca-certificates-20260816-2-any.pkg.tar.zst",
+        "size": 392537,
+        "sha256": "341401204ee1c0a7ce90336beead3b5dc4d35d4bf254fc955ade64036333d04e"
+      },
+      {
+        "file": "ca-certificates-20260816-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "cdb8767a765526281366029f082c996157a4fcf2fbd1309d2c43e6c308edb8c4"
+      },
+      {
+        "file": "coreutils-8.32-5-x86_64.pkg.tar.zst",
+        "size": 2755209,
+        "sha256": "62dfee1c39fd15f99c39802b35e82643bc14fffc16d6c76d4001caa385ec77e3"
+      },
+      {
+        "file": "coreutils-8.32-5-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "622861ad85807d070f3665d7f6c524c27a5e1d2050b0ee3f806247f185a07ad2"
+      },
+      {
+        "file": "curl-8.23.0-1-x86_64.pkg.tar.zst",
+        "size": 942782,
+        "sha256": "6f21e0187e3f309199e01f729d415ccfeb304cc9f8a27365c8aa9c216351022e"
+      },
+      {
+        "file": "curl-8.23.0-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "54fb06d40fd31922ab704cd42c873e7bdcf57591b563ee1326da7c023869a093"
+      },
+      {
+        "file": "dash-0.5.13.5-1-x86_64.pkg.tar.zst",
+        "size": 83150,
+        "sha256": "842aa48bae2fe394ab0587ad3405d3ac4c70c367c676a47c1049f62ef7f0fbcc"
+      },
+      {
+        "file": "dash-0.5.13.5-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "ed09a2b30a7e42fa6feebafe28596ef46902130f68924d302a720aa630628932"
+      },
+      {
+        "file": "db-6.2.32-6-x86_64.pkg.tar.zst",
+        "size": 49971,
+        "sha256": "41bc94acad3b53eaa92227ec34412305f648848ffbc963bcad88274517e13e8d"
+      },
+      {
+        "file": "db-6.2.32-6-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "dfd5a37a7512575806074297354f8ee3a1e1d58a750e6d30dd1522f12a4ee085"
+      },
+      {
+        "file": "file-5.48-1-x86_64.pkg.tar.zst",
+        "size": 468042,
+        "sha256": "f55026638fe4ed4b31ee3cf316843ac190d9332816bff8dcb0a99fd8c6350608"
+      },
+      {
+        "file": "file-5.48-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "9d76081160bd2870532132802589d0c7a5200c413c8157cc6b509d2f487c3e46"
+      },
+      {
+        "file": "filesystem-2026.03.06-1-x86_64.pkg.tar.zst",
+        "size": 94696,
+        "sha256": "4506b2dbb496281b7645ee2b2d3700f6a2fab3d74a800733f3b3b44eeb8edc5c"
+      },
+      {
+        "file": "filesystem-2026.03.06-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "4f2b4f21dea6b268317998a84ed7ee50c78d4d45a548b1167d9a78e43c3862f2"
+      },
+      {
+        "file": "findutils-4.11.0-2-x86_64.pkg.tar.zst",
+        "size": 582781,
+        "sha256": "f19d3c6b1b073d4c5759ae83f5639d11a5f0227b772f7d86d600db573d9d5d32"
+      },
+      {
+        "file": "findutils-4.11.0-2-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "89e5c679db160d56a7b88b4c82a14187168272a51e8f919cc1e8be0b09254c9a"
+      },
+      {
+        "file": "gawk-5.4.1-1-x86_64.pkg.tar.zst",
+        "size": 1519178,
+        "sha256": "4b1322cb6c83d61fde5100e229e3cabc5b7d01fc0d0d8bc311edc08df91916be"
+      },
+      {
+        "file": "gawk-5.4.1-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "54e5b27f677207d401ef32bfc3cad66f502de332e3a676a1d0898a8abaeae19b"
+      },
+      {
+        "file": "gcc-libs-16.2.0-1-x86_64.pkg.tar.zst",
+        "size": 1080310,
+        "sha256": "50e1bbbb1b4186ba1ed8c08cdbb5c0a8c2343e4b5747bace24273e26fb148471"
+      },
+      {
+        "file": "gcc-libs-16.2.0-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "9329aeae7118a8660d0a92898e6864b8a83b47c987e726931d9002e526006d76"
+      },
+      {
+        "file": "gdbm-1.26-1-x86_64.pkg.tar.zst",
+        "size": 212954,
+        "sha256": "1f8e949be2bbe488c5644132db78ecda288c9945922e7ed2447384734e2adba2"
+      },
+      {
+        "file": "gdbm-1.26-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "dde1cf8a37a12fd83a97a1c25d30774b789c2b1ed772ef0b540fbc3127d64e5f"
+      },
+      {
+        "file": "getent-2.18.90-6-x86_64.pkg.tar.zst",
+        "size": 11791,
+        "sha256": "d6bcece7733d5080c6125aedf7996bbbfd33067f432dd659447f34d8136d97ca"
+      },
+      {
+        "file": "getent-2.18.90-6-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "6e1ccd65338bd7782d2669f6dc67b3e41c4e0d7bdbce63e99cd4c354e380952f"
+      },
+      {
+        "file": "gettext-0.22.5-1-x86_64.pkg.tar.zst",
+        "size": 1885957,
+        "sha256": "b31ab065c3538ecb1fb6ab48ab2b3049243d6d9e585331c882f38326eefc1831"
+      },
+      {
+        "file": "gettext-0.22.5-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "66995cb353db6537ffc23ccc3049b3dcb36cfa98c51981ec2d87491734240781"
+      },
+      {
+        "file": "git-2.56.0-1-x86_64.pkg.tar.zst",
+        "size": 7681199,
+        "sha256": "051fc526cba4a5c732acde867cddec9dbd54653d781be3009546c611bfd82638"
+      },
+      {
+        "file": "git-2.56.0-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "0cb82228cbb0b624af1c952a6928ace20f5c16aee095c22c7f4d08cbd0ad93a2"
+      },
+      {
+        "file": "gmp-6.3.0-2-x86_64.pkg.tar.zst",
+        "size": 396914,
+        "sha256": "f84536138e618d47a1df2da83916cfebbd449f159ffad52f994a71060a41cf34"
+      },
+      {
+        "file": "gmp-6.3.0-2-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "2fe4effbb7950beba40d46dfd83db242c79d8989ee712c125e89bc292e94f24d"
+      },
+      {
+        "file": "gnupg-2.4.9-3-x86_64.pkg.tar.zst",
+        "size": 2697631,
+        "sha256": "ff78c8391e894c53ad0e3054f1e885e34f22072ad7f8578cd199e0d5657592b2"
+      },
+      {
+        "file": "gnupg-2.4.9-3-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "4a93c63e05ace744bd1528d8477ce8e654487a088daa4dca8fd727d777c4773e"
+      },
+      {
+        "file": "grep-1~3.0-7-x86_64.pkg.tar.zst",
+        "size": 249241,
+        "sha256": "2909b3bbef8d33d66980339fb7bd2d3d9145bae0f04191e6671df39868aea427"
+      },
+      {
+        "file": "grep-1~3.0-7-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "ffa35ecbdb81cf800a6083be6a7bfbbfbf3fe482510a65869698e0405390583d"
+      },
+      {
+        "file": "gzip-1.15-1-x86_64.pkg.tar.zst",
+        "size": 95115,
+        "sha256": "3f967c87cf041391d0d43819c91174742917ccc2d1bb9419050df29ef22f4bfd"
+      },
+      {
+        "file": "gzip-1.15-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "cf5c405ee596d78ab067e432e823ea6dbfc120d5e72ebf2f799fc654f0940433"
+      },
+      {
+        "file": "heimdal-7.8.0-7-x86_64.pkg.tar.zst",
+        "size": 552333,
+        "sha256": "c1e9dc49b6eaffd145abd73c8b516acca89eac64fa90031e116ac93c3b493a1e"
+      },
+      {
+        "file": "heimdal-7.8.0-7-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "11de851c464651f2431058f89d524e1d1e0557ebfbe12e85d3b23510095f60e5"
+      },
+      {
+        "file": "heimdal-libs-7.8.0-7-x86_64.pkg.tar.zst",
+        "size": 861182,
+        "sha256": "badbf9d464fe8498668451b8d53cf84c7ec3bd0e7bcc0ea158bf6339a30a2416"
+      },
+      {
+        "file": "heimdal-libs-7.8.0-7-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "5cea0da866e72c5cf6ce59d137dd63c6fd3b0012a4181f861aba2fc6cb789ed9"
+      },
+      {
+        "file": "inetutils-2.8-1-x86_64.pkg.tar.zst",
+        "size": 229914,
+        "sha256": "b0a00adbdc549b54292db23530caf58bb0f150fc39359b99d074d6dee9aed677"
+      },
+      {
+        "file": "inetutils-2.8-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "5e216f010f583ed8792416f6c277b06ecded8ef5f1010f87ffb46413d4f4abce"
+      },
+      {
+        "file": "info-7.2-3-x86_64.pkg.tar.zst",
+        "size": 189742,
+        "sha256": "69242603357aa7011356f7d15a2017ad086e5682c8577f13520943c94bd2b03e"
+      },
+      {
+        "file": "info-7.2-3-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "3d009bb77efd7b553898f73b21f4325188111e0f1b66397a0a57c4b283513ffd"
+      },
+      {
+        "file": "less-710-1-x86_64.pkg.tar.zst",
+        "size": 156690,
+        "sha256": "894a643ecd01861490e5767873d67b55cd5a2faf2c77b0b24a62dbba7bd038fd"
+      },
+      {
+        "file": "less-710-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "69792283a40f680a34d0bf4fd346876f4679eb4b6ab552fa85f177c6a6c4556a"
+      },
+      {
+        "file": "libargp-20260115-1-x86_64.pkg.tar.zst",
+        "size": 40238,
+        "sha256": "34ff307975c269d552045bab47019551d0e643d5c129e6080d1e26140d35735d"
+      },
+      {
+        "file": "libargp-20260115-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "e96f57cad76c80f3e0d2ef4d98c7f037da6bd2baefae3628feb0845705ed1489"
+      },
+      {
+        "file": "libasprintf-0.22.5-1-x86_64.pkg.tar.zst",
+        "size": 5553,
+        "sha256": "fdd59ae72d355ae1c5615f12429493611782f3e38bf1f7ca9ca83b61fcfb6c26"
+      },
+      {
+        "file": "libasprintf-0.22.5-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "57f2c559f8521d0aae13bb14a180edf388c974f7240ad6cad141f3d9898474e2"
+      },
+      {
+        "file": "libassuan-3.0.2-1-x86_64.pkg.tar.zst",
+        "size": 99262,
+        "sha256": "f6414e08f432e2fb130b23deb3c5c99f68c1f09768599f634c6138db50d1823f"
+      },
+      {
+        "file": "libassuan-3.0.2-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "80eca1860dd981d2a9a32a40dcea8b2bf34abe1a8df931e4dc41d47300abf2c2"
+      },
+      {
+        "file": "libbz2-1.0.8-4-x86_64.pkg.tar.zst",
+        "size": 30786,
+        "sha256": "89fb0e1478b22b80effda55ab4ae7549388d01245d3841a096d8a2d63236c2a1"
+      },
+      {
+        "file": "libbz2-1.0.8-4-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "8d2642418c1db5f80efdb272196b201ef117292db0f0280dadedd4701763a4f3"
+      },
+      {
+        "file": "libcbor-0.14.0-2-x86_64.pkg.tar.zst",
+        "size": 23152,
+        "sha256": "a661826edc2d452f8d74bae2cd5974dfbcd84e23bfbfa7ea3db38ee010d7b004"
+      },
+      {
+        "file": "libcbor-0.14.0-2-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "aa81966a4929ac9b1f4e34c0566090236e65bfbaee4c5a931e85b8e5e797bd4a"
+      },
+      {
+        "file": "libcurl-8.23.0-1-x86_64.pkg.tar.zst",
+        "size": 398836,
+        "sha256": "3034aae7fb58e129c7af62a7e7d2ae12e0a3475a5310d7fdad38fe9a3c672c9d"
+      },
+      {
+        "file": "libcurl-8.23.0-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "8704955f1f938e469adb38b8e570607d5d808f18b200aac2233143a5a4a8447b"
+      },
+      {
+        "file": "libdb-6.2.32-6-x86_64.pkg.tar.zst",
+        "size": 831918,
+        "sha256": "27a35786f3aab14e625c02df7bcd8a9dda0da782ce4f0549a427a21316b4d179"
+      },
+      {
+        "file": "libdb-6.2.32-6-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "1f0efaa8e2c0065af9e9fa8bdd8ae990ad414f121e67cb7b7e57fb8e46016294"
+      },
+      {
+        "file": "libedit-20240808_3.1-1-x86_64.pkg.tar.zst",
+        "size": 94059,
+        "sha256": "aada8ba7dfe41fdcac28d3706c0dc7c621b7667035a5e629cb5f3af7fb3f7de0"
+      },
+      {
+        "file": "libedit-20240808_3.1-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "cea62afb5546b9dc5d95e134ab4ce9db868e541b8b2b9516d8cee99276882413"
+      },
+      {
+        "file": "libexpat-2.9.0-1-x86_64.pkg.tar.zst",
+        "size": 64459,
+        "sha256": "3021e1119cbe6a384977914c1dc099a98ce861505cc07229a842e8e1253597e5"
+      },
+      {
+        "file": "libexpat-2.9.0-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "97f10dfe97a5a4f1b2d246e888527f8784acd7a4991f198b934113724f39c249"
+      },
+      {
+        "file": "libffi-3.8.0-1-x86_64.pkg.tar.zst",
+        "size": 37793,
+        "sha256": "e0a21ae5ee3f0ce1ff3f446ea2c95ad462803081014aecfa8fc1cd22bc4df187"
+      },
+      {
+        "file": "libffi-3.8.0-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "dd707edd30ab2fcd7861d04d935f9c33e8b1e07e67f52b4b8022d16ceaac4340"
+      },
+      {
+        "file": "libfido2-1.17.0-1-x86_64.pkg.tar.zst",
+        "size": 84734,
+        "sha256": "30794db36fa21af67c7126a221e2cb95b177be08845bb38720a8c9f28c39cdbb"
+      },
+      {
+        "file": "libfido2-1.17.0-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "a423daadd68eb7720a053bbc2f1df0b0e41d8277549a678ceeb08688d9191ed9"
+      },
+      {
+        "file": "libgcrypt-1.12.4-1-x86_64.pkg.tar.zst",
+        "size": 566930,
+        "sha256": "640aafc35d064279de3529679feccecced41267923f4e6b77e3b3dbe8614aa88"
+      },
+      {
+        "file": "libgcrypt-1.12.4-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "69c0c25a69c7c581656b17e5eb5d03ab1a903f3a5cd00632d463c675835a180f"
+      },
+      {
+        "file": "libgdbm-1.26-1-x86_64.pkg.tar.zst",
+        "size": 32345,
+        "sha256": "bb4b08b720dd3194db010589812e9c63bec3d29b32545e7cbd07b6443e51c5ed"
+      },
+      {
+        "file": "libgdbm-1.26-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "b5806f722fc62740275ab0ed60d6cd2fbecd4f062597250c785634201df333b9"
+      },
+      {
+        "file": "libgettextpo-0.22.5-1-x86_64.pkg.tar.zst",
+        "size": 128573,
+        "sha256": "a9f3ef6b3712e20f0dc6eecaf8c2ec6aff5f259b2dbe87422a0aaca7b27c98d5"
+      },
+      {
+        "file": "libgettextpo-0.22.5-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "4c37a6483148ec0e3c7fe0e6b73109be0a6d82ef9069ea92c63e22438e00783f"
+      },
+      {
+        "file": "libgnutls-3.8.13-2-x86_64.pkg.tar.zst",
+        "size": 1499887,
+        "sha256": "144a34bda1456dfbc0ca83ce8ed1ce49e89d750987ef096ab4083676dbcb373e"
+      },
+      {
+        "file": "libgnutls-3.8.13-2-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "93747b5872434917969136798bada84bdc41c712241d38342d17ab6ded7f20da"
+      },
+      {
+        "file": "libgpg-error-1.61-1-x86_64.pkg.tar.zst",
+        "size": 203007,
+        "sha256": "4c760c81be9c3875837f9b3c2a61e2c6247cbc73903e2c8696fb58df0d683e43"
+      },
+      {
+        "file": "libgpg-error-1.61-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "8deddc811dbb3c68e82293cf628a101686dcff42172a4c142fc8f82c49c26786"
+      },
+      {
+        "file": "libhogweed-4.0-1-x86_64.pkg.tar.zst",
+        "size": 183739,
+        "sha256": "1302b7e86c5c54c93bd431685ccefa89df5f1b01257c68e24f2609df953cfdc2"
+      },
+      {
+        "file": "libhogweed-4.0-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "ebc58ddd409135d14a9595cdeae51c4700ec28ec5e9297a3eecac854660cafe7"
+      },
+      {
+        "file": "libiconv-1.19-1-x86_64.pkg.tar.zst",
+        "size": 718353,
+        "sha256": "0fa55ea2a6ccf97cf8c58b24b2615815e15e16e6e4e888091c263c2c83c5313d"
+      },
+      {
+        "file": "libiconv-1.19-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "273339e4ff358e016840a7808f6cdebc119b820ada9467f49cc4396d1d406a97"
+      },
+      {
+        "file": "libidn2-2.3.8-1-x86_64.pkg.tar.zst",
+        "size": 150443,
+        "sha256": "55e0de96b893e9f67f14a4283d411fc2a45d7b59333bc16e2a9b16e5bfc9282f"
+      },
+      {
+        "file": "libidn2-2.3.8-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "0a63ede3181976c7ffe97aec1aab6dc8c52e45e550eaf1edb93e3cd777901ffb"
+      },
+      {
+        "file": "libintl-0.22.5-1-x86_64.pkg.tar.zst",
+        "size": 50537,
+        "sha256": "336d66b9d95cf9c1804958f8e260762a3e83bf158ed5981f783bc772a31073cf"
+      },
+      {
+        "file": "libintl-0.22.5-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "1adbb78dc17437af97cea7491aa1637917ec09e69d3d94a628624e2b32b4d937"
+      },
+      {
+        "file": "libksba-1.8.1-1-x86_64.pkg.tar.zst",
+        "size": 139067,
+        "sha256": "fd0e37456f563504740afab92ddbf8372471f6c0fea557dc60ec08ce8bd745ad"
+      },
+      {
+        "file": "libksba-1.8.1-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "1b111f170bb2bc09545470cac58913098a1aa1cd8af7c0bdd2d181fdc83df627"
+      },
+      {
+        "file": "liblz4-1.10.0-1-x86_64.pkg.tar.zst",
+        "size": 65386,
+        "sha256": "1cbbe51ee91bf32691aabb15bdb7c8548e8b5ef8195122ef31f10edcca6e952f"
+      },
+      {
+        "file": "liblz4-1.10.0-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "7d19164b38f93ae16af84617ac7cf5df2cb3d6ccdefd348f1015c7198e877ca1"
+      },
+      {
+        "file": "liblzma-5.8.4-1-x86_64.pkg.tar.zst",
+        "size": 90529,
+        "sha256": "4b7d61656e72a5651a797680b66186338dce4f8fbc62a637ab3b59922dd01074"
+      },
+      {
+        "file": "liblzma-5.8.4-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "5afe40d3719b0a6fa6a39b366554b567b6d72d0dcba8acfcf912a29812a0bf64"
+      },
+      {
+        "file": "libnettle-4.0-1-x86_64.pkg.tar.zst",
+        "size": 147354,
+        "sha256": "aa2a398eb5af88247f29d5de683c6d1d7411733c07cc5e6c62803e1e77337cf7"
+      },
+      {
+        "file": "libnettle-4.0-1-x86_64.pkg.tar.zst.sig",
+        "size": 565,
+        "sha256": "85fd6cf7226bca625bcbda7fc1463a0ae15eead01d1f017be8dab2d76f84495c"
+      },
+      {
+        "file": "libnghttp2-1.70.0-1-x86_64.pkg.tar.zst",
+        "size": 66251,
+        "sha256": "9b3443ff1b26a3ece9394409efca60f3ac8eee94309e5be1e6b05706f3386110"
+      },
+      {
+        "file": "libnghttp2-1.70.0-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "6ee279c9edaeafc1a4dff549029afb3e33e84c0dae70584f60ced91fbfda7126"
+      },
+      {
+        "file": "libnghttp3-1.18.0-1-x86_64.pkg.tar.zst",
+        "size": 69613,
+        "sha256": "45fdd8613fa1da08f6c0504377194497fea540ed1fec438bc557736459040669"
+      },
+      {
+        "file": "libnghttp3-1.18.0-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "73761453f9acbb9cbfd2951a4cf3dfe28673200dd444dea79264c864d610dd47"
+      },
+      {
+        "file": "libngtcp2-1.25.0-1-x86_64.pkg.tar.zst",
+        "size": 162594,
+        "sha256": "a4c389078632e64ac2b320473651e80d44c97f9fed7a746a232d95b400b14fe8"
+      },
+      {
+        "file": "libngtcp2-1.25.0-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "2d6b01f0fb3f9bb1193bd639bb36b8fe7371cec8ef423a5b05796c6808ba610e"
+      },
+      {
+        "file": "libnpth-1.8-1-x86_64.pkg.tar.zst",
+        "size": 7194,
+        "sha256": "29803ea796a2766396351d4c7786e33f7a64ebe2576968ec5dd55338eada08fb"
+      },
+      {
+        "file": "libnpth-1.8-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "e881b657c9557e965383319d97e1e4096e92cfbf9e9731a00fa7d8e35318474a"
+      },
+      {
+        "file": "libopenssl-3.6.5-1-x86_64.pkg.tar.zst",
+        "size": 2096427,
+        "sha256": "05f6cc946f0dde3aecc3632007fa1d874e40720226117b750327bc2a01846325"
+      },
+      {
+        "file": "libopenssl-3.6.5-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "a2893cb68c3c88ba266a868f16feb1863983da7e3c71b4194c5b3b1f74598dd8"
+      },
+      {
+        "file": "libp11-kit-0.26.5-1-x86_64.pkg.tar.zst",
+        "size": 254512,
+        "sha256": "62707348cea67bf4ee009dbf25548c84e9f06a76b688590bd14e76321d58e125"
+      },
+      {
+        "file": "libp11-kit-0.26.5-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "bd3cad79f7d5440d5cfee0caf720849312284054b6ff564cd58e78a907d456e8"
+      },
+      {
+        "file": "libpcre-8.45-5-x86_64.pkg.tar.zst",
+        "size": 96135,
+        "sha256": "b4dc2eb7795cbacaa683101d720fa67f536262497a1d89934a58f5dab8d17d17"
+      },
+      {
+        "file": "libpcre-8.45-5-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "76c4c41d12e380e6cdf1e6e0242c64b53a5dfdfb0d946ca98b4af99f2df14990"
+      },
+      {
+        "file": "libpcre2_8-10.49-1-x86_64.pkg.tar.zst",
+        "size": 151223,
+        "sha256": "2de42bf4656e3952a72809663e85899be76c7020e016687055ac0acd05145a3b"
+      },
+      {
+        "file": "libpcre2_8-10.49-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "07c4ccadfec964194ff8634e3b1554f149a7d192eca13f28e17f35d220c0aa6f"
+      },
+      {
+        "file": "libpsl-0.23.2-1-x86_64.pkg.tar.zst",
+        "size": 72764,
+        "sha256": "749014f86a1ae5f5a5adccec518e0296a03a838db9874aa9803dffaa8d30abc8"
+      },
+      {
+        "file": "libpsl-0.23.2-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "b9877ec2a6aed59c45742d3aafb342470feb0efe2f47963416326644c42135bd"
+      },
+      {
+        "file": "libreadline-8.3.006-1-x86_64.pkg.tar.zst",
+        "size": 388090,
+        "sha256": "29e25c50bf6cd7a5e6f2253af76f54fe3c1a915313c7c18e98bedaa665c6adea"
+      },
+      {
+        "file": "libreadline-8.3.006-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "5ed1ce5972f4f6ea69d4581883ded3b0379687992d97adc5a50b300ace280561"
+      },
+      {
+        "file": "libsqlite-3.54.0-1-x86_64.pkg.tar.zst",
+        "size": 765782,
+        "sha256": "089e17fe8647da22b790dc2d5629d56cf53b5da5685d6555cb172400f32fe70f"
+      },
+      {
+        "file": "libsqlite-3.54.0-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "dff984eaa06e36f6953a8fbbc375f4cb5c077f620fbb99c358e388d3b44e5d76"
+      },
+      {
+        "file": "libssh2-1.11.1-1-x86_64.pkg.tar.zst",
+        "size": 230653,
+        "sha256": "f79883af85a2bb4778e1352c0b7ea27737a05e4110ef14461f0a842a40ff893d"
+      },
+      {
+        "file": "libssh2-1.11.1-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "8190b424b591b1ed71fba0c7e9853e71c023fd5c665071a3a315acb4bd1533c6"
+      },
+      {
+        "file": "libtasn1-4.21.0-1-x86_64.pkg.tar.zst",
+        "size": 100727,
+        "sha256": "14f15c4b2b6ebeb6bfcf060cab27a32cd8967f70b0e68cc14670062cce546f04"
+      },
+      {
+        "file": "libtasn1-4.21.0-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "ae7d5d10f0d524153dfe8bdb106ba1e0b397bf9e1d22d16fcba806e67df41e15"
+      },
+      {
+        "file": "libunistring-1.4.2-1-x86_64.pkg.tar.zst",
+        "size": 772641,
+        "sha256": "bcd04706d95b5e7127d39834565bceed6b400192f5fb51599745aba28d5da018"
+      },
+      {
+        "file": "libunistring-1.4.2-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "e42366a37f23d640892962d99378c16544c3444e7ac76a4ab8011d6fdc78d6f0"
+      },
+      {
+        "file": "libutil-linux-2.40.2-2-x86_64.pkg.tar.zst",
+        "size": 308527,
+        "sha256": "148ec8e668cb0a30ea0c4e2687e16e0953d6628305598f4c3225bedf2564192d"
+      },
+      {
+        "file": "libutil-linux-2.40.2-2-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "300dce2e36f58f14a860a478b4594a765fa955711ba07b4d0c150c91dbbe592d"
+      },
+      {
+        "file": "libxcrypt-4.5.2-1-x86_64.pkg.tar.zst",
+        "size": 87371,
+        "sha256": "e63db0aa2b708359e25f61f506e2d2c92c315febf5f88cc9f386e4ec0bdf4fa5"
+      },
+      {
+        "file": "libxcrypt-4.5.2-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "d2dda19a9fa14dc5c1cba7a41a9b47fedcdfd798fc52e3b530934146c96a6d91"
+      },
+      {
+        "file": "libzstd-1.5.7-1-x86_64.pkg.tar.zst",
+        "size": 399681,
+        "sha256": "5e370b2e725a0a7e5ff58d84653c9a0cd5a10b9cfe930f2d949a28ad2a11c1f2"
+      },
+      {
+        "file": "libzstd-1.5.7-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "fa9200763ed912254353ea15b36342824881d6e8f91558f3793168b576192d6a"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-adobe-source-code-pro-fonts-2.042u+1.062i+1.026vf-1-any.pkg.tar.zst",
+        "size": 990276,
+        "sha256": "711d2e809be6a35ada61cb7fcd57b9605ad1b95e3bd591638c4932059847bc4b"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-adobe-source-code-pro-fonts-2.042u+1.062i+1.026vf-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "daa7e2d01e031d78a0e659e0d2d1e2341284b6fcf18084f89c2b824a6efaef75"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-adwaita-icon-theme-51.0-1-any.pkg.tar.zst",
+        "size": 1828217,
+        "sha256": "27323f39c04761d94b882ad012dd4a78eccc0efe4e0d8d5a28786a5eec6bdc4c"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-adwaita-icon-theme-51.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "323fb1b48352beaf53428f060fe265b75f12ee328ed9aa245567bbf986d75b0c"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-adwaita-icon-theme-legacy-46.2-1-any.pkg.tar.zst",
+        "size": 2152574,
+        "sha256": "f365c5724a7829e5cc52f131cd664f0391f996cf456bc7da6196e4cc5ce82903"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-adwaita-icon-theme-legacy-46.2-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "faa9ce570312974749fe0f1fe01a0b756f941ca2983acec24f4ffc971698260d"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-aom-3.15.2-1-any.pkg.tar.zst",
+        "size": 3802453,
+        "sha256": "e81f01d419f262e31275771fad18f93617f7b321deeb416e5ac39d70f295b286"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-aom-3.15.2-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "c1b149ad2ac8a3eb5b9dd7933ab72372f8a5ac86e025d1f648a2ed796d6f9d06"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-binutils-2.47-4-any.pkg.tar.zst",
+        "size": 6625838,
+        "sha256": "c18a40b871bfddb5da030f015003479ca85625afde1cb89f7313945e6151397d"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-binutils-2.47-4-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "36326260428a8567fcb936b3c3fa80c6cd5e59083c8a34f9464718b5b0f586dd"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-brotli-1.2.0-1-any.pkg.tar.zst",
+        "size": 453708,
+        "sha256": "9cc89665496ea504751476eafba15c71c554aaf3004babc2004f7c07ffd60514"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-brotli-1.2.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "7240b29d455849753ee40a1922c46150737ae423e889296a00e8fc3a89fbec5b"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-bzip2-1.0.8-4-any.pkg.tar.zst",
+        "size": 94396,
+        "sha256": "f03a2174034ddd2d96cecd34f617c5f8e2ef86c812b8d2bb3b8875257f2c8bfa"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-bzip2-1.0.8-4-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "fa2198d8b839edad658a38a364a90036439ccade817f450085be2a65c0f7fe5b"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-c-ares-1.34.9-1-any.pkg.tar.zst",
+        "size": 325022,
+        "sha256": "a95c349e1a838a825d4c6723c0fc497ae62d7ca9fe68b517552fd80afa5cd5f1"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-c-ares-1.34.9-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "8c62252c9d9ce0739bb351e753886e6d7b07f3029d55cdd084596a1599e28019"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-ca-certificates-20260816-3-any.pkg.tar.zst",
+        "size": 399948,
+        "sha256": "037d3bf0b4eb004e2b3586baa29e526db70013dfe3118a2a86748acb46ee07b4"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-ca-certificates-20260816-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "8d2d70ee2af05b9b8125ed9a82d08a9a54cd7c3c0b52b228c25f92a4369866b4"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-cairo-1.18.6-2-any.pkg.tar.zst",
+        "size": 893167,
+        "sha256": "021c0a4d1df463d08d0cac170818a7cbaccaa5b09ac6edc7948e461cb5a46e85"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-cairo-1.18.6-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "7d819e788912a957685f02a7fc7c44779e3d1e162b4d238ecde06e8b351e7f61"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-cantarell-fonts-0.311-1-any.pkg.tar.zst",
+        "size": 112761,
+        "sha256": "3fb8c646b67b2838f2ae306f02b06b1d909fdf69fb0ae6796e7813570aad219f"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-cantarell-fonts-0.311-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "bb1be4098e39671fee5f18f96e45ef3930b23c20c94464f390bdb2e73a69ee7b"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-cc-libs-16.2.0-6-any.pkg.tar.zst",
+        "size": 2343,
+        "sha256": "d8fff9e62443168bcda8ce746697243519c4f090ea607357ce94feac0bd10a50"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-cc-libs-16.2.0-6-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "7a166a9b5ecc5cee55f113637abf554686cfa6cc796d2b462758c98bdb6a1e97"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-chromaprint-1.6.2-1-any.pkg.tar.zst",
+        "size": 74911,
+        "sha256": "0f68fbfe6621a9681aca96ad1d3a75acfafd2bde9dbd13966205f6c5f90bbd81"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-chromaprint-1.6.2-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "e7576689764c6b78f3ed269304b701c5fbd7e52e329c8e7bc3b42751f08179d3"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-crt-14.0.0.r495.g63ebe6cdb-1-any.pkg.tar.zst",
+        "size": 4067902,
+        "sha256": "5975fa56060f1d428d2369b6be70b1e63c0512c63031c2bae722b45610d1c1ea"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-crt-14.0.0.r495.g63ebe6cdb-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "14059f2fc1896fa227c8c29648f4992ef0e0c0d224a40922fcaf80073fac8f0c"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-crypto++-8.9.0-2-any.pkg.tar.zst",
+        "size": 3055114,
+        "sha256": "34a524d2956926791a88f8fed87a0513dd2097c06325a111b241e9dc6da28193"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-crypto++-8.9.0-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "800e0b1d6557e5cd8627dc5b80c467863b7cd45cd446e2a1f645f0f57138389b"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-curl-8.23.0-1-any.pkg.tar.zst",
+        "size": 1787789,
+        "sha256": "cb1b4e7c0aa8e6e39ac88af83f083d36fb9ea4c50377e795fdb7c3e97ac9fda5"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-curl-8.23.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "0877ea76d4d6e7906b0499aa7ac30383c2d8378f99aaec65cb126f48219b6c65"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-dav1d-1.5.4-1-any.pkg.tar.zst",
+        "size": 903148,
+        "sha256": "ccf26c6f29fd36f5692d57fd5e0fe3becec492e0b875fd5e04f47a9582eb8b37"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-dav1d-1.5.4-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "b3579c2e73c0f8873c71248dc928f840092907f9f0a3b16509a2d772c5cef8be"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-directx-headers-1~1.619.5-1-any.pkg.tar.zst",
+        "size": 305622,
+        "sha256": "e3524c39e8b0ead83f336e67b7b1b520fdcb801c6eb9c6134cbdbd196d67deb8"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-directx-headers-1~1.619.5-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "5190d6674998e85a625ab17b6538bf9b4ca408b765b13a7e3fe6c0324297893d"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-directxmath-3.20.b-1-any.pkg.tar.zst",
+        "size": 113235,
+        "sha256": "c01486e96a024a7366d3ceadf5b8b8263d50c7d7a02343abdd43c47200cd223e"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-directxmath-3.20.b-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "2024b7d8bad3e033ac8dd6e4f1589d52b122f5b4b499d25ee54a1f3d612fcb30"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-djvulibre-3.5.30-1-any.pkg.tar.zst",
+        "size": 2025904,
+        "sha256": "12cf80ecbc195620348276b4ecc5267ec4ba85c92e5703cb5f34c7324fcc2257"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-djvulibre-3.5.30-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "ff46696f915b11768e4e86a6bf3a903aa50389dff07ce65d1ead8ad6cd181756"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-duktape-2.7.0-2-any.pkg.tar.zst",
+        "size": 244180,
+        "sha256": "9321075fef48d29f32aab10df3b70b7e8407a01c702d01b7f4498b4d1c1fcf57"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-duktape-2.7.0-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "bc5941b0c30cf9f6aed2c36b6fc60877b5bbbc6a835388444bfe1a3c2b4f638e"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-egl-headers-1.5.r284.3ae2b7c-1-any.pkg.tar.zst",
+        "size": 17478,
+        "sha256": "29743159048cf216f75d0dc3eb3e0a04a07515db17d839803e54b060f5aeb0b3"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-egl-headers-1.5.r284.3ae2b7c-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "dfd9b5634ef53ce78581f430fc5792c50cb426c6afade6faa365fe7660dedc52"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-expat-2.9.0-1-any.pkg.tar.zst",
+        "size": 197375,
+        "sha256": "f52364dc874009316e1ee1fe46ee89784594b80d10cbcc1cc856945d575308e0"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-expat-2.9.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "48e42dee021f3f5f4c7f727277282d4a9f477223928dd9d136966433a6d4a27a"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-faac-2.1-1-any.pkg.tar.zst",
+        "size": 157363,
+        "sha256": "e80c28bce12df1fa08d64c33e2067d34c556ba8c8c6b772348e2f3fcab914401"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-faac-2.1-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "c7b564b90da2bc94afd21f798c6643124fa3677856f773391935e18ced040784"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-faad2-2.11.4-1-any.pkg.tar.zst",
+        "size": 282335,
+        "sha256": "d8a333d37338044935ae2a3d9d91a2bc274592026bd2f66d621a589db8541b28"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-faad2-2.11.4-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "5f14ad11cbc91f107652b1c2f6f4eca68bee42c2079326bb4c779c73f22de42d"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-fdk-aac-2.0.3-1-any.pkg.tar.zst",
+        "size": 867642,
+        "sha256": "e08846148086d898d4affa0303a3fcccd0dc97017487017e4cb18dab95a10150"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-fdk-aac-2.0.3-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "077d7c14551ed5a051c837f4341779a9750ffbec9ac6855796fba9e7c1235c61"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-ffmpeg-9.0.2-1-any.pkg.tar.zst",
+        "size": 25264862,
+        "sha256": "fa38d677cc6373180d9650e675c503d28fb6e60b99eb630a97866051afa953b2"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-ffmpeg-9.0.2-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "c3b39c93a089fccc86c4b7af32d62c2f413b4561e90bc84df2a4115edc7eae1b"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-fftw-3.3.11-2-any.pkg.tar.zst",
+        "size": 5123959,
+        "sha256": "8bcffc286600ae011726e9356f19ea8afba0a622427c77e89b5a09ecce252d95"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-fftw-3.3.11-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "41c5fd8ffa771cc4d9fec200ad5698d3c19ffd67e1211be2acd2de10949208c2"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-flac-1.5.0-2-any.pkg.tar.zst",
+        "size": 523215,
+        "sha256": "28e8637795bd7d80289ddbb582d6ad350b73eac64390b877149717dd3757ad79"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-flac-1.5.0-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "9c62c031304f276ed660cdcad0f26b4a069f00f7805f9f897f8df84c5a8ae31c"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-flif-0.4-2-any.pkg.tar.zst",
+        "size": 1058167,
+        "sha256": "7a2f60b3783c26a935671add33a86b76d3516985cf2125098e80deaa2ce1778e"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-flif-0.4-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "ab6c204c9383e772f473a24c8bb842495a3c6ed7eb6a79063cc5e31a82749d13"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-fluidsynth-2.6.1-1-any.pkg.tar.zst",
+        "size": 560736,
+        "sha256": "d6309a340870a50ae0fbf97a9cc6c4b71b7f5dc5d2acab5a5fcf719827d72264"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-fluidsynth-2.6.1-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "21d817e4cc257bb49a74b675cc9e89b7f6b5885c9ef7a5205ea7b64a0e46e958"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-fontconfig-2.18.3-1-any.pkg.tar.zst",
+        "size": 302429,
+        "sha256": "d0b364f3ee37e3b6f6c136688ce8fa909bb6d8a69df7e08de1aa40870d9e1d60"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-fontconfig-2.18.3-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "65beeeb8fd936b47479c3958694738ff96a9a734dae5566c1a366e1e46f831e8"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-freetype-2.15.0-1-any.pkg.tar.zst",
+        "size": 640235,
+        "sha256": "a9a691f71d1a553099c54ca666e611abfb2b4ff08dae24f2a5af72e22a7e5feb"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-freetype-2.15.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "c00b213b2151c368fdda205148b27c27288c7679ef83e2f7376dee7fe27e7e81"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-frei0r-plugins-3.6.0-1-any.pkg.tar.zst",
+        "size": 785337,
+        "sha256": "90bafc156bae4afbc70245c499bfb141eef6f3ff2845907e124e1ad9053068ef"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-frei0r-plugins-3.6.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "5b6af74772e49fbc0e0b831437bb0d89ab93eb849dcc4175854644b4ff06ab88"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-fribidi-1.0.17-1-any.pkg.tar.zst",
+        "size": 85992,
+        "sha256": "3581ee03cf83a9bb0e98bf688c4f532a29553500e317532d90746de295b0f8a8"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-fribidi-1.0.17-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "433199192c9777041368123fcd8bb30820e2f68ac9173bc21306d59d6e7784fa"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gcc-16.2.0-6-any.pkg.tar.zst",
+        "size": 48529712,
+        "sha256": "0290e91f5a9a8a3699bcea6221a899403bb9bd5d6f7dbd98c883d74e2ef36338"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gcc-16.2.0-6-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "b5222c79f95692ab08aebda10781c01e2a1816d6a500eaa3ce0edd33721a4185"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gdk-pixbuf2-2.44.8-1-any.pkg.tar.zst",
+        "size": 820387,
+        "sha256": "aacfe4bdf635b1ad5bd50ffe9b106f9256e5aee567aec37d4fabe142a0353419"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gdk-pixbuf2-2.44.8-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "af2f4fc34582805d665040e4c4c96ccb17ecebdd554260fe5fec2eb95f462102"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gettext-runtime-1.0-1-any.pkg.tar.zst",
+        "size": 417977,
+        "sha256": "ba693dda4ac375af76ce481ff3a6e7481286546cc7dc6d56c7021dae34084157"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gettext-runtime-1.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "4754e870d55cacb5e7e3707313b68edb29d2598cc7a1ee399c74715007f38c4d"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-ggml-0.27.0-1-any.pkg.tar.zst",
+        "size": 7582408,
+        "sha256": "7914f6176611b77aeaa09418012c1db28f978d5b06655eb4bc53a95ef9bd2ef9"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-ggml-0.27.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "541a33a2811e92896edbb60ee8e8c2bfb9b850be905c838fa5c4bfa5486e8547"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-giflib-6.1.3-1-any.pkg.tar.zst",
+        "size": 120903,
+        "sha256": "9e7ac8feb0e2af6e0fce3c8ead1bd7bcaf018661d08033858c1e2657a04f6f1a"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-giflib-6.1.3-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "fa9e92ba91f364a1c0f51dd0c34fd9b8f180196806986371b56ed4aef7a3ac4e"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gles-headers-3.2.r1065.7fc154c-1-any.pkg.tar.zst",
+        "size": 52298,
+        "sha256": "066007a50bd08f062b5494f2c4811a219e1a65f4ecdce2beb453f6d9d8b92098"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gles-headers-3.2.r1065.7fc154c-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "8c66615e2d9d5dfab3f86981df2146af1a8d6b76255da5df144e9524adc236ed"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-glib-networking-2.90.0-1-any.pkg.tar.zst",
+        "size": 201384,
+        "sha256": "798d4bf112cf569fbb67cc9e8ee3ef8fdbddb61dc34e13692636a387adb4cf91"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-glib-networking-2.90.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "16e95994449f08d379ce283e4497e10b69c5b542ddfadb897113586481a7792d"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-glib2-2.90.1-1-any.pkg.tar.zst",
+        "size": 5467018,
+        "sha256": "9a7826349279bcca0c935b01880d812be9de9609aef2205be68fd7a6128c1695"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-glib2-2.90.1-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "f9df54bf6b9b2d248fc1d72e1eed30c57254e41550c8dc9dd96ff7f7fb56f4eb"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-glslang-16.6.0-1-any.pkg.tar.zst",
+        "size": 2422278,
+        "sha256": "74742908b850637e4f0710cd9630f511b0def5b0f18d653cf9657197758bda82"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-glslang-16.6.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "4ae6690b811f2691b3148b1036f247195c11710e10ffe81ba41014ae36ec1ee5"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gmp-6.3.0-2-any.pkg.tar.zst",
+        "size": 592359,
+        "sha256": "e82a75968a556484a50084578238a84eb60fb93e34986fd6695c537975bd39ea"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gmp-6.3.0-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "99d2b95269ef099bdc8f3dd0e3db8a9171346e4076bfe0c0c58855d7b97220ff"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gnutls-3.8.13-3-any.pkg.tar.zst",
+        "size": 2400784,
+        "sha256": "303da3babd11f545fcac647439298e8559951ce6a1086666faf8ad2a1f708be6"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gnutls-3.8.13-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "7c954bd756006c1f618282b906f12d808fa27547447a3764e1cc5fdf680a0103"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gobject-introspection-runtime-1.86.0-4-any.pkg.tar.zst",
+        "size": 145305,
+        "sha256": "d33a35499bf5be2e9b28afcc368232e3c5d11bdb07d8832e6814e448c05da476"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gobject-introspection-runtime-1.86.0-4-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "fb62bf680de054d2b1ac55a8933fa577223cad09e543c6b479c9bbf4fbb31d20"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-graphene-1.10.8-3-any.pkg.tar.zst",
+        "size": 223025,
+        "sha256": "4ae49208acf49de84f2abbe9555c2d22f51ab52c1509f5ac8bb5ce7fcaf07d57"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-graphene-1.10.8-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "bd5fdd9bb2cd231215207f89db1348b655ef2dbdd63d6fb5bbf4d7e9cadcd269"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-graphite2-1.3.15-1-any.pkg.tar.zst",
+        "size": 152553,
+        "sha256": "34ca1f88bff10ef182a6b1c8e5622d5029f13b05748e361af13b552b422ea849"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-graphite2-1.3.15-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "c9e3dacf81d1bb2926baae8ec2ac0f3836a1681238ce5ba864d5d2ffce8921c2"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gsettings-desktop-schemas-51.0-1-any.pkg.tar.zst",
+        "size": 917248,
+        "sha256": "6ef842a0263ee34f3037fecae210ecfce93d7f17568465d54233a0f17e0c4323"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gsettings-desktop-schemas-51.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "e36465e02634df6a2f55217a47040b7c534676324772c45883f90e497939538b"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gsfonts-20200910-3-any.pkg.tar.zst",
+        "size": 1673424,
+        "sha256": "50dc35e62cdb19e4943689f7ad41f99cf25688aeaf95c9b60101f65de62300b5"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gsfonts-20200910-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "31ff0a2986c6236d541bd0ad631c62681fd8547ac7b2c70a8ca1656442cc6365"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gsm-1.0.24-1-any.pkg.tar.zst",
+        "size": 68289,
+        "sha256": "13a27cb11190c7c7c75fa9d1b227bad9044c70a2430ea87931773daca32a13b1"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gsm-1.0.24-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "394b5c971fffcd0a5d4134bafc14761a5434db9d6d906442453bbda9b06377ea"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gst-libav-1.28.8-1-any.pkg.tar.zst",
+        "size": 138372,
+        "sha256": "e0f9b4b570252b7a697c67dff03c2a99a4d90523dcaef3e36ad8a3d5bf4bbc95"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gst-libav-1.28.8-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "15cfe0b7d5a3de18061e304e2b609739663bf28cc77edde44a80d9e0a4b5954f"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gst-plugins-bad-1.28.8-2-any.pkg.tar.zst",
+        "size": 4045981,
+        "sha256": "1eab0c1e6c5cab3e2f21d5341ec735e5bfbec7261fe4af24de552dadc7c1d4a2"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gst-plugins-bad-1.28.8-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "1d2fcb99dd4750c53eda8b6ca38a48f386c7f1509e1d269579a4770e10f6f173"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gst-plugins-bad-libs-1.28.8-2-any.pkg.tar.zst",
+        "size": 1890903,
+        "sha256": "9a73034d7e01dc9397a8143cc225ffb4f0e86e0a655535e4cdf19af85739db3d"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gst-plugins-bad-libs-1.28.8-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "5835907ed52ee2332b7c116f5a08faef3b9b2f6244b73ac9a44ca7a7007a63b9"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gst-plugins-base-1.28.8-1-any.pkg.tar.zst",
+        "size": 2659126,
+        "sha256": "2c6e937a3e551eea5a139c47896517bb6fa6a00dfefcf3a0968e3175c1ba4eaf"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gst-plugins-base-1.28.8-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "fac97c716c8b85214bb03d259d9d260dac25446c4d148fe5ad73d93a5d27203a"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gst-plugins-good-1.28.8-1-any.pkg.tar.zst",
+        "size": 2206246,
+        "sha256": "258f9192bcb65dd7ee79f3298784d5355b16fcd62fb7060789a1194f8010e3a5"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gst-plugins-good-1.28.8-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "6712b1a7574ef6edbf07daeb52f6d436d4fc9427fa427b9364bc59c5034481f9"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gst-python-1.28.8-1-any.pkg.tar.zst",
+        "size": 59446,
+        "sha256": "2d8a829555997c801fb4b3c5774027f19170a6f5f220c0248844d90814e40154"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gst-python-1.28.8-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "43de0f8060da34c957ba39abd3472ffc5e5884e651da433a388bcbdac0de7d8b"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gstreamer-1.28.8-1-any.pkg.tar.zst",
+        "size": 2439792,
+        "sha256": "db13c201cbc385aebf23916b971ae0aaf4aeabb53c07f2ca232a644886b82e1b"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gstreamer-1.28.8-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "7b9ec1139f43d22ba6e2d72624e44b3ada4778ae97fb106b226deb3585db0c4e"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gtk-update-icon-cache-3.24.52-1-any.pkg.tar.zst",
+        "size": 25385,
+        "sha256": "eedfe01d226496699b95b065b3ec2a4fb3c51979b2fd649541a560d1f949ae18"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gtk-update-icon-cache-3.24.52-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "d4928225dbafc8eb0c3611a448f304074374db1a9e63efd1fd6480e795fd74ec"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gtk4-4.24.1-1-any.pkg.tar.zst",
+        "size": 12789533,
+        "sha256": "03e6fd251437d50ea8c53b90e2ece1879064fdc30d0c7675da64f1d0ce3bcde8"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-gtk4-4.24.1-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "fb5213e3ca9b34328636f0e1597e34548fd84cd6ff362b530e1b3330c26b8023"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-harfbuzz-14.6.0-1-any.pkg.tar.zst",
+        "size": 2434657,
+        "sha256": "8781d486c864bf91f482768cc5bd7267e49331636583d9f855af3974e6378e69"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-harfbuzz-14.6.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "96bc51f08625ecf972e282f84849b181399f48aa4fd9197d4533ea1839e29bd3"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-headers-14.0.0.r495.g63ebe6cdb-1-any.pkg.tar.zst",
+        "size": 6889590,
+        "sha256": "0bf27bba94f897ee61ce7fb71cec0d29398f4429f6a5f55c970bce4981e7865a"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-headers-14.0.0.r495.g63ebe6cdb-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "c71e54a8dc9e10f051d96e0fa29ce51ce35efb55c7c10200c1f5649c520c2632"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-hicolor-icon-theme-0.18-1-any.pkg.tar.zst",
+        "size": 20147,
+        "sha256": "1ef00d7c034935a479f951a36a7b0e17cfdc482765e860924061b98e6948340c"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-hicolor-icon-theme-0.18-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "174374de38b633a1b7645fa000a9d87328ea4a4f2adc467e5ec5ba226336aaa7"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-highway-1.4.0-3-any.pkg.tar.zst",
+        "size": 1578590,
+        "sha256": "4d2ed7c528c2323e1bf05921963181412b7a33eee1cde798fdd7e613f59b2ab3"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-highway-1.4.0-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "4da3758e2901647d8f95a4a704c06ef6df3d85c067b9d4da8bda2553c2b9dcd5"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-http-parser-2.9.4-3-any.pkg.tar.zst",
+        "size": 29187,
+        "sha256": "375263e3835677b4390872cd2cb280b1f0691b89f9b79c56c6b921eddc8615ce"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-http-parser-2.9.4-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "9836c1042b140d2c841fc6f4f3161eed7baeb964673c6c6c88817586b5c4309a"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-imagemagick-7.1.2.34-1-any.pkg.tar.zst",
+        "size": 3386686,
+        "sha256": "1fa7e5ca692aeeb33cf20f1559cf0212d8ad1e1a8b719d5d31cde2e230343e79"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-imagemagick-7.1.2.34-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "11b7bf5a25b9b1807b7e251ed9a61d84d3b8b780ab2677f25bf6c771aa3a4d2c"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-imath-3.2.3-3-any.pkg.tar.zst",
+        "size": 5049021,
+        "sha256": "7a2e2175d5bd126c277e1eb0a059004f8750918e7dbbd447554c7b46dca34d60"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-imath-3.2.3-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "40cb726b7ca921fc24b25323f540ce974dda7ff2f176093f4c0d0ce534c58872"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-isl-0.28-1-any.pkg.tar.zst",
+        "size": 1540719,
+        "sha256": "8594e01a253d5a72646c586cf5a1626c1b1c2be7c30060fe67abd9bebe3fe223"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-isl-0.28-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "7154a96c9936f5d00504ae012c74a82cd15f094d925e0cf1a17b7a2bf1be11a6"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-iso-codes-4.20.1-1-any.pkg.tar.zst",
+        "size": 3789895,
+        "sha256": "4e510fda4d64bcadf7d79d76f02f7080e016bf37759b0a5fe5b2e65553e49785"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-iso-codes-4.20.1-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "73a06b8b9c37e2184c5d608b75e8040d36ec7d17693ac215435152c126730318"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-jbigkit-2.1-6-any.pkg.tar.zst",
+        "size": 71553,
+        "sha256": "9e237d1041350e7436294cfa13d4bd3d1606d1f2a32ade2eb2958b4d4e79b7ad"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-jbigkit-2.1-6-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "df994765205968411c08cbe7b4013ee3635731598c477412acbeb9a3137f0eae"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-json-glib-1.10.8-2-any.pkg.tar.zst",
+        "size": 198168,
+        "sha256": "3b07443be79b7be8062f085d4453161fc71441700494a393807f76c0abda2fc6"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-json-glib-1.10.8-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "8b4dd40c3f9e7732ef892812d9c9c3f935cf1d6276149c4efdce23d37b668b20"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-kvazaar-2.3.2-1-any.pkg.tar.zst",
+        "size": 360268,
+        "sha256": "1f42ae66c7dd730a7ce8b93bd2fce4896e7b7bd46bb0d2b318c6dd55d5ae12ec"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-kvazaar-2.3.2-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "2c96378a531a1d8e7ba8fe22f17ca8d43e2474ced9476156b4fdc101951c7d82"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-lame-3.100-3-any.pkg.tar.zst",
+        "size": 350124,
+        "sha256": "6bc4bf7d2f39a941a695b228818a8c846a53c43c20117e0707e08977b0dd0da9"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-lame-3.100-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "488a08bc5df60c404f3b293ce929dfca81a7a9ea98a3f11debfd63a312d5d18e"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-lcms2-2.19.1-1-any.pkg.tar.zst",
+        "size": 400720,
+        "sha256": "144518cc80679f7bcc1d31b5dd7ec92e8737a1d8162014e30c8c1c181f47a156"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-lcms2-2.19.1-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "af755e179dc85c7aba9f83e3be1c1413af01ab59f81cbf1ede0a6d3e878eb235"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-lerc-4.1.1-1-any.pkg.tar.zst",
+        "size": 312118,
+        "sha256": "c0afbf4832488d67030c6f313349cd814946c9a7bc3ae9fd54524825c9ca055d"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-lerc-4.1.1-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "17858084c0705229216468aabad2a2d906c0087f75b0c79b72d672f665045e31"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libadwaita-1.10.0-2-any.pkg.tar.zst",
+        "size": 1407286,
+        "sha256": "1e14c2dfa753680d0b3c35fd2f8db147f06144a748d44bf5ac6e77da7efc9ebd"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libadwaita-1.10.0-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "4409b9f414c2cd27bbc05b3cf4cc6bc46a03e35cbdc32bed0d2e1edf6c62affa"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libass-0.17.5-1-any.pkg.tar.zst",
+        "size": 212411,
+        "sha256": "4385fd47a77784478878f0f03f2d9afa59a5ac71facb7cad1dfe19c555e75762"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libass-0.17.5-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "0ab1d51937777a4d49a217c3a7adebeaef593f8e42b7d5307a13e8971225da48"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libb2-0.98.1-3-any.pkg.tar.zst",
+        "size": 24592,
+        "sha256": "dfb554635119d3c46adb00c9d0c589bb38d1cb0781b10ecf31de07ce388bd0c0"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libb2-0.98.1-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "fc45f4e1186cc9be0f83faa6310e6f22424e5eb68da8f38247d8c978b0818790"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libbluray-1.5.0-1-any.pkg.tar.zst",
+        "size": 337157,
+        "sha256": "1713a92076608db29c6d67dab95da04150d671dbdddf010ed9ee90049bd2e2ed"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libbluray-1.5.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "5d931812462b53da07db87f4046dcef846f30a06e30af08a6fda3bc31f36e252"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libbs2b-3.1.0-2-any.pkg.tar.zst",
+        "size": 40335,
+        "sha256": "1d2075387741977d3de751a941fc0d8eae7cbbfe16751d1dde9313dc41885b3d"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libbs2b-3.1.0-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "d649c8d98b8dbf6758079e4d0036c314cddf1acf47b9ff802f423a8601e059ad"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libcaca-0.99.beta20-8-any.pkg.tar.zst",
+        "size": 377902,
+        "sha256": "fd2e0dd4f64179155aee7f6ef814ad1ccf460c775713025ab896e2df4769e712"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libcaca-0.99.beta20-8-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "358384c7424d59dca900b71ded106d8ec736c460bdda690929c7c94837d0b3f5"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libcue-2.3.0-1-any.pkg.tar.zst",
+        "size": 47065,
+        "sha256": "555d869359bf0d01716495bf8c85e4b8b9eabeef0d6e07b944ac0e405a0e45cc"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libcue-2.3.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "b97bcbf09a319e0aba3d1ed7498bad23ffb30af98ae2f57f1ec94f72f4cb3cbb"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libdatrie-0.2.14-1-any.pkg.tar.zst",
+        "size": 80929,
+        "sha256": "ea92777801ad325278193a362967540752ae37035016df2f6bcee2d89928a195"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libdatrie-0.2.14-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "a9b22cf2ca6b9df6353fb88066f92fa096eec726eaa66c1b3c2176f0783271c6"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libdca-0.0.7-3-any.pkg.tar.zst",
+        "size": 154230,
+        "sha256": "04cfa8da5c59c89e3c5fb4ba3e1f93d73b79c1273dc8bdf985958dc50c23aa73"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libdca-0.0.7-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "8160553d9e43dad054aedb03d061bfeade369b7225951a55a1d39e45ba386e01"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libde265-1.1.3-1-any.pkg.tar.zst",
+        "size": 496133,
+        "sha256": "2d722373ff26d4f281cbfa49e4518ee00aa5d9ccbba0e6cbde7cade50124e9fa"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libde265-1.1.3-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "59739a9ab9c616bcd082396d1596cbe0a128968ab66007595b01746235a855e5"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libdeflate-1.26-1-any.pkg.tar.zst",
+        "size": 92465,
+        "sha256": "17720c77bd01641a3554801cafd71d96fb7fff7427f4cc20ac9f36efb8cb3da0"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libdeflate-1.26-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "b6a4b90c07748817d9539fbdd8cfd0f357f1d468bac13fe843c5901a99887b9c"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libdovi-3.4.0-1-any.pkg.tar.zst",
+        "size": 2094197,
+        "sha256": "fd683eb03572f56db2cbdf0ffc2131bb93a21a0edbbda44862e3ef7eb98ebf00"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libdovi-3.4.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "94ca89519b2bb74e3e56065b0f759258876836196bef7b95532f34f9a0e5f966"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libdvdcss-1.6.0-1-any.pkg.tar.zst",
+        "size": 81698,
+        "sha256": "7f1ef10e14db4aa96976689540a6742857f3ca62192d4e7e7748d1ee4629df41"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libdvdcss-1.6.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "a245325899c32e71c517fde075066eb29c9321c01670927a89b3973344f44e6e"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libdvdnav-7.0.0-2-any.pkg.tar.zst",
+        "size": 98669,
+        "sha256": "73fe3183674ca63187c9f0b2d40c9f181213e88cb48ddaf8dc4e2a1e9cf13e3f"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libdvdnav-7.0.0-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "7f3bf108d05ecfdc3975b2b133cab0f62ee5d1816cec5355cab3976891c03101"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libdvdread-7.1.1-1-any.pkg.tar.zst",
+        "size": 139967,
+        "sha256": "416b316f562fcaea29744a559e446ea9bc490f90085bbc925bc9a9e2767cdd41"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libdvdread-7.1.1-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "77cc23da4045ce80c1a4a7e07000ba13c19aeaad7a9665f27b8627a530d3626e"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libepoxy-1.5.10-7-any.pkg.tar.zst",
+        "size": 873124,
+        "sha256": "c6c6994e8ec49071f06cc1fae475406bdf17603d4687ad0bcac2e11078cfd7c8"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libepoxy-1.5.10-7-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "79dc335c3926b29d837308a1e92b9ad99c5feefc09a65473c96ca42b2a8aea65"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libexif-0.6.26-1-any.pkg.tar.zst",
+        "size": 594333,
+        "sha256": "b1bfcb8f983fcbf7d7078e11fa92aa3a77048e94e317a407bfc6f19c7086f741"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libexif-0.6.26-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "cb41e9e1e16c8dc4a92d7cd65ed45d22507e711526ba2ceb42d17fc39766420b"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libffi-3.8.0-1-any.pkg.tar.zst",
+        "size": 51576,
+        "sha256": "99ad12f4ecfa00a889ef9c5c0188592368a5bac109d0c508ce4e04f29ea95a76"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libffi-3.8.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "a49e13cb3d5030cfcf47b3dc911f4a0937c1e2fb20ee9ec3244a8732047193a8"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libgcc-16.2.0-6-any.pkg.tar.zst",
+        "size": 77191,
+        "sha256": "80b2497f019977dd9528b1abc8621b1328a0115ab1f724047ccbb56bf323f11d"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libgcc-16.2.0-6-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "47722822a5d94a7d2e5ec9daaa02dc1f6b7f420765efaa8fd8a86bd3012788db"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libgfortran-16.2.0-6-any.pkg.tar.zst",
+        "size": 1222985,
+        "sha256": "34406a0c721e44655c3971ce131efd81652d5f6fa5381eb5700b288bc9a780ab"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libgfortran-16.2.0-6-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "82f78c9f53920dc38f647f3b34033b258b2fc913b3d1aed3227c54c1db3f9e4b"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libgit2-1.9.7-2-any.pkg.tar.zst",
+        "size": 1215886,
+        "sha256": "cab5079ccbe0a9c953f758cd95441f48669bdf17eb523a45175a8361eae16855"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libgit2-1.9.7-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "6b9a0d6f419d4d549563745e1e128bb925b5817f64862305c76f61ac88930dc2"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libgme-0.6.5-2-any.pkg.tar.zst",
+        "size": 245249,
+        "sha256": "f227b2f1beafd244a63f440677fcc6c99d2aa717f23f4443394a4b0770c4c951"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libgme-0.6.5-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "a096975aae1b166e08d09fe9a6abbd4252ccf8a7bac8aa84c4d62c81db4ba1cf"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libgomp-16.2.0-6-any.pkg.tar.zst",
+        "size": 311245,
+        "sha256": "809b95086d8d3ba145e041bb36d5756b4407d1d97c0524ef731d3b94548faa69"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libgomp-16.2.0-6-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "409cba0147544a5cdc3d4e271733951a9bb89f0f9b41589e90d2957f899517ea"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libheif-1.23.6-1-any.pkg.tar.zst",
+        "size": 1123153,
+        "sha256": "1dc60f9d1218d79ab56d3b3ce44b9bcc98e411f6e316db38acb33e9fe4ba21b9"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libheif-1.23.6-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "fb3b51a7749e7279a73c307c4a36ac8b7c37ff2ed2cfaa19b8bed5d50bee78e5"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libiconv-1.19-1-any.pkg.tar.zst",
+        "size": 744750,
+        "sha256": "9a500f38c2b91808741c62fae746b3e9110b33a1ecf5c30fa0c66dbedddf7e16"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libiconv-1.19-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "e18abd753c47dbed046cf619f0855c2bc05ae17a7f3eabba8a2e841478a4f6b2"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libidn2-2.3.8-4-any.pkg.tar.zst",
+        "size": 175129,
+        "sha256": "d5f4b5e9d99ff7b2a986d1dc0c73da2bcd93ba68462be7b1debbd6ef76371f57"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libidn2-2.3.8-4-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "46c5d4192a6494ea11a347d3e2ec265e7ff9024d309c8fe860820cb79708fd76"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libjpeg-turbo-3.2.0-1-any.pkg.tar.zst",
+        "size": 791232,
+        "sha256": "7c001d00df557cfee969ad43d37b9c31ae22869e8aac4091a89dc3ae6d95e11d"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libjpeg-turbo-3.2.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "aed8e731a0e62326023ebebe6e3830936298289d1d9e08d584b328c657aa0b44"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libjxl-0.12.0-2-any.pkg.tar.zst",
+        "size": 2649665,
+        "sha256": "4affd5d7b94f4ee1513e6fa15c9273ab28e29dab294f548c9bf52e872b40f06d"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libjxl-0.12.0-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "2b91a4aadb0b86243c82b9fa4c98a5687af380f76fcb950dbf5cd60df094cc78"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-liblc3-1.1.3-1-any.pkg.tar.zst",
+        "size": 119705,
+        "sha256": "e97b0b2f9d7b9e5452f883e01cbad504624f4fb036fe889ddd3ba6cec254c5aa"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-liblc3-1.1.3-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "0bd90677db13f5e8415458fa63fbbd77272e161ede7d04145bde0fda6afad310"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-liblqr-0.4.3-3-any.pkg.tar.zst",
+        "size": 46668,
+        "sha256": "6e1b18ca4ed41607951e45c682b05c359be6d04271d589ea75a4f8472b8dfa01"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-liblqr-0.4.3-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "77f6e14d8bc871a968c2b26ae90230d5e656d6142b47e04920c628f90b739c1f"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libltdl-2.6.2-1-any.pkg.tar.zst",
+        "size": 61477,
+        "sha256": "d769ff3399df0c83010ebc16696f0265e3f078469a5087719b235f24c8724a9e"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libltdl-2.6.2-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "59a9d9c9adb6743b4c39ab33a7ec73dcf0d8fa9c00c259ac529029e4aecc1eea"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libmicrodns-0.2.0-4-any.pkg.tar.zst",
+        "size": 43617,
+        "sha256": "8bce33dddae63187e57c942f05bc86340bd5e2fc42b4f102b9d049bbfbbb5ad1"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libmicrodns-0.2.0-4-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "322a4f7ca79b962eea60e5a9863e195242f3dd1f71b3450193738fad0512af1d"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libmodplug-0.8.9.0-5-any.pkg.tar.zst",
+        "size": 250695,
+        "sha256": "7bac0ddfde760dbcee6e07ea0e8b32cd560f53deec11edfa5391337ccc6158b5"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libmodplug-0.8.9.0-5-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "4589e75f38914c79bb349319566acd6099b276eb7a5fc8ee55962e9e49b12f98"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libmpcdec-1~0.1+r475-2-any.pkg.tar.zst",
+        "size": 195612,
+        "sha256": "284fcab68d3eeb2f9383c5a54f99bc5839f91bb66cf08f4303cf07a6d5aa2c73"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libmpcdec-1~0.1+r475-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "c0c80a6210eb861e419c93753709f33123c19da72d5ae0fdbd7d278461859a20"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libmpeg2-0.5.1-2-any.pkg.tar.zst",
+        "size": 143905,
+        "sha256": "8aeacbf87c7e8430d50d4dd9cadeca41651908d7edd3419dd596de8c4d11a46a"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libmpeg2-0.5.1-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "e2e65aa3b41cdbb28d49ab21756a1aff0c6f997f8911f1730707fa41a44599c0"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libmysofa-1.3.5-1-any.pkg.tar.zst",
+        "size": 1203638,
+        "sha256": "ff8ff472d14376194fcf57d51adb56033c30d6d0b81824e193b03b8a4b105bdd"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libmysofa-1.3.5-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "22d9e7657a219a6806eaf5fdf2b55e5b840e97800d2a2ef01529c0e74cd769f1"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libnice-0.1.24-1-any.pkg.tar.zst",
+        "size": 258360,
+        "sha256": "081b7c4efd7b413c458ab9e476eff7dfd10800fbcb70ca04c5b16a0da58c06db"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libnice-0.1.24-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "c3bb1d58a63366f8bf01f8f4137f91aab2a5aaf043b2fdbecbdca926ec97db19"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libogg-1.3.6-1-any.pkg.tar.zst",
+        "size": 216262,
+        "sha256": "110a34239e8f122da15e041b2601e2f3c6d4c909d738bdf978700601e0f64449"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libogg-1.3.6-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "d4447438bfc3f77f63745a9ba0956df724485add0f04d57481d35f835ff3ead5"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libopenmpt-0.8.9-1-any.pkg.tar.zst",
+        "size": 2045219,
+        "sha256": "be5de5a8abdc9a95a74a859d1f66651d32b876854a8620751a1f69dc9e29a513"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libopenmpt-0.8.9-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "a79eca1114d028a7cd1adf4f98a7a765065c5f926dd0124b163a27b78a9a4aab"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libplacebo-7.360.1-2-any.pkg.tar.zst",
+        "size": 759948,
+        "sha256": "ef183923c29475320d75a3b06fff5729172fcfdcefc45b660ed28c41107d4de4"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libplacebo-7.360.1-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "4dd5d2b984fa4583d97ac716003a5f310caaa2f9025a89863c6583ffee106c91"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libpng-1.6.59-1-any.pkg.tar.zst",
+        "size": 402222,
+        "sha256": "7f8448e06eceba8f8ce130390addea49f767bdf8f6b7e7eede8ca6d595e3d3a8"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libpng-1.6.59-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "72a1476dbfdcb07dff8ca0e58b770c39eeba55f0391912dec1985a9c47cfcb53"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libproxy-0.5.12-1-any.pkg.tar.zst",
+        "size": 259089,
+        "sha256": "ebf80a4c84bfeed53c023bbdda4fb514c84b9e433baf3ba6e976de59dea1df74"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libproxy-0.5.12-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "dc8c3ca760756f6385d601c74816e7ce138134ecf1522166ccd86d1cf8d3a2e7"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libpsl-0.21.5-3-any.pkg.tar.zst",
+        "size": 95717,
+        "sha256": "d96e0bb50ac3f8b6e44a39ea8de8d186f7b08f6938b0676eb69a7ba1f127bcf4"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libpsl-0.21.5-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "96c1b37b792714e6d4b3a8981b49c851b1f0a47227603eca1e63c7d3e971241b"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libquadmath-16.2.0-6-any.pkg.tar.zst",
+        "size": 179374,
+        "sha256": "7b553c0b6dd9cf2f676c0c6812aa359495940dbdd7347f47be1dbd75d29cd611"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libquadmath-16.2.0-6-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "a675f0d12e1ee1f34edf828e966cbe3c29886700c050ca447ac7a28681f861e1"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libraqm-0.11.0-1-any.pkg.tar.zst",
+        "size": 45979,
+        "sha256": "a4b66d786fb57d291a083209197f8e324f5e88b3332e889926e64ba521c7e279"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libraqm-0.11.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "5613aba341de623a54b455e7e46131e2027aec785642059db2476226fa680a90"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libraw-0.22.2-2-any.pkg.tar.zst",
+        "size": 692451,
+        "sha256": "84e9d58a88fcf478287a994d07e467e18247e11209baff38fffcbef332a3b754"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libraw-0.22.2-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "245af9420e6e76d1a293aa0b894505820fe692a8021d683e5f31660b1fde4473"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libreplaygain-475-3-any.pkg.tar.zst",
+        "size": 15740,
+        "sha256": "9e84af96e870cf42505ea23d06a7f3827250aaceb41159428031cbc9185b55c2"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libreplaygain-475-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "b485493bd72a1e01df1b21a45ed632588c86fa01c0d99efbb14157dacf6d5ee3"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-librsvg-2.63.3-1-any.pkg.tar.zst",
+        "size": 21698573,
+        "sha256": "34fe8d7f25cbc0928eb4e03486585fffc8491be42a8944b24d72bdf0e9ad27a5"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-librsvg-2.63.3-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "330e89db871a8112b0c660334c60b0c57be006978e032b2783595d1ba6f1e5fa"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libshout-2.4.6-6-any.pkg.tar.zst",
+        "size": 137114,
+        "sha256": "21a175c3d3a7d5538015218771c6680ac2846d48c13ff194d33dac8dc921bdee"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libshout-2.4.6-6-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "26e9a53d4083cdd1bea248f10189c30bbd14dd302e7a9787dd5932bdd09666a9"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libsndfile-1.2.2-1-any.pkg.tar.zst",
+        "size": 512025,
+        "sha256": "a882301af8cb1f645c45b1dcbf9634a9bf5a92af47f0cef95a88e83d3a3f444b"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libsndfile-1.2.2-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "e27b66dce38bbeb407791fc05712c316482ed88b91a6436678c3b7f9df24f851"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libsoup3-3.8.0-1-any.pkg.tar.zst",
+        "size": 618699,
+        "sha256": "a6ff8cfc9f2572e6afe495ac3d9228655502a95b0598efa7911ef738c5f84ce4"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libsoup3-3.8.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "75007635ba3cea762c5d7a2547177e1a82c8bafd0084799970ef60d3b1d6f44f"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libsoxr-0.1.3-6-any.pkg.tar.zst",
+        "size": 189690,
+        "sha256": "29ace511f4ca8c2f58a218837478eb15b99246690849ef8e6d679cc7fc70fe69"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libsoxr-0.1.3-6-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "d9fd28b5b87592b1b7bcaefebc20c18122a0ae36c4ab88fb0eceee406d8e6a22"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libsrtp-2.8.1-1-any.pkg.tar.zst",
+        "size": 101892,
+        "sha256": "5149c58129cf93dc8369a254c47c8465782e740834e8bd5ff451bd6b392d4405"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libsrtp-2.8.1-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "7735d8be5af5f58c79982ec081b1e7867e644ad9d91ca97631957fe9cad219c2"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libssh-0.12.2-1-any.pkg.tar.zst",
+        "size": 423141,
+        "sha256": "1be494f5fad8bf1210a1eeaccdd07d3e8319f4d13cd79a9302ae196fcc96da8b"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libssh-0.12.2-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "cb731a19e41677f1d4727ef207125e8e78359860222179566d4558e8886f03e0"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libssh2-1.11.1-2-any.pkg.tar.zst",
+        "size": 317737,
+        "sha256": "0e91316dfa4979dcabbfa9e71528ec9882ece619ce549cb25312089b4754fa65"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libssh2-1.11.1-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "900621b47c451e8d4607ecbdb34b7d963a79c927a5bb9b267533bee92fe48d29"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libstdc++-16.2.0-6-any.pkg.tar.zst",
+        "size": 795910,
+        "sha256": "33c5e58a85a538cf843a8672991cce591f0231d66da3b66a57629712d64be17f"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libstdc++-16.2.0-6-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "f2855b4509de406b931fe69ddac645285824cb2330375843f504e97d0ce35848"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libsystre-1.0.2-3-any.pkg.tar.zst",
+        "size": 8603,
+        "sha256": "62f564b1395d4862db1599b77f6588c32de5c80936845751cf369b31eee1560b"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libsystre-1.0.2-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "309e932a109cf308d03005f82c91786714e222904c499c6d164d0f1456de513f"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libtasn1-4.21.0-1-any.pkg.tar.zst",
+        "size": 203077,
+        "sha256": "d098b27834c3b25142b6f5aa9a0ca5731a8e4334c232786406cb149dd8bde2ba"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libtasn1-4.21.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "9816772585dd35c1b2e272e1d868be44b4c51d82116f403b66525ef02ff79346"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libthai-0.1.30-1-any.pkg.tar.zst",
+        "size": 214246,
+        "sha256": "c90ebbca3e7b4c34f4b3ffa501ba8d00cdaf6340cff7db3c46d79d5e01ef207c"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libthai-0.1.30-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "cc81154ef4d32e216a0d82dce519639f345168a0d58009bfe95656306aea4643"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libtheora-1.2.0-1-any.pkg.tar.zst",
+        "size": 433714,
+        "sha256": "7c5d7caadc7da0b293ccb3eb8ed9d00f335fd62527a16cfd2a4fddca43d8de11"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libtheora-1.2.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "b50201a91cdd030b9120cb8ecb2af3def349cd67a54ef81f1dcfd985c917cfb2"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libtiff-4.7.2-2-any.pkg.tar.zst",
+        "size": 709209,
+        "sha256": "258e08a91e6b1703d41730ffe6080c2a40968fe90896b45716c1b41042775076"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libtiff-4.7.2-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "7e4c4128857b1eaa43a415be4e030e7e26fff4ec5cb72a3c6f1fe61e15cf246e"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libtre-0.9.0-2-any.pkg.tar.zst",
+        "size": 82227,
+        "sha256": "d50f22545c50d7c0cd584474bba83f0c7a2cd8aab1aed1ad6c1f9c6452f3c4fc"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libtre-0.9.0-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "35f28b414e9c1b0ee8c30d0736c0914a17c691317a358b3f9db62b0041bc8e9a"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libunibreak-7.0-1-any.pkg.tar.zst",
+        "size": 36294,
+        "sha256": "de657828b41248a2fd67fa6e8348402a61ef130b0444f1f006c6545c43ad86d8"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libunibreak-7.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "aba81f73266296021c63e572f0be0775b58cb443fd49554814e6d1db7f0fdbb0"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libunistring-1.4.2-1-any.pkg.tar.zst",
+        "size": 867265,
+        "sha256": "e784273da19bbdcc91cbb510b5e27c3ac021b026140734eefcce5ccbd878bd97"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libunistring-1.4.2-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "3c900f4bbd203f5cc3af9e910e1848bfcb3680ea04b89f223bbab7fb4414c38a"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libva-2.24.1-1-any.pkg.tar.zst",
+        "size": 246531,
+        "sha256": "bd3c2aabe37534f17aaa11a5d846034b56b6890767abcbfb2e8c3fd9153a1a6f"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libva-2.24.1-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "68916378f9c5cd63b7547616f669cfef180bca3716a807213b475869e75fe545"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libvorbis-1.3.7-3-any.pkg.tar.zst",
+        "size": 367465,
+        "sha256": "d013d2c7489b175299f9ea8bd9b70cf456337943b0f13e6eb470beb6c3fc251f"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libvorbis-1.3.7-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "be5db9a68a9662335e0f1f0f85f19122fc78c9376b27121c32d6d524caac5009"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libvpl-2.17.0-1-any.pkg.tar.zst",
+        "size": 378143,
+        "sha256": "ae9c80f22fa62e533fbef09d4650e1152588e905b9a42b8f7ae4a2c12c27ae77"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libvpl-2.17.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "26b025b919e99aabc7d717cf37fbb3a08cf6d1b95d68dff7848a4ee40baeeb80"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libvpx-1.17.0-1-any.pkg.tar.zst",
+        "size": 1625301,
+        "sha256": "8ff6919dbb88ea26ce28d22fd81d6f0d6e200cf56a4dd81ffc2d33124fe98024"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libvpx-1.17.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "05005f4ca63ff421a294b7635634cc3e2f6570bb428748488c427d4c93efec47"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libwebp-1.6.0-1-any.pkg.tar.zst",
+        "size": 623411,
+        "sha256": "34ff8396c403d484c8777ad49ad0fc06dfb94fadf6f14bcf84d50c45bc6fd17e"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libwebp-1.6.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "7669ea161adb081e9f3b4ff15a613dd22e6c05010287b21a0cd14ad7c68a548b"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libwinpthread-14.0.0.r495.g63ebe6cdb-2-any.pkg.tar.zst",
+        "size": 32044,
+        "sha256": "0cee80308aec93607165be8c8655c1c3884389e0c2829b022643de7988d8b1f9"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libwinpthread-14.0.0.r495.g63ebe6cdb-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "04cfc80491e87a3f6481249dfb9303d43d76e780dfe33059e8188371480e361d"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libwmf-0.2.16-1-any.pkg.tar.zst",
+        "size": 1979704,
+        "sha256": "bf2e5d857dd64c071b6fa72aa84b9694b079907c2b9482865b56d7c96a554b1e"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libwmf-0.2.16-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "f1f4b47da61e334ce6ef9501c57ba417d930debd1b6f40aeac3ae7702f0bddbf"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libx264-0.165.r3222.b35605a-3-any.pkg.tar.zst",
+        "size": 819270,
+        "sha256": "10d3817153fc05832643ebc5da9aec940b4ae2d9dadb6643ac3c282985880434"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libx264-0.165.r3222.b35605a-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "dd1d0f91a310f07c365417f91058fcc4f8a2291f3630b51ef91209c759d52716"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libxml2-2.15.4-2-any.pkg.tar.zst",
+        "size": 1003948,
+        "sha256": "1678213c8acddcee2a393477c26cafcb7a4e47c2d611638c028853b502c7d662"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-libxml2-2.15.4-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "2812eceea478ae816ee973d5ddcca41cb9b5603583f92ba477a1b796cc2b08f3"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-llama.cpp-1~0.7.0-2-any.pkg.tar.zst",
+        "size": 8266059,
+        "sha256": "997b1a1fa1efc4b741591d740461ca68ee18518a5012d8c2b08e2f764cfd03b6"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-llama.cpp-1~0.7.0-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "30829faf4cd6181a96843fe9e5bdc832a476ab3757517c1450fdf6be6144b4de"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-llvm-libs-23.1.3-1-any.pkg.tar.zst",
+        "size": 32568517,
+        "sha256": "38336a3f9f5e02634624e84ab34adf4108eedf922aaec9a9315f388aed19e77b"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-llvm-libs-23.1.3-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "3002ec4fd3e68e33eafd03cf2fba4a2fc77726fbed3be97b67e99c33a0473343"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-lzo2-2.10-3-any.pkg.tar.zst",
+        "size": 102253,
+        "sha256": "717c8065996bea51543518a0d3ab46837bf9a990c41886348bd2fa9484ea23f3"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-lzo2-2.10-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "99020bb306c18a3911489ec62f5b8ed75c97a5539712169e691e6e5707051cd6"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-mpc-1.4.1-1-any.pkg.tar.zst",
+        "size": 139585,
+        "sha256": "f06556e811c711ce91609484e31d358e4f495811ba29813bf2284a3b236d82ce"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-mpc-1.4.1-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "c6816cce004dfe57f976a60bdac037a52c7dbf29a4ee0f8085acca13b26cb5a0"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-mpdecimal-4.0.1-3-any.pkg.tar.zst",
+        "size": 158639,
+        "sha256": "abf25c3869ba5e5bc3b69fdeb6cd49b060fc1a64d0d2de10918adeae9630a68d"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-mpdecimal-4.0.1-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "57bacb0a38597c8973b6fb3592b8e7ebc6a1b7751a474f366de1337763ece710"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-mpfr-4.2.2-3-any.pkg.tar.zst",
+        "size": 553765,
+        "sha256": "6b70a275d2ec75c70aa50a236c218e6b7ee9a5ab4c6d52cb0b580267b7d200fe"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-mpfr-4.2.2-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "6eb04885039d85bbf17a932840fc54aca8b871545711347c04309dcc840e11cd"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-mpg123-1.33.7-1-any.pkg.tar.zst",
+        "size": 585485,
+        "sha256": "7d4efa8ab7682476f0b8b048658596e9b64d8115cd9706afbba0a5410792e240"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-mpg123-1.33.7-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "d9713373f162de6d9741224b87571205245342a3e59eed4a14430640912460c9"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-ncurses-6.6-4-any.pkg.tar.zst",
+        "size": 1605818,
+        "sha256": "88331fe78470ef2c5e0280652fee5e10b6dcaa35f8037725c359407f2702309c"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-ncurses-6.6-4-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "c33a9dd72c3aabe13b327231c0abad5ae530931d8e32d855771ed69095ea1f38"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-nettle-4.0-1-any.pkg.tar.zst",
+        "size": 576939,
+        "sha256": "47b49f1723ef2c75ff3042b6e463910c47cdffa3342e175b6409fb9d630e64ed"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-nettle-4.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "f81831dfc9676e3810868c70af6f0349fac650733ca7d3123a578a93b7133661"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-nghttp2-1.70.0-1-any.pkg.tar.zst",
+        "size": 204606,
+        "sha256": "39baf792ff3855c1d656514eaef648fab20de80614517fc15f57a57fa103cc20"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-nghttp2-1.70.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "b0769122a38cfa54ca812623a1e91efdeec08dbdaf110322d3c8ffcb5c7af50f"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-nghttp3-1.18.0-1-any.pkg.tar.zst",
+        "size": 140340,
+        "sha256": "06e51ea288e5fdd511c753038979772ec22ec71504dac61f912c63a6e586ba80"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-nghttp3-1.18.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "9ebbecec866228abfd7b083cc9b4eaafb4f95e66993043fe99fc7d95e0938993"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-ngtcp2-1.25.0-1-any.pkg.tar.zst",
+        "size": 315803,
+        "sha256": "cce230d80a05cd0a1ec38fa5d76c0445c9bb725c65c2136be3d23e6dc218a89e"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-ngtcp2-1.25.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "334d0050b85275587eca34ad9d16f16a2205ee20fd7406b714f71d555aea3ad1"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-openal-1.25.2-1-any.pkg.tar.zst",
+        "size": 1818095,
+        "sha256": "fc08e781610b08503b17fbb60c24a64a801938b4a28ba6838164b6e9fe2db0e3"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-openal-1.25.2-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "a46bb9e458e0fed76bc5620ca3991b8e0b9ca3a6796609f6847a957c4a769dc2"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-openblas-0.3.34-1-any.pkg.tar.zst",
+        "size": 12269481,
+        "sha256": "d9e14c9440d9aa70b6d09cdf0b8117995d181ced9c3d233ad7b62a907982add5"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-openblas-0.3.34-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "c375ffc90467642f43c45a94288013e0d2abf994e0fd9141bc62e354cc2c4b86"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-opencl-icd-2026.05.29-1-any.pkg.tar.zst",
+        "size": 85231,
+        "sha256": "4e0dab8d5cc3da24edb716d78b013c1a36fc111b06f0f286a949218665d71a98"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-opencl-icd-2026.05.29-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "d0e95232c5c977f548a75a91f7a3b3bd03b95883e66932f0f7de2d53635eb79c"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-opencore-amr-0.1.6-1-any.pkg.tar.zst",
+        "size": 174483,
+        "sha256": "65c6b5a2795ff12fd1839fa52b59785210ca1c2154fcbb73d7ea39767ea11fc4"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-opencore-amr-0.1.6-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "74f8b4c2f8222fee20397c2716a0caa91619e3809dc332d9f436500769e6d0bb"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-openexr-3.5.2-1-any.pkg.tar.zst",
+        "size": 1136190,
+        "sha256": "69b7dbca8bf026243ed8524d1c24aacb3df2fa4cac70697e689745ee8d1d18a3"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-openexr-3.5.2-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "e12cec90fbcb82bb83429af545c280218b453542ef43556db41c5c13312386e8"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-openh264-2.6.0-2-any.pkg.tar.zst",
+        "size": 570954,
+        "sha256": "45c07f6ae0cc684d9560f83eb362ec38deb89d483318b20ccf99bc490739444b"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-openh264-2.6.0-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "bbbbc8c256fcbb9b5b2e21198b23b82d15c607a774410f75b6ca78fb78efc491"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-openjpeg2-2.5.4-2-any.pkg.tar.zst",
+        "size": 454223,
+        "sha256": "2a4c148052b6f8e47abe5e98b29fd8942e2e3c17722ff00f172b1630897a10b9"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-openjpeg2-2.5.4-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "799c917eccb657a46507a230057709509483e7db0ac41f431234749b57b1610e"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-openjph-0.32.0-1-any.pkg.tar.zst",
+        "size": 371278,
+        "sha256": "5ef96678170cf69ebb553723cf9209e61ce21f85b7afe084da7797d686e98b5c"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-openjph-0.32.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "606c57b324907a6682ec8d1b53c6a3424971d26f80b873d86387c94003552e32"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-openssl-3.6.5-1-any.pkg.tar.zst",
+        "size": 8297898,
+        "sha256": "773e021ebad83f14b5c103db467411e8ff064663e1c7e7f730e2be72f4117064"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-openssl-3.6.5-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "77e1f439fbd7e0b6d8bdc372c12ec92d91f643a98393f5271b9b90692c819703"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-opus-1.6.1-2-any.pkg.tar.zst",
+        "size": 344930,
+        "sha256": "bb114bcf26225f50f874497ebfd6b8224fff2a20bda3f8ee45cd07ce5f02657b"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-opus-1.6.1-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "cc5674c685bb514a6aefc04a4ad46f509fed19fe588d0a2b50cd1f9761359c98"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-orc-0.4.44-1-any.pkg.tar.zst",
+        "size": 255963,
+        "sha256": "f333a8207fbec0178e34d6293e412015c7450e3e73dfa1627279cd922f5d622f"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-orc-0.4.44-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "5c9095128873488668f1561480be5a9cca8e45e4d5d151d73fa7a73f74aa407d"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-p11-kit-0.26.5-1-any.pkg.tar.zst",
+        "size": 648133,
+        "sha256": "6e1645f0afa669f3e3325abb891d79c58dacf0bb5f9bb1ea719d22da1d754e62"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-p11-kit-0.26.5-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "f55114289b2e0ef0dc3b4edacc70462711addb3ef33aa404c3940a3788d60035"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-pango-1.58.2-1-any.pkg.tar.zst",
+        "size": 696849,
+        "sha256": "8d86e4a018ff139b010bf357fa1c9f9030fa32ee195c54ed7e89d8ea701851c8"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-pango-1.58.2-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "f21742242711e4b617fdcec033431efdbc23b35a81e74505a9a3f1f1c397d69a"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-pcre2-10.49-1-any.pkg.tar.zst",
+        "size": 1445467,
+        "sha256": "63172179db724ac71e2439a7981134c1bcab8049bdddfd349b32b8f76ed52d1e"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-pcre2-10.49-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "929b46a140c6a9c4459f14c476a071aa2225ae4e8c7d32be80c5c14163a9ac5f"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-pixman-0.46.4-3-any.pkg.tar.zst",
+        "size": 356199,
+        "sha256": "4c01b986563d2b5f7ad6fcec2d0ec9915d2f242ddac5eacddc19971964241cc5"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-pixman-0.46.4-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "a413e642b2661d68ed9cfbd2ed95f9fce67729c6e431159fbf2174f15a1440e3"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-pkgconf-1~3.0.10-1-any.pkg.tar.zst",
+        "size": 149203,
+        "sha256": "c234b9f8280f1e931efe8e4350085f544e4a6081ffcbd2caa3e81834e72e4688"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-pkgconf-1~3.0.10-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "70641da78e2a18a7c278b206dfa2acf47794589bba7679a4d49905c44256d86c"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-portaudio-1~19.7.0-7-any.pkg.tar.zst",
+        "size": 230489,
+        "sha256": "085e0ba89a659e6f66379552f7fb736b182ecaa7caf710d611e481f557e20c38"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-portaudio-1~19.7.0-7-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "5c175476faad202dd5924845d8566a39c6b72804871d30becdff00501da2f226"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-python-3.14.8-1-any.pkg.tar.zst",
+        "size": 27765405,
+        "sha256": "d6542336430039a7cb75f107b713332887665a26a0c9c51e82d8d772c7770b5e"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-python-3.14.8-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "f7927979ff338489d7f62f45e6cb57215cb991322c4d132ee12c0b5050ebb997"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-python-cairo-1.29.2-1-any.pkg.tar.zst",
+        "size": 118287,
+        "sha256": "8eac0882871a74912fd4963ce31a8677d49af374a77ea1d39d64609c288eb139"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-python-cairo-1.29.2-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "058e726a93a3a3baab13b38af7b7bb2089ef0562524a7ae33033123fc6c289c5"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-python-gobject-3.58.1-1-any.pkg.tar.zst",
+        "size": 325581,
+        "sha256": "d638df173cb0dbcd69a229dc883813aa62cf4ab7ad9cbe1640040bc9c7891d3e"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-python-gobject-3.58.1-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "e79161d045bc982b2444672a4627be7ae8be9a09a78470c9fd9ea49803d32129"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-python-packaging-26.3-1-any.pkg.tar.zst",
+        "size": 263600,
+        "sha256": "b90d1451cfbf015a5334409bd9edf9c61bc0f7b78cac19400b0f92c9279fbaa7"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-python-packaging-26.3-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "6cdb72b9d602244e43fef6d3bc505ff056febd94899e687108ac5ce0c542333e"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-rav1e-0.8.1-1-any.pkg.tar.zst",
+        "size": 2450140,
+        "sha256": "00a03a734f96f66405ad79bae2ffb1c5cf2b050ef90a4ffa508ddbfdb64c0fb1"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-rav1e-0.8.1-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "d870db5f91a5cce69e9e022d5e51f47523c0f582a5bf70df28b20126c527e429"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-readline-8.3.003-1-any.pkg.tar.zst",
+        "size": 513820,
+        "sha256": "de2423c2e10fcd88272a0ab2f833f6a082cfe613d4c17c2f548cc50a5d2190c4"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-readline-8.3.003-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "f1c10d5c28d6837d6a86eee8db181126fb62f9f4992360bead8b94abfef285f4"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-rtmpdump-2.6-2-any.pkg.tar.zst",
+        "size": 129306,
+        "sha256": "a62df12a96f6a7c5945bd2e3c437af6c04503475e897d437e772ff153fe4acba"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-rtmpdump-2.6-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "ec5bc875917fe38f3c2172b1b24422cf8d9123d95944aae814925f7d8cbb3885"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-rust-1.99.1-1-any.pkg.tar.zst",
+        "size": 68986909,
+        "sha256": "f30b909b7e0a03d87864d54e96e5b1d5ee668848297cb943d9988538142fe9cb"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-rust-1.99.1-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "ed9506643ff92a9289c1e93e8177b13ad3f857de38af66694b350bb26f7d8c86"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-sbc-2.2-1-any.pkg.tar.zst",
+        "size": 51960,
+        "sha256": "140e402d38182b0dd59ce4fc54ffb69e61ecab88e227dda217bd673e01e625af"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-sbc-2.2-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "4e93b263963e0d275f6ce25680704728c35443bb9a3407d3dacc8ad116f8ad92"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-SDL2-2.32.10-1-any.pkg.tar.zst",
+        "size": 1551429,
+        "sha256": "9e77124b14bedaafbfb44ac26e5fb43890184db23292cebf2251b2178fad6693"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-SDL2-2.32.10-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "c05be5b0fa46396d090ee4e5fad92981d56f772c58c43aaa2da84a45b0db0e8c"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-sdl3-3.4.18-1-any.pkg.tar.zst",
+        "size": 2497713,
+        "sha256": "f9f8e2fe9858868e7653b24c973bcc8c19dea1096afc8c905bf1cd1a87960442"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-sdl3-3.4.18-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "05b18d637ae0cb986f6d57783c2f5bcb19dde6cbc4646e8cf62e6c0a45ec50bf"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-shaderc-2026.4-1-any.pkg.tar.zst",
+        "size": 3794027,
+        "sha256": "a4ad271f76acd2307ed67738770b30d6486bd3c7acff63ba83dd13e56ce9ab82"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-shaderc-2026.4-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "3d6d9fe32e1244450f058633f89a26b24b937877f72529c31c19d7c652599f57"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-shared-mime-info-2.5.1-1-any.pkg.tar.zst",
+        "size": 790995,
+        "sha256": "71da1e4032374f89e2c9fcfd8f626b5b64e6d359e53235cd9653465e88d435d6"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-shared-mime-info-2.5.1-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "cf338a74e3b92d46741bf94160d59caef05b9b3da94796e817fda02a7727aca8"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-soundtouch-2.4.1-1-any.pkg.tar.zst",
+        "size": 139483,
+        "sha256": "78c50140bf82eb9ff100241b3ef21aa5debbbdc22deeb7764e689e71b9f3a322"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-soundtouch-2.4.1-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "b75220aab393e54cdabc2e93e341590bbde7c0317ea1f418b76130142a99992b"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-spandsp-0.0.6-6-any.pkg.tar.zst",
+        "size": 579064,
+        "sha256": "ddd9cca98e7ad05e9cb83f3ca404db8eba601d20825dbbbc4605e21e8cbe430b"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-spandsp-0.0.6-6-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "006ba422ac29b1db60232741573899b1e6e42a8f67be50e8c9fd5bc542ab068c"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-speex-1.2.1-1-any.pkg.tar.zst",
+        "size": 542036,
+        "sha256": "bed78c12555879a6463a6585b01fea72746143c0e98d7015ae99b8e9bb8daba4"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-speex-1.2.1-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "ad44da0d45204f76559ca3024967c5ad4fa693252bd21110b394f1370844ff80"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-speexdsp-1.2.1-2-any.pkg.tar.zst",
+        "size": 487391,
+        "sha256": "397f3e3b7922cc7016c965ba42a67c22372ab8e0c4c144eddd26092a562acbf8"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-speexdsp-1.2.1-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "ba9c3b88936590c0d2ce8c3d3e17a0a4c0eec1bff389127b1a11259c4e55c2fc"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-spirv-cross-1~1.4.363.0-1-any.pkg.tar.zst",
+        "size": 2195633,
+        "sha256": "246759d1a8391c67a4180ad4d103a78219182ef7057d70469394fa6c40851187"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-spirv-cross-1~1.4.363.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "d508d948c05bb8757f593e6131f1c9208fdc538286c79667b6eb34bed85f663a"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-spirv-tools-3~1.4.363.0-1-any.pkg.tar.zst",
+        "size": 3435292,
+        "sha256": "d31d67fe918aeee21d1e930fd96360856a60146d23094e4ae8baf071a4049aaa"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-spirv-tools-3~1.4.363.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "2d48d6f0ffc0fd7e3c671b2d6456665337ae4ec0612bb780276278065d65a9b8"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-sqlite3-3.54.0-1-any.pkg.tar.zst",
+        "size": 2485166,
+        "sha256": "fc7100490316733bbb96d5633d305a5d6c579200c321969cfa21d5a128055e65"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-sqlite3-3.54.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "58f05a22af90033247bf26820d8290fb62bd148defaefc66cfe72540d724a900"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-srt-1.5.7-1-any.pkg.tar.zst",
+        "size": 798115,
+        "sha256": "f68cd966e8e7cba30a7884accc280fee82d508bddb0544f3c88f69872b783076"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-srt-1.5.7-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "c40c756baf1bc0d9930ba68dcdef3fc5e14146dc1900555eb647f58392d9d4fc"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-svt-av1-4.2.0-1-any.pkg.tar.zst",
+        "size": 3183302,
+        "sha256": "87c97a68bab7dd67413ea0cae024c3d2e4bdc2f96fccf38365304642b1b44ee5"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-svt-av1-4.2.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "398d528581effbf610ec4b745cadc0f4cc65980f441fe4bb2873e3b5bec42b7c"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-svt-jpeg-xs-0.9.0-1-any.pkg.tar.zst",
+        "size": 205373,
+        "sha256": "22c9c2dc49408908d93bbe98801ccbde196897e21c67a932cf1ee73ac5665e4b"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-svt-jpeg-xs-0.9.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "fcb9c9045973f8698f44f276dc807b62ed61b082c072726d756db73d05091dad"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-taglib-2.2.1-1-any.pkg.tar.zst",
+        "size": 924288,
+        "sha256": "7a3bd5f6d08bebd0f3e2ec8893324e97bbb54b02b48ef476ee613c3e8f5cc0b2"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-taglib-2.2.1-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "306922ecbaffc0c4561cbddb4a6a84f22fe61dd7f926f0af97cce78b55875abd"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-tcl-8.6.18-1-any.pkg.tar.zst",
+        "size": 2805892,
+        "sha256": "0c3a50ea5be8c5190e58a1fdc46c09f8113ad1b855745875646b7a78a02215df"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-tcl-8.6.18-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "8371e770940696421ba337a12a409e31f811a8a3503556a87969c7b42687ada6"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-termcap-1.3.1-8-any.pkg.tar.zst",
+        "size": 19274,
+        "sha256": "c7891143e252568d8d46df72b3aefea932f4166771e17f22317218d7dd2af23c"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-termcap-1.3.1-8-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "642b493fd955ff23db7c0f4ebffdddedf72f5fd36f4ff3e4a232dc39e956f888"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-tk-8.6.18-1-any.pkg.tar.zst",
+        "size": 2122449,
+        "sha256": "bfa011886032962833ddc93ae9b508798ec56625b9093cc6d0ff5c95507c79c6"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-tk-8.6.18-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "0d0ceada83de2ae3efd4cc000dae537b476648496fff9d5ae9737a3e4526dfa8"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-ttf-dejavu-2.37-4-any.pkg.tar.zst",
+        "size": 2726674,
+        "sha256": "dd9fd7bb48ceb0f0f004a4b34d6ac0d9cb4fd2d15273d88780b3cda6cab0beea"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-ttf-dejavu-2.37-4-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "5b1d8fc5c6e16ebfd23884bcfdeb8b339a6e9c7a0008149168f687225fa6b944"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-twolame-0.4.0-3-any.pkg.tar.zst",
+        "size": 122549,
+        "sha256": "e8094a54e83f34f15b779b383e33f75b65e777912479c0787dacf6d34c366c92"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-twolame-0.4.0-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "9d8f1be4874a0a60603d05b8404a29232093f36698a1656dfef02ad8bcde1687"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-tzdata-2026e-1-any.pkg.tar.zst",
+        "size": 225916,
+        "sha256": "f1809089f8ed5cec858ae8584289172896eb921be1e78ba583555f74e9015428"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-tzdata-2026e-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "82b25050da350a15380f12c17c7a42050399bc64c4e92311651d3cee69a9735c"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-vid.stab-1.1.2-1-any.pkg.tar.zst",
+        "size": 105135,
+        "sha256": "fc41ab627a97fe11dd53ccfd3feea9e0cd859f59c11aec929d13d1f84393ed06"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-vid.stab-1.1.2-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "b32c2e7bad7b598932d114594fc23ac178fcb5565aa9f8010a71636e26de50f4"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-vmaf-3.2.1-1-any.pkg.tar.zst",
+        "size": 418437,
+        "sha256": "acd1392a943eef18a7d12df142f1bfaed38f04ca239b136b9c60cfb6f4e0dac2"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-vmaf-3.2.1-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "af3252706e28f00001cf77384891db16e352d4c20598edc144bd152a3cf8e7a5"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-vo-amrwbenc-0.1.3-2-any.pkg.tar.zst",
+        "size": 97482,
+        "sha256": "731b4ebecd81d8b5738a396bc8d0fddbd435c550c77876dadf6b2ce4f1d6003a"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-vo-amrwbenc-0.1.3-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "8855c313fbc0c39f19ad6b658e858d9fa066fc47818d59699958fc14da5f74bb"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-vulkan-loader-1~1.4.363.0-1-any.pkg.tar.zst",
+        "size": 222857,
+        "sha256": "065076fe13d39ab97eea4740596426d5ae741b5044e48e1c9495d04835c92dbe"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-vulkan-loader-1~1.4.363.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "a04eb7174a3de8b3ab4607cecdee500f7b27c27c7bda847cfb5af3d3575fdc7c"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-wavpack-5.9.0-1-any.pkg.tar.zst",
+        "size": 588625,
+        "sha256": "d4edfdc44a6449e3636c150a2ebf513e779176b8173c206f0d1830e0f6c7f17d"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-wavpack-5.9.0-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "84489bb632af97a683d213100a88c50d3bbe94caab5cd3133e40c18e8c7b5c3e"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-webrtc-audio-processing-1-1.3-5-any.pkg.tar.zst",
+        "size": 514955,
+        "sha256": "30329953ef1227be165f29e1246c771ef5286dae229fce31d375c80c65259568"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-webrtc-audio-processing-1-1.3-5-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "aba3213a2e39b97705015fb5dcda4dcfb0ae36fd82cbaa063545b96a81afccaa"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-whisper.cpp-1~1.9.5.r2.g0c7be6963-1-any.pkg.tar.zst",
+        "size": 1187229,
+        "sha256": "f76b90d88fa57caa5f956c8976302a415c613dbc87d2fefc7c9f2c06920a1716"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-whisper.cpp-1~1.9.5.r2.g0c7be6963-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "e23fa6aba297ed7d45f4d58ec1e647221189d56459a5f3e109e4b5f5bd64b71b"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-windows-default-manifest-20260815-1-any.pkg.tar.zst",
+        "size": 2652,
+        "sha256": "b39039f754a600cc0dec49df7d675a59a3cb2b63691d91b4ae60735ee7075eca"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-windows-default-manifest-20260815-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "e3d5eeee4fc45230c973bb8f08bd1fb3e0cd97846ffbe0a34c4ca54cc09a84fb"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-wineditline-2.208-1-any.pkg.tar.zst",
+        "size": 61123,
+        "sha256": "b07b34de1669e16cfd6743691914f5a66ad4013500bbf0e4c7a7644046ae7b1c"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-wineditline-2.208-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "cc5cf21469088fd975b540e0c66db5eb46d96d012a90998caf27dcee8d700d1f"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-winpthreads-14.0.0.r495.g63ebe6cdb-2-any.pkg.tar.zst",
+        "size": 47096,
+        "sha256": "c4619c757302e3e459b86b7d45efb0043d7dc20172f0b761c93899c6a9179ff7"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-winpthreads-14.0.0.r495.g63ebe6cdb-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "a85f1718b23f5a3f6bb417429ab5916e76454645f5f3679fa6f83ab07000443c"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-x265-4.3-1-any.pkg.tar.zst",
+        "size": 3647877,
+        "sha256": "40dd235ba4294266ecad0eec661fae7db25dfe9df2ee9a7c3e07b0d079ae2034"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-x265-4.3-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "06fb15a83f3272b9833f44bb6201d0bf976940657ac4e1168dff7020655f7fd1"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-xvidcore-1.3.7-5-any.pkg.tar.zst",
+        "size": 332115,
+        "sha256": "4aa825b97f073dafc328e0c1f6e7d2574b42dc0c0e91eb71f908ded6926a1284"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-xvidcore-1.3.7-5-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "aba021e929ef39e68eaa4bf9d09425c08cf8bdffa3422d94aec527138f09b983"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-xz-5.8.4-1-any.pkg.tar.zst",
+        "size": 905211,
+        "sha256": "a9d771f816d8c0c5bde152ffb27a687ede91079b8e77e5b8297efa3b5a835934"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-xz-5.8.4-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "eb53b483e5b52e605082196af6649f119f0193f82de724989da39fd429ca5bd2"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-zbar-0.23.95-1-any.pkg.tar.zst",
+        "size": 239041,
+        "sha256": "a2fbdc221926477dce95382f0ba3750ad44851332e99eb928c8e2f73f1d81425"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-zbar-0.23.95-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "c53e5f0abf0527941276296797fab6572c9bb9a538a6cdec1186fb27e83bb1ba"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-zimg-3.0.6-3-any.pkg.tar.zst",
+        "size": 359421,
+        "sha256": "add647f0b898696b7369098a0779e6df4499de20080b6888ada565ac987cef26"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-zimg-3.0.6-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "3f7a1c165e350e27d35f56650111ffeb16c10a25d867902421a7eba012db4cfb"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-zlib-1.3.2-2-any.pkg.tar.zst",
+        "size": 111475,
+        "sha256": "841401182976d2f9e17e5c0ebaac51f2a8014140ea53d67625e91c8fb3c85ea0"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-zlib-1.3.2-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "3c21e4ca62ae9544f37ad41b0910f64d60f4f0c4c4113bc5c9287ce2b6396acb"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-zstd-1.5.7-2-any.pkg.tar.zst",
+        "size": 668277,
+        "sha256": "dbdb8427280046a2b41697780aa4c52983b708082b0da4755951dc3bea96ca89"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-zstd-1.5.7-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "97b4fe48e37ed32bc8a952c01737b6263dceb5a9c2c6f6b3a2def8e22f4e8b35"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-zvbi-0.2.45-1-any.pkg.tar.zst",
+        "size": 326330,
+        "sha256": "6cba0f25da5baacb7bcc88c7a1dcb66f66bf2a127a1144ce301df3881c1edcce"
+      },
+      {
+        "file": "mingw-w64-ucrt-x86_64-zvbi-0.2.45-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "85ffd087de7e3231d846679dffd6e80467e6dc95728c4938d9cb14632241f399"
+      },
+      {
+        "file": "mintty-1~3.8.3-1-x86_64.pkg.tar.zst",
+        "size": 1361640,
+        "sha256": "a6b74c4beb29e4298b4d253baebfc38b1c67811f2259ab980e17dbaa5a76ac6e"
+      },
+      {
+        "file": "mintty-1~3.8.3-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "fc863054c35190c59649ee46865108f70de3ca52d02315d5753caf3476039c88"
+      },
+      {
+        "file": "mpfr-4.2.2-1-x86_64.pkg.tar.zst",
+        "size": 395839,
+        "sha256": "8f1b6c17c53e00494a488e03dfdf8fc742027ed03a5bd7b1b3a6a33f595a7498"
+      },
+      {
+        "file": "mpfr-4.2.2-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "8c9a772a091365c88751e74ec280ab01435fade4dea7984676869a4d594cbeca"
+      },
+      {
+        "file": "msys.db",
+        "size": 516451,
+        "sha256": "6c432ac723100f9e8cddca40a4e1e6a4d182b4541dbe88b82dac3dc5f16a6da9"
+      },
+      {
+        "file": "msys.db.sig",
+        "size": 566,
+        "sha256": "75d0f5e3a0a301617e43e3e95803c47f7a3cc41018fa2d599b0320a426c9aebc"
+      },
+      {
+        "file": "msys2-keyring-1~20260814-1-any.pkg.tar.zst",
+        "size": 42254,
+        "sha256": "a9a02c41bc14eb0965fb23b7e7d43a1d0eb20d9e70cbfeb193fcbf68bb0dc5d0"
+      },
+      {
+        "file": "msys2-keyring-1~20260814-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "3f38969ef1141264363c591cee0a0b78de79a6d326df1e191295874a778cb604"
+      },
+      {
+        "file": "msys2-launcher-1.5-3-x86_64.pkg.tar.zst",
+        "size": 98694,
+        "sha256": "56b1170274fc33014e6d857e4e4d32a20975be0e23ed8385bb7372520118aa84"
+      },
+      {
+        "file": "msys2-launcher-1.5-3-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "b7c734cf3afb62c618738e6fa66a59e6600420135840b177e2d8fa6d4cae947a"
+      },
+      {
+        "file": "msys2-runtime-3.6.11-4-x86_64.pkg.tar.zst",
+        "size": 2068768,
+        "sha256": "7b1c4b625483ceff9a87f2dfcf3659704dc3da655a0ad414ecb7d9175e7d3ba0"
+      },
+      {
+        "file": "msys2-runtime-3.6.11-4-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "69efc5969208b7cc34818ed334768ec5d2e37a3fb66b0e722a67e7f4405ffe7a"
+      },
+      {
+        "file": "nano-9.2-1-x86_64.pkg.tar.zst",
+        "size": 688103,
+        "sha256": "0fd23077af18ab656e4a082ce0455ab16217c852f3968343e903843c204a12b2"
+      },
+      {
+        "file": "nano-9.2-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "0e25eab46b9686803563142ca525b269fdf4305e5698d0419b0a4db2701d677c"
+      },
+      {
+        "file": "ncurses-6.6-2-x86_64.pkg.tar.zst",
+        "size": 1286284,
+        "sha256": "828c92f09b17f00d3b49362fcfa4affa58e5e50e238f290ea36eb7a690da3acb"
+      },
+      {
+        "file": "ncurses-6.6-2-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "96552e3391030cd6b26a94acfdd21880e4a2865608b94bf30759c93ca6b62e08"
+      },
+      {
+        "file": "nettle-4.0-1-x86_64.pkg.tar.zst",
+        "size": 98825,
+        "sha256": "6e8809a2dc5f98dd199a3dd7c7e3783bdaf2fec1699a0c5b9eb4480ab7dd6365"
+      },
+      {
+        "file": "nettle-4.0-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "aab60ae6740212c51c57c921cab4c004360c40f12a61e19a55ce0c049696f759"
+      },
+      {
+        "file": "openssh-10.6p1-1-x86_64.pkg.tar.zst",
+        "size": 1219859,
+        "sha256": "40694d9506e733f55262c4123cf6107dd28d27457a2b320f2866cdbde454c448"
+      },
+      {
+        "file": "openssh-10.6p1-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "ff332dcbba431182356c16149beb7f82983fa244effea3f50c388acbf3cf1cec"
+      },
+      {
+        "file": "openssl-3.6.5-1-x86_64.pkg.tar.zst",
+        "size": 685267,
+        "sha256": "4dc7c1199010b26d6382c59d8b16a9dbc857d314d76d9668f0f333bc5fecdd38"
+      },
+      {
+        "file": "openssl-3.6.5-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "1f756af77e2606f23fdc479bed93d5995cc8102c910ed169cb48bb4c9a2fdce5"
+      },
+      {
+        "file": "p11-kit-0.26.5-1-x86_64.pkg.tar.zst",
+        "size": 514293,
+        "sha256": "db341cc3e91c68f5de25d9a2eda3beb752ec8ac74a89f001f60453c817ce5f51"
+      },
+      {
+        "file": "p11-kit-0.26.5-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "d8ea75713efa164627519549f908a667661063967c48f0fbb4e98733df53f20c"
+      },
+      {
+        "file": "pacman-6.1.0-25-x86_64.pkg.tar.zst",
+        "size": 5735552,
+        "sha256": "cb375279a44b37f646dbe834b440c233fddbacb97d6173e5c7d91362717c970f"
+      },
+      {
+        "file": "pacman-6.1.0-25-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "5e1ba3629ba46322ba38afe2050c72e9c8d3e08cfb59b01eeefb62cc6786cc20"
+      },
+      {
+        "file": "pacman-contrib-1.10.6-2-x86_64.pkg.tar.zst",
+        "size": 4103908,
+        "sha256": "99300a1ee81c991e78f866566b05d59d824d4774e0b5ab011d8f6b117f9ee2ae"
+      },
+      {
+        "file": "pacman-contrib-1.10.6-2-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "1fbcdd9e3963af707b1548e1318c76e6ef4f701becf4648aa126a44d942c721c"
+      },
+      {
+        "file": "pacman-mirrors-20260129-1-any.pkg.tar.zst",
+        "size": 2556,
+        "sha256": "e7f8aa620cd29c7449e5a8177d83799f7ea2a5fc7afad0ec9c11b07fa46670b6"
+      },
+      {
+        "file": "pacman-mirrors-20260129-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "4f9b80df4db2f71146ccd0ed76302c9f751c47ea4aa0f56192f1cdbc7f197c62"
+      },
+      {
+        "file": "perl-5.42.3-3-x86_64.pkg.tar.zst",
+        "size": 7532255,
+        "sha256": "6a4dbc38cdcc53d16239904b5c87d2277cffc49ed92c6a7796f8bf6b49517d5b"
+      },
+      {
+        "file": "perl-5.42.3-3-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "cdd37c7d9594ccad8c5f6efe2655d2f07ecd6b5ece90ffec777ece1d8adaf6c5"
+      },
+      {
+        "file": "perl-authen-sasl-2.2100-2-any.pkg.tar.zst",
+        "size": 42301,
+        "sha256": "98cdd396f65df318ca777de7f4166485ad7815c5000399e4aa6843f59e00e55b"
+      },
+      {
+        "file": "perl-authen-sasl-2.2100-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "0f8cdb0c566cead2926903ddc27bf7cb3c3b5dcd868dddfd14e08242a4e0c26d"
+      },
+      {
+        "file": "perl-clone-0.51-1-x86_64.pkg.tar.zst",
+        "size": 17867,
+        "sha256": "39ee27b8a2ff4062e0aa1d3cdf334e59a1a726916daaa0c4bc13d31d1788a49a"
+      },
+      {
+        "file": "perl-clone-0.51-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "cbe864144d3fef6e37d82c2cc3202acbb974c58673c08aa0ba4c69a378649175"
+      },
+      {
+        "file": "perl-convert-binhex-1.125-3-any.pkg.tar.zst",
+        "size": 29568,
+        "sha256": "96d9418550129e569a69b17682654f71754c92bbe97515f2f255d6aa9ad4d1bc"
+      },
+      {
+        "file": "perl-convert-binhex-1.125-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "5459345de8e00ab239cb4afd2ef7a526349a722b0e7d5f7f064d0ebf23c20b5f"
+      },
+      {
+        "file": "perl-encode-locale-1.05-3-any.pkg.tar.zst",
+        "size": 10630,
+        "sha256": "e02957a3468521d6a35fec39327ee9ecf024b00261fb4c496339cb5428decd8f"
+      },
+      {
+        "file": "perl-encode-locale-1.05-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "2e8042fe0276df55f0bce6099885e80b956e777b2485c473c6e68455a4559345"
+      },
+      {
+        "file": "perl-error-0.17030-3-any.pkg.tar.zst",
+        "size": 21354,
+        "sha256": "c5c183196a4803c0b427fc174e446cc530e80833fce7405719bc46a33d3c61fd"
+      },
+      {
+        "file": "perl-error-0.17030-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "1f56b7c096f9a06910c752b40b8f61e0fc9561810e97c24f5cc712acd39a01ad"
+      },
+      {
+        "file": "perl-file-listing-6.16-2-any.pkg.tar.zst",
+        "size": 10271,
+        "sha256": "15e00cd7923ec76c8127576bb64e0cb159a48ea87efefc35f64493bcd1e8a95e"
+      },
+      {
+        "file": "perl-file-listing-6.16-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "5886079b56ae6075b8b25f14cda7eeceb5d0d98724ef89db4ddef7c960aab462"
+      },
+      {
+        "file": "perl-html-parser-3.86-2-x86_64.pkg.tar.zst",
+        "size": 80703,
+        "sha256": "18a6097593b08689f3923bfe948356c645e486929af5fee6e9d661a1285c060c"
+      },
+      {
+        "file": "perl-html-parser-3.86-2-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "64c09c585d88375af4d82fc04fd70290d7e761308e9c59e92383c1b3bcfbc5af"
+      },
+      {
+        "file": "perl-html-tagset-3.24-2-any.pkg.tar.zst",
+        "size": 10815,
+        "sha256": "cf9adccdaaa6b5b1307365afed083daa126d4230ef812f35ec65eb5f6e472c92"
+      },
+      {
+        "file": "perl-html-tagset-3.24-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "ad04b4c089a44d9208a87fae5520e75885b487951a6b6d90ef24eab392b2107b"
+      },
+      {
+        "file": "perl-http-cookiejar-0.014-2-any.pkg.tar.zst",
+        "size": 13667,
+        "sha256": "70fdf1d4bdbab078765e7200436f614cf995007f2329f487baafc1841e8d66a9"
+      },
+      {
+        "file": "perl-http-cookiejar-0.014-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "8b54ce6674e907607084f698c4e3be1392e5b9cb6d684e8482d198a795fb0ebf"
+      },
+      {
+        "file": "perl-http-cookies-6.12-2-any.pkg.tar.zst",
+        "size": 22253,
+        "sha256": "902e3d2ac5564536bafd113f42d49df7ecf8c4808c793369ba7bb413a12546d1"
+      },
+      {
+        "file": "perl-http-cookies-6.12-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "61f10dddf3457c8512ff35eb82e9bc8db3129b2ab4a898aeefd72d46022e7ac4"
+      },
+      {
+        "file": "perl-http-daemon-6.17-2-any.pkg.tar.zst",
+        "size": 20173,
+        "sha256": "77d6fd31b6e1a1db66237a97da8a99c7a0eff8297ca1d5b75acfcb38a86251ca"
+      },
+      {
+        "file": "perl-http-daemon-6.17-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "5593546b82f71ffc126e6d505e9f46bee4b3a4b977202a2c1f25274a2027c1fe"
+      },
+      {
+        "file": "perl-http-date-6.08-2-any.pkg.tar.zst",
+        "size": 10237,
+        "sha256": "c26c4e9655557e7c9ec8b74c39d32e31ec5640552f5371b221d59bc22bfa520a"
+      },
+      {
+        "file": "perl-http-date-6.08-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "254fc49b0209b9f77e24774135d8a19030bca47446499445db98b515cee090a6"
+      },
+      {
+        "file": "perl-http-message-7.04-2-any.pkg.tar.zst",
+        "size": 75778,
+        "sha256": "526c89268f0489c37d950fbd8fdbdbb745dbe61ec2d2bd2871c6c8646d01792d"
+      },
+      {
+        "file": "perl-http-message-7.04-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "f284c791b01e81e19b6a86985ea2664fb0440a0fb5ec770b70d36a2aec082801"
+      },
+      {
+        "file": "perl-http-negotiate-6.01-4-any.pkg.tar.zst",
+        "size": 12075,
+        "sha256": "0cb00eb507d51b5fb9446827acc7d7f0629381f7d7bf8548fa3e0ba64704dd5e"
+      },
+      {
+        "file": "perl-http-negotiate-6.01-4-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "69de576ec7612cdd55424edfbe620299435cd917e2e8c690878244c4db248b0f"
+      },
+      {
+        "file": "perl-io-html-1.004-3-any.pkg.tar.zst",
+        "size": 14494,
+        "sha256": "3d42f5fe05b06fda5cbe94c79f98c9a1f32d0b0361b93839f9244af3676620f0"
+      },
+      {
+        "file": "perl-io-html-1.004-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "39b175a5df6608f7fda73ac4ae8ea4bc9171f9ec0231efb8abfedac50fd717d9"
+      },
+      {
+        "file": "perl-io-socket-ssl-2.099-2-any.pkg.tar.zst",
+        "size": 170073,
+        "sha256": "d9d0adc2c9435a50d573869031f893babbceef8ddbc8039efe01a7ee598ac35f"
+      },
+      {
+        "file": "perl-io-socket-ssl-2.099-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "051e5e2326b1114bed76298642bd4e793a025f9c3e4fb70ab3b9ef47103aee4d"
+      },
+      {
+        "file": "perl-io-stringy-2.113-4-any.pkg.tar.zst",
+        "size": 44503,
+        "sha256": "35664d5b4b6e6c569984f4901d7d57b56869b5a41b9ab35674f938186a50b7e2"
+      },
+      {
+        "file": "perl-io-stringy-2.113-4-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "d32818bea9475eab864fd4544e940e9c35793ac1d338e99368c9b8258aed84f7"
+      },
+      {
+        "file": "perl-libwww-6.83-3-any.pkg.tar.zst",
+        "size": 130150,
+        "sha256": "adbc8538af75c6d9d37ec3c05cbda27843ad35c6b9fc6de8de64e016bb4c27b1"
+      },
+      {
+        "file": "perl-libwww-6.83-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "b1733e96dac60f891d2c73f60bade625927e80bd4540e5130426977d5e0eb09a"
+      },
+      {
+        "file": "perl-lwp-mediatypes-6.05-2-any.pkg.tar.zst",
+        "size": 19513,
+        "sha256": "4afde66f5a53366fbed27779345b3f7fd782feffa00613a5d5482b5d207f6358"
+      },
+      {
+        "file": "perl-lwp-mediatypes-6.05-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "ab698c9754dcd68cccb9b538ce0d7d32a8856a43a0ca88875c2f1b284b701bab"
+      },
+      {
+        "file": "perl-mailtools-2.22-2-any.pkg.tar.zst",
+        "size": 59858,
+        "sha256": "53cba8b2bc2042518d83a88d562a9ee0d1ceae3d581ac4896baec0ac25bfc91c"
+      },
+      {
+        "file": "perl-mailtools-2.22-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "fab1d977027ed9daec06923688616260abc0ad21cdcc4408eab77597ba3e76fe"
+      },
+      {
+        "file": "perl-mime-tools-5.518-2-any.pkg.tar.zst",
+        "size": 182639,
+        "sha256": "05d3cb6d53c943ce4481f67a04e7b9272e383577ea84672f2ff390d7dab95766"
+      },
+      {
+        "file": "perl-mime-tools-5.518-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "b0fc112a8c244d2fa7ae2cceeb203cbb1cfb3d45b6f76060d6c0c263c6e178fe"
+      },
+      {
+        "file": "perl-net-http-6.24-2-any.pkg.tar.zst",
+        "size": 22198,
+        "sha256": "8f45b20264525e3c5788f2b12a1c15ae8a27ef2904030bd598aa7fc9d10fda36"
+      },
+      {
+        "file": "perl-net-http-6.24-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "621426e62c054cf9e6b21d05b4507144996487b14e7b0db297bb071497764c3e"
+      },
+      {
+        "file": "perl-net-smtp-ssl-1.04-3-any.pkg.tar.zst",
+        "size": 4714,
+        "sha256": "d553221db395c227c93643800af42d39049b055f2630e39b1c4cd78a7d3745c1"
+      },
+      {
+        "file": "perl-net-smtp-ssl-1.04-3-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "4ece7976fbdc2639f40a267b219b6a1b8651888ebd6b8f9b3e279800dda9f7d2"
+      },
+      {
+        "file": "perl-net-ssleay-1.96-2-x86_64.pkg.tar.zst",
+        "size": 225869,
+        "sha256": "63b534ee973831d01b9c9e64fd8891925e9cf0c8923326b63f3c9d4582fee820"
+      },
+      {
+        "file": "perl-net-ssleay-1.96-2-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "32176a7f7203b68bb26e23d8132b9b63515ed402385db67d7ec830e3be752975"
+      },
+      {
+        "file": "perl-termreadkey-2.38-9-x86_64.pkg.tar.zst",
+        "size": 20568,
+        "sha256": "584029cb544e78f46d7cc2040d22d144bc26657d0584452d2119dc67f1cf747d"
+      },
+      {
+        "file": "perl-termreadkey-2.38-9-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "28eb9c3496f356e002d74abbfb33b3a49974f93b9b9aa0855426517e00feedca"
+      },
+      {
+        "file": "perl-timedate-2.35-2-any.pkg.tar.zst",
+        "size": 62901,
+        "sha256": "ddd3cd5bb07f6c1cc2a6315233e48002d904a492901134d6f1f4139d21f31625"
+      },
+      {
+        "file": "perl-timedate-2.35-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "1fe23ac2a733c28e3f5f94676f7f336edad601989bd2b61ef2e6ae472a9d62f2"
+      },
+      {
+        "file": "perl-try-tiny-0.32-2-any.pkg.tar.zst",
+        "size": 19142,
+        "sha256": "3d36d2b776c6aa8d4313b3b08eea81ad58002783c5f95c4ad8ca718cd84b9c8c"
+      },
+      {
+        "file": "perl-try-tiny-0.32-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "80370fcb49444610321e15f1f90737a8413f2992b167fbcb491756032be06fec"
+      },
+      {
+        "file": "perl-uri-5.40-1-any.pkg.tar.zst",
+        "size": 101204,
+        "sha256": "bca295f7bc3c70dd55fa310a05378c5bf09f9fa0a1fc50036576622c502e9a3c"
+      },
+      {
+        "file": "perl-uri-5.40-1-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "2a79f1857aa596ed941d3ed78c9addb29e83d67251f623fc660fce388efcd2c6"
+      },
+      {
+        "file": "perl-www-robotrules-6.03-2-any.pkg.tar.zst",
+        "size": 14489,
+        "sha256": "c4b720d8a7e5973d524de6b53d798db49e6f3697252da1ea68a680ca0861c4d5"
+      },
+      {
+        "file": "perl-www-robotrules-6.03-2-any.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "dd49cbfac7a89e856220a79f9e286e7251406747e35d82d16840f872b979687d"
+      },
+      {
+        "file": "pinentry-1.3.3-1-x86_64.pkg.tar.zst",
+        "size": 50253,
+        "sha256": "6a72ff654a57181dbb168951a24147dd6cf3f53c0df6250b96a4cca6eeb4837c"
+      },
+      {
+        "file": "pinentry-1.3.3-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "ba14898f1e74d9fc2d84d8234c49603c23d3c18ad87ad06f01f00137cc2b873a"
+      },
+      {
+        "file": "rebase-4.5.0-5-x86_64.pkg.tar.zst",
+        "size": 279218,
+        "sha256": "d67e710f40b36fe2154fc32e63fdc4e2da7b7615a2e59ec996ce9b292ba85430"
+      },
+      {
+        "file": "rebase-4.5.0-5-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "786c27104db179f773ab7e9ff7528ad881b1bcfe4492f54bba3281b585f69c18"
+      },
+      {
+        "file": "sed-4.9-1-x86_64.pkg.tar.zst",
+        "size": 249918,
+        "sha256": "3748af28f69e946ec5a42e6670c9bbf6da7352dc93baaa537f69e99c5483b9fc"
+      },
+      {
+        "file": "sed-4.9-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "f581e034fe9b375764c64880278604e0b42cb544f40c1ce01eb1492d0af1e056"
+      },
+      {
+        "file": "tar-1.35-3-x86_64.pkg.tar.zst",
+        "size": 815230,
+        "sha256": "71983bed200c4026cdec157837d989728d3de65e8cf644e03876df41a0f1b7c4"
+      },
+      {
+        "file": "tar-1.35-3-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "db89bbaa5b227cb35b36a1a1f3b90925b94dbfd4031c4722b6fc66b27375ea5c"
+      },
+      {
+        "file": "time-1.10-1-x86_64.pkg.tar.zst",
+        "size": 25855,
+        "sha256": "53bd332145effa8afec1209c105fe9b5264a5692ff35e0d03d96d2058ea7ae61"
+      },
+      {
+        "file": "time-1.10-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "fd39660c76c39ae121cc5ecfebd62236719ad1307eb727486fd01be40fa01b44"
+      },
+      {
+        "file": "tzcode-2026e-1-x86_64.pkg.tar.zst",
+        "size": 269622,
+        "sha256": "8dbce9e8ff470b36ec7666fba6cf86c56384a618da9568a192b79f0008d55df1"
+      },
+      {
+        "file": "tzcode-2026e-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "06839e6d7b5fcec26dd9ecead1609fc71b5ed7eadbb9d85da37b523c39aefb51"
+      },
+      {
+        "file": "ucrt64.db",
+        "size": 591032,
+        "sha256": "d84341512092f94e341fc6100a256dc74c66af21f7c20b6436d87861daf5fa9a"
+      },
+      {
+        "file": "ucrt64.db.sig",
+        "size": 566,
+        "sha256": "3c62aa6378964be85b9ec5ba3af9f788411c6d506fe929f2b18e4620270109d1"
+      },
+      {
+        "file": "util-linux-2.40.2-2-x86_64.pkg.tar.zst",
+        "size": 2265288,
+        "sha256": "969edb185d37986e6feddb3c54807598e3cc6774b736fec3a27d5d27731f7fdd"
+      },
+      {
+        "file": "util-linux-2.40.2-2-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "d4e123eb9c8cef0ea7dad3718f8ada5a40dd46a026781ebd556442e51f54a714"
+      },
+      {
+        "file": "wget-1.25.0-4-x86_64.pkg.tar.zst",
+        "size": 778748,
+        "sha256": "533bd9beb98fe40789558de0343aa29361709876af6a3b9eb2e83f88a18645d3"
+      },
+      {
+        "file": "wget-1.25.0-4-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "fd760210036da69c17e54ed126ad685ef6522cce1bfaadaf798ad34caf93b7e9"
+      },
+      {
+        "file": "which-2.25-1-x86_64.pkg.tar.zst",
+        "size": 19913,
+        "sha256": "a299e7b9076e5d9381e59fd67538aa39346eb36bb16a93834fb99cccc3f2055b"
+      },
+      {
+        "file": "which-2.25-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "a252b5093f445c6e6b0adecf9115a1bb2a194c56492e8984e2da7bd8bfd457d5"
+      },
+      {
+        "file": "xz-5.8.4-1-x86_64.pkg.tar.zst",
+        "size": 733040,
+        "sha256": "cad72459be8f5b99920bed2f122dfe81e05fc599c33f5b871bd35d72b726ef9e"
+      },
+      {
+        "file": "xz-5.8.4-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "14273a42581312775a0f26b88954695314b8367c88db64818ec7d3d874319ee9"
+      },
+      {
+        "file": "zlib-1.3.2-1-x86_64.pkg.tar.zst",
+        "size": 52245,
+        "sha256": "a04aa79996c57f0db936be66cf94326d7e67e9cd8dbffe4cf6e97693d0a1d9ef"
+      },
+      {
+        "file": "zlib-1.3.2-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "97d2a513a19b53edd250476da081803124c985e1fc726b52602fb82908d2d62e"
+      },
+      {
+        "file": "zstd-1.5.7-1-x86_64.pkg.tar.zst",
+        "size": 91266,
+        "sha256": "7b8ab77828c5a1efe53ebc53e3ea9d719bfbd609bf4c810eaa88d626188ed407"
+      },
+      {
+        "file": "zstd-1.5.7-1-x86_64.pkg.tar.zst.sig",
+        "size": 566,
+        "sha256": "8bc891c344c33fe3f4d7b4c2742387f7c0b35c3acaaffc3d3dd4e38ee7373c4c"
+      }
+    ],
+    "validation": "pacman download integrity/signature checks; exact installed/archived name-version equality",
+    "byte_identical_rebuild_demonstrated": false
+  },
+  "build": {
+    "command": [
+      "cargo",
+      "build",
+      "--release",
+      "--locked",
+      "--target",
+      "x86_64-pc-windows-gnu",
+      "--target-dir",
+      "target/windows-build/cargo"
+    ],
+    "profile": "release",
+    "target": "x86_64-pc-windows-gnu",
+    "environment": {
+      "RUSTFLAGS": "-D warnings",
+      "PKG_CONFIG_PATH": "D:\\a\\_temp\\msys64\\ucrt64\\lib\\pkgconfig;D:\\a\\_temp\\msys64\\ucrt64\\share\\pkgconfig",
+      "MSYSTEM": "UCRT64",
+      "MINGW_PREFIX": "D:/a/_temp/msys64/ucrt64"
+    },
+    "cargo_lock_sha256": "6adc4b0bdae904d2514526c59b0816887de8406c7db721db05ae05506dc233b1",
+    "packaging_only": false,
+    "allow_dirty": false
+  },
+  "host": {
+    "system": "Windows",
+    "release": "2022Server",
+    "version": "10.0.20348",
+    "machine": "AMD64"
+  },
+  "ci": {
+    "GITHUB_RUN_ID": "39879166819",
+    "GITHUB_RUN_ATTEMPT": "1",
+    "GITHUB_WORKFLOW": "Windows developer preview",
+    "GITHUB_SHA": "ee3097dc525d3f3797b5270fecd563eda894d8e9",
+    "ImageOS": "win22",
+    "ImageVersion": "20261012.333.1"
+  },
+  "binary_sha256": "0971ab11da64b899a5013ea98df39ce06b0b2254301515edda761f892feed420",
+  "runtime": {
+    "manifest_sha256": "b6fb63b893cc2212b0e205f2e70da2887e98761bb4937760112179df592d913d",
+    "files": 7828,
+    "packages": 206
+  },
+  "byte_identical_rebuild_demonstrated": false
+}

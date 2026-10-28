@@ -1,0 +1,27 @@
+{
+  "input_attachment": {
+    "execute": "blockdev-add",
+    "arguments": {
+      "driver": "raw",
+      "node-name": "papo_fixture_update",
+      "read-only": true,
+      "file": {
+        "driver": "file",
+        "filename": "${WORKSPACE}/target/windows-clean-vm/step6/final-input.img"
+      }
+    }
+  },
+  "device": {
+    "execute": "device_add",
+    "arguments": {
+      "driver": "usb-storage",
+      "bus": "usb.0",
+      "drive": "papo_fixture_update",
+      "id": "papo_fixture_update_usb",
+      "removable": true
+    }
+  },
+  "launch": "Read-only PAPOISOLATE volume -> start.ps1 -> media-acceptance.ps1 -> check-media.ps1",
+  "prior_prototype_cleanup": "start.ps1 removes only the earlier disposable PapoIsolationPrototype and PapoTiming directories under the fixture user profile",
+  "input_method": "QMP fixture-only keyboard and USB mouse; no guest agent or host share"
+}

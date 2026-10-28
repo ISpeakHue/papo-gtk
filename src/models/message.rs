@@ -38,7 +38,12 @@ impl Attachment {
     /// EN-US: Classify the preview UI only; downloaded bytes still require independent container validation.
     /// PT-BR: Classifica apenas a prévia na interface; os bytes baixados ainda exigem validação independente do contêiner.
     pub fn is_video(&self)->bool{
-        let mime=self.mime_type.split(';').next().unwrap_or("").trim();
+        Self::video_type(&self.mime_type,&self.original_file_name)
+    }
+    // EN-US: Drafts and received attachments must classify supported videos identically on every OS.
+    // PT-BR: Rascunhos e anexos recebidos devem classificar vídeos compatíveis igualmente em todo SO.
+    pub(crate) fn video_type(mime:&str,name:&str)->bool{
+        let mime=mime.split(';').next().unwrap_or("").trim();
         // Newly detected containers outside the native validator stay ordinary
         // download tiles rather than presenting an unusable playback control.
         if ["video/x-msvideo","video/x-matroska"].iter().any(|kind|mime.eq_ignore_ascii_case(kind)){return false;}
@@ -48,7 +53,7 @@ impl Attachment {
         // now report a detected video type. Classify supported suffixes only
         // for unknown MIME; the downloaded container is validated separately.
         let unknown=mime.is_empty()||["application/octet-stream","binary/octet-stream"].iter().any(|kind|mime.eq_ignore_ascii_case(kind));
-        unknown&&std::path::Path::new(&self.original_file_name).extension().is_some_and(|ext|["mov","mp4","m4v","webm"].iter().any(|suffix|ext.eq_ignore_ascii_case(suffix)))
+        unknown&&std::path::Path::new(name).extension().is_some_and(|ext|["mov","mp4","m4v","webm"].iter().any(|suffix|ext.eq_ignore_ascii_case(suffix)))
     }
 }
 

@@ -1,0 +1,83 @@
+{
+  "status": "ok",
+  "python": "3.14.8",
+  "prefix": "D:/a/papo-gtk/papo-gtk/dist/Papo-1.0.2-windows-x86_64-dev/runtime",
+  "gtk": "4.24.1",
+  "gstreamer": "GStreamer 1.28.8",
+  "checked_files": 7828,
+  "loaded_modules": 276,
+  "media_fixtures": 4,
+  "decode_runs": [
+    {
+      "fixture": "chat-h264.mp4",
+      "mode": "auto",
+      "decoders": [
+        "avdec_aac",
+        "avdec_h264",
+        "decodebin",
+        "uridecodebin"
+      ]
+    },
+    {
+      "fixture": "chat-h264.mp4",
+      "mode": "software",
+      "decoders": [
+        "avdec_aac",
+        "avdec_h264",
+        "decodebin",
+        "uridecodebin"
+      ]
+    },
+    {
+      "fixture": "chat-video.mov",
+      "mode": "auto",
+      "decoders": [
+        "avdec_h264",
+        "decodebin",
+        "uridecodebin"
+      ]
+    },
+    {
+      "fixture": "chat-video.mov",
+      "mode": "software",
+      "decoders": [
+        "avdec_h264",
+        "decodebin",
+        "uridecodebin"
+      ]
+    },
+    {
+      "fixture": "chat-video.webm",
+      "mode": "auto",
+      "decoders": [
+        "decodebin",
+        "uridecodebin",
+        "vorbisdec",
+        "vp8dec"
+      ]
+    },
+    {
+      "fixture": "chat-video.webm",
+      "mode": "software",
+      "decoders": [
+        "decodebin",
+        "uridecodebin",
+        "vorbisdec",
+        "vp8dec"
+      ]
+    },
+    {
+      "fixture": "voice.wav",
+      "mode": "auto",
+      "decoders": [
+        "decodebin",
+        "opusdec",
+        "uridecodebin"
+      ]
+    }
+  ],
+  "hardware_decoder_factories": [],
+  "hardware_scope": "Available factory names and actual automatic selection; no forced driver or physical-GPU qualification.",
+  "os_codec_modules": [],
+  "runtime_cache": "C:\\Users\\runneradmin\\AppData\\Local\\papo-gtk\\runtime\\5866d8a5d7125710\\registry.bin"
+}

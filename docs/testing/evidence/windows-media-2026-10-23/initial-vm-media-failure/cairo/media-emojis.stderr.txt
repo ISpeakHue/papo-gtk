@@ -1,0 +1,6 @@
+
+thread 'ui::root::tests::ui_smoke_window_has_header_controls_and_server_password' (8036) panicked at src\ui\chat\emoji.rs:158:178:
+assertion `left == right` failed: offscreen inline emojis must pause
+  left: Paintable { inner: TypedObjectRef { inner: 0x203267e1e00, type: GdkMemoryTexture } }
+ right: Paintable { inner: TypedObjectRef { inner: 0x203267e2f80, type: GdkMemoryTexture } }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

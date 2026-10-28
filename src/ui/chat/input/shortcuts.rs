@@ -10,7 +10,7 @@ pub(crate) fn completion(panel:&gtk::ScrolledWindow,entry:&gtk::TextView){
     let keys=gtk::EventControllerKey::new();keys.set_propagation_phase(gtk::PropagationPhase::Capture);
     let weak=panel.downgrade();let entry=entry.downgrade();
     keys.connect_key_pressed(move |_,key,_,mods|{
-        if mods.intersects(gtk::gdk::ModifierType::SHIFT_MASK|gtk::gdk::ModifierType::CONTROL_MASK|gtk::gdk::ModifierType::ALT_MASK|gtk::gdk::ModifierType::SUPER_MASK){return gtk::glib::Propagation::Proceed;}
+        if !crate::platform::shortcuts::modifiers(mods).is_empty(){return gtk::glib::Propagation::Proceed;}
         let Some(panel)=weak.upgrade()else{return gtk::glib::Propagation::Proceed;};
         let mut choices=vec![];buttons(panel.upcast_ref(),&mut choices);
         let focused=choices.iter().position(|b|b.state_flags().contains(gtk::StateFlags::FOCUS_WITHIN));
@@ -47,7 +47,9 @@ pub(crate) fn type_to_focus(view:&gtk::TextView,scroll:&gtk::ScrolledWindow,comp
             if mods.is_empty()&&matches!(key,gtk::gdk::Key::Page_Up|gtk::gdk::Key::Page_Down|gtk::gdk::Key::End)&&!composer.is_composing(){
                 if let (Some(view),Some(scroll))=(weak.upgrade(),scroll.upgrade()){
                     let focus=view.root().and_downcast::<gtk::Window>().and_then(|w|gtk::prelude::RootExt::focus(&w));
-                    let in_chat=focus.as_ref().is_some_and(|f|f==view.upcast_ref::<gtk::Widget>()||f.is_ancestor(&scroll));
+                    // EN-US: End/Page keys belong to native draft editing; history navigation owns only the message pane.
+                    // PT-BR: End/Page pertencem à edição nativa do rascunho; a navegação do histórico controla só o painel de mensagens.
+                    let in_chat=focus.as_ref().is_some_and(|f|!owns_text_or_popup(Some(f.clone()))&&f.is_ancestor(&scroll));
                     if in_chat&&scroll.is_mapped(){let _=input.send(match key{gtk::gdk::Key::End=>ChatMsg::Latest,gtk::gdk::Key::Page_Up=>ChatMsg::Page(-1),_=>ChatMsg::Page(1)});return gtk::glib::Propagation::Stop;}
                 }
             }

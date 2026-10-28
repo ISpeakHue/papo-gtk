@@ -1,4 +1,4 @@
-name: Windows developer preview
+name: Windows release checks
 
 on:
   push:
@@ -8,7 +8,19 @@ on:
   workflow_dispatch:
     inputs:
       packaging_only:
-        description: Rebuild packaging for code already covered by native tests
+        description: Rebuild identical tested inputs; never qualifies a release
+        type: boolean
+        default: false
+      tested_run_id:
+        description: Successful full run for this exact revision (required for packaging_only)
+        type: string
+        default: ''
+      runtime_artifact_run:
+        description: Only recheck the portable ZIP from this run ID (does not qualify a release)
+        type: string
+        default: ''
+      bridge_probe:
+        description: Diagnose native sandbox APIs against an existing runtime ZIP; not release acceptance
         type: boolean
         default: false
 
@@ -17,8 +29,12 @@ permissions:
 
 jobs:
   windows:
+    if: (github.event_name != 'workflow_dispatch' || inputs.runtime_artifact_run == '') && !inputs.bridge_probe
     runs-on: windows-2022
-    timeout-minutes: 60
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: read
     defaults:
       run:
         shell: msys2 {0}
@@ -30,6 +46,46 @@ jobs:
       PYTHONUTF8: '1'
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Authenticate the tested source run before a packaging-only rebuild
+        if: github.event_name == 'workflow_dispatch' && inputs.packaging_only
+        uses: actions/github-script@v7
+        env:
+          TESTED_RUN_ID: ${{ inputs.tested_run_id }}
+        with:
+          script: |
+            const fs = require('fs');
+            const id = process.env.TESTED_RUN_ID;
+            if (!/^[1-9][0-9]*$/.test(id)) throw new Error('packaging_only requires tested_run_id');
+            const {data: run} = await github.rest.actions.getWorkflowRun({...context.repo, run_id: id});
+            if (run.repository.full_name !== process.env.GITHUB_REPOSITORY ||
+                run.head_repository?.full_name !== process.env.GITHUB_REPOSITORY ||
+                run.path !== '.github/workflows/windows.yml' || run.head_sha !== context.sha ||
+                !['push', 'workflow_dispatch'].includes(run.event) ||
+                run.status !== 'completed' || run.conclusion !== 'success') {
+              throw new Error('Rebuild requires a successful full workflow for this exact repository/revision');
+            }
+            fs.mkdirSync('target/windows-build', {recursive: true});
+            fs.writeFileSync('target/windows-build/tested-run.json', JSON.stringify(run));
+      - name: Fetch the authenticated full-run gate
+        if: github.event_name == 'workflow_dispatch' && inputs.packaging_only
+        uses: actions/download-artifact@v4
+        with:
+          name: Windows-release-gate
+          path: target/windows-tested
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.tested_run_id }}
+      - name: Record checkout Git configuration before MSYS2
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force target/windows-build | Out-Null
+          git --version | Out-File -Encoding utf8 target/windows-build/checkout-git.txt
+          git config --show-origin --get-regexp '^core\.(autocrlf|eol|filemode|symlinks|ignorecase)$' | Out-File -Append -Encoding utf8 target/windows-build/checkout-git.txt
+          git status --porcelain=v1 --untracked-files=all | Out-File -Append -Encoding utf8 target/windows-build/checkout-git.txt
+          git diff --stat HEAD | Out-File -Append -Encoding utf8 target/windows-build/checkout-git.txt
+          git diff --summary HEAD | Out-File -Append -Encoding utf8 target/windows-build/checkout-git.txt
+          git ls-files --eol | Out-File -Append -Encoding utf8 target/windows-build/checkout-git.txt
       - uses: msys2/setup-msys2@v2
         with:
           msystem: UCRT64
@@ -50,14 +106,47 @@ jobs:
             mingw-w64-ucrt-x86_64-gst-plugins-bad
             mingw-w64-ucrt-x86_64-gst-libav
             mingw-w64-ucrt-x86_64-libnice
+            mingw-w64-ucrt-x86_64-nsis
+      - name: Diagnose source differences with MSYS2 Git before compiling
+        run: |
+          python - <<'PYCODE'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path("packaging/windows").resolve()))
+          from build import source_state, write_json, require_source
+          source = source_state()
+          write_json(Path("target/windows-build/post-setup.json"), source)
+          print(source["status"] or "Clean source checkout")
+          print(source["diff_summary"])
+          print(source["git_config"])
+          require_source(source)
+          PYCODE
+      - name: Test source provenance and package archive verification
+        run: python packaging/ci/python_checks.py --pattern 'windows_*test.py' --output target/windows-build/python-native.json
+      - name: Retain exact installed native dependency packages
+        run: python packaging/windows/native_inputs.py capture target/windows-native-inputs
+      - name: Record native toolchain and build options before compilation
+        run: python packaging/windows/build.py --preflight --native-inputs target/windows-native-inputs
+      - name: Select explicit UCRT64 runtime for unbundled developer tests
+        run: echo "PAPO_RUNTIME_DIR=$(cygpath -w "$MINGW_PREFIX")" >> "$GITHUB_ENV"
       - name: Check every Rust target on Windows
         if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only
         run: cargo check --locked --all-targets
-      - name: Test platform policy and native worker lifecycle with synthetic audio
+      - name: Run every portable regular Rust test and native synthetic lifecycle probes
         if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only
         run: |
-          cargo test --locked platform:: -- --test-threads=1
+          cargo test --locked -- --test-threads=1
           cargo test --locked native_voice -- --ignored --test-threads=1
+          cargo test --locked native_call_ -- --ignored --test-threads=1
+      - name: Test account-bound notifications without desktop delivery
+        if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only
+        run: |
+          cargo test --locked platform::notifications:: -- --test-threads=1
+          PAPO_UI_CASE=windows-notifications cargo test --locked ui_smoke -- --ignored --test-threads=1
+      - name: Test call devices, bounded IPC and cues without hardware
+        if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only
+        run: |
+          python packaging/ci/python_checks.py --pattern voice_worker_test.py --pattern windows_capture_test.py --pattern windows_capture_gst_test.py --pattern probe_runtime_test.py --pattern call_sound_test.py --allow-skip call_sound_test.CallSoundTests.test_auto_output_children_get_papos_identity_before_playback --output target/windows-build/python-workers.json
       - name: Test embedded icon coverage and native GTK rendering
         if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only
         run: |
@@ -65,22 +154,186 @@ jobs:
           python -m unittest discover -s tests -p icon_assets_test.py
           PAPO_UI_CASE=symbolic-icons cargo test --locked ui_smoke -- --ignored --test-threads=1
           PAPO_UI_CASE=startup cargo test --locked ui_smoke -- --ignored --test-threads=1
-      - name: Stage developer preview (external MSYS2 runtime required)
-        run: python packaging/windows/build.py
+          PAPO_UI_CASE=clipboard cargo test --locked ui_smoke -- --ignored --test-threads=1
+      - name: Test session persistence policies with memory storage
+        if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only
+        run: |
+          cargo test --locked session:: -- --test-threads=1
+          cargo test --locked api::features::tests:: -- --test-threads=1
+      - name: Test desktop editing and dialog policies with disposable fixtures
+        if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only
+        run: |
+          python -m unittest discover -s tests -p desktop_input_test.py -v
+          PAPO_UI_CASE=desktop-input PAPO_NATIVE_INPUT_TEST=1 GTK_A11Y=test cargo test --locked ui_smoke -- --ignored --test-threads=1
+          PAPO_UI_CASE=login-input cargo test --locked ui_smoke -- --ignored --test-threads=1
+          PAPO_UI_CASE=edit-mentions cargo test --locked ui_smoke -- --ignored --test-threads=1
+          for papo_case in search-recycling account-settings voice-controls; do
+            PAPO_UI_CASE="$papo_case" GTK_A11Y=test cargo test --locked ui_smoke -- --ignored --test-threads=1
+          done
+      - name: Test media classification, decoded bounds and cache budgets
+        if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only
+        run: |
+          cargo test --locked media:: -- --test-threads=1
+          cargo test --locked ui::chat::transfers::encoded:: -- --test-threads=1
+          cargo test --locked ui::chat::draft_preview::tests:: -- --test-threads=1
+          cargo test --locked models::message::attachment_tests:: -- --test-threads=1
+          cargo test --locked --no-run --message-format=json > target/windows-build/media-test-artifacts.jsonl
+          python packaging/windows/media_tests.py --artifacts target/windows-build/media-test-artifacts.jsonl --directory target/windows-media-tests
+      - name: Build and validate self-contained portable preview
+        run: |
+          papo_build_options=()
+          if [[ "${{ inputs.packaging_only }}" == "true" ]]; then
+            papo_build_options+=(--packaging-only --tested-gate target/windows-tested/gate.json --tested-run target/windows-build/tested-run.json)
+          fi
+          python packaging/windows/build.py --native-inputs target/windows-native-inputs "${papo_build_options[@]}"
+      - name: Build per-user NSIS preview from the exact standalone ZIP
+        run: |
+          python - <<'PYCODE'
+          import pathlib, subprocess, sys, shutil
+          archives = list(pathlib.Path('dist').glob('Papo-*-windows-x86_64-dev.zip'))
+          if len(archives) != 1:
+              raise SystemExit('Expected exactly one standalone Windows ZIP')
+          archive = archives[0]
+          subprocess.run([sys.executable, 'packaging/windows/installer.py', '--stage', str(archive.with_suffix('')),
+                          '--archive', str(archive)], check=True)
+          metadata = list(pathlib.Path('dist').glob('Papo-*-windows-x86_64.exe.json'))
+          if len(metadata) != 1:
+              raise SystemExit('Expected exactly one installer manifest')
+          shutil.copy2(metadata[0], 'target/windows-build/INSTALLER-INFO.json')
+          PYCODE
+      - name: Exercise disposable native credentials, files and dialogs
+        run: |
+          mkdir -p target/windows-build/storage
+          env -u PAPO_RUNTIME_DIR -u PAPO_PYTHON -u PYTHONHOME -u PYTHONPATH dist/Papo-*-windows-x86_64-dev/Papo.com --check-windows-storage > target/windows-build/storage/stdout.json
+      - name: Verify packaged AppContainer isolation and healthy media conversion
+        run: |
+          mkdir -p target/windows-build/media
+          env -u PAPO_RUNTIME_DIR -u PAPO_PYTHON -u PYTHONHOME -u PYTHONPATH dist/Papo-*-windows-x86_64-dev/Papo.com --check-media-runtime > target/windows-build/media/stdout.txt 2> target/windows-build/media/stderr.txt
       - uses: actions/upload-artifact@v4
+        if: ${{ always() && hashFiles('dist/Papo-*-windows-x86_64-dev.zip') != '' }}
         with:
           name: Papo-Windows-x86_64-developer-preview
-          path: dist/Papo-*-windows-x86_64-dev.zip
+          path: |
+            dist/Papo-*-windows-x86_64-dev.zip
+            dist/Papo-*-windows-x86_64-dev.zip.sha256
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: ${{ success() && (github.event_name != 'workflow_dispatch' || !inputs.packaging_only) }}
+        with:
+          name: Windows-media-acceptance
+          path: target/windows-media-tests/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && hashFiles('dist/Papo-*-windows-x86_64.exe.json') != '' }}
+        with:
+          name: Papo-Windows-x86_64-installer-preview
+          path: |
+            dist/Papo-*-windows-x86_64.exe
+            dist/Papo-*-windows-x86_64.exe.sha256
+            dist/Papo-*-windows-x86_64.exe.json
           if-no-files-found: error
 
+      - name: Retain source and toolchain diagnostics even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-build-diagnostics
+          path: |
+            target/windows-build/*.json
+            target/windows-build/checkout-git.txt
+            target/windows-build/storage/
+            target/windows-build/media/
+          if-no-files-found: warn
+      - name: Retain native rebuild inputs separately from the preview ZIP
+        if: ${{ always() && hashFiles('target/windows-native-inputs/NATIVE-INPUTS.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-UCRT64-native-inputs
+          path: target/windows-native-inputs/
+          compression-level: 0
+          retention-days: 90
+          if-no-files-found: warn
+
+  portable-runtime:
+    needs: windows
+    if: ${{ always() && !cancelled() && !inputs.bridge_probe && (needs.windows.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.runtime_artifact_run != '')) }}
+    permissions:
+      contents: read
+      actions: read
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: Papo-Windows-x86_64-developer-preview
+          path: download
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.runtime_artifact_run || github.run_id }}
+      - name: Validate portable ZIP without developer discovery paths
+        shell: pwsh
+        run: ./packaging/windows/check-portable.ps1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Windows-portable-results
+          path: target/windows-portable/
+          if-no-files-found: error
+
+  media-ui-runtime:
+    needs: windows
+    if: ${{ always() && !cancelled() && !inputs.packaging_only && !inputs.bridge_probe && (needs.windows.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.runtime_artifact_run != '')) }}
+    permissions:
+      contents: read
+      actions: read
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: Papo-Windows-x86_64-developer-preview
+          path: download
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.runtime_artifact_run || github.run_id }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: Windows-media-acceptance
+          path: media-checks
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.runtime_artifact_run || github.run_id }}
+      - name: Exercise packaged media with software rendering
+        shell: powershell
+        run: |
+          $archive=(Get-ChildItem download -Filter '*.zip'|Select-Object -First 1).FullName
+          & ./packaging/windows/check-media-ui.ps1 -Archive $archive -TestDirectory ./media-checks -OutputDirectory target/windows-media-ui/cairo
+      - name: Exercise automatic renderer selection without forcing a GPU driver
+        if: ${{ !cancelled() }}
+        shell: powershell
+        run: |
+          $archive=(Get-ChildItem download -Filter '*.zip'|Select-Object -First 1).FullName
+          & ./packaging/windows/check-media-ui.ps1 -Archive $archive -TestDirectory ./media-checks -OutputDirectory target/windows-media-ui/auto -Renderer auto -Cases @('mov-media','backend-gifs','status-viewer','video-audio')
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Windows-media-UI-results
+          path: target/windows-media-ui/
+          if-no-files-found: warn
+
   macos-foundation:
-    if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only
+    if: (github.event_name != 'workflow_dispatch' || (!inputs.packaging_only && inputs.runtime_artifact_run == '')) && !inputs.bridge_probe
     runs-on: macos-latest
     timeout-minutes: 40
     env:
       RUSTFLAGS: '-D warnings'
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       - name: Install native GTK build dependencies
         run: brew install pkgconf gtk4 libadwaita
@@ -88,3 +341,169 @@ jobs:
         run: |
           cargo check --locked --all-targets
           cargo test --locked --no-run
+
+  desktop-ui-runtime:
+    needs: windows
+    if: ${{ always() && !cancelled() && !inputs.packaging_only && !inputs.bridge_probe && (needs.windows.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.runtime_artifact_run != '')) }}
+    permissions:
+      contents: read
+      actions: read
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: Papo-Windows-x86_64-developer-preview
+          path: download
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.runtime_artifact_run || github.run_id }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: Windows-media-acceptance
+          path: desktop-checks
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.runtime_artifact_run || github.run_id }}
+      - name: Exercise packaged desktop, notifications, voice text chat and worker lifecycle
+        shell: powershell
+        run: |
+          $archive=(Get-ChildItem download -Filter '*.zip'|Select-Object -First 1).FullName
+          & ./desktop-checks/check-desktop-ui.ps1 -Archive $archive -OutputDirectory target/windows-desktop-ui -NativeKeys
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Windows-desktop-results
+          path: target/windows-desktop-ui/
+          if-no-files-found: error
+
+  linux-regression:
+    if: (github.event_name != 'workflow_dispatch' || (!inputs.packaging_only && inputs.runtime_artifact_run == '')) && !inputs.bridge_probe
+    uses: ./.github/workflows/test.yml
+
+  installer-runtime:
+    needs: windows
+    if: ${{ always() && !cancelled() && !inputs.bridge_probe && inputs.runtime_artifact_run == '' && needs.windows.result == 'success' }}
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: Papo-Windows-x86_64-installer-preview
+          path: installer-download
+      - name: Exercise per-user installation, replacement, recovery and data preservation
+        shell: powershell
+        run: |
+          $file=(Get-ChildItem installer-download -Filter '*.exe'|Select-Object -First 1).FullName
+          & ./packaging/windows/check-installer.ps1 -Installer $file -OutputDirectory target/windows-installer-results -DisposableAccount
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Windows-installer-results
+          path: target/windows-installer-results/
+          if-no-files-found: error
+
+  candidate-gate:
+    name: Windows candidate gate
+    needs: [windows, portable-runtime, media-ui-runtime, desktop-ui-runtime, installer-runtime, linux-regression, macos-foundation]
+    # EN-US: Never turn a skipped dependency into a pass; diagnostic/rebuild modes produce no gate.
+    # PT-BR: Nunca transforma dependência ignorada em aprovação; diagnósticos/recompilações não geram aprovação.
+    if: ${{ always() && !inputs.packaging_only && !inputs.bridge_probe && inputs.runtime_artifact_run == '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download build provenance even if a required job failed
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: Windows-build-diagnostics
+          path: evidence/build
+      - name: Download each packaged check report
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: Windows-*-results
+          path: evidence/checks
+      - name: Require all jobs and source-bound package evidence
+        env:
+          REQUIRED_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          mkdir -p target/windows-gate
+          python -c 'import os,pathlib; pathlib.Path("target/windows-gate/jobs.json").write_text(os.environ["REQUIRED_RESULTS"], encoding="utf-8")'
+          python packaging/windows/release_gate.py --build-info evidence/build/BUILD-INFO.json --reports evidence/checks --jobs target/windows-gate/jobs.json --commit "$GITHUB_SHA" --repository "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --output target/windows-gate/gate.json
+      - name: Record candidate qualification separately from Windows desktop acceptance
+        if: always()
+        run: |
+          python - <<'PYCODE'
+          import json, os
+          from pathlib import Path
+          path = Path('target/windows-gate/gate.json')
+          report = json.loads(path.read_text()) if path.exists() else {'automated_status': 'missing'}
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
+              output.write(f"Automated Windows candidate gate: **{report['automated_status']}**.\n\n")
+              output.write('Windows 11 Home/Pro desktop/device acceptance remains pending; this is not a supported release.\n')
+          PYCODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Windows-release-gate
+          path: target/windows-gate/
+          if-no-files-found: error
+
+  sandbox-api-prototype:
+    if: github.event_name == 'workflow_dispatch' && inputs.bridge_probe
+    runs-on: windows-2022
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: Papo-Windows-x86_64-developer-preview
+          path: download
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.runtime_artifact_run }}
+      - name: Extract the previously verified runtime for native API diagnostics
+        shell: pwsh
+        run: |
+          $zip=Get-ChildItem download -Filter 'Papo-*-windows-x86_64-dev.zip'|Select-Object -First 1
+          $expected=([IO.File]::ReadAllText($zip.FullName+'.sha256')).Split(' ')[0]
+          if((Get-FileHash $zip.FullName -Algorithm SHA256).Hash -ne $expected){throw 'Archive checksum mismatch'}
+          New-Item -ItemType Directory -Force target | Out-Null
+          $destination=Join-Path $env:RUNNER_TEMP 'Papo-native-sandbox-runtime'
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [IO.Compression.ZipFile]::ExtractToDirectory($zip.FullName,$destination)
+          $package=(Get-ChildItem $destination -Directory|Select-Object -First 1).FullName
+          (Join-Path $package 'runtime')|Set-Content target/probe-runtime.txt -Encoding utf8NoBOM
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          path-type: minimal
+          install: mingw-w64-ucrt-x86_64-gcc
+      - name: Compile the actual bridge and run only the native API compatibility diagnostic
+        shell: msys2 {0}
+        run: |
+          g++ --version
+          g++ -std=c++17 -O2 -static -municode -Wall -Wextra -Werror tests/security/windows_sandbox_probe.cpp src/platform/sandbox/windows.cpp -luserenv -ladvapi32 -lole32 -o target/sandbox-probe.exe
+          papo_runtime_path=$(cat target/probe-runtime.txt | tr -d '\r\n')
+          target/sandbox-probe.exe "$papo_runtime_path" "$(cygpath -w "$PWD/tests/fixtures/chat-h264.mp4")" "$(cygpath -w "$PWD/tests/security/windows_api_probe.py")" > target/prototype.stdout.txt 2> target/prototype.stderr.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Sandbox-API-prototype
+          path: target/prototype.*.txt

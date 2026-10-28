@@ -1,0 +1,120 @@
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.09s
+[1m[92m     Running[0m unittests src/main.rs (target/debug/deps/papo_gtk-b1ee5b15568df97b)
+
+running 1 test
+test ui::root::tests::ui_smoke_window_has_header_controls_and_server_password ... MESA-EGL: warning: DRI3 error: Could not get DRI3 device
+MESA-EGL: warning: Ensure your X server supports DRI3 to get accelerated rendering
+dbus-daemon[1842]: [session uid=1001 pid=1842 pidfd=5] Activating service name='org.freedesktop.portal.Desktop' requested by ':1.2' (uid=1001 pid=1860 comm="/work/target/debug/deps/papo_gtk-b1ee5b15568df97b" label="crun (unconfined)")
+dbus-daemon[1842]: [session uid=1001 pid=1842 pidfd=5] Activating service name='org.freedesktop.impl.portal.PermissionStore' requested by ':1.3' (uid=1001 pid=1877 comm="/usr/libexec/xdg-desktop-portal" label="crun (unconfined)")
+dbus-daemon[1842]: [session uid=1001 pid=1842 pidfd=5] Successfully activated service 'org.freedesktop.impl.portal.PermissionStore'
+dbus-daemon[1842]: [session uid=1001 pid=1842 pidfd=5] Activating service name='org.freedesktop.portal.Documents' requested by ':1.3' (uid=1001 pid=1877 comm="/usr/libexec/xdg-desktop-portal" label="crun (unconfined)")
+dbus-daemon[1842]: [session uid=1001 pid=1842 pidfd=5] Successfully activated service 'org.freedesktop.portal.Documents'
+fuse: device /dev/fuse not found. Kernel module not loaded?
+error: fuse init failed: Can't mount path /ci-home/.cache/doc
+
+(/usr/libexec/xdg-desktop-portal:1877): xdg-desktop-portal-WARNING **: 00:41:17.388: Document portal fuse mount point unknown: GDBus.Error:org.freedesktop.DBus.Error.ServiceUnknown: The name :1.5 was not provided by any .service files
+
+(/usr/libexec/xdg-desktop-portal:1877): xdg-desktop-portal-WARNING **: 00:41:17.388: Choosing gtk.portal for org.freedesktop.impl.portal.Access as a last-resort fallback
+dbus-daemon[1842]: [session uid=1001 pid=1842 pidfd=5] Activating service name='org.freedesktop.impl.portal.desktop.gtk' requested by ':1.3' (uid=1001 pid=1877 comm="/usr/libexec/xdg-desktop-portal" label="crun (unconfined)")
+
+(xdg-desktop-portal-gtk:1896): Gtk-WARNING **: 00:41:17.397: cannot open display: 
+dbus-daemon[1842]: [session uid=1001 pid=1842 pidfd=5] Activated service 'org.freedesktop.impl.portal.desktop.gtk' failed: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:1877): xdg-desktop-portal-WARNING **: 00:41:17.404: Failed to create RealtimeKit proxy: Could not connect: No such file or directory
+
+(/usr/libexec/xdg-desktop-portal:1877): xdg-desktop-portal-WARNING **: 00:41:17.404: Choosing gtk.portal for org.freedesktop.impl.portal.Settings as a last-resort fallback
+dbus-daemon[1842]: [session uid=1001 pid=1842 pidfd=5] Activating service name='org.freedesktop.impl.portal.desktop.gtk' requested by ':1.3' (uid=1001 pid=1877 comm="/usr/libexec/xdg-desktop-portal" label="crun (unconfined)")
+
+(xdg-desktop-portal-gtk:1901): Gtk-WARNING **: 00:41:17.412: cannot open display: 
+dbus-daemon[1842]: [session uid=1001 pid=1842 pidfd=5] Activated service 'org.freedesktop.impl.portal.desktop.gtk' failed: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:1877): xdg-desktop-portal-WARNING **: 00:41:17.414: Failed to create settings proxy: Error calling StartServiceByName for org.freedesktop.impl.portal.desktop.gtk: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:1877): xdg-desktop-portal-WARNING **: 00:41:17.414: Not providing Settings portal: No working backend
+
+(/usr/libexec/xdg-desktop-portal:1877): xdg-desktop-portal-WARNING **: 00:41:17.414: Choosing gtk.portal for org.freedesktop.impl.portal.FileChooser as a last-resort fallback
+dbus-daemon[1842]: [session uid=1001 pid=1842 pidfd=5] Activating service name='org.freedesktop.impl.portal.desktop.gtk' requested by ':1.3' (uid=1001 pid=1877 comm="/usr/libexec/xdg-desktop-portal" label="crun (unconfined)")
+
+(xdg-desktop-portal-gtk:1904): Gtk-WARNING **: 00:41:17.421: cannot open display: 
+dbus-daemon[1842]: [session uid=1001 pid=1842 pidfd=5] Activated service 'org.freedesktop.impl.portal.desktop.gtk' failed: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:1877): xdg-desktop-portal-WARNING **: 00:41:17.422: Failed to create file chooser proxy: Error calling StartServiceByName for org.freedesktop.impl.portal.desktop.gtk: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:1877): xdg-desktop-portal-WARNING **: 00:41:17.422: Choosing gtk.portal for org.freedesktop.impl.portal.AppChooser as a last-resort fallback
+dbus-daemon[1842]: [session uid=1001 pid=1842 pidfd=5] Activating service name='org.freedesktop.impl.portal.desktop.gtk' requested by ':1.3' (uid=1001 pid=1877 comm="/usr/libexec/xdg-desktop-portal" label="crun (unconfined)")
+
+(xdg-desktop-portal-gtk:1907): Gtk-WARNING **: 00:41:17.430: cannot open display: 
+dbus-daemon[1842]: [session uid=1001 pid=1842 pidfd=5] Activated service 'org.freedesktop.impl.portal.desktop.gtk' failed: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:1877): xdg-desktop-portal-WARNING **: 00:41:17.431: Failed to create app chooser proxy: Error calling StartServiceByName for org.freedesktop.impl.portal.desktop.gtk: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:1877): xdg-desktop-portal-WARNING **: 00:41:17.431: Choosing gtk.portal for org.freedesktop.impl.portal.Print as a last-resort fallback
+dbus-daemon[1842]: [session uid=1001 pid=1842 pidfd=5] Activating service name='org.freedesktop.impl.portal.desktop.gtk' requested by ':1.3' (uid=1001 pid=1877 comm="/usr/libexec/xdg-desktop-portal" label="crun (unconfined)")
+
+(xdg-desktop-portal-gtk:1910): Gtk-WARNING **: 00:41:17.438: cannot open display: 
+dbus-daemon[1842]: [session uid=1001 pid=1842 pidfd=5] Activated service 'org.freedesktop.impl.portal.desktop.gtk' failed: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:1877): xdg-desktop-portal-WARNING **: 00:41:17.439: Failed to create print proxy: Error calling StartServiceByName for org.freedesktop.impl.portal.desktop.gtk: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:1877): xdg-desktop-portal-WARNING **: 00:41:17.439: Choosing gtk.portal for org.freedesktop.impl.portal.Notification as a last-resort fallback
+dbus-daemon[1842]: [session uid=1001 pid=1842 pidfd=5] Activating service name='org.freedesktop.impl.portal.desktop.gtk' requested by ':1.3' (uid=1001 pid=1877 comm="/usr/libexec/xdg-desktop-portal" label="crun (unconfined)")
+
+(xdg-desktop-portal-gtk:1913): Gtk-WARNING **: 00:41:17.447: cannot open display: 
+dbus-daemon[1842]: [session uid=1001 pid=1842 pidfd=5] Activated service 'org.freedesktop.impl.portal.desktop.gtk' failed: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:1877): xdg-desktop-portal-WARNING **: 00:41:17.447: Failed to create notification proxy: Error calling StartServiceByName for org.freedesktop.impl.portal.desktop.gtk: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:1877): xdg-desktop-portal-WARNING **: 00:41:17.448: Choosing gtk.portal for org.freedesktop.impl.portal.Inhibit as a last-resort fallback
+dbus-daemon[1842]: [session uid=1001 pid=1842 pidfd=5] Activating service name='org.freedesktop.impl.portal.desktop.gtk' requested by ':1.3' (uid=1001 pid=1877 comm="/usr/libexec/xdg-desktop-portal" label="crun (unconfined)")
+
+(xdg-desktop-portal-gtk:1916): Gtk-WARNING **: 00:41:17.455: cannot open display: 
+dbus-daemon[1842]: [session uid=1001 pid=1842 pidfd=5] Activated service 'org.freedesktop.impl.portal.desktop.gtk' failed: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:1877): xdg-desktop-portal-WARNING **: 00:41:17.456: Failed to create inhibit proxy: Error calling StartServiceByName for org.freedesktop.impl.portal.desktop.gtk: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:1877): xdg-desktop-portal-WARNING **: 00:41:17.456: The location portal requires an access impl
+
+(/usr/libexec/xdg-desktop-portal:1877): xdg-desktop-portal-WARNING **: 00:41:17.456: The camera portal requires an access impl
+
+(/usr/libexec/xdg-desktop-portal:1877): xdg-desktop-portal-WARNING **: 00:41:17.456: Choosing gtk.portal for org.freedesktop.impl.portal.Account as a last-resort fallback
+dbus-daemon[1842]: [session uid=1001 pid=1842 pidfd=5] Activating service name='org.freedesktop.impl.portal.desktop.gtk' requested by ':1.3' (uid=1001 pid=1877 comm="/usr/libexec/xdg-desktop-portal" label="crun (unconfined)")
+
+(xdg-desktop-portal-gtk:1919): Gtk-WARNING **: 00:41:17.463: cannot open display: 
+dbus-daemon[1842]: [session uid=1001 pid=1842 pidfd=5] Activated service 'org.freedesktop.impl.portal.desktop.gtk' failed: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:1877): xdg-desktop-portal-WARNING **: 00:41:17.464: Failed to create account proxy: Error calling StartServiceByName for org.freedesktop.impl.portal.desktop.gtk: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:1877): xdg-desktop-portal-WARNING **: 00:41:17.464: Choosing gtk.portal for org.freedesktop.impl.portal.Email as a last-resort fallback
+dbus-daemon[1842]: [session uid=1001 pid=1842 pidfd=5] Activating service name='org.freedesktop.impl.portal.desktop.gtk' requested by ':1.3' (uid=1001 pid=1877 comm="/usr/libexec/xdg-desktop-portal" label="crun (unconfined)")
+
+(xdg-desktop-portal-gtk:1922): Gtk-WARNING **: 00:41:17.471: cannot open display: 
+dbus-daemon[1842]: [session uid=1001 pid=1842 pidfd=5] Activated service 'org.freedesktop.impl.portal.desktop.gtk' failed: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:1877): xdg-desktop-portal-WARNING **: 00:41:17.472: Failed to create email proxy: Error calling StartServiceByName for org.freedesktop.impl.portal.desktop.gtk: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:1877): xdg-desktop-portal-WARNING **: 00:41:17.472: Choosing gtk.portal for org.freedesktop.impl.portal.DynamicLauncher as a last-resort fallback
+dbus-daemon[1842]: [session uid=1001 pid=1842 pidfd=5] Activating service name='org.freedesktop.impl.portal.desktop.gtk' requested by ':1.3' (uid=1001 pid=1877 comm="/usr/libexec/xdg-desktop-portal" label="crun (unconfined)")
+
+(xdg-desktop-portal-gtk:1925): Gtk-WARNING **: 00:41:17.479: cannot open display: 
+dbus-daemon[1842]: [session uid=1001 pid=1842 pidfd=5] Activated service 'org.freedesktop.impl.portal.desktop.gtk' failed: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+
+(/usr/libexec/xdg-desktop-portal:1877): xdg-desktop-portal-WARNING **: 00:41:17.480: Failed to create dynamic_launcher proxy: Error calling StartServiceByName for org.freedesktop.impl.portal.desktop.gtk: Process org.freedesktop.impl.portal.desktop.gtk exited with status 1
+dbus-daemon[1842]: [session uid=1001 pid=1842 pidfd=5] Successfully activated service 'org.freedesktop.portal.Desktop'
+FAILED
+
+failures:
+
+---- ui::root::tests::ui_smoke_window_has_header_controls_and_server_password stdout ----
+Papo GUI renderer: GskCairoRenderer
+
+thread 'ui::root::tests::ui_smoke_window_has_header_controls_and_server_password' (1861) panicked at src/ui/chat/actions/tests.rs:38:28:
+missing button: ❤️
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    ui::root::tests::ui_smoke_window_has_header_controls_and_server_password
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 299 filtered out; finished in 5.40s
+
+[1m[91merror[0m: test failed, to rerun pass `--bin papo-gtk`

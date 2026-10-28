@@ -1,0 +1,75 @@
+{
+  "schema": 1,
+  "status": "fail",
+  "started_utc": "2026-10-23T00:32:56.7706013Z",
+  "renderer_request": "auto",
+  "cases": [
+    {
+      "renderer": "test ui::root::tests::ui_smoke_window_has_header_controls_and_server_password ... Papo GUI renderer: GskCairoRenderer",
+      "ui_peak_working_set_bytes": 165928960,
+      "seconds": 11.2198147,
+      "name": "mov-media",
+      "status": "fail",
+      "timed_out": false,
+      "exit_code": 101
+    },
+    {
+      "renderer": "test ui::root::tests::ui_smoke_window_has_header_controls_and_server_password ... Papo GUI renderer: GskCairoRenderer",
+      "ui_peak_working_set_bytes": 105279488,
+      "seconds": 11.3725832,
+      "name": "backend-gifs",
+      "status": "pass",
+      "timed_out": false,
+      "exit_code": 0
+    },
+    {
+      "renderer": "test ui::root::tests::ui_smoke_window_has_header_controls_and_server_password ... Papo GUI renderer: GskCairoRenderer",
+      "ui_peak_working_set_bytes": 106561536,
+      "seconds": 5.5911277,
+      "name": "status-viewer",
+      "status": "pass",
+      "timed_out": false,
+      "exit_code": 0
+    },
+    {
+      "renderer": "test ui::root::tests::ui_smoke_window_has_header_controls_and_server_password ... Papo GUI renderer: GskCairoRenderer",
+      "ui_peak_working_set_bytes": 44019712,
+      "seconds": 0.5605482,
+      "name": "video-audio",
+      "status": "pass",
+      "timed_out": false,
+      "exit_code": 0
+    }
+  ],
+  "user": {
+    "name": "runnervmgnbhw\\runneradmin",
+    "administrator": true
+  },
+  "os": {
+    "build": "20348",
+    "edition": "ServerDatacenter",
+    "version": "10.0.20348",
+    "caption": "Microsoft Windows Server 2022 Datacenter",
+    "ubr": 5622,
+    "display_version": "21H2"
+  },
+  "archive": {
+    "sha256": "4be7e057b7259051261d51762e03f7cd0aa4b965ed8e65c0415ef2d54d846dc1",
+    "name": "Papo-1.0.2-windows-x86_64-dev.zip"
+  },
+  "instrumented_ui": {
+    "schema": 1,
+    "source_commit": "5b27e0be5b1f6ba8fada0b20adbdf40fe364b736",
+    "source_dirty": false,
+    "executable": "papo-media-tests.exe",
+    "sha256": "e6f029ae8f514b56ab19bc0d4c406e40bb5656284b953a4a46acb443cbae8fad",
+    "scope": "Instrumented shared UI tests; uses the separately verified portable ZIP runtime. Not a release executable."
+  },
+  "source_commit": "5b27e0be5b1f6ba8fada0b20adbdf40fe364b736",
+  "runtime_manifest_sha256": "32eaed7c845bbe29b523a0ba5086b49864627ca672bbc30d1cae7a1e3194781d",
+  "immutable_runtime": true,
+  "machine_path_unchanged": true,
+  "error": "Media UI acceptance failed; inspect individual case logs",
+  "extracted_package_removed": true,
+  "finished_utc": "2026-10-23T00:33:37.5152090Z"
+}

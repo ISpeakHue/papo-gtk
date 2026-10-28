@@ -1,6 +1,6 @@
 //! EN-US: Media decoder facade; isolation belongs to the platform adapter.
 //! PT-BR: Fachada dos decodificadores; o isolamento pertence ao adaptador da plataforma.
-pub(super) use crate::platform::sandbox::command;
+pub(super) use crate::platform::sandbox::{command,prepare,timeout};
 
 #[cfg(all(test,target_os="linux"))]mod tests{
     use super::*;

@@ -1,0 +1,10 @@
+{
+  "device": "read-only USB FAT fixture",
+  "label": "PAPOMEDIA7",
+  "image": "target/windows-step7-vm/final-input.img",
+  "network": false,
+  "host_share": false,
+  "guest_agent": false,
+  "input": "fixture-only QMP keyboard/mouse; separated key press/release for reliable guest USB input",
+  "results": "fresh writable PAPORESULTS FAT; prior diagnostic image preserved separately; host extraction only after normal shutdown"
+}

@@ -1,6 +1,9 @@
 # Composer, clipboard and input methods
 
 Commands run from the repository root. See [Testing](../../TESTING.md) for setup.
+Windows desktop and real input-method acceptance is tracked separately in
+[Windows desktop/input testing](windows-desktop.md). X11 key injection and direct
+preedit-signal tests do not prove Windows dead-key or IME behavior.
 Dated validation results describe their original fixture runs, rather than a
 current guarantee for every server, desktop or driver.
 

@@ -1,0 +1,13 @@
+macos-foundation	Compile and link tests and the native Keychain adapter (no macOS bundle yet)	2026-10-22T01:04:04.4382260Z ^[[1m^[[92m    Finished^[[0m `dev` profile [unoptimized + debuginfo] target(s) in 54.16s
+macos-foundation	Compile and link tests and the native Keychain adapter (no macOS bundle yet)	2026-10-22T01:05:26.8805480Z ^[[1m^[[92m    Finished^[[0m `test` profile [unoptimized + debuginfo] target(s) in 1m 22s
+windows	Test source provenance and package archive verification	2026-10-22T01:04:31.9184006Z Ran 24 tests in 4.431s
+windows	Check every Rust target on Windows	2026-10-22T01:07:45.4618412Z ^[[1m^[[92m    Finished^[[0m `dev` profile [unoptimized + debuginfo] target(s) in 1m 43s
+windows	Test platform policy and native worker lifecycle with synthetic audio	2026-10-22T01:09:40.4424876Z ^[[1m^[[92m    Finished^[[0m `test` profile [unoptimized + debuginfo] target(s) in 1m 54s
+windows	Test platform policy and native worker lifecycle with synthetic audio	2026-10-22T01:09:40.7129303Z test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 285 filtered out; finished in 0.14s
+windows	Test platform policy and native worker lifecycle with synthetic audio	2026-10-22T01:09:40.9852693Z ^[[1m^[[92m    Finished^[[0m `test` profile [unoptimized + debuginfo] target(s) in 0.18s
+windows	Test platform policy and native worker lifecycle with synthetic audio	2026-10-22T01:09:44.1405066Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 295 filtered out; finished in 3.12s
+windows	Test embedded icon coverage and native GTK rendering	2026-10-22T01:09:44.7147644Z ^[[1m^[[92m    Finished^[[0m `test` profile [unoptimized + debuginfo] target(s) in 0.19s
+windows	Test embedded icon coverage and native GTK rendering	2026-10-22T01:09:45.1620793Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 295 filtered out; finished in 0.41s
+windows	Test embedded icon coverage and native GTK rendering	2026-10-22T01:09:45.4498321Z ^[[1m^[[92m    Finished^[[0m `test` profile [unoptimized + debuginfo] target(s) in 0.20s
+windows	Test embedded icon coverage and native GTK rendering	2026-10-22T01:09:50.4105947Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 295 filtered out; finished in 4.92s
+windows	Build and validate self-contained portable preview	2026-10-22T01:12:56.1204977Z ^[[1m^[[92m    Finished^[[0m `release` profile [optimized] target(s) in 3m 04s

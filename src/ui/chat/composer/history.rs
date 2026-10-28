@@ -55,7 +55,8 @@ impl Composer {
         let menu=gtk::gio::Menu::new();menu.append(Some("Desfazer"),Some("draft.undo"));menu.append(Some("Refazer"),Some("draft.redo"));entry.set_extra_menu(Some(&menu));
         let shortcuts=gtk::ShortcutController::new();shortcuts.set_propagation_phase(gtk::PropagationPhase::Capture);
         use gtk::gdk::{Key,ModifierType as M};
-        for (key,mods,redo) in [(Key::z,M::CONTROL_MASK,false),(Key::Z,M::CONTROL_MASK|M::SHIFT_MASK,true),(Key::z,M::CONTROL_MASK|M::SHIFT_MASK,true),(Key::y,M::CONTROL_MASK,true)]{
+        let primary=crate::platform::shortcuts::primary_modifier();
+        for (key,mods,redo) in [(Key::z,primary,false),(Key::Z,primary|M::SHIFT_MASK,true),(Key::z,primary|M::SHIFT_MASK,true),(Key::y,primary,true)]{
             let weak=entry.downgrade();let composer=self.clone();
             let action=gtk::CallbackAction::new(move |_,_|{
                 if composer.is_composing(){return gtk::glib::Propagation::Proceed;}

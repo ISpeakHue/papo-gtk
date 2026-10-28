@@ -1,0 +1,15 @@
+{
+  "source_commit": "5b27e0be5b1f6ba8fada0b20adbdf40fe364b736",
+  "archive_sha256": "4be7e057b7259051261d51762e03f7cd0aa4b965ed8e65c0415ef2d54d846dc1",
+  "runtime_manifest_sha256": "32eaed7c845bbe29b523a0ba5086b49864627ca672bbc30d1cae7a1e3194781d",
+  "fixture_sha256": {
+    "Papo-1.0.2-windows-x86_64-dev.zip": "4be7e057b7259051261d51762e03f7cd0aa4b965ed8e65c0415ef2d54d846dc1",
+    "Papo-1.0.2-windows-x86_64-dev.zip.sha256": "3caf94fa3534addced21988096a2650d58f8b36a17212572d506f2a0a985b5b2",
+    "check-media-ui.ps1": "0b9db13c2e8b542168bc6618567f644a4c67f2dfede05a214e5dd75e8ac9b575",
+    "MEDIA-TESTS.json": "30a1e148afb818afa326dc3e68f2d9ee70d09a771afe69163a6f9b0c5286110d",
+    "papo-media-tests.exe": "e6f029ae8f514b56ab19bc0d4c406e40bb5656284b953a4a46acb443cbae8fad",
+    "start.ps1": "fb4adf9d3f95a4d6d992d83d17c820c1bea8a65b3d6bfb6351665c3f5ddfadb2",
+    "check-media.ps1": "66ee8d860cfaa340a36b50989f16e42a594c881912800b4ff317f588fe4ba752"
+  },
+  "input_disk_sha256": "356260bbb5e02a20beee83208ecd7d2a51c320fd20be19060c7754e351de5582"
+}

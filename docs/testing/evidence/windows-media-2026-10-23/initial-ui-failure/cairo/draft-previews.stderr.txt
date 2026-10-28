@@ -1,0 +1,4 @@
+
+thread 'ui::root::tests::ui_smoke_window_has_header_controls_and_server_password' (5848) panicked at src\ui\chat\draft_preview.rs:124:85:
+called `Result::unwrap()` on an `Err` value: Os { code: 3, kind: NotFound, message: "The system cannot find the path specified." }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

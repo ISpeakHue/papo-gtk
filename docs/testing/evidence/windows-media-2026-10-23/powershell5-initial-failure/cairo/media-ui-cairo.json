@@ -1,0 +1,24 @@
+﻿{
+    "schema":  1,
+    "status":  "fail",
+    "started_utc":  "2026-10-23T03:34:46.6202325Z",
+    "renderer_request":  "cairo",
+    "audio_output":  "discard",
+    "cases":  [
+
+              ],
+    "user":  {
+                 "name":  "PAPO-CLEAN-VM\\PapoTester",
+                 "administrator":  false
+             },
+    "os":  {
+               "build":  "26300",
+               "version":  "10.0.26300",
+               "caption":  "Microsoft Windows 11 Enterprise Evaluation",
+               "edition":  "EnterpriseEval",
+               "display_version":  "26H2",
+               "ubr":  9457
+           },
+    "error":  "Cannot bind argument to parameter \u0027Path\u0027 because it is an empty string.",
+    "finished_utc":  "2026-10-23T03:35:31.8557916Z"
+}

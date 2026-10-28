@@ -1,0 +1,15 @@
+{
+  "source_commit": "ee3097dc525d3f3797b5270fecd563eda894d8e9",
+  "archive_sha256": "0539a4bb623595d93513c8bd8cdc0a6242c6c07f1300722dd26f45b3654021b6",
+  "runtime_manifest_sha256": "b6fb63b893cc2212b0e205f2e70da2887e98761bb4937760112179df592d913d",
+  "fixture_sha256": {
+    "Papo-1.0.2-windows-x86_64-dev.zip": "0539a4bb623595d93513c8bd8cdc0a6242c6c07f1300722dd26f45b3654021b6",
+    "Papo-1.0.2-windows-x86_64-dev.zip.sha256": "db0ff3aba27ec805b19888bc9f017b6a4968be79a122936fca19356246c9a3b3",
+    "check-media-ui.ps1": "5b3e2adfab5c68198b50f1a1284c2732766d744227a804a5cec0e4ffcf4a87f3",
+    "MEDIA-TESTS.json": "b9bb8c2806fdc5cd9d5cf6120371caa58adf8b21e81732ef7fa945339caf6840",
+    "papo-media-tests.exe": "5085ae0187c2cd76616d03d168d84a6ab95c3071ab3e79c757d753cfa93f0476",
+    "start.ps1": "4dc2b17a43c4fb770ce50672be21ba01b2dac95de68d58adf983c7acb796cf8e"
+  },
+  "input_disk_sha256": "af99e9501e11b19433da8f15c568700ec325275e72f855af0184567bc24c9d9a",
+  "driver_source": "0029ecd8e4afa40a5655c45181165b5a6dfefad5"
+}

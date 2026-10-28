@@ -1,0 +1,26 @@
+2026-10-23T00:43:18.9141667Z     Finished `dev` profile [unoptimized + debuginfo] target(s) in 2m 03s
+2026-10-23T00:46:13.4908748Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 2m 54s
+2026-10-23T00:46:13.7722792Z test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 288 filtered out; finished in 0.16s
+2026-10-23T00:46:14.1781088Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.30s
+2026-10-23T00:46:17.2004817Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 300 filtered out; finished in 2.97s
+2026-10-23T00:46:18.1144719Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.37s
+2026-10-23T00:46:18.7602574Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 300 filtered out; finished in 0.60s
+2026-10-23T00:46:19.1507941Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.29s
+2026-10-23T00:46:25.9136389Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 300 filtered out; finished in 6.71s
+2026-10-23T00:46:26.3509283Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.33s
+2026-10-23T00:46:27.6378417Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 300 filtered out; finished in 1.23s
+2026-10-23T00:46:28.2886997Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.32s
+2026-10-23T00:46:30.7807906Z test result: ok. 10 passed; 0 failed; 1 ignored; 0 measured; 290 filtered out; finished in 2.44s
+2026-10-23T00:46:31.2100607Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.34s
+2026-10-23T00:46:31.2697211Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.01s
+2026-10-23T00:46:31.8989933Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.33s
+2026-10-23T00:46:45.4060419Z test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 276 filtered out; finished in 13.44s
+2026-10-23T00:46:45.8146191Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.31s
+2026-10-23T00:46:46.0037059Z test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 295 filtered out; finished in 0.14s
+2026-10-23T00:46:46.3845333Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.30s
+2026-10-23T00:46:46.5060377Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 299 filtered out; finished in 0.07s
+2026-10-23T00:46:46.8848205Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.28s
+2026-10-23T00:46:46.9363263Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 298 filtered out; finished in 0.00s
+2026-10-23T00:46:47.3210808Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.30s
+2026-10-23T00:52:06.4065799Z     Finished `release` profile [optimized] target(s) in 5m 14s
+2026-10-23T00:52:26.3401668Z {"status": "ok", "python": "3.14.8", "prefix": "D:/a/papo-gtk/papo-gtk/dist/Papo-1.0.2-windows-x86_64-dev/runtime", "gtk": "4.24.1", "gstreamer": "GStreamer 1.28.8", "checked_files": 7828, "loaded_modules": 276, "media_fixtures": 4, "decode_runs": [{"fixture": "chat-h264.mp4", "mode": "auto", "decoders": ["avdec_aac", "avdec_h264", "decodebin", "uridecodebin"]}, {"fixture": "chat-h264.mp4", "mode": "software", "decoders": ["avdec_aac", "avdec_h264", "decodebin", "uridecodebin"]}, {"fixture": "chat-video.mov", "mode": "auto", "decoders": ["avdec_h264", "decodebin", "uridecodebin"]}, {"fixture": "chat-video.mov", "mode": "software", "decoders": ["avdec_h264", "decodebin", "uridecodebin"]}, {"fixture": "chat-video.webm", "mode": "auto", "decoders": ["decodebin", "uridecodebin", "vorbisdec", "vp8dec"]}, {"fixture": "chat-video.webm", "mode": "software", "decoders": ["decodebin", "uridecodebin", "vorbisdec", "vp8dec"]}, {"fixture": "voice.wav", "mode": "auto", "decoders": ["decodebin", "opusdec", "uridecodebin"]}], "hardware_decoder_factories": [], "hardware_scope": "Available factory names and actual automatic selection; no forced driver or physical-GPU qualification.", "os_codec_modules": [], "runtime_cache": "C:\\Users\\runneradmin\\AppData\\Local\\papo-gtk\\runtime\\5866d8a5d7125710\\registry.bin"}

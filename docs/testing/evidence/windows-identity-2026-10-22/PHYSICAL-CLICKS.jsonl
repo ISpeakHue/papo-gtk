@@ -1,0 +1,2 @@
+{"phase": "warm", "utc": "2026-10-22T15:10:38.104747+00:00", "screenshot": "history-warm.png", "display": [1280, 800], "click": [1080, 170], "target": "Papo synthetic notification body in history"}
+{"phase": "cold", "utc": "2026-10-22T15:11:09.150930+00:00", "screenshot": "history-cold.png", "display": [1280, 800], "click": [1080, 170], "target": "Papo synthetic notification body in history; no Papo taskbar window before click"}

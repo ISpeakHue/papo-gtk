@@ -1,0 +1,76 @@
+{
+  "inputs": [
+    {
+      "path": "target/windows-clean-vm/step6/final-input.img",
+      "sha256": "959112e402f6fe913cafe9bfceedc11d4bf5c9b8b3652fbe30ae3473935b8659",
+      "size": 268435456
+    },
+    {
+      "path": "target/windows-step6-final-package/Papo-1.0.2-windows-x86_64-dev.zip",
+      "sha256": "7914456e7fed0f469ca7f9b9fabad8438e1524d397c8fc2476d8eb7a5d4156b1",
+      "size": 178284739
+    },
+    {
+      "path": "target/windows-step6-final-package/Papo-1.0.2-windows-x86_64-dev.zip.sha256",
+      "sha256": "f2534d95ca6461a60c8b41b3d505e26d50a1949478dea38f63bbc319f117a124",
+      "size": 101
+    },
+    {
+      "path": "packaging/windows/check-media.ps1",
+      "sha256": "03f57295941f031e586b90cd17f6b2a7dbac637e86abff821a471d5ac7433e55",
+      "size": 4698
+    },
+    {
+      "path": "packaging/windows/clean-vm/media-acceptance.ps1",
+      "sha256": "56b738757d83f9d14d97de7bc61a8bdbe9674b374b422608e8d4bf1e7cfa8f88",
+      "size": 1163
+    },
+    {
+      "path": "packaging/windows/clean-vm/prepare.py",
+      "sha256": "1fabff916a992c5bfac4eaead2276591a0621b8ce0bf1dcf21499d0e2dc475e4",
+      "size": 10985
+    },
+    {
+      "path": "packaging/windows/clean-vm/run.py",
+      "sha256": "8f2f4022e8810e049cd15da91d6e44fe98f093e1970aa757893a384bebffd80a",
+      "size": 6438
+    },
+    {
+      "path": "packaging/windows/clean-vm/control.py",
+      "sha256": "5c7fe9e2525107841328c77109149eb910cac4b88db9088eaa2fe3a444e287c7",
+      "size": 5868
+    },
+    {
+      "path": "target/windows-clean-vm/step6/final-input/check-media.ps1",
+      "sha256": "66ee8d860cfaa340a36b50989f16e42a594c881912800b4ff317f588fe4ba752",
+      "size": 4701,
+      "matches_source_without_utf8_bom": true
+    },
+    {
+      "path": "target/windows-clean-vm/step6/final-input/media-acceptance.ps1",
+      "sha256": "ce52190d7dcf7f0b0eb3dc00e41289a72213d772a3ad621592104ba94fc6bef4",
+      "size": 1166,
+      "matches_source_without_utf8_bom": true
+    },
+    {
+      "path": "target/windows-clean-vm/step6/final-input/start.ps1",
+      "sha256": "7a5e244700ec75ece49710b41d0a1cc93e22212b5f25f38a254acdf8c1069b76",
+      "size": 578
+    },
+    {
+      "path": "tests/fixtures/chat-h264.mp4",
+      "sha256": "1cc1a655c0578b6c4cbb729b2c0b9f608c29f4115358a9444e0cc8daa23391e4",
+      "size": 60255
+    },
+    {
+      "path": "tests/fixtures/chat-video.mov",
+      "sha256": "c91ae43fcc866019ba69f1ac6ebe69c34cae8bed5df6da20bf2e25ce0e377a9b",
+      "size": 40966
+    },
+    {
+      "path": "tests/fixtures/chat-video.webm",
+      "sha256": "c300d695d9fb01ffc27756ea89f7d356f936d4be3483a0dd480a46b2a0f8a3f9",
+      "size": 8293
+    }
+  ]
+}

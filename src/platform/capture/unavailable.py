@@ -1,4 +1,4 @@
-# EN-US: Native Windows/macOS capture needs a permission-aware source picker before enabling publication.
-# PT-BR: A captura nativa no Windows/macOS exige seleção de fonte com consentimento antes de habilitar a publicação.
+# EN-US: Unsupported targets, including macOS, cannot publish without a consent-aware native adapter.
+# PT-BR: Plataformas sem suporte, incluindo macOS, não publicam sem um adaptador nativo com consentimento.
 def create_screen_capture(ready, ended):
     raise NotImplementedError("Screen capture is not available on this platform yet")

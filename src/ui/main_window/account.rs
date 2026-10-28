@@ -595,7 +595,13 @@ impl MainWindowModel {
                 save.add_css_class("suggested-action");save.set_halign(gtk::Align::End);save.set_margin_top(4);
                 let s = sender.clone();
                 save.connect_clicked(move |_|s.input(MainWindowMsg::Account(AccountMsg::SavePreferences(token))));
-                body.append(&save);
+                // EN-US: Keep the primary action outside the scrolling form at small sizes/large fonts.
+                // PT-BR: Mantém a ação principal fora do formulário rolável em tamanhos pequenos/fontes grandes.
+                if embedded{
+                    let (_,page)=self.settings_mount(settings::Tab::Preferences).unwrap();
+                    let footer=gtk::Box::new(gtk::Orientation::Horizontal,12);footer.add_css_class("papo-profile-actions");
+                    let spacer=gtk::Box::new(gtk::Orientation::Horizontal,0);spacer.set_hexpand(true);footer.append(&spacer);footer.append(&save);page.append(&footer);
+                }else{body.append(&save);}
                 let error = gtk::Label::new(None);
                 error.set_wrap(true);error.set_xalign(0.0);error.set_visible(false);error.connect_label_notify(|label|label.set_visible(!label.text().is_empty()));
                 body.append(&error);

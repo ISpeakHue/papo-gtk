@@ -14,6 +14,7 @@ sound.Gst.init(None)
 
 
 class CallSoundTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == "linux", "Linux-only PulseAudio mixer identity; native Windows cues are checked separately")
     def test_auto_output_children_get_papos_identity_before_playback(self):
         sink = sound.Gst.ElementFactory.make("pulsesink")
         if sink is None:

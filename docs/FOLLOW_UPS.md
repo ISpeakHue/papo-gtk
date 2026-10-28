@@ -7,6 +7,20 @@ in the [testing guides](../TESTING.md), [design guide](../DESIGN.md),
 
 ## Investigations that need current evidence
 
+- **Windows inline-emoji pause assertion:** the [step 7 record](testing/evidence/windows-media-2026-10-23/README.md)
+  retains one standard-user VM failure comparing frames immediately after a
+  scroll; the unchanged complete replay, native CI matrices and earlier VM
+  diagnostic passed. Capture allocated clipping bounds and after-paint frame
+  samples before attributing this to the animation scheduler or changing the
+  assertion. The visibility code already schedules a check after allocation;
+  premature sampling is plausible, not a demonstrated root cause or fix.
+
+- **Linux CI qualification:** the [build-provenance record](testing/build-provenance.md#verification-record-2026-10-21)
+  identifies the repaired sandbox/loader setup, the explicit codec dependency
+  correction and individual remaining GUI failures. Keep those cases failing until
+  their assertions or product defects are resolved with mapped-layout/decoder
+  evidence; an icon-only pass does not qualify the complete GUI workflow.
+
 - **Native playback teardown:** the [2026-10-13 crash analysis](archive/CRASH_ANALYSIS_2026-10-13.md)
   records a GStreamer cleanup SIGSEGV after leaving fullscreen and jumping to the
   latest messages. Synthetic passing runs did not establish its root cause or

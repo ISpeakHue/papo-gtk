@@ -49,7 +49,7 @@ pub(super) fn group(body: &gtk::Box, title: &str, refresh_label: &str, sender: &
 }
 
 pub(super) fn new(sender: &ComponentSender<MainWindowModel>) -> Controls {
-    let native = adw::Window::builder().title("Configurar chamada").default_width(760).default_height(560).hide_on_close(true).build();
+    let native = adw::Window::builder().title("Configurar chamada").default_width(760).default_height(640).hide_on_close(true).build();
     native.set_size_request(320,360);
     let toolbar = adw::ToolbarView::new();
     let header = adw::HeaderBar::new();

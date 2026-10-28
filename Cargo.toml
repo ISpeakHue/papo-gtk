@@ -1,6 +1,6 @@
 [package]
 name = "papo-gtk"
-version = "1.0.2"
+version = "1.1.0"
 edition = "2021"
 authors = ["Papo Contributors"]
 description = "GTK 4 frontend for the Papo chat server"
@@ -28,6 +28,7 @@ tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.10"
 
 # Date/time
 chrono = { version = "0.4", features = ["serde"] }
@@ -64,8 +65,12 @@ syntect = { version = "5.3", default-features = false, features = ["default-synt
 [target.'cfg(target_os = "linux")'.dependencies]
 keyring = { version = "3", features = ["sync-secret-service", "crypto-rust", "vendored"] }
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }
+windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Security_Cryptography", "Win32_System_Threading", "Win32_System_JobObjects", "Win32_System_Memory", "Win32_System_Console", "Win32_System_Pipes", "Win32_System_RemoteDesktop", "Win32_Storage_FileSystem", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "3", features = ["apple-native"] }

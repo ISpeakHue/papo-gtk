@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "iso": "/home/gabrieloliveiradecastro/Documentos/Código/papo-gtk/target/windows-clean-vm/windows11.iso",
+  "iso_sha256": "bc3f24086ebadc94489066b5ad78089e2cf5c3491e90e790bb81a2b199c10e38",
+  "archive": "Papo-1.0.2-windows-x86_64-dev.zip",
+  "archive_sha256": "3f65b9fd44aac15685b6842097a1878ec9f8671c25226fed2a94f539abf1cf43",
+  "network": "none",
+  "memory_mib": 6144,
+  "cpus": 4,
+  "accounts": {
+    "administrator": "PapoTestAdmin",
+    "acceptance": "PapoTester"
+  },
+  "firmware": {
+    "executable": {
+      "filename": "/usr/share/edk2/ovmf/OVMF_CODE_4M.secboot.qcow2",
+      "format": "qcow2"
+    },
+    "variables": "/home/gabrieloliveiradecastro/Documentos/Código/papo-gtk/target/windows-clean-vm/clean/uefi-vars.qcow2",
+    "variable_format": "qcow2",
+    "descriptor": "/usr/share/qemu/firmware/30-edk2-ovmf-4m-qcow2-x64-sb-enrolled.json",
+    "code_sha256": "7505c4d2b8abd28bf599f209721d7d214f144b35c380703a9ee009fb76a3418c"
+  },
+  "hypervisor": "QEMU emulator version 10.2.2 (qemu-10.2.2-1.fc44)"
+}

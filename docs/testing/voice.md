@@ -101,7 +101,7 @@ required:
 
 ```sh
 cd tests/voice-sfu
-go build -mod=readonly -o /tmp/papo-voice-sfu .
+go build -mod=readonly -o ../../target/voice-sfu .
 cd ../..
 python3 tests/voice_probe.py
 # Desktop capture verification: private virtual PulseAudio/PipeWire source.
@@ -231,7 +231,7 @@ its `-light` variant and `/tmp/papo-design-call-settings-narrow.png`.
 ## Call sound playback and mixer identity
 
 ```sh
-/usr/bin/python3 -m unittest discover -s tests -p 'call_sound_test.py' -v
+python3 -m unittest discover -s tests -p 'call_sound_test.py' -v
 PAPO_UI_CASE=call-sounds dbus-run-session -- xvfb-run -a \
   cargo test --locked --offline ui_smoke -- --ignored --test-threads=1
 ```
@@ -243,3 +243,10 @@ and the account sound preference, remain respected. The headless checks verify
 metadata on dynamically added output sinks without opening an audio device and
 decode both bundled cues to a fake sink. The GTK case checks disabled sounds,
 join/leave playback, cancellation, rapid restarts and process cleanup.
+
+## Windows call implementation
+
+[Step 8 call checks](windows-calls.md) document endpoint IDs, device-change
+recovery, raw/MJPEG cameras, process-tree cleanup and portable SFU launchers.
+Windows hardware testing is deferred until a release is available, as requested;
+local synthetic passes do not qualify Windows microphone/camera acceptance.

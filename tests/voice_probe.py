@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Two native clients, real Go SFU and local TURN; never open the microphone.
-Build tests/voice-sfu into /tmp/papo-voice-sfu before running this script.
+Build tests/voice-sfu into target/voice-sfu[.exe], or pass --sfu PATH.
 """
 import asyncio
 import json
 from pathlib import Path
 import sys
+from probe_runtime import python, sfu_binary, spawn_options
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -28,7 +29,7 @@ async def run(relay, device=None):
     processes = []
     pumps = []
     async def spawn(label, *args):
-        process = await asyncio.create_subprocess_exec(*args, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=None if "--diagnostics" in sys.argv else asyncio.subprocess.DEVNULL)
+        process = await asyncio.create_subprocess_exec(*args, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=None if "--diagnostics" in sys.argv else asyncio.subprocess.DEVNULL, **spawn_options())
         processes.append(process)
         async def pump():
             while line := await process.stdout.readline():
@@ -36,8 +37,8 @@ async def run(relay, device=None):
             await queue.put((label, {"type": "eof"}))
         pumps.append(asyncio.create_task(pump()))
         return process
-    sfu = await spawn("sfu", "/tmp/papo-voice-sfu")
-    clients = {peer: await spawn(peer, "/usr/bin/python3", "-u", str(ROOT / "src/voice/engine.py")) for peer in ("a", "b")}
+    sfu = await spawn("sfu", sfu_binary())
+    clients = {peer: await spawn(peer, python(), "-u", str(ROOT / "src/voice/engine.py")) for peer in ("a", "b")}
     audible = set()
     connected = set()
     routes = {}
@@ -65,7 +66,7 @@ async def run(relay, device=None):
                         await send(sfu, {"peer": peer, "event": {"type": "voice_join"}})
                 elif kind == "voice_joined":
                     await send(sfu, {"peer": peer, "event": {"type": "voice_mute", "muted": False}})
-                    await send(clients[peer], {"type": "start", "ice_servers": config, "relay": relay, "test_source": device is None, "device": device, "test_sink": True, "frequency": 440 if peer == "a" else 880})
+                    await send(clients[peer], {"type": "start", "muted": False, "ice_servers": config, "relay": relay, "test_source": device is None, "device": device, "test_sink": True, "frequency": 440 if peer == "a" else 880})
                 elif kind in ("voice_answer", "voice_offer", "voice_ice_candidate", "voice_audio_routes"):
                     if kind == "voice_audio_routes":
                         routes[peer] = event["routes"]
@@ -121,7 +122,7 @@ async def run(relay, device=None):
         await asyncio.gather(*pumps, return_exceptions=True)
 
 async def invalid_device():
-    p = await asyncio.create_subprocess_exec("/usr/bin/python3", "-u", str(ROOT / "src/voice/engine.py"), stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=None if "--diagnostics" in sys.argv else asyncio.subprocess.DEVNULL)
+    p = await asyncio.create_subprocess_exec(python(), "-u", str(ROOT / "src/voice/engine.py"), stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=None if "--diagnostics" in sys.argv else asyncio.subprocess.DEVNULL, **spawn_options())
     try:
         await send(p, {"type": "start", "device": "papo-nonexistent-test-microphone"})
         event = json.loads(await asyncio.wait_for(p.stdout.readline(), 10))
@@ -132,6 +133,8 @@ async def invalid_device():
         await close(p)
 
 async def virtual_capture():
+    if not sys.platform.startswith("linux"):
+        raise RuntimeError("--capture uses Linux PulseAudio virtual devices; use the synthetic default on Windows/macOS")
     # Private PulseAudio/PipeWire nodes carry a test tone, never the user's mic.
     name = "papo_voice_probe_" + str(__import__("os").getpid())
     modules = []
@@ -146,7 +149,7 @@ async def virtual_capture():
         modules.append(await pactl("load-module", "module-remap-source", "master=" + name + ".monitor", "source_name=" + name + "_capture"))
         tone = await asyncio.create_subprocess_exec("gst-launch-1.0", "-q", "audiotestsrc", "is-live=true", "volume=0.25", "!", "audioconvert", "!", "audioresample", "!", "pulsesink", "device=" + name, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
         await asyncio.sleep(0.3)
-        p = await asyncio.create_subprocess_exec("/usr/bin/python3", str(ROOT / "src/voice/engine.py"), "--devices", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+        p = await asyncio.create_subprocess_exec(python(), str(ROOT / "src/voice/engine.py"), "--devices", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
         out, _ = await p.communicate()
         devices = json.loads(out)["devices"]
         device = next(d["id"] for d in devices if name in d["id"])
@@ -160,6 +163,8 @@ async def virtual_capture():
             await pactl("unload-module", module)
 
 async def main():
+    if "--capture" in sys.argv and not sys.platform.startswith("linux"):
+        raise SystemExit("--capture requires Linux; the default probe uses synthetic audio on every OS")
     await run(False)
     await run(True)
     await invalid_device()

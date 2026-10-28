@@ -1,0 +1,130 @@
+﻿{
+    "schema":  1,
+    "status":  "pass",
+    "started_utc":  "2026-10-23T03:38:16.5993420Z",
+    "renderer_request":  "cairo",
+    "audio_output":  "discard",
+    "driver_sha256":  "df19dc0078d51c1d6afc3f0c94ca68bf50fbf01ae7e60899257847ab1d0e647c",
+    "cases":  [
+                  {
+                      "exit_code":  0,
+                      "name":  "media-emojis",
+                      "timed_out":  false,
+                      "ui_peak_working_set_bytes":  94547968,
+                      "renderer":  "test ui::root::tests::ui_smoke_window_has_header_controls_and_server_password ... Papo GUI renderer: GskCairoRenderer",
+                      "status":  "pass",
+                      "seconds":  10.2697018
+                  },
+                  {
+                      "exit_code":  0,
+                      "name":  "draft-previews",
+                      "timed_out":  false,
+                      "ui_peak_working_set_bytes":  91742208,
+                      "renderer":  "test ui::root::tests::ui_smoke_window_has_header_controls_and_server_password ... Papo GUI renderer: GskCairoRenderer",
+                      "status":  "pass",
+                      "seconds":  5.4616248999999994
+                  },
+                  {
+                      "exit_code":  0,
+                      "name":  "attachment-media",
+                      "timed_out":  false,
+                      "ui_peak_working_set_bytes":  95260672,
+                      "renderer":  "test ui::root::tests::ui_smoke_window_has_header_controls_and_server_password ... Papo GUI renderer: GskCairoRenderer",
+                      "status":  "pass",
+                      "seconds":  2.4356641999999997
+                  },
+                  {
+                      "exit_code":  0,
+                      "name":  "mov-media",
+                      "timed_out":  false,
+                      "ui_peak_working_set_bytes":  165376000,
+                      "renderer":  "test ui::root::tests::ui_smoke_window_has_header_controls_and_server_password ... Papo GUI renderer: GskCairoRenderer",
+                      "status":  "pass",
+                      "seconds":  8.1646214
+                  },
+                  {
+                      "exit_code":  0,
+                      "name":  "backend-gifs",
+                      "timed_out":  false,
+                      "ui_peak_working_set_bytes":  104755200,
+                      "renderer":  "test ui::root::tests::ui_smoke_window_has_header_controls_and_server_password ... Papo GUI renderer: GskCairoRenderer",
+                      "status":  "pass",
+                      "seconds":  7.993087
+                  },
+                  {
+                      "exit_code":  0,
+                      "name":  "media-cache",
+                      "timed_out":  false,
+                      "ui_peak_working_set_bytes":  96923648,
+                      "renderer":  "test ui::root::tests::ui_smoke_window_has_header_controls_and_server_password ... Papo GUI renderer: GskCairoRenderer",
+                      "status":  "pass",
+                      "seconds":  4.5048577
+                  },
+                  {
+                      "exit_code":  0,
+                      "name":  "recent-media",
+                      "timed_out":  false,
+                      "ui_peak_working_set_bytes":  105226240,
+                      "renderer":  "test ui::root::tests::ui_smoke_window_has_header_controls_and_server_password ... Papo GUI renderer: GskCairoRenderer",
+                      "status":  "pass",
+                      "seconds":  5.2170933
+                  },
+                  {
+                      "exit_code":  0,
+                      "name":  "status-viewer",
+                      "timed_out":  false,
+                      "ui_peak_working_set_bytes":  115007488,
+                      "renderer":  "test ui::root::tests::ui_smoke_window_has_header_controls_and_server_password ... Papo GUI renderer: GskCairoRenderer",
+                      "status":  "pass",
+                      "seconds":  5.0242986
+                  },
+                  {
+                      "exit_code":  0,
+                      "name":  "send-video",
+                      "timed_out":  false,
+                      "ui_peak_working_set_bytes":  85995520,
+                      "renderer":  "test ui::root::tests::ui_smoke_window_has_header_controls_and_server_password ... Papo GUI renderer: GskCairoRenderer",
+                      "status":  "pass",
+                      "seconds":  6.9547998999999994
+                  },
+                  {
+                      "exit_code":  0,
+                      "name":  "video-audio",
+                      "timed_out":  false,
+                      "ui_peak_working_set_bytes":  54362112,
+                      "renderer":  "test ui::root::tests::ui_smoke_window_has_header_controls_and_server_password ... Papo GUI renderer: GskCairoRenderer",
+                      "status":  "pass",
+                      "seconds":  0.46095539999999996
+                  }
+              ],
+    "user":  {
+                 "name":  "runnervmgnbhw\\runneradmin",
+                 "administrator":  true
+             },
+    "os":  {
+               "build":  "20348",
+               "version":  "10.0.20348",
+               "caption":  "Microsoft Windows Server 2022 Datacenter",
+               "edition":  "ServerDatacenter",
+               "display_version":  "21H2",
+               "ubr":  5622
+           },
+    "archive":  {
+                    "sha256":  "0539a4bb623595d93513c8bd8cdc0a6242c6c07f1300722dd26f45b3654021b6",
+                    "name":  "Papo-1.0.2-windows-x86_64-dev.zip"
+                },
+    "instrumented_ui":  {
+                            "schema":  1,
+                            "source_commit":  "ee3097dc525d3f3797b5270fecd563eda894d8e9",
+                            "source_dirty":  false,
+                            "executable":  "papo-media-tests.exe",
+                            "sha256":  "5085ae0187c2cd76616d03d168d84a6ab95c3071ab3e79c757d753cfa93f0476",
+                            "scope":  "Instrumented shared UI tests; uses the separately verified portable ZIP runtime. Not a release executable."
+                        },
+    "source_commit":  "ee3097dc525d3f3797b5270fecd563eda894d8e9",
+    "runtime_manifest_sha256":  "b6fb63b893cc2212b0e205f2e70da2887e98761bb4937760112179df592d913d",
+    "immutable_runtime":  true,
+    "machine_path_unchanged":  true,
+    "extracted_package_removed":  true,
+    "finished_utc":  "2026-10-23T03:39:36.4859853Z"
+}

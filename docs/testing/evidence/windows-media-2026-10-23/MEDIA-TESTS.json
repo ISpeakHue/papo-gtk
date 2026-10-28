@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "source_commit": "ee3097dc525d3f3797b5270fecd563eda894d8e9",
+  "source_dirty": false,
+  "executable": "papo-media-tests.exe",
+  "sha256": "5085ae0187c2cd76616d03d168d84a6ab95c3071ab3e79c757d753cfa93f0476",
+  "scope": "Instrumented shared UI tests; uses the separately verified portable ZIP runtime. Not a release executable."
+}

@@ -15,7 +15,7 @@ pub enum DirectMsg {
 }
 #[derive(Default)]
 pub(super) struct Direct {
-    pub items:Vec<DirectConversation>, pub known:HashSet<Uuid>, request:Option<Uuid>,refresh_again:bool,selection:Option<Uuid>,version:u64,
+    pub items:Vec<DirectConversation>, pub known:HashSet<Uuid>, pub(super) request:Option<Uuid>,refresh_again:bool,selection:Option<Uuid>,version:u64,
     changed:HashMap<Uuid,u64>,read:HashMap<Uuid,MessageCursor>,hidden:HashSet<Uuid>,hidden_since:HashMap<Uuid,u64>,blocked_peers:HashSet<Uuid>,busy:HashSet<Uuid>,jobs:Vec<tokio::task::JoinHandle<()>>,
     pub presence:HashMap<Uuid,crate::ws::PresenceStatus>,last_refresh:Option<Instant>,
     blocks:Option<BlockView>, blocks_request:Option<Uuid>,
@@ -55,7 +55,7 @@ impl MainWindowModel {
     }
     pub(super) fn direct_cancel_selection(&mut self){self.direct.selection=None;}
     pub(super) fn direct_selection_pending(&self)->bool{self.direct.selection.is_some()}
-    pub(super) fn can_read_target(&self,id:Uuid)->bool{
+    pub(crate) fn can_read_target(&self,id:Uuid)->bool{
         self.direct.items.iter().any(|d|d.id==id)||self.access.get(&id).is_some_and(|a|a.read)&&self.channels.iter().any(|c|c.id==id)
     }
     pub(super) fn publish_direct(&self){self.sidebar.emit(SidebarMsg::SetDirect(self.direct.items.clone()));}

@@ -7,3 +7,10 @@ __pycache__/
 .env
 .env.*
 !.env.example
+
+# EN-US: Signing keys remain in the owner's external store, never in source/build artifacts.
+# PT-BR: Chaves de assinatura ficam no repositório externo do proprietário, nunca no código/artefatos.
+*.pfx
+*.p12
+*.key
+*private-key*.pem

@@ -1,0 +1,112 @@
+﻿{
+    "schema":  1,
+    "status":  "pass",
+    "started_utc":  "2026-10-22T15:08:30.3546896Z",
+    "click_mode":  "external physical mouse",
+    "user":  {
+                 "name":  "PAPO-CLEAN-VM\\PapoTester",
+                 "administrator":  false
+             },
+    "os":  {
+               "build":  "26300",
+               "version":  "10.0.26300",
+               "caption":  "Microsoft Windows 11 Enterprise Evaluation",
+               "edition":  "EnterpriseEval",
+               "display_version":  "26H2",
+               "ubr":  9457
+           },
+    "archive":  {
+                    "sha256":  "d151f623bef5abd992d636ca6fcb386efd4a1c801cc48719facfd1e86640dca9",
+                    "name":  "Papo-1.0.2-windows-x86_64-dev.zip"
+                },
+    "source_commit":  "a374e67743ab6211e0522c2b5b4d785d453c9c33",
+    "source_dirty":  false,
+    "runtime_manifest_sha256":  "04f030837b34d181470cf5a20e4bdfe4b3fa2b1464b3611216107a22e9e96d09",
+    "resources":  [
+                      {
+                          "version":  "1.0.2.0",
+                          "extracted_icons":  2,
+                          "subsystem":  2,
+                          "icon":  true,
+                          "manifest":  true,
+                          "file":  "Papo.exe"
+                      },
+                      {
+                          "version":  "1.0.2.0",
+                          "extracted_icons":  2,
+                          "subsystem":  3,
+                          "icon":  true,
+                          "manifest":  true,
+                          "file":  "Papo.com"
+                      },
+                      {
+                          "version":  "1.0.2.0",
+                          "extracted_icons":  2,
+                          "subsystem":  2,
+                          "icon":  true,
+                          "manifest":  true,
+                          "file":  "runtime\\bin\\papo-gtk.exe"
+                      },
+                      {
+                          "version":  "1.0.2.0",
+                          "extracted_icons":  2,
+                          "subsystem":  3,
+                          "icon":  true,
+                          "manifest":  true,
+                          "file":  "runtime\\bin\\papo-shell.exe"
+                      }
+                  ],
+    "runtime":  "{\"status\": \"ok\", \"control_icons\": 47, \"desktop_themes\": 3, \"scales\": [1, 2], \"gtk\": \"4.24.1\"}\r\n{\"status\": \"ok\", \"python\": \"3.14.8\", \"prefix\": \"C:\\\\Users\\\\PapoTester\\\\WI3e3608\\\\Papo áéç\\\\Papo-1.0.2-windows-x86_64-dev\\\\runtime\", \"gtk\": \"4.24.1\", \"gstreamer\": \"GStreamer 1.28.8\", \"checked_files\": 7828, \"loaded_modules\": 606, \"media_fixtures\": 4, \"os_codec_modules\": [], \"runtime_cache\": \"C:\\\\Users\\\\PapoTester\\\\AppData\\\\Local\\\\papo-gtk\\\\runtime\\\\484a26fc85d9d0dd\\\\registry.bin\"}\r\n\nPapo 1.0.2: packaged runtime OK\n",
+    "activation_policy":  "Windows account-bound activation policy OK\n",
+    "desktop":  {
+                    "app_id":  "br.com.papo.gtk",
+                    "shortcut":  true,
+                    "activator":  true,
+                    "target":  true,
+                    "protocol":  true
+                },
+    "dpi":  {
+                "window_dpi":  96,
+                "awareness":  "system"
+            },
+    "shortcut_activation":  {
+                                "ok":  true,
+                                "pid":  600,
+                                "accepted":  2,
+                                "delivered":  2,
+                                "queued":  0,
+                                "console":  false
+                            },
+    "protocol_warm":  {
+                          "ok":  true,
+                          "pid":  600,
+                          "accepted":  3,
+                          "delivered":  3,
+                          "queued":  0,
+                          "console":  false
+                      },
+    "toast_history":  {
+                          "count":  1,
+                          "test_present":  true
+                      },
+    "toast_warm":  {
+                       "ok":  true,
+                       "pid":  600,
+                       "accepted":  4,
+                       "delivered":  4,
+                       "queued":  0,
+                       "console":  false
+                   },
+    "toast_cold":  {
+                       "ok":  true,
+                       "pid":  1424,
+                       "accepted":  1,
+                       "delivered":  1,
+                       "queued":  0,
+                       "console":  false
+                   },
+    "machine_path_unchanged":  true,
+    "cleanup_started_utc":  "2026-10-22T15:11:18.1605953Z",
+    "registration_removed":  true,
+    "finished_utc":  "2026-10-22T15:11:18.4143801Z"
+}

@@ -59,12 +59,15 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let save=find_button(editor.upcast_ref(),"Salvar edição");save.emit_clicked();until(context,||save.is_sensitive());save.emit_clicked();until(context,||!editor.is_visible());
     let expected=format!("Hi @mention(<@{user}>) :dance: :dance: ");
     let edits:Vec<_>=backend.lock().unwrap().requests.iter().filter(|(m,p,_)|m=="PUT"&&p.ends_with(&message.id.to_string())).cloned().collect();assert_eq!(edits.len(),2);assert!(edits.iter().all(|(_,_,body)|body["content"]==expected));
-    // Navigation keys operate on the chat while the composer keeps its caret.
+    // EN-US: History navigation owns the message pane; native draft keys keep their editing meaning.
+    // PT-BR: A navegação do histórico controla o painel de mensagens; teclas do rascunho mantêm a edição nativa.
     performance::settle(context);entry.grab_focus();let caret=entry.position();
     let scroll=descendants(chat.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::ScrolledWindow>().ok().filter(|s|s.child().is_some_and(|v|descendants(&v).iter().any(|w|w.is::<gtk::ListBox>())))).unwrap();
     let adj=scroll.vadjustment();chat.emit(ChatMsg::Latest);performance::settle(context);let bottom=adj.value();assert!(bottom>200.0);
     let controllers=host.observe_controllers();let keys:Vec<_>=(0..controllers.n_items()).filter_map(|i|controllers.item(i).and_downcast::<gtk::EventControllerKey>()).collect();
     let press=|key|{keys.iter().any(|c|c.emit_by_name::<bool>("key-pressed",&[&key,&0u32,&gtk::gdk::ModifierType::empty()]))};
+    assert!(!press(gtk::gdk::Key::End));
+    scroll.child().unwrap().set_focusable(true);assert!(scroll.child().unwrap().grab_focus());pump(context);
     assert!(press(gtk::gdk::Key::Page_Up));until(context,||adj.value()<bottom-100.0);performance::settle(context);let up=adj.value();
     assert!(press(gtk::gdk::Key::Page_Down));until(context,||adj.value()>up+50.0);
     assert!(press(gtk::gdk::Key::End));until(context,||adj.upper()-adj.page_size()-adj.value()<1.0);assert_eq!(entry.position(),caret);assert_eq!(chat.model().draft.text,draft);

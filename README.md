@@ -21,7 +21,15 @@ transport logging directive. Authentication models and cookie header values
 also redact secrets in debug output.
 
 Windows-first port development and macOS groundwork are described in
-[MULTIPLATFORM.md](MULTIPLATFORM.md). Windows builds on this branch are experimental.
+[MULTIPLATFORM.md](MULTIPLATFORM.md). The source version is **1.1.0, unreleased**;
+Windows builds on this branch remain experimental. The
+[signing and publication guide](docs/testing/windows-publication.md) records the
+missing owner certificate and native acceptance required before a supported release.
+See the [Windows support policy](WINDOWS_SUPPORT.md) and
+[release acceptance checklist](docs/testing/windows.md) for the planned targets
+and remaining validation. The portable preview bundles its own native runtime;
+see [Windows runtime checks](docs/testing/windows-runtime.md) and
+[identity, GUI launch and diagnostics](docs/testing/windows-identity.md).
 
 ## Build and run (Linux)
 
@@ -64,7 +72,8 @@ sudo dnf install bubblewrap python3-gobject python3-gstreamer1 gstreamer1-plugin
 
 Screen sharing also requires a working desktop portal. Media playback depends
 on the installed codecs; a backend configured for voice is required for calls.
-Video preview/animation helpers require Bubblewrap and working user namespaces.
+On Linux, video preview/animation helpers require Bubblewrap and working user namespaces.
+Windows uses the [AppContainer/Job backend](docs/testing/windows-isolation.md).
 See [SECURITY_REVIEW.md](SECURITY_REVIEW.md) for media isolation and supported containers.
 
 ## Downloads

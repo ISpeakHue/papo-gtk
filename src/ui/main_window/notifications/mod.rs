@@ -1,7 +1,9 @@
 //! EN-US: Coordinate the notification inbox, its window, desktop alerts and read acknowledgments.
 //! PT-BR: Coordena a caixa de notificações, sua janela, avisos do desktop e confirmações de leitura.
 #[cfg(target_os="linux")]mod desktop;
-#[cfg(not(target_os="linux"))]#[path="desktop_pending.rs"]mod desktop;
+#[cfg(windows)]#[path="desktop_windows.rs"]mod desktop;
+#[cfg(all(test,not(windows)))]#[path="desktop_windows.rs"]mod windows_contract;
+#[cfg(not(any(target_os="linux",windows)))]#[path="desktop_pending.rs"]mod desktop;
 mod filters;
 #[cfg(test)]pub(crate) use filters::exercise as exercise_filters;
 mod read;
@@ -17,8 +19,11 @@ pub enum NoticeMsg {
     Loaded{token:Uuid,cursor:Option<MessageCursor>,result:anyhow::Result<NotificationList>},
     Marked{id:Uuid,result:anyhow::Result<u32>},
     MarkedBatch{ids:Vec<Uuid>,result:anyhow::Result<u32>},
-    #[cfg(target_os="linux")]DesktopAction{notice:Uuid,channel:Uuid,message:Uuid,observed:Option<crate::models::MessageObservation>,token:Option<String>},
+    #[cfg(any(target_os="linux",windows,test))]DesktopAction{notice:Uuid,channel:Uuid,message:Uuid,observed:Option<crate::models::MessageObservation>,token:Option<String>},
     #[cfg(target_os="linux")]DesktopReady(Result<gtk::gio::DBusProxy,gtk::glib::Error>),
+    #[cfg(any(windows,test))]WindowsReady(bool),
+    #[cfg(any(windows,test))]NativeTicket(Uuid),
+    #[cfg(any(windows,test))]NativeResolved(Option<crate::platform::notifications::Target>),
 }
 #[derive(Default)]
 pub(super) struct Notifications {
@@ -26,6 +31,10 @@ pub(super) struct Notifications {
     request:Option<Uuid>,refresh_again:bool,cursor:Option<MessageCursor>,more:bool,older_pages:bool,
     marks:HashSet<Uuid>,failed_marks:HashSet<Uuid>,read_error:Option<String>,seen_events:HashSet<Uuid>,pub(super) jobs:Vec<tokio::task::JoinHandle<()>>,desktop:desktop::Desktop,
     pending_open:Option<Uuid>,
+    #[cfg(any(windows,test))]native_pending:Option<Uuid>,
+    #[cfg(any(windows,test))]native_inflight:bool,
+    #[cfg(any(windows,test))]native_synced:bool,
+    #[cfg(test)]native_backend:Option<crate::platform::notifications::Backend>,
     reads:read::Reads,
     pub(super) manual_reads:std::collections::HashMap<Uuid,Uuid>,
 }
@@ -42,6 +51,7 @@ impl MainWindowModel {
     }
 
     pub(super) fn notification_event(&mut self,msg:NoticeMsg,root:&gtk::Box,sender:ComponentSender<Self>){
+        #[cfg(windows)]let sync_sender=sender.clone();
         match msg {
             NoticeMsg::Open=>{
                 self.notifications.failed_marks.clear();self.notifications.read_error=None;
@@ -78,6 +88,7 @@ impl MainWindowModel {
                 if self.notifications.request!=Some(token){return;}self.notifications.request=None;
                 match result {
                     Ok(page)=>{
+                        #[cfg(any(windows,test))]{self.notifications.native_synced=true;}
                         let next=page.notifications.last().map(|n|MessageCursor{created_at:n.created_at,id:n.id});
                         let reset_head=cursor.is_none()&&self.notifications.inbox.rows.len()>=NOTICE_WINDOW;
                         if reset_head{self.notifications.older_pages=false;}
@@ -127,7 +138,7 @@ impl MainWindowModel {
                     sender.input(MainWindowMsg::Notification(NoticeMsg::Open));if let Some(v)=&self.notifications.view{v.status.set_text("Localizando mensagem… Se o canal estiver indisponível, a notificação permanecerá aqui.");}
                 }
             }
-            #[cfg(target_os="linux")]NoticeMsg::DesktopAction{notice,channel,message,observed,token}=>{
+            #[cfg(any(target_os="linux",windows,test))]NoticeMsg::DesktopAction{notice,channel,message,observed,token}=>{
                 if !self.can_read_target(channel){return;}
                 if let Some(window)=root.root().and_downcast::<gtk::Window>(){if let Some(token)=token{window.set_startup_id(&token);}window.present();}
                 if let Some(observed)=observed{if !self.notifications.inbox.messages.contains_key(&message){self.notifications.inbox.observe(observed);}}
@@ -136,7 +147,16 @@ impl MainWindowModel {
                 sender.input(MainWindowMsg::Navigate{channel_id:channel,message_id:message});
             }
             #[cfg(target_os="linux")]NoticeMsg::DesktopReady(result)=>{self.notifications.desktop.ready(result,sender.input_sender().clone());self.deliver_notices(sender);}
+            #[cfg(any(windows,test))]NoticeMsg::WindowsReady(ready)=>{#[cfg(windows)]self.notifications.desktop.ready(ready);#[cfg(not(windows))]let _=ready;self.deliver_notices(sender);}
+            #[cfg(any(windows,test))]NoticeMsg::NativeTicket(id)=>{self.notifications.native_pending=Some(id);self.try_native_notice(&sender);}
+            #[cfg(any(windows,test))]NoticeMsg::NativeResolved(target)=>{
+                self.notifications.native_inflight=false;
+                if let Some(target)=target.filter(|t|self.can_read_target(t.channel)){
+                    sender.input(MainWindowMsg::Notification(NoticeMsg::DesktopAction{notice:target.notice,channel:target.channel,message:target.message,observed:None,token:None}));
+                }
+            }
         }
+        #[cfg(windows)]self.deliver_notices(sync_sender);
     }
     fn personal_notice(&self,n:&state::Notice)->bool{n.channel_id.is_some_and(|id|self.direct.known.contains(&id)||self.direct.items.iter().any(|d|d.id==id))}
     fn mark_open_notices(&mut self,sender:&ComponentSender<Self>){
@@ -170,9 +190,31 @@ impl MainWindowModel {
         let read=self.notifications.inbox.messages.get(&event.message_id).is_some_and(|m|self.notifications.reads.covers_cursor(m.channel_id,MessageCursor{id:m.id,created_at:m.created_at}));let id=event.id;
         self.notifications.inbox.event(event);if read{self.notifications.inbox.mark(id);}self.load_notice_authors(&sender);self.mark_open_notices(&sender);self.deliver_notices(sender.clone());self.render_inbox(&sender);self.mark_open_notices(&sender);self.refresh_notifications(None,sender);
     }
+    #[cfg(any(windows,test))]
+    fn native_notice_account(&self)->crate::platform::activation::Account{
+        crate::platform::activation::Account{server:self.api_client.base_url().into(),user:self.current_user.id,session:self.api_client.session_owner()}
+    }
+    #[cfg(any(windows,test))]
+    fn try_native_notice(&mut self,sender:&ComponentSender<Self>){
+        // EN-US: Cold activation waits for current channel/DM permissions, never cached access from disk.
+        // PT-BR: A ativação inicial aguarda permissões atuais de canais/DMs, nunca acesso salvo em disco.
+        if !self.background_started||!self.notifications.native_synced||self.notifications.native_inflight||self.access_request.is_some()||self.direct.request.is_some(){return;}
+        let Some(id)=self.notifications.native_pending.take()else{return;};
+        #[cfg(test)]let backend=self.notifications.native_backend.clone().or_else(crate::platform::notifications::backend);
+        #[cfg(not(test))]let backend=crate::platform::notifications::backend();
+        let Some(backend)=backend else{return;};
+        let readable=self.notification_channels().into_iter().filter(|c|self.can_read_target(c.id)).map(|c|c.id).collect();
+        self.notifications.native_inflight=true;
+        let owner=self.native_notice_account();let output=sender.input_sender().clone();
+        self.notifications.jobs.push(tokio::spawn(async move{let target=backend.resolve(owner,id,readable).await;let _=output.send(MainWindowMsg::Notification(NoticeMsg::NativeResolved(target)));}));
+    }
     pub(super) fn deliver_notices(&mut self,sender:ComponentSender<Self>){
+        #[cfg(windows)]{
+            self.try_native_notice(&sender);
+            let owner=self.native_notice_account();self.notifications.desktop.account(owner);
+        }
         if !crate::platform::CURRENT.desktop_notifications{return;}
-        if self.account.config.notifications.as_ref().is_some_and(|p|p.enabled==Some(true)){self.notifications.desktop.initialize(sender.input_sender().clone());}
+        if self.account.config.notifications.as_ref().is_some_and(|p|p.enabled.unwrap_or(true)){self.notifications.desktop.initialize(sender.input_sender().clone());}
         let channels=self.notification_channels();
         let mut send=Vec::new();
         let users=self.users.iter().map(|u|(u.id,u.clone())).collect();
@@ -183,7 +225,10 @@ impl MainWindowModel {
                 send.push((n.id,crate::ui::chat::mentions::render(&body,&users),sound));
             }n.pending_desktop=false;
         }
-        let allowed=self.notifications.inbox.rows.values().filter(|n|state::delivery(n,&self.account.config,&channels,self.current_user.id,&self.notifications.inbox.messages).is_some()).map(|n|n.id).collect();let readable=channels.iter().map(|c|c.id).collect();self.notifications.desktop.revoke(&allowed,&readable);
+        let allowed=self.notifications.inbox.rows.values().filter(|n|state::delivery(n,&self.account.config,&channels,self.current_user.id,&self.notifications.inbox.messages).is_some()).map(|n|n.id).collect();let readable=channels.iter().map(|c|c.id).collect();
+        #[cfg(windows)]let reconcile=self.notifications.native_synced&&!self.notifications.native_inflight&&self.notifications.native_pending.is_none()&&self.access_request.is_none()&&self.direct.request.is_none();
+        #[cfg(not(windows))]let reconcile=true;
+        if reconcile{self.notifications.desktop.revoke(&allowed,&readable);}
         for (id,body,sound)in send{if let Some(n)=self.notifications.inbox.rows.get(&id){let observed=self.notifications.inbox.messages.get(&n.message_id).cloned();self.notifications.desktop.send(n,observed,body,sound);}}
     }
     fn load_notice_authors(&mut self,sender:&ComponentSender<Self>){
@@ -480,4 +525,41 @@ pub(crate) fn exercise_denied(main:&Controller<MainWindowModel>,context:&gtk::gl
     assert!(backend.lock().unwrap().requests.iter().any(|(_,p,_)|p.contains(&format!("last_id={}",cursor.id))),"paging continues past the window instead of truncating older history");
     find_button(w.upcast_ref(),"Voltar às notificações mais recentes").emit_clicked();until(context,||main.model().notifications.request.is_none()&&!main.model().notifications.older_pages);
     assert!(!find_button(w.upcast_ref(),"Voltar às notificações mais recentes").is_visible());w.close();host.set_content(None::<&gtk::Widget>);host.close();drop(main);server.abort();pump(context);
+}
+
+#[cfg(test)]pub(crate) fn exercise_windows(context:&gtk::glib::MainContext){
+    use adw::prelude::*;
+    use crate::platform::notifications::{Target,Operation};
+    use crate::ui::chat::actions::tests::{mock,pump,until,descendants};
+    #[cfg(windows)]use desktop::Desktop as NativeDesktop;
+    #[cfg(not(windows))]use windows_contract::Desktop as NativeDesktop;
+    let(api,fixture,server)=tokio::runtime::Handle::current().block_on(mock());
+    let current_user=serde_json::from_value(fixture.lock().unwrap().profile.clone()).unwrap();
+    let main=MainWindowModel::builder().launch(MainWindowInit{current_user,api_client:api}).detach();
+    let host=adw::Window::builder().default_width(1100).default_height(740).content(main.widget()).build();host.present();
+    until(context,||main.model().background_started&&main.model().access_request.is_none()&&main.model().direct.request.is_none()&&main.model().notifications.native_synced&&!main.model().notifications.inbox.rows.is_empty());
+    let owner=main.model().native_notice_account();
+    let notice=main.model().notifications.inbox.ordered().into_iter().find(|n|n.channel_id.is_some_and(|id|main.model().can_read_target(id))).unwrap().clone();
+    let target=Target{notice:notice.id,channel:notice.channel_id.unwrap(),message:notice.message_id};
+    let path=std::env::temp_dir().join(format!("papo-notice-ui-{}",Uuid::new_v4()));
+    let(native,calls)=crate::platform::notifications::fixture(path.join("tickets.dat"));
+    let mut desktop=NativeDesktop::fixture(owner.clone(),native.clone());desktop.account(owner.clone());
+    assert!(!desktop.available());desktop.initialize(main.sender().clone());desktop.ready(true);assert!(desktop.available());
+    desktop.revoke(&[notice.id].into(),&[target.channel].into());desktop.send(&notice,None,"<private & preview>".into(),false);
+    until(context,||calls.lock().unwrap().iter().any(|c|matches!(c,Operation::Show{..})));
+    let id=calls.lock().unwrap().iter().find_map(|c|if let Operation::Show{id,..}=c{Some(*id)}else{None}).unwrap();
+    {let mut state=main.state().get_mut();state.model.notifications.native_backend=Some(native.clone());state.model.access_request=Some(Uuid::new_v4());}
+    main.emit(MainWindowMsg::Notification(NoticeMsg::NativeTicket(id)));pump(context);
+    assert_eq!(main.model().notifications.native_pending,Some(id),"cold activation waits for fresh access");
+    main.state().get_mut().model.access_request=None;
+    main.emit(MainWindowMsg::Notification(NoticeMsg::NativeTicket(id)));
+    until(context,||descendants(main.model().chat.widget().upcast_ref()).iter().any(|w|w.widget_name()==format!("message-{}",target.message)&&w.has_css_class("papo-message-highlight")));
+    assert!(main.model().notifications.native_pending.is_none());assert!(!main.model().notifications.native_inflight);
+    until(context,||calls.lock().unwrap().iter().any(|c|matches!(c,Operation::Remove{id:removed,..}if *removed==id)));
+    let before=main.model().active_channel_id;
+    let inaccessible=Target{channel:Uuid::new_v4(),..target};
+    main.emit(MainWindowMsg::Notification(NoticeMsg::NativeResolved(Some(inaccessible))));pump(context);
+    assert_eq!(main.model().active_channel_id,before,"late activation rechecks current permissions");
+    desktop.revoke(&HashSet::new(),&HashSet::new());
+    host.set_content(None::<&gtk::Widget>);host.close();drop(main);drop(desktop);server.abort();pump(context);let _=std::fs::remove_dir_all(path);
 }

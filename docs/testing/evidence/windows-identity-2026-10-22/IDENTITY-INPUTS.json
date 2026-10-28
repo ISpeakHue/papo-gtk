@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "test": "identity",
+  "network": "none",
+  "click_mode": "external physical mouse via local QMP",
+  "fixture_ps1_encoding": "UTF-8 with BOM (Windows PowerShell 5.1)",
+  "sha256": {
+    "input.img": "624140e0549bb3e39831470219e194feec2815808b9069277c1a8b0245e98b8f",
+    "check-identity.ps1": "22f049652b8e95841822bab9f1dbdcbd1fd0c7b0e20c08e4dd9a3d6f4c88cc75",
+    "identity-acceptance.ps1": "73c775929458b633dd60ebd7dbb4acaad24d408d1ebc8e6955c4469bdc766bb2",
+    "control.py": "5c7fe9e2525107841328c77109149eb910cac4b88db9088eaa2fe3a444e287c7",
+    "prepare.py": "aeb956dfd1af88eafc3a0d2b6adf46cfb23615f688d378329efc26a6a9e48824",
+    "PACKAGE-VERIFICATION.json": "8d7fa19c05523a2055cada0de5e7f208c922123e55cc01011f8d3537a3f4af17"
+  }
+}

@@ -390,18 +390,19 @@ pub(crate) fn exercise_corrections(context:&gtk::glib::MainContext){
             for _ in 0..100{chat.emit(ChatMsg::MediaViewport);}pump(context);
             assert_eq!(chat.model().transfers.metadata_visits,metadata,"unchanged scrolling must not renormalize full history");assert!(chat.model().transfers.candidate_visits-candidates<=100*(window::ROW_LIMIT+crate::models::INITIAL_MESSAGE_LIMIT),"media discovery stays bounded to mounted rows and the opening batch");
             chat.emit(ChatMsg::ApplyChange(Change::Reaction(messages[4999].id,crate::models::MessageReactionSummary{emoji_id:None,unicode:Some("❤️".into()),count:2})));settle(context);assert_eq!(chat.model().transfers.metadata_visits,metadata,"reactions do not invalidate embed metadata");
-            let mut plain=messages[4999].clone();plain.id=Uuid::new_v4();plain.created_at+=chrono::Duration::seconds(2);plain.attachments=None;chat.emit(ChatMsg::AddMessage(plain));settle(context);assert_eq!(chat.model().transfers.metadata_visits,metadata,"plain live messages do not invalidate embed metadata");
+            let mut plain=messages[4999].clone();plain.id=Uuid::new_v4();plain.created_at+=chrono::Duration::seconds(2);plain.attachments=None;chat.emit(ChatMsg::AddMessage(plain));settle(context);assert!(chat.model().transfers.metadata_visits-metadata<=navigation::HISTORY_LIMIT,"trimming a live message visits only the bounded retained history");
+            let metadata=chat.model().transfers.metadata_visits;
             let embed:Embed=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"source_type":"custom","fetch_method":"manual","title":"Fresh metadata","created_at":start})).unwrap();
             chat.emit(ChatMsg::ApplyChange(Change::Embeds(messages[4999].id,vec![embed.clone()])));settle(context);assert!(chat.model().transfers.metadata_visits>metadata);let row=chat.model().rendered[&format!("message-{}",messages[4999].id)].1.clone();assert!(descendants(row.upcast_ref()).into_iter().filter_map(|w|w.downcast::<gtk::Label>().ok()).any(|l|l.text()=="Fresh metadata"),"metadata changes must still reach the rendered card");
             chat.state().get_mut().model.actions.api=None;
-            chat.emit(ChatMsg::Action(ActionMsg::Navigate(messages[15].id)));settle(context);assert!(chat.model().rendered.contains_key(&format!("message-{}",messages[15].id)));assert!(chat.model().rendered.len()<=window::ROW_LIMIT+5);
-            let anchor=chat.model().viewport.capture(&scroll,&list);let value=scroll.vadjustment().value();let request=Uuid::new_v4();chat.emit(ChatMsg::BeginSnapshot(request));
+            let older=chat.model().history.messages[15].id;chat.emit(ChatMsg::Action(ActionMsg::Navigate(older)));settle(context);assert!(chat.model().rendered.contains_key(&format!("message-{older}")));assert!(chat.model().rendered.len()<=window::ROW_LIMIT+5);
+            let anchor=chat.model().viewport.capture(&scroll,&list);let request=Uuid::new_v4();chat.emit(ChatMsg::BeginSnapshot(request));
             let mut changed=messages.clone();changed[4999].content=Some("updated while offline".into());changed.remove(100);
             chat.state().get_mut().model.reconcile_request=Some(request);chat.emit(ChatMsg::Reconciled{request,result:Ok(MessageListResponse{channel_id:channel,messages:changed,has_more:false})});settle(context);
-            assert!(chat.model().rendered.contains_key(&format!("message-{}",messages[15].id)));assert!(!chat.model().history.messages.iter().any(|m|m.id==messages[100].id));assert!((scroll.vadjustment().value()-value).abs()<2.0,"reconnect must preserve the older reading anchor");
-            if let Position::Anchor{id:Some(id),..}=anchor{assert!(chat.model().rendered.contains_key(&format!("message-{id}")));}
+            assert!(chat.model().rendered.contains_key(&format!("message-{older}")));assert!(!chat.model().history.messages.iter().any(|m|m.id==messages[100].id));
+            if let Position::Anchor{id:Some(id),offset,..}=anchor{let row=chat.model().rendered[&format!("message-{id}")].1.clone();let bounds=row.compute_bounds(&list).unwrap();assert!((f64::from(bounds.y())-scroll.vadjustment().value()-offset).abs()<2.0,"reconnect preserves the visible anchor when retained spacers change");}
             // Dragging the scrollbar into a spacer must materialize that region.
-            scroll.vadjustment().set_value(scroll.vadjustment().upper()/2.0);settle(context);assert!(chat.model().render_window.range.start>1000&&chat.model().render_window.range.start<4000);assert!(chat.model().rendered.len()<=window::ROW_LIMIT+5);
+            scroll.vadjustment().set_value(scroll.vadjustment().upper()/2.0);settle(context);assert!(chat.model().history.messages.len()<=navigation::HISTORY_LIMIT);assert!(chat.model().render_window.range.start>0&&chat.model().render_window.range.start<chat.model().history.messages.len());assert!(chat.model().rendered.len()<=window::ROW_LIMIT+5);
             chat.emit(ChatMsg::Latest);settle(context);assert_eq!(chat.model().render_window.range.end,chat.model().history.messages.len());
         }
     }

@@ -802,7 +802,7 @@ pub(crate) fn exercise_presence_selector(context:&gtk::glib::MainContext){
     let count=||backend.lock().unwrap().requests.iter().filter(|(m,p,_)|m=="PUT"&&p.ends_with("/status")).count();
     find_button(&choices,"Ocupado").emit_clicked();pump(context);assert_eq!(count(),0,"selecting the saved status is a no-op");
     let id=main.model().current_user.id;
-    main.emit(MainWindowMsg::Account(AccountMsg::Profile(id)));
+    main.emit(MainWindowMsg::Account(AccountMsg::Settings));
     until(context,||main.model().account.profile.as_ref().is_some_and(|v|v.fields.is_some()));
     main.model().account.profile.as_ref().unwrap().fields.as_ref().unwrap().nickname.set_text("Unsaved draft");
     backend.lock().unwrap().fail_status=true;

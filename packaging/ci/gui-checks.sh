@@ -24,11 +24,17 @@ if (( $# )); then papo_cases=("$@"); fi
 for papo_case in "${papo_cases[@]}"; do
     printf '\nRunning GTK case: %s\n' "$papo_case"
     papo_environment=(env -u PAPO_NATIVE_INPUT_TEST "PAPO_UI_CASE=$papo_case")
+    # EN-US: The aggregate case contains dozens of workflows; focused cases retain their shorter bound.
+    # PT-BR: O caso agregado contém dezenas de fluxos; casos específicos mantêm o limite menor.
+    papo_timeout=240s
+    if [[ "$papo_case" == default ]]; then papo_timeout=600s; fi
     case "$papo_case" in
         desktop-input|multiline|full-app-input|login-input|report9|edit-mentions) papo_environment+=(PAPO_NATIVE_INPUT_TEST=1 GTK_IM_MODULE=simple) ;;
         emoji-details) papo_environment+=(PAPO_NATIVE_INPUT_TEST=1) ;;
     esac
-    "${papo_environment[@]}" timeout --kill-after=10s 240s dbus-run-session -- xvfb-run -a \
+    # EN-US: Fedora defaults to 640x480; exercise the requested desktop sizes and explicit narrow resizes.
+    # PT-BR: O Fedora usa 640x480 por padrão; exercita os tamanhos de desktop pedidos e reduções explícitas.
+    "${papo_environment[@]}" timeout --kill-after=10s "$papo_timeout" dbus-run-session -- xvfb-run -a -s '-screen 0 1920x1080x24' \
         cargo test --locked ui_smoke -- --ignored --test-threads=1 \
         2>&1 | tee "target/ci/gui/$papo_case.log"
     papo_statuses=("${PIPESTATUS[@]}")

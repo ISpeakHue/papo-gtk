@@ -105,6 +105,7 @@ mod tests {
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("report11"){crate::ui::chat::composer::exercise_inline(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("backend-contracts"){crate::ui::chat::transfers::exercise_metadata(&context);crate::ui::main_window::search::exercise_backend_identity(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("history-navigation"){crate::ui::chat::exercise_navigation(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("history-retention"){crate::ui::chat::performance::exercise_corrections(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("report10"){crate::ui::chat::polish_tests::exercise(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("search-recycling"){crate::ui::main_window::search::exercise_recycling(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("avatar-viewport"){crate::ui::user_list::exercise_viewport(&context);window.close();return;}

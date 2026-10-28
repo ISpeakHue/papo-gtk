@@ -55,7 +55,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     assert_eq!(row(&chat,ids[35]),visible,"renaming a mentioned member must preserve unrelated rows");
     assert!(descendants(&row(&chat,ids[67])).iter().filter_map(|w|w.downcast_ref::<gtk::TextView>()).any(|v|v.buffer().text(&v.buffer().start_iter(),&v.buffer().end_iter(),false)=="Olá @Robert"));
     edited.content=Some("Texto editado da mensagem respondida".into());chat.emit(ChatMsg::ApplyChange(Change::Upsert(edited)));settle(context);
-    assert!(descendants(find_button(&row(&chat,ids[68]),"Ir para a mensagem respondida").upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::Label>()).any(|l|l.text()=="Texto editado da mensagem respondida"));
+    assert!(descendants(find_button(&row(&chat,ids[68]),"Ir para a mensagem respondida").upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::TextView>()).any(|view|{let buffer=view.buffer();buffer.text(&buffer.start_iter(),&buffer.end_iter(),false)=="Texto editado da mensagem respondida"}));
     chat.emit(ChatMsg::Action(ActionMsg::Navigate(ids[36])));settle(context);
     chat.emit(ChatMsg::ContextAt{id:ids[36],x:90.0,y:20.0});settle(context);let message=row(&chat,ids[36]);
     let menu=descendants(&message).into_iter().find_map(|w|w.downcast::<gtk::MenuButton>().ok()).unwrap();let (pointing,rectangle)=menu.popover().unwrap().pointing_to();assert!(pointing);let point=message.compute_point(&menu,&gtk::graphene::Point::new(90.0,20.0)).unwrap();assert!((rectangle.x() as f32-point.x()).abs()<2.0&&(rectangle.y() as f32-point.y()).abs()<2.0,"the native menu must anchor at the clicked point");

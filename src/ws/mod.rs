@@ -544,7 +544,7 @@ mod backend_contract_tests {
 
     #[tokio::test]
     async fn ping_is_answered_and_revoked_session_stops_reconnecting() {
-        use tokio::{net::TcpListener,io::AsyncWriteExt,time::{timeout,Duration}};
+        use tokio::{net::TcpListener,io::{AsyncReadExt,AsyncWriteExt},time::{timeout,Duration}};
         use tokio_tungstenite::{accept_async,tungstenite::Message};
         timeout(Duration::from_secs(10),async {
             let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -567,7 +567,15 @@ mod backend_contract_tests {
                 // Server password changes revoke cookies and disconnect sockets. The
                 // next handshake receives 401; it must return to login without retries.
                 let (mut stream,_) = listener.accept().await.unwrap();
+                // EN-US: Drain the upgrade request before closing; unread bytes can turn the 401 into a TCP reset on Windows.
+                // PT-BR: Consome a requisição antes de fechar; bytes não lidos podem transformar o 401 em reset TCP no Windows.
+                let mut request = Vec::new();
+                while !request.ends_with(b"\r\n\r\n") {
+                    assert!(request.len() < 8192, "oversized mock upgrade request");
+                    request.push(stream.read_u8().await.unwrap());
+                }
                 stream.write_all(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await.unwrap();
+                stream.shutdown().await.unwrap();
             });
             let (mut events,commands) = spawn(client);
             assert!(matches!(events.recv().await,Some(WsEvent::ConnectionReady(_))));

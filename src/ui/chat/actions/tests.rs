@@ -34,7 +34,8 @@ pub(crate) fn descendants(w: &gtk::Widget) -> Vec<gtk::Widget> {
     while let Some(w) = child { found.extend(descendants(&w)); child = w.next_sibling(); } found
 }
 pub(crate) fn find_button(w: &gtk::Widget, text: &str) -> gtk::Button {
-    descendants(w).into_iter().find_map(|w| w.downcast::<gtk::Button>().ok().filter(|b| b.label().as_deref() == Some(text) || b.tooltip_text().as_deref() == Some(text)))
+    descendants(w).into_iter().find_map(|w| w.downcast::<gtk::Button>().ok().filter(|b| b.label().as_deref() == Some(text) || b.tooltip_text().as_deref() == Some(text)
+        || b.child().and_downcast::<gtk::Label>().is_some_and(|label|label.text()==text)))
         .unwrap_or_else(|| panic!("missing button: {text}"))
 }
 pub(crate) fn pump(context: &gtk::glib::MainContext) { for _ in 0..500 { if !context.pending() { break; } context.iteration(false); } }

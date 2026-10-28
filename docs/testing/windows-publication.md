@@ -1,11 +1,12 @@
 # Windows signing, qualification and publication — step 14
 
-Prepared 2026-10-28. The source version is **1.1.0, unreleased**. The signing,
-final-test, qualification and publication tools are implemented; **no supported
-Windows release has been qualified or published**. The owner confirmed that no
-Windows signing certificate is available. Steps 8–13 also retain their recorded
-native desktop/device/beta acceptance gaps, and the port changes are uncommitted.
-Step 14 stays unchecked. Existing Linux 1.0.2 downloads remain unchanged; macOS
+Updated 2026-10-28. Source version **1.1.0** has an unsigned
+[Windows preview](windows-preview.md) with a matching installer, portable ZIP,
+checksums and corresponding source. Its committed revision passed the full
+Windows/Linux/macOS candidate workflow and fresh-runner package checks.
+**No supported Windows release has been qualified.** No signing certificate is
+available, and native Windows 11 desktop/device/beta acceptance remains pending.
+Step 14 stays unchecked. Linux 1.0.2 remains the latest stable release; macOS
 remains compile/link groundwork without a supported bundle.
 
 ## Required inputs and trust boundaries
@@ -203,9 +204,11 @@ or add a macOS support claim.
   do not establish native SDK signing, certificate-provider behavior,
   Windows PowerShell 5.1 execution, revocation/timestamp service success or beta
   acceptance. No signing/reputation/native Windows pass is claimed.
-- **Blocked release inputs:** no owner signing certificate; open native Windows
-  acceptance/beta steps; no full clean-source CI run for this revision; uncommitted
-  source. No supported Windows release is published or promised by these tools.
+- **Current supported-release blockers:** no owner signing certificate and open
+  native Windows 11 acceptance/beta steps. The committed unsigned preview now
+  passes the complete automated workflow and is published with matching assets;
+  see its [build record](windows-preview.md). This does not qualify a supported
+  Windows release.
 
 References: [Microsoft SignTool](https://learn.microsoft.com/en-us/windows/win32/seccrypto/signtool),
 [NSIS signing hooks](https://nsis.sourceforge.io/Docs/Chapter5.html#uninstfinalize),

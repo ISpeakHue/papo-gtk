@@ -1,11 +1,12 @@
 # Windows installer and beta — step 13
 
-Prepared 2026-10-28. The per-user installer recipe, CI driver and beta tooling
-are implemented. **No Windows installation or attended beta run of this revision
-has been performed.** The user deferred Windows desktop testing until a release
-candidate is available. Step 13 stays unchecked until clean-machine acceptance
-and the beta below pass. Windows remains an unsigned experimental preview;
-supported release qualification/signing/publication belongs to step 14.
+Updated 2026-10-28. The unsigned [Windows preview](windows-preview.md) installer
+passed fresh-runner installation, replacement, recovery, uninstall and data
+preservation checks in the full candidate workflow. **Attended Windows 11
+Home/Pro and real-device beta acceptance remain pending.** The user deferred
+that testing until a downloadable candidate was available. Step 13 stays
+unchecked until the remaining native acceptance and beta pass; supported release
+qualification and signing belong to step 14.
 
 ## Packaging
 

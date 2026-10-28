@@ -21,8 +21,11 @@ transport logging directive. Authentication models and cookie header values
 also redact secrets in debug output.
 
 Windows-first port development and macOS groundwork are described in
-[MULTIPLATFORM.md](MULTIPLATFORM.md). The source version is **1.1.0, unreleased**;
-Windows builds on this branch remain experimental. The
+[MULTIPLATFORM.md](MULTIPLATFORM.md). The source version is **1.1.0**. An unsigned
+[Windows preview](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.1.0-preview.1)
+provides a per-user installer and portable ZIP; see its
+[verified build and remaining acceptance](docs/testing/windows-preview.md).
+Windows remains experimental. The
 [signing and publication guide](docs/testing/windows-publication.md) records the
 missing owner certificate and native acceptance required before a supported release.
 See the [Windows support policy](WINDOWS_SUPPORT.md) and

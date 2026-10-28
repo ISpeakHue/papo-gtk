@@ -6,8 +6,10 @@ Policy date: 2026-10-21. Scope: step 1 of [the port plan](MULTIPLATFORM_PLAN.md)
 release.** This document defines the targets and evidence required for the first
 supported release. Completing this policy does not complete desktop validation.
 Linux releases retain their existing support policy; macOS remains groundwork.
-The source version is now 1.1.0, unreleased. The owner confirmed that a signing
-certificate is unavailable, and native desktop/beta acceptance remains pending.
+Source version 1.1.0 is available as an unsigned
+[Windows preview](docs/testing/windows-preview.md) with a verified installer and
+portable ZIP. The owner confirmed that a signing certificate is unavailable, and
+native Windows 11 desktop/device/beta acceptance remains pending.
 See the [publication gate](docs/testing/windows-publication.md); no Windows
 download is represented as a supported or signed release.
 

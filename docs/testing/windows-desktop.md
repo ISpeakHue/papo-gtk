@@ -90,8 +90,10 @@ native width of 760. GTK Win32 preserves the last native allocation during its
 queued layout. The shared resize fixture now reapplies a normal toplevel layout
 through GTK’s public API on Windows, then asserts the actual allocated geometry.
 The same helper covers the media/emoji/profile resize fixtures; production window
-behavior and native input methods are unchanged. Full packaged checks and
-attended IME acceptance remain required.
+behavior and native input methods are unchanged. The subsequent
+[full workflow 40756265548](https://github.com/ISpeakHue/papo-gtk/actions/runs/40756265548)
+passed source and packaged desktop checks with these fixes. Attended native IME
+acceptance remains pending; see the [published preview](windows-preview.md).
 
 The recipe and patches live in `packaging/windows/gtk/`. Its upstream source tarball,
 recipe, both patches and exact locally built package are retained in the

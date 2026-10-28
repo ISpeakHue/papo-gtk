@@ -6,11 +6,15 @@ experimental developer build; macOS has platform boundaries prepared but no
 supported build or `.app` bundle yet. There is one application and protocol
 implementation, rather than separate operating-system forks.
 
-Source version **1.1.0 is unreleased**. The
+Source version **1.1.0** is available as an unsigned
+[Windows preview](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.1.0-preview.1),
+with a self-contained installer and portable ZIP. Its clean source revision passed
+the complete automated candidate workflow; see the
+[build record and remaining acceptance](docs/testing/windows-preview.md). The
 [signing/qualification/publication tools](docs/testing/windows-publication.md)
-require an owner signing certificate and completed native acceptance. Neither is
-currently available; no Windows tag or release has been published. The existing
-Linux 1.0.2 downloads remain the published Linux packages.
+still require an owner signing certificate and completed native acceptance for a
+supported release. Neither is currently available. Linux 1.0.2 remains the latest
+stable release.
 
 The first release targets and dependency constraints are defined in
 [WINDOWS_SUPPORT.md](WINDOWS_SUPPORT.md). The

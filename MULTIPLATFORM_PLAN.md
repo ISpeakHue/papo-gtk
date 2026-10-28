@@ -382,9 +382,10 @@ remaining GUI assertions are tracked in the provenance record.
     isolation and missing-component failures run without developer discovery
     paths. Packaging-only rebuilds require an authenticated successful full run
     of identical source and build inputs and cannot emit a candidate gate.
-    Local gate tests, workflow lint and PowerShell parsing pass. No native CI
-    run of this revision or deferred Windows 11 desktop acceptance is claimed;
-    this checkbox remains open until the original completion checks pass. See
+    The clean preview revision now passes the complete automated candidate
+    workflow and all packaged checks. Native Windows 11 desktop/device acceptance
+    remains deferred; the original completion checkbox stays open. See the
+    [verified preview](docs/testing/windows-preview.md) and
     [packaged CI gate and verification](docs/testing/windows-release-gate.md).
 
 13. [ ] **Build the installer and complete a Windows beta.**
@@ -413,8 +414,9 @@ remaining GUI assertions are tracked in the provenance record.
     journal recovery and data preservation. The opt-in numeric diagnostics
     exporter and attended beta/Linux-comparison matrix are ready. Local payload,
     privacy and gate tests, real NSIS recipe compilation and script/workflow
-    validation pass. Native install/upgrade/uninstall and the attended beta have
-    not run; the original completion checkbox remains open. See
+    validation pass. Native installer lifecycle checks now pass on fresh Windows CI runners;
+    attended Windows 11 Home/Pro and real-device beta acceptance remain pending.
+    The original completion checkbox stays open. See
     [installer contract, beta matrix and evidence](docs/testing/windows-beta.md).
 
 14. [ ] **Qualify and publish the supported Windows release.**
@@ -435,7 +437,7 @@ remaining GUI assertions are tracked in the provenance record.
     downloadable artifacts match the tested source, clean-machine acceptance
     passes, and Windows is documented as supported with explicit limits.
 
-    **Release tooling prepared 2026-10-28; qualification/publication blocked:**
+    **Release tooling prepared 2026-10-28; supported-release qualification pending:**
     source version 1.1.0 and draft notes are prepared. Explicit Windows-store
     signing, NSIS embedded-uninstaller signing, PE content invariants, refreshed
     runtime identities and final signed-file rechecks are implemented. The
@@ -444,9 +446,11 @@ remaining GUI assertions are tracked in the provenance record.
     publisher stages source/notices/checksums, requires the tested remote tag,
     verifies fresh signatures and uploaded digests, then publishes from a draft
     only with an explicit flag. No signing material is committed or exported.
-    The owner confirmed no certificate is available; native acceptance, a clean
-    committed revision and its complete CI run remain pending. No tag/release
-    was created and no Windows support claim is made. See
+    The owner confirmed no certificate is available. A clean committed revision
+    now passes the full automated workflow, and an unsigned
+    [Windows preview](docs/testing/windows-preview.md) is published as
+    `v1.1.0-preview.1`. Native acceptance and supported release qualification
+    remain pending; no Windows support claim is made. See
     [signing, qualification and publication](docs/testing/windows-publication.md).
 
 ## Dependencies and milestone boundaries

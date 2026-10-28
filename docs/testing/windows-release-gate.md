@@ -1,11 +1,12 @@
 # Windows packaged CI gate — step 12
 
-Implemented 2026-10-28. Local policy tests and workflow/script validation are
-recorded below. **This revision has not run through native GitHub CI or Windows
-11 desktop acceptance.** Step 12's completion checkbox stays open until a clean
-revision passes the full workflow and its advertised features have acceptance
-evidence. The existing Home/Pro, device, keyboard and display checks remain
-deferred as requested.
+Updated 2026-10-28. The clean Windows preview revision passed the
+[full automated workflow](https://github.com/ISpeakHue/papo-gtk/actions/runs/40756265548),
+including every required packaged job and the candidate gate. Downloaded and
+uploaded files were checked against that source-bound result; see the
+[preview build record](windows-preview.md). Windows 11 Home/Pro, physical devices,
+keyboard/IME, accessibility, displays and beta acceptance remain deferred as
+requested. The remaining completion checkboxes do not claim that acceptance.
 
 ## Required workflow
 

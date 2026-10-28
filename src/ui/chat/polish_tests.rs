@@ -20,7 +20,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     assert_eq!(previews.len(),2,"composer and message reference both use rich previews");
     for preview in &previews{let b=preview.buffer();assert!(b.slice(&b.start_iter(),&b.end_iter(),true).ends_with(" end"),"available width, not a character cutoff, controls clipping");let mut iter=b.start_iter();let mut paints=0;loop{paints+=usize::from(iter.paintable().is_some());if let Some(p)=iter.paintable(){let metrics=preview.pango_context().metrics(None,None);let height=(metrics.ascent()+metrics.descent()+pango::SCALE-1)/pango::SCALE;assert!(p.intrinsic_height()<=height);let next=iter.clone();let rect=preview.iter_location(&next);assert!(rect.height()<=preview.parent().unwrap().height(),"emoji and adjacent glyphs fit the single-line preview");}if !iter.forward_char(){break;}}assert_eq!(paints,1);assert!(b.text(&b.start_iter(),&b.end_iter(),false).contains("😄"));}
     assert_eq!(texture.height(),32,"compact previews must not resize the shared chat texture");
-    let before=previews[0].parent().unwrap().width();host.set_default_size(600,680);until(context,||host.width()<700);assert!(previews[0].parent().unwrap().width()<before);
+    let before=previews[0].parent().unwrap().width();crate::ui::chat::actions::tests::resize_window(&host,600,680);until(context,||host.width()<700);assert!(previews[0].parent().unwrap().width()<before);
     // Recently viewed images outside the opening batch survive a visit elsewhere.
     let mut resident=transfers::resident::Cache::default();let key=Uuid::new_v4();let owners=std::collections::HashSet::from([latest.id]);
     resident.select(channel,&HashMap::new());resident.insert(channel,key,&owners,&texture);

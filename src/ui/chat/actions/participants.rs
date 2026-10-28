@@ -133,7 +133,7 @@ impl Member{
     // Refresh retains the selected emoji and existing row widgets.
     chat.emit(ChatMsg::Action(ActionMsg::Reconcile(message)));until(context,||!chat.model().actions.reaction_requests.contains_key(&message));assert_eq!(chat.model().actions.participants.as_ref().unwrap().selected,Some(Key(Some(emoji),None)));
     crate::ui::chat::performance::settle(context);crate::ui::main_window::layout::tests::preview(&view,"reaction-participants",context);
-    view.set_default_size(340,400);crate::ui::chat::performance::settle(context);assert!(view.width()<=360,"the reaction window must fit a narrow layout: {}",view.width());
+    crate::ui::chat::actions::tests::resize_window(&view,340,400);crate::ui::chat::performance::settle(context);assert!(view.width()<=360,"the reaction window must fit a narrow layout: {}",view.width());
     let member=chat.model().actions.participants.as_ref().unwrap().members[&ids[1]].button.clone();member.emit_clicked();pump(context);assert!(output.borrow().iter().any(|o|matches!(o,ChatOutput::OpenProfile(id) if *id==ids[1])));assert!(chat.model().actions.participants.is_none());
     chat.emit(ChatMsg::Action(ActionMsg::OpenParticipants(message)));until(context,||chat.model().actions.participants.as_ref().is_some_and(|v|v.members.len()==50));let view=chat.model().actions.participants.as_ref().unwrap().window.clone();
     // Removing the selected emoji chooses the remaining reaction rather than a blank list.

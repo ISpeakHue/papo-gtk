@@ -885,7 +885,7 @@ pub(crate) fn exercise_preferences_and_profiles(main: &Controller<MainWindowMode
     let bounds=image_button.compute_bounds(&profile).unwrap();assert!(bounds.y()+bounds.height()<profile.height() as f32,"profile image controls should be visible when the window opens: button={bounds:?}, window={}x{}",profile.width(),profile.height());
     assert!(descendants(profile.upcast_ref()).iter().any(|w|w.is::<adw::HeaderBar>()));assert!(descendants(profile.upcast_ref()).iter().any(|w|w.is::<adw::EntryRow>()));
     let save=find_button(profile.upcast_ref(),"Salvar perfil");let save_bounds=save.compute_bounds(&profile).unwrap();assert!(save_bounds.y()>profile.height() as f32-90.0&&save_bounds.y()+save_bounds.height()<=profile.height() as f32,"save stays visible in the fixed bottom bar");
-    profile.set_default_size(390,650);until(context,||profile.width()<=420);crate::ui::main_window::layout::tests::preview(&profile,"profile-narrow",context);
+    crate::ui::chat::actions::tests::resize_window(&profile,390,650);until(context,||profile.width()<=420);crate::ui::main_window::layout::tests::preview(&profile,"profile-narrow",context);
     assert!(profile.width()<=420,"the profile editor must fit a narrow window");let bounds=save.compute_bounds(&profile).unwrap();assert!(bounds.y()>profile.height() as f32-90.0&&bounds.y()+bounds.height()<=profile.height() as f32);
     let old = main.model().account.profile.as_ref().unwrap().token;
     {

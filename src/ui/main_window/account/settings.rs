@@ -179,7 +179,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     // EN-US: Measure client content; native CSD shadows are outside the requested window size.
     // PT-BR: Mede o conteúdo cliente; sombras CSD nativas ficam fora do tamanho pedido para a janela.
     let content=window.downcast_ref::<adw::Window>().unwrap().content().unwrap();
-    window.set_default_size(390,650);until(context,||content.width()>0&&content.width()<=420);
+    crate::ui::chat::actions::tests::resize_window(&window,390,650);until(context,||content.width()>0&&content.width()<=420);
     tabs.set_visible_child_name("profile");crate::ui::main_window::layout::tests::preview(&window,"account-settings-profile-narrow",context);
     wait_profile_layout(&main,&window,context);
     {let model=main.model();let v=model.account.profile.as_ref().unwrap();v.hero.as_ref().unwrap().check_layout(&window,false);let bounds=v.save.as_ref().unwrap().compute_bounds(&window).unwrap();assert!(bounds.y()>window.height() as f32-90.0&&bounds.y()+bounds.height()<=window.height() as f32,"the narrow profile keeps Save visible");}

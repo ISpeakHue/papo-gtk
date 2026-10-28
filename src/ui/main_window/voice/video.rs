@@ -140,7 +140,7 @@ pub(super) fn exercise_configuration(main:&Controller<MainWindowModel>,context:&
     let bounds=done.compute_bounds(&window).unwrap();let last=combos[1].compute_bounds(&window).unwrap();
     assert!(last.y()+last.height()<=bounds.y(),"the camera controls fit above Concluir without scrolling: window={}x{}, camera={last:?}, button={bounds:?}",window.width(),window.height());
     main.model().voice.gain.set_value(200.0);pump(context);assert_eq!(main.model().voice.gain.value(),200.0);
-    window.set_default_size(390,600);until(context,||window.width()<=420);
+    crate::ui::chat::actions::tests::resize_window(&window,390,600);until(context,||window.width()<=420);
     crate::ui::main_window::layout::tests::preview(&window,"call-settings-narrow",context);
     for row in &combos{let bounds=row.compute_bounds(&window).unwrap();assert!(bounds.x()>=0.0&&bounds.x()+bounds.width()<=window.width() as f32);}
     style.set_color_scheme(previous);

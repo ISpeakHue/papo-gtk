@@ -77,7 +77,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     until(context,||scroll.height()>initial);assert!(scroll.height()<=160);
     crate::ui::main_window::layout::tests::preview(&window,"composer-multiline",context);
     // Natural wrapping and a bounded vertical viewport at narrow widths.
-    field.set_text(&"Palavras compridas e acentos á é ç. ".repeat(60));field.set_position(-1);window.set_default_size(500,700);
+    field.set_text(&"Palavras compridas e acentos á é ç. ".repeat(60));field.set_position(-1);crate::ui::chat::actions::tests::resize_window(&window,500,700);
     until(context,||scroll.height()>=150&&scroll.vadjustment().upper()>scroll.vadjustment().page_size());
     assert!(scroll.height()<=160);assert_eq!(scroll.hadjustment().value(),0.0);
     let rect=field.iter_location(&field.buffer().end_iter());assert!(rect.x()<field.width(),"long lines must wrap inside the editor");

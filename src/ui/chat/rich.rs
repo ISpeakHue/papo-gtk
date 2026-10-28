@@ -90,10 +90,10 @@ pub(super) fn footer(card:&gtk::Box,p:&Embed,image_available:bool,users:&HashMap
     let mut wide=embed.clone();for field in &mut wide.fields{field.value="Rich embed field text ".repeat(20);}
     chat.emit(ChatMsg::ApplyChange(Change::Embeds(message.id,vec![wide])));settle(context);
     for width in [850,400]{
-        window.set_default_size(width,680);settle(context);let all=descendants(chat.widget().upcast_ref());let card=all.iter().find(|w|w.has_css_class("papo-link-preview")).unwrap();let media_box=all.iter().find(|w|w.widget_name()=="message-media").unwrap();let bounds=card.compute_bounds(media_box).unwrap();
+        crate::ui::chat::actions::tests::resize_window(&window,width,680);settle(context);let all=descendants(chat.widget().upcast_ref());let card=all.iter().find(|w|w.has_css_class("papo-link-preview")).unwrap();let media_box=all.iter().find(|w|w.widget_name()=="message-media").unwrap();let bounds=card.compute_bounds(media_box).unwrap();
         assert!(bounds.x().abs()<=1.0&&bounds.width()<=media_box.width() as f32+1.0,"wide field cards must fit and align with message text");
     }
-    window.set_default_size(850,680);settle(context);
+    crate::ui::chat::actions::tests::resize_window(&window,850,680);settle(context);
     let mut quote=embed.clone();quote.source_type="link".into();quote.provider=Some("X".into());
     quote.title=Some("Author (@author)".into());quote.description=Some("Comment on the quoted post".into());
     quote.fields=vec![crate::models::EmbedField{position:0,name:"Quoted author (@quoted)".into(),value:"The quoted text 🌎".into(),inline:false}];
@@ -120,7 +120,7 @@ pub(super) fn footer(card:&gtk::Box,p:&Embed,image_available:bool,users:&HashMap
     let mut stale=sent.clone();stale.edited_at=Some(created+chrono::Duration::seconds(1));stale.embeds=Some(vec![embed.clone()]);
     let epoch=chat.model().actions.epoch;chat.emit(ChatMsg::Action(actions::ActionMsg::EditFinished{epoch,token:Uuid::new_v4(),result:Ok(stale)}));settle(context);
     let current=chat.model().history.messages.iter().find(|m|m.id==sent.id).unwrap().clone();assert_eq!(current.content.as_deref(),Some("Newer edit"));assert_eq!(current.embeds,Some(vec![latest]),"a delayed PUT must not replace a newer socket edit's cards");
-    window.set_default_size(400,680);settle(context);
+    crate::ui::chat::actions::tests::resize_window(&window,400,680);settle(context);
     let card=descendants(chat.widget().upcast_ref()).into_iter().find(|w|w.has_css_class("papo-link-preview")).unwrap();
     assert!(card.width()>0&&card.width()<=chat.widget().width(),"rich cards must fit a narrow chat");
     for l in descendants(&card).into_iter().filter(|w|w.is::<gtk::Label>()){
@@ -153,7 +153,7 @@ pub(super) fn footer(card:&gtk::Box,p:&Embed,image_available:bool,users:&HashMap
     let view=descendants(card.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::TextView>().ok()).unwrap();let buffer=view.buffer();
     assert_eq!(buffer.text(&buffer.start_iter(),&buffer.end_iter(),false),expected);
     assert_eq!(view.iter_location(&buffer.start_iter()).y(),view.iter_location(&buffer.end_iter()).y(),"a fitting bot sentence must not wrap in a wide chat: card={}, text={}",card.width(),view.width());
-    window.set_default_size(260,600);settle(context);
+    crate::ui::chat::actions::tests::resize_window(&window,260,600);settle(context);
     assert!(view.width()<=chat.widget().width());assert!(view.iter_location(&buffer.end_iter()).y()>view.iter_location(&buffer.start_iter()).y(),"narrow cards still wrap: window={}, chat={}, text={}",window.width(),chat.widget().width(),view.width());
     window.set_content(None::<&gtk::Widget>);window.close();drop(chat);pump(context);
 }
@@ -185,7 +185,7 @@ pub(super) fn footer(card:&gtk::Box,p:&Embed,image_available:bool,users:&HashMap
         let count=opened.borrow().len();buffer.select_range(&buffer.start_iter(),&buffer.end_iter());click.emit_by_name::<()>("pressed",&[&1i32,&f64::from(x),&f64::from(y)]);click.emit_by_name::<()>("released",&[&1i32,&f64::from(x),&f64::from(y)]);pump(context);assert_eq!(opened.borrow().len(),count,"selecting bridge text must not open profiles");
     }
     assert_eq!(opened.borrow().len(),2);
-    window.set_default_size(380,680);performance::settle(context);for view in descriptions(){assert!(view.width()<=row.width(),"mentions must wrap inside narrow cards");}
+    crate::ui::chat::actions::tests::resize_window(&window,380,680);performance::settle(context);for view in descriptions(){assert!(view.width()<=row.width(),"mentions must wrap inside narrow cards");}
     window.set_content(None::<&gtk::Widget>);window.close();drop(chat);pump(context);
 }
 

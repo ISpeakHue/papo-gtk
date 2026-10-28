@@ -39,6 +39,13 @@ pub(crate) fn find_button(w: &gtk::Widget, text: &str) -> gtk::Button {
         .unwrap_or_else(|| panic!("missing button: {text}"))
 }
 pub(crate) fn pump(context: &gtk::glib::MainContext) { for _ in 0..500 { if !context.pending() { break; } context.iteration(false); } }
+pub(crate) fn resize_window(window:&impl IsA<gtk::Window>,width:i32,height:i32){
+    let window=window.as_ref();window.set_default_size(width,height);
+    // EN-US: Win32 layout preserves the last native allocation after queue_resize. Re-present a normal layout to apply the new fixture size.
+    // PT-BR: O layout Win32 preserva a última alocação nativa após queue_resize. Reapresenta o layout normal para aplicar o novo tamanho da fixture.
+    // https://github.com/GNOME/gtk/blob/4.24.1/gdk/win32/gdksurface-win32.c
+    if cfg!(windows)&&window.is_mapped()&&!window.is_maximized()&&!window.is_fullscreen(){window.unmaximize();}
+}
 #[track_caller]
 pub(crate) fn until(context: &gtk::glib::MainContext, condition: impl Fn() -> bool) {
     // EN-US: Cold packaged Windows codecs have a bounded startup budget beyond five seconds.

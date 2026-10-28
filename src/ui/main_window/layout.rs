@@ -86,7 +86,7 @@ pub(crate) mod tests {
         main.model().chat.emit(ChatMsg::UpdateChannel(edited.clone()));until(context,||title.title()=="# Canal de teste");
         assert_eq!(title.subtitle(),edited.topic.as_deref().unwrap());
         for width in [1280,900,540,360]{
-            window.set_default_size(width,760);settle(context);
+            crate::ui::chat::actions::tests::resize_window(window,width,760);settle(context);
             preview(window,&format!("gnome-{width}"),context);
             assert!(window.width()<=width+2,"requested {width}, actual {}, header minimum {:?}, app minimum {:?}",window.width(),header.measure(gtk::Orientation::Horizontal,-1),main.widget().measure(gtk::Orientation::Horizontal,-1));
             // Topic length must not move the channel title toward either
@@ -128,7 +128,7 @@ pub(crate) mod tests {
         find_button(header.upcast_ref(),"Lista de membros").emit_clicked();pump(context);assert!(main.model().layout.members.shows_sidebar());settle(context);assert_chat_center(main,&title,&header);main.model().layout.members.set_show_sidebar(false);pump(context);menu.popdown();
         find_button(header.upcast_ref(),"Canais e conversas (F9)").emit_clicked();pump(context);assert!(main.model().layout.navigation.shows_sidebar());
         main.model().layout.dismiss_navigation();pump(context);
-        window.set_default_size(1280,760);settle(context);
+        crate::ui::chat::actions::tests::resize_window(window,1280,760);settle(context);
         let members=main.model().layout.members.shows_sidebar();find_button(header.upcast_ref(),"Lista de Membros").emit_clicked();pump(context);assert_eq!(main.model().layout.members.shows_sidebar(),!members);
         settle(context);assert_chat_center(main,&title,&header);
         find_button(header.upcast_ref(),"Lista de Membros").emit_clicked();pump(context);settle(context);assert_chat_center(main,&title,&header);
@@ -188,14 +188,14 @@ pub(crate) mod tests {
         main.widget().activate_action("papo.members",None).unwrap();pump(context);assert!(!main.model().layout.members.shows_sidebar());
         main.widget().activate_action("papo.members",None).unwrap();pump(context);assert!(main.model().layout.members.shows_sidebar());
         style.set_color_scheme(adw::ColorScheme::ForceLight);settle(context);snapshot(&window,"light",context);
-        window.set_default_size(900,760);until(context,||window.width()<=1100);settle(context);assert!(!main.model().layout.navigation.is_collapsed());assert!(main.model().layout.members.is_collapsed());assert!(!main.model().layout.members.shows_sidebar());
-        window.set_default_size(540,760);until(context,||window.width()<=760);settle(context);assert!(main.model().layout.navigation.is_collapsed());assert!(!main.model().layout.navigation.shows_sidebar());
+        crate::ui::chat::actions::tests::resize_window(&window,900,760);until(context,||window.width()<=1100);settle(context);assert!(!main.model().layout.navigation.is_collapsed());assert!(main.model().layout.members.is_collapsed());assert!(!main.model().layout.members.shows_sidebar());
+        crate::ui::chat::actions::tests::resize_window(&window,540,760);until(context,||window.width()<=760);settle(context);assert!(main.model().layout.navigation.is_collapsed());assert!(!main.model().layout.navigation.shows_sidebar());
         main.widget().activate_action("papo.navigation",None).unwrap();settle(context);assert!(main.model().layout.navigation.shows_sidebar());snapshot(&window,"narrow-navigation",context);
         main.emit(MainWindowMsg::ChannelSelected(saved_channels.iter().find(|c|c.id==selected).unwrap().clone()));settle(context);assert!(!main.model().layout.navigation.shows_sidebar());
         style.set_color_scheme(adw::ColorScheme::ForceDark);settle(context);snapshot(&window,"narrow",context);
         // Opening media controls does not force a wider chat window.
         let panel=main.model().voice.panel.clone();panel.set_visible(true);main.widget().activate_action("papo.navigation",None).unwrap();settle(context);assert!(panel.is_mapped());assert!(window.width()<=760);assert!(panel.measure(gtk::Orientation::Horizontal,-1).0<=360);snapshot(&window,"narrow-call",context);panel.set_visible(false);main.widget().activate_action("papo.navigation",None).unwrap();settle(context);
-        window.set_default_size(1280,760);until(context,||window.width()>1100);settle(context);assert!(!main.model().layout.navigation.is_collapsed());assert!(!main.model().layout.members.is_collapsed());
+        crate::ui::chat::actions::tests::resize_window(&window,1280,760);until(context,||window.width()>1100);settle(context);assert!(!main.model().layout.navigation.is_collapsed());assert!(!main.model().layout.members.is_collapsed());
         // Use the ListBox signal GTK emits for clicks, rather than direct component messages.
         if let Some(other)=saved_channels.iter().find(|c|c.id!=selected&&matches!(c.channel_type,None|Some(crate::models::ChannelType::Text))){
             let activate=|id|{let row=descendants(main.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::ListBoxRow>().ok().filter(|r|r.widget_name()==format!("channel-{id}"))).unwrap();row.parent().and_downcast::<gtk::ListBox>().unwrap().emit_by_name::<()>("row-activated",&[&row]);};

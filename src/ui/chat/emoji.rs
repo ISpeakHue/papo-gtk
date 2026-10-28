@@ -188,15 +188,15 @@ pub(crate) fn exercise_resize(context:&gtk::glib::MainContext){
         (first_row,rows.get(1).map(|y|y-rows[0]).unwrap_or(0),visible)
     };
     let (grid,scroll)=active();let first=grid.first_child().unwrap();let small=geometry(&grid,&scroll);assert!(small.0>1&&small.1>0);
-    window.set_default_size(400,760);performance::settle(context);let tall=geometry(&grid,&scroll);
+    crate::ui::chat::actions::tests::resize_window(&window,400,760);performance::settle(context);let tall=geometry(&grid,&scroll);
     assert_eq!(tall.0,small.0);assert_eq!(tall.1,small.1,"growing vertically must preserve compact row spacing");assert!(tall.2>small.2,"a taller picker must show more emoji rows");
-    window.set_default_size(1000,760);performance::settle(context);let wide=geometry(&grid,&scroll);
+    crate::ui::chat::actions::tests::resize_window(&window,1000,760);performance::settle(context);let wide=geometry(&grid,&scroll);
     assert!(wide.0>tall.0,"a wider picker must add columns");assert_eq!(wide.1,small.1);assert!(wide.2>96,"a large viewport must fill beyond the first lazy page");
     assert!(grid.observe_children().n_items()>96&&grid.observe_children().n_items()<1024,"resize fills the viewport without eagerly mounting the entire catalog");assert_eq!(grid.first_child().unwrap(),first,"resizing preserves existing cells");
     // Both shared picker tabs use the same responsive layout.
     tabs.set_visible_child_name("server");performance::settle(context);let (server,server_scroll)=active();let broad=geometry(&server,&server_scroll);assert!(broad.0>small.0&&broad.2>96);
-    window.set_default_size(320,420);performance::settle(context);let narrow=geometry(&server,&server_scroll);assert!(narrow.0<broad.0);assert_eq!(narrow.1,broad.1);assert!(server_scroll.hadjustment().upper()<=server_scroll.hadjustment().page_size()+1.0);
-    window.set_default_size(1000,760);search.set_text("server_0001");until(context,||server.observe_children().n_items()==1);performance::settle(context);
+    crate::ui::chat::actions::tests::resize_window(&window,320,420);performance::settle(context);let narrow=geometry(&server,&server_scroll);assert!(narrow.0<broad.0);assert_eq!(narrow.1,broad.1);assert!(server_scroll.hadjustment().upper()<=server_scroll.hadjustment().page_size()+1.0);
+    crate::ui::chat::actions::tests::resize_window(&window,1000,760);search.set_text("server_0001");until(context,||server.observe_children().n_items()==1);performance::settle(context);
     let cell=server.first_child().unwrap();assert!(cell.height()<64,"one filtered emoji must not stretch to fill the window");assert!(server.height()<80,"unused height belongs below the grid");
     cell.downcast::<gtk::FlowBoxChild>().unwrap().child().and_downcast::<gtk::Button>().unwrap().emit_clicked();assert_eq!(*chosen.borrow(),vec![Some(custom[1].id)]);
     window.set_content(None::<&gtk::Widget>);window.close();drop(picker);pump(context);

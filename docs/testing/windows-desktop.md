@@ -84,8 +84,14 @@ as failures. The patched runtime passed native desktop input, login, mention edi
 search in [run 40687585032](https://github.com/ISpeakHue/papo-gtk/actions/runs/40687585032),
 with critical diagnostics fatal. That run then exposed an account-settings sizing
 fixture failure; it did not produce an installer or pass the candidate gate.
-The resize fixture now measures client content rather than including native CSD
-shadows. Full packaged checks and attended IME acceptance remain required.
+The first resize correction (client content instead of window decoration) was
+insufficient: run 40692230416 recorded a requested width of 390 but an unchanged
+native width of 760. GTK Win32 preserves the last native allocation during its
+queued layout. The shared resize fixture now reapplies a normal toplevel layout
+through GTK’s public API on Windows, then asserts the actual allocated geometry.
+The same helper covers the media/emoji/profile resize fixtures; production window
+behavior and native input methods are unchanged. Full packaged checks and
+attended IME acceptance remain required.
 
 The recipe and patches live in `packaging/windows/gtk/`. Its upstream source tarball,
 recipe, both patches and exact locally built package are retained in the

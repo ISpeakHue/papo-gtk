@@ -39,7 +39,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
         if animated{assert!(chat.model().transfers.animations.contains_key(&key));}
         let actual=frame(chat.widget().upcast_ref());assert_ne!((actual.width(),actual.height()),(guessed.width(),guessed.height()),"decoded geometry must supersede the guessed first frame");
         // Resizing and returning to a recent channel reuse its fitted preview.
-        window.set_default_size(400,680);performance::settle(context);assert_fitted(chat.widget().upcast_ref());let narrow=frame(chat.widget().upcast_ref());let geometry=(narrow.width(),narrow.height());assert!(geometry.0<400);
+        crate::ui::chat::actions::tests::resize_window(&window,400,680);performance::settle(context);assert_fitted(chat.widget().upcast_ref());let narrow=frame(chat.widget().upcast_ref());let geometry=(narrow.width(),narrow.height());assert!(geometry.0<400);
         if !embedded&&width>height{crate::ui::main_window::layout::tests::preview(&window,"first-image-fitted",context);}
         let cached_preview=chat.model().transfers.textures[&key].as_ptr();
         chat.emit(ChatMsg::SetChannel(target(Uuid::new_v4())));pump(context);chat.emit(ChatMsg::SetChannel(target(channel)));
@@ -84,7 +84,7 @@ pub(crate) fn exercise_metadata(context:&gtk::glib::MainContext){
     let mut poster=std::io::Cursor::new(Vec::new());image::DynamicImage::new_rgba8(160,90).write_to(&mut poster,image::ImageFormat::Png).unwrap();
     chat.emit(ChatMsg::Transfer(TransferMsg::Bytes{epoch:chat.model().transfers.epoch,message,key:landscape,token:None,result:Ok(poster.into_inner())}));until(context,||chat.model().transfers.textures.contains_key(&landscape));performance::settle(context);
     assert_eq!(geometry(landscape),(640,360),"a small decoded poster cannot shrink the reserved video box");
-    host.set_default_size(400,800);performance::settle(context);let(w,h)=geometry(photo);assert!(w<600&&(w-5*h).abs()<=3);
+    crate::ui::chat::actions::tests::resize_window(&host,400,800);performance::settle(context);let(w,h)=geometry(photo);assert!(w<600&&(w-5*h).abs()<=3);
     let(w,h)=geometry(video);assert!(w<=270&&h<=480&&(16*w-9*h).abs()<=16,"portrait geometry remains bounded during resizing");
     host.set_content(None::<&gtk::Widget>);host.close();drop(chat);pump(context);
 }

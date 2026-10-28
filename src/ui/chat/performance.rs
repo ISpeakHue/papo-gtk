@@ -134,7 +134,7 @@ pub(crate) fn exercise_opening(context:&gtk::glib::MainContext){
     let old_input=chat.model().viewport.input_epoch(); let covered_before=covered_frames.get();
     chat.emit(ChatMsg::SetChannel(target.clone()));chat.emit(ChatMsg::CancelInitialRead(old_input));pump(context);assert!(chat.model().viewport.covered(),"queued input from the old channel cannot reveal the new one");
     until(context,||covered_frames.get()>covered_before);
-    window.set_default_size(520,620);
+    crate::ui::chat::actions::tests::resize_window(&window,520,620);
     let request=Uuid::new_v4();chat.emit(ChatMsg::BeginHistory{request_id:request,cursor:None});chat.emit(ChatMsg::HistoryLoaded{request_id:request,append:false,result:Ok(MessageListResponse{channel_id:channel,messages:messages.clone(),has_more:false})});
     // Updates arriving every frame must not restart opening indefinitely.
     let updates=Rc::new(std::cell::Cell::new(0));let count=updates.clone();let input=chat.sender().clone();let last=messages[69].id;

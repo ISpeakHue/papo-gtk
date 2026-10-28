@@ -109,7 +109,7 @@ pub(super) fn navigation()->(gtk::ScrolledWindow,Vec<(Option<Category>,gtk::Togg
     tabs.set_visible_child_name("server");performance::settle(context);
     assert!(!button("food").is_mapped());assert!(descendants(&tabs.visible_child().unwrap()).iter().any(|w|w.downcast_ref::<gtk::Button>().is_some_and(|b|b.tooltip_text().as_deref()==Some(":server_test:"))));
     tabs.set_visible_child_name("unicode");performance::settle(context);assert!(button("food").is_active());
-    window.set_default_size(320,500);performance::settle(context);
+    crate::ui::chat::actions::tests::resize_window(&window,320,500);performance::settle(context);
     let scroll=grid.ancestor(gtk::ScrolledWindow::static_type()).and_downcast::<gtk::ScrolledWindow>().unwrap();
     assert!(scroll.hadjustment().upper()<=scroll.hadjustment().page_size()+1.0);
     crate::ui::main_window::layout::tests::preview(&window,"emoji-categories",context);

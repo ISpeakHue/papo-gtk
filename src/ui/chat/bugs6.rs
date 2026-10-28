@@ -88,10 +88,10 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
         let texture=window.renderer().unwrap().render_texture(&node,None);let mut pixels=vec![0;texture.width() as usize*texture.height() as usize*4];texture.download(&mut pixels,texture.width() as usize*4);
         assert!(pixels.chunks_exact(4).collect::<std::collections::HashSet<_>>().len()>4,"sent text must actually paint glyphs");
     }
-    window.set_default_size(480,680);until(context,||window.width()<=480);settle(context);
+    crate::ui::chat::actions::tests::resize_window(&window,480,680);until(context,||window.width()<=480);settle(context);
     let last=chat.model().history.messages.last().unwrap().id;let row=chat.model().rendered[&format!("message-{last}")].1.clone();let text=descendants(row.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::TextView>().ok()).unwrap();
     let end=text.iter_location(&text.buffer().end_iter());assert!(end.y()+end.height()<=text.height()+2,"narrow resizing must show every wrapped line");
-    window.set_default_size(850,680);until(context,||window.width()>=800);settle(context);let end=text.iter_location(&text.buffer().end_iter());assert!(end.y()+end.height()<=text.height()+2,"wide resizing preserves complete text");
+    crate::ui::chat::actions::tests::resize_window(&window,850,680);until(context,||window.width()>=800);settle(context);let end=text.iter_location(&text.buffer().end_iter());assert!(end.y()+end.height()<=text.height()+2,"wide resizing preserves complete text");
     let mut denied=chat.model().access.clone();denied.read=false;chat.emit(ChatMsg::SetAccess{user_id:user,access:denied});pump(context);assert!(chat.model().transfers.textures.is_empty());assert!(!chat.model().transfers.encoded.contains(image),"revocation must also clear compressed media");
     window.set_content(None::<&gtk::Widget>);window.close();
 }

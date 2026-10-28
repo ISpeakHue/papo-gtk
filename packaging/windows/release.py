@@ -175,7 +175,7 @@ def make_candidate(args):
         work = args.output / "installer-work"
         uninstaller_receipt = receipts / "uninstaller.json"
         prepare(stage, archive, work, output, nsis_sign_command(uninstaller_receipt), release_candidate=True)
-        subprocess.run([args.makensis, "-WX", "-V3", "installer.nsi"], cwd=work, check=True)
+        subprocess.run([args.makensis, "-INPUTCHARSET", "UTF8", "-WX", "-V3", "installer.nsi"], cwd=work, check=True)
         uninstall = read(uninstaller_receipt)
         require(uninstall["status"] == "pass" and uninstall["signer_certificate_sha256"] == certificate
                 and uninstall["trusted"] is True and uninstall["timestamped"] is True, "Embedded uninstaller is not signed by the selected owner")

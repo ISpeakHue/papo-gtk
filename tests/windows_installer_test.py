@@ -4,10 +4,12 @@ PT-BR: Valida conteúdos exatos e caminhos hostis com pacotes exclusivamente sin
 import json
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
 import zipfile
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "packaging/windows"))
@@ -108,6 +110,25 @@ class WindowsInstaller(unittest.TestCase):
         installer.prepare(self.stage, self.archive, self.root / "recipe", self.root / "setup.exe")
         text = (self.root / "recipe/payload.nsh").read_text()
         self.assertIn('Delete "$INSTDIR\\$$PLUGINSDIR.txt"', text)
+
+    def test_windows_compiler_paths_use_native_separators(self):
+        with patch.object(installer.sys, "platform", "win32"):
+            self.assertEqual(installer.compiler_path("D:/Papo áéç/runtime/bin/Papo.exe"),
+                             "D:\\Papo áéç\\runtime\\bin\\Papo.exe")
+
+    @unittest.skipUnless(sys.platform == "win32", "Native Windows NSIS required")
+    def test_real_nsis_compiles_absolute_unicode_payload_paths(self):
+        compiler = shutil.which("makensis")
+        self.assertIsNotNone(compiler, "The native packaging environment must supply NSIS")
+        with tempfile.TemporaryDirectory(prefix="papo nsis áéç ") as temp:
+            root = Path(temp)
+            stage, archive = fixture(root)
+            work, output = root / "recipe", root / "Papo-fixture.exe"
+            installer.prepare(stage, archive, work, output)
+            result = subprocess.run([compiler, "-INPUTCHARSET", "UTF8", "-WX", "-V3", "installer.nsi"],
+                                    cwd=work, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue(output.read_bytes().startswith(b"MZ"))
 
 
 if __name__ == "__main__":

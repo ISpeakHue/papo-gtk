@@ -5,7 +5,7 @@ PT-BR: Compila um instalador NSIS por usuário com o conteúdo exato do ZIP inde
 import argparse
 import hashlib
 import json
-from pathlib import Path, PurePosixPath, PureWindowsPath
+from pathlib import Path, PurePosixPath
 import re
 import shutil
 import stat
@@ -20,9 +20,9 @@ RESERVED = re.compile(r"^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)", re.I)
 
 
 def compiler_path(path):
-    # EN-US: NSIS splits File paths only at its host separator; UCRT64 Python emits forward slashes.
-    # PT-BR: O NSIS separa caminhos File só pelo separador nativo; o Python UCRT64 emite barras normais.
-    return str(PureWindowsPath(path)) if sys.platform == "win32" else str(path)
+    # EN-US: NSIS splits File paths at backslashes; MSYS2 emits slashes even from PureWindowsPath.
+    # PT-BR: O NSIS separa caminhos File por contrabarras; o MSYS2 emite barras mesmo com PureWindowsPath.
+    return str(path).replace("/", "\\") if sys.platform == "win32" else str(path)
 
 
 def literal(value):

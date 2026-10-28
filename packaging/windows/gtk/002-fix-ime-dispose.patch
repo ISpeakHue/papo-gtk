@@ -1,0 +1,112 @@
+From 2a50bd4af856d9297f0c569cfc8ad871fcd056c7 Mon Sep 17 00:00:00 2001
+From: Dimitriy Ryazantcev <dimitriy.ryazantcev@gmail.com>
+Date: Sun, 27 Sep 2026 02:18:31 +0300
+Subject: [PATCH] win32: Remove the IME message filter on dispose, not just
+ focus_out
+
+The Win32 IME message filter is registered per-context in focus_in()
+but was only ever removed in focus_out(). A context destroyed while
+still focused left a dangling filter->data pointer, crashing the next
+Win32 message dispatched on that display (a click, or
+WM_INPUTLANGCHANGE from switching the input language).
+
+Regressed by 6eb5c1b79c (MR !9958), which dropped the focus_out() call
+that used to happen when the widget was unset on a focused context. A
+plain revert doesn't work either, since surface lookup at dispose time
+usually fails on an unrealized widget.
+
+Track the display the filter is actually registered on instead, and
+add/remove it through a symmetric helper pair called from
+focus_in/focus_out and now also dispose.
+
+Part-of: <https://gitlab.gnome.org/GNOME/gtk/-/merge_requests/10411>
+---
+ gtk/gtkimcontextime.c        | 35 +++++++++++++++++++++++++++--------
+ gtk/gtkimcontextimeprivate.h |  2 +-
+ 2 files changed, 28 insertions(+), 9 deletions(-)
+
+diff --git a/gtk/gtkimcontextime.c b/gtk/gtkimcontextime.c
+index ac019f74176..1e0257a52e8 100644
+--- a/gtk/gtkimcontextime.c
++++ b/gtk/gtkimcontextime.c
+@@ -243,6 +243,7 @@ static void
+ gtk_im_context_ime_init (GtkIMContextIME *context_ime)
+ {
+   context_ime->client_widget          = NULL;
++  context_ime->filter_display         = NULL;
+   context_ime->use_preedit            = TRUE;
+   context_ime->preediting             = FALSE;
+   context_ime->opened                 = FALSE;
+@@ -258,11 +259,35 @@ gtk_im_context_ime_init (GtkIMContextIME *context_ime)
+ }
+ 
+ 
++static void
++gtk_im_context_ime_add_message_filter (GtkIMContextIME *context_ime,
++                                       GdkDisplay       *display)
++{
++  if (context_ime->filter_display)
++    return;
++
++  gdk_win32_display_add_filter (GDK_WIN32_DISPLAY (display),
++                                gtk_im_context_ime_message_filter, context_ime);
++  g_set_weak_pointer (&context_ime->filter_display, display);
++}
++
++static void
++gtk_im_context_ime_remove_message_filter (GtkIMContextIME *context_ime)
++{
++  if (!context_ime->filter_display)
++    return;
++
++  gdk_win32_display_remove_filter (GDK_WIN32_DISPLAY (context_ime->filter_display),
++                                   gtk_im_context_ime_message_filter, context_ime);
++  g_clear_weak_pointer (&context_ime->filter_display);
++}
++
+ static void
+ gtk_im_context_ime_dispose (GObject *obj)
+ {
+   GtkIMContext *context = GTK_IM_CONTEXT (obj);
+ 
++  gtk_im_context_ime_remove_message_filter (GTK_IM_CONTEXT_IME (obj));
+   gtk_im_context_ime_set_client_widget (context, NULL);
+ 
+   G_OBJECT_CLASS (gtk_im_context_ime_parent_class)->dispose (obj);
+@@ -642,8 +667,7 @@ gtk_im_context_ime_focus_in (GtkIMContext *context)
+   if (!himc)
+     return;
+ 
+-  gdk_win32_display_add_filter (GDK_WIN32_DISPLAY (gdk_surface_get_display (toplevel)),
+-                                gtk_im_context_ime_message_filter, context_ime);
++  gtk_im_context_ime_add_message_filter (context_ime, gdk_surface_get_display (toplevel));
+ 
+   /* restore preedit context */
+   context_ime->opened = ImmGetOpenStatus (himc);
+@@ -737,12 +761,7 @@ gtk_im_context_ime_focus_out (GtkIMContext *context)
+     }
+ 
+   /* remove event filter */
+-  if (GDK_IS_SURFACE (surface))
+-    {
+-      gdk_win32_display_remove_filter (GDK_WIN32_DISPLAY (gdk_surface_get_display (surface)),
+-                                       gtk_im_context_ime_message_filter,
+-                                       context_ime);
+-    }
++  gtk_im_context_ime_remove_message_filter (context_ime);
+ 
+   if (was_preediting)
+     {
+diff --git a/gtk/gtkimcontextimeprivate.h b/gtk/gtkimcontextimeprivate.h
+index 56faf97118b..4c9357d28d1 100644
+--- a/gtk/gtkimcontextimeprivate.h
++++ b/gtk/gtkimcontextimeprivate.h
+@@ -37,7 +37,7 @@ struct _GtkIMContextIME
+   GtkIMContext object;
+ 
+   GtkWidget *client_widget;
+-  GdkSurface *client_surface;
++  GdkDisplay *filter_display;
+   gulong after_layout_id;
+   guint use_preedit : 1;
+   guint preediting : 1;

@@ -74,13 +74,20 @@ regular Rust tests but exposed an access violation while reopening the mention
 editor with GTK 4.24.1. That GTK version leaves a native IME filter registered
 when its context is disposed without a usable client surface. The corresponding
 [upstream fix](https://github.com/GNOME/gtk/commit/2a50bd4af856d9297f0c569cfc8ad871fcd056c7)
-is absent from the available UCRT64 4.24.1 package. Papo now releases keyboard
-focus before Windows surfaces/editors are torn down, while their native IME
-clients can still unregister. Native IME remains enabled. The desktop CI step
-treats critical diagnostics as failures so a dangling callback cannot count as
-a passing test merely because it has not crashed yet. This workaround still
-requires the new native run and attended IME acceptance; the older crash is not
-recorded as a pass.
+is absent from the available UCRT64 4.24.1 package. Releasing focus before
+widget teardown did not fix the native failure. The Windows workflow therefore
+rebuilds the MSYS2 GTK recipe as `4.24.1-1.1` with that upstream patch and the
+existing MSYS2 font-rendering patch. It installs the resulting package before
+compiling or testing Papo. Native IME remains enabled; no private GTK ABI or
+Compose-only replacement is used. The desktop CI step treats critical diagnostics
+as failures. The patched runtime requires a successful new native CI run and
+attended IME acceptance; the older crash is not recorded as a pass.
+
+The recipe and patches live in `packaging/windows/gtk/`. Its upstream source tarball,
+recipe, both patches and exact locally built package are retained in the
+`Windows-UCRT64-native-inputs` artifact and hashed in `NATIVE-INPUTS.json` alongside
+the official repository packages. The manifest identifies the locally built
+package explicitly; it does not claim an MSYS2 signature for that package.
 
 Step 7's instrumented UI artifact now includes `check-desktop-ui.ps1` and the
 hashed Windows input helper. It reuses the verified portable ZIP and existing

@@ -205,6 +205,9 @@ fn progressive(context: &gtk::glib::MainContext) {
     let frames = gifs.map(|key|chat.model().transfers.textures[&key].downgrade());
     drop(held);
     until(context, || gifs.iter().all(|key|chat.model().transfers.animations.contains_key(key)) && chat.model().media_render_pending.is_none());
+    // EN-US: GTK may retain the old snapshot until the next frame, after the model has already rendered.
+    // PT-BR: O GTK pode manter o snapshot anterior até o próximo quadro, após a renderização do modelo.
+    until(context, || frames.iter().all(|frame|frame.upgrade().is_none()));
     assert!(frames.iter().all(|frame|frame.upgrade().is_none()),"full animations release the temporary first-frame textures");
     assert_eq!(backend.lock().unwrap().requests.iter().filter(|(_,p,_)|p.starts_with("/attachments/")||p.starts_with("/embeds/")).count(),1);
     window.set_content(None::<&gtk::Widget>); window.close(); drop(chat); server.abort(); pump(context);

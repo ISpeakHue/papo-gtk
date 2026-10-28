@@ -92,6 +92,7 @@ jobs:
           update: true
           path-type: minimal
           install: >-
+            base-devel
             git
             mingw-w64-ucrt-x86_64-rust
             mingw-w64-ucrt-x86_64-gcc
@@ -107,6 +108,22 @@ jobs:
             mingw-w64-ucrt-x86_64-gst-libav
             mingw-w64-ucrt-x86_64-libnice
             mingw-w64-ucrt-x86_64-nsis
+            mingw-w64-ucrt-x86_64-meson
+            mingw-w64-ucrt-x86_64-gi-docgen
+            mingw-w64-ucrt-x86_64-gobject-introspection
+            mingw-w64-ucrt-x86_64-python-docutils
+            mingw-w64-ucrt-x86_64-sassc
+            mingw-w64-ucrt-x86_64-shaderc
+            mingw-w64-ucrt-x86_64-vulkan-headers
+      - name: Backport the upstream native GTK IME disposal fix
+        run: |
+          test "$(pacman -Q mingw-w64-ucrt-x86_64-gtk4)" = 'mingw-w64-ucrt-x86_64-gtk4 4.24.1-1'
+          papo_gtk_build="$(cygpath -u "$RUNNER_TEMP")/papo-gtk-ime"
+          mkdir -p "$papo_gtk_build"
+          cp packaging/windows/gtk/* "$papo_gtk_build/"
+          cd "$papo_gtk_build"
+          MINGW_INSTALLS=ucrt64 makepkg-mingw --noconfirm --nodeps --nocheck
+          pacman -U --noconfirm mingw-w64-ucrt-x86_64-gtk4-4.24.1-1.1-any.pkg.tar.zst
       - name: Diagnose source differences with MSYS2 Git before compiling
         run: |
           python - <<'PYCODE'
@@ -124,7 +141,14 @@ jobs:
       - name: Test source provenance and package archive verification
         run: python packaging/ci/python_checks.py --pattern 'windows_*test.py' --output target/windows-build/python-native.json
       - name: Retain exact installed native dependency packages
-        run: python packaging/windows/native_inputs.py capture target/windows-native-inputs
+        run: |
+          papo_gtk_build="$(cygpath -u "$RUNNER_TEMP")/papo-gtk-ime"
+          python packaging/windows/native_inputs.py capture target/windows-native-inputs \
+            --local-package "$papo_gtk_build/mingw-w64-ucrt-x86_64-gtk4-4.24.1-1.1-any.pkg.tar.zst" \
+            --source-input "$papo_gtk_build/gtk-4.24.1.tar.xz" \
+            --source-input "$papo_gtk_build/PKGBUILD" \
+            --source-input "$papo_gtk_build/001-fix-font-rendering.patch" \
+            --source-input "$papo_gtk_build/002-fix-ime-dispose.patch"
       - name: Record native toolchain and build options before compilation
         run: python packaging/windows/build.py --preflight --native-inputs target/windows-native-inputs
       - name: Select explicit UCRT64 runtime for unbundled developer tests

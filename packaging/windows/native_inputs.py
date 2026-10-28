@@ -45,7 +45,24 @@ def verify_archive(directory, installed=None):
     return {"manifest_sha256": sha256(directory / "NATIVE-INPUTS.json"), **manifest}
 
 
-def capture(directory):
+def local_packages(paths, installed):
+    """EN-US: Only archive locally built packages that are actually installed.
+    PT-BR: Só arquiva pacotes locais que realmente estão instalados.
+    """
+    result = {}
+    for path in paths:
+        path = Path(path).resolve()
+        inventory = package_set(run("pacman", "-Qp", msys_path(path)))
+        if len(inventory) != 1:
+            raise RuntimeError("Expected one package per local archive")
+        name, version = next(iter(inventory.items()))
+        if name in result or installed.get(name) != version:
+            raise RuntimeError("Local package does not match installed versions or is duplicated")
+        result[name] = {"version": version, "archive": path.name, "path": path}
+    return result
+
+
+def capture(directory, local=(), sources=()):
     if sys.platform != "win32":
         raise RuntimeError("Archive native inputs from MSYS2 on Windows")
     directory = directory.resolve()
@@ -53,11 +70,22 @@ def capture(directory):
         raise RuntimeError("Choose a new/empty archive path; never mix package snapshots")
     directory.mkdir(parents=True)
     installed = package_set(run("pacman", "-Q"))
+    custom = local_packages(local, installed)
     # EN-US: Download and validate in one transaction; reject repository drift after provisioning.
     # PT-BR: Baixa e valida em uma transação; rejeita divergências do repositório após preparar o ambiente.
     import subprocess
-    subprocess.run(["pacman", "-Sw", "--noconfirm", "--cachedir", msys_path(directory), *sorted(installed)],
+    subprocess.run(["pacman", "-Sw", "--noconfirm", "--cachedir", msys_path(directory), *sorted(installed.keys() - custom.keys())],
                    cwd=ROOT, check=True)
+    for item in custom.values():
+        shutil.copy2(item["path"], directory / item["archive"])
+    source_names = []
+    for path in map(Path, sources):
+        if (directory / path.name).exists() or path.name == "NATIVE-INPUTS.json":
+            raise RuntimeError("Duplicate source input filename")
+        shutil.copy2(path, directory / path.name)
+        source_names.append(path.name)
+    if custom and not source_names:
+        raise RuntimeError("Local packages require retained corresponding source and recipes")
     packages = sorted(path for path in directory.iterdir()
                       if ".pkg.tar." in path.name and not path.name.endswith(".sig"))
     # EN-US: Stay below Windows' command-line limit when retaining the full toolchain closure.
@@ -77,7 +105,10 @@ def capture(directory):
         "schema": 1, "installed": installed,
         "files": [{"file": path.name, "size": path.stat().st_size, "sha256": sha256(path)}
                   for path in sorted(directory.iterdir())],
-        "validation": "pacman download integrity/signature checks; exact installed/archived name-version equality",
+        "validation": "pacman integrity/signature checks for repository packages; local package hashes and retained source; exact installed/archived name-version equality",
+        "locally_built": {name: {key: value for key, value in item.items() if key != "path"}
+                          for name, item in custom.items()},
+        "corresponding_source": source_names,
         "byte_identical_rebuild_demonstrated": False,
     }
     write_json(directory / "NATIVE-INPUTS.json", manifest)
@@ -89,9 +120,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("capture", "verify"))
     parser.add_argument("directory", type=Path)
+    parser.add_argument("--local-package", type=Path, action="append", default=[])
+    parser.add_argument("--source-input", type=Path, action="append", default=[])
     args = parser.parse_args()
     if args.command == "capture":
-        capture(args.directory)
+        capture(args.directory, args.local_package, args.source_input)
     else:
         manifest = verify_archive(args.directory)
         print(f"Verified {len(manifest['files'])} retained native inputs")

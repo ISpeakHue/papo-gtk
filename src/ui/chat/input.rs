@@ -28,15 +28,6 @@ fn apply_desktop_im(settings:&gtk::Settings){
 /// even when the terminal has no XMODIFIERS hint. Leave valid GTK preferences
 /// to GTK; an unavailable module must not silently select a broken fallback.
 pub(super) fn configure_im(view:&gtk::TextView){
-    #[cfg(windows)]view.connect_unrealize(|view|{
-        // EN-US: Removing a focused editor must notify native IME before GTK detaches its client widget.
-        // PT-BR: Remover um editor focado deve avisar o IME nativo antes de o GTK desconectar seu widget cliente.
-        if let Some(window)=view.root().and_downcast::<gtk::Window>(){
-            if gtk::prelude::GtkWindowExt::focus(&window).is_some_and(|focus|focus==view.clone().upcast::<gtk::Widget>()||focus.is_ancestor(view)){
-                gtk::prelude::GtkWindowExt::set_focus(&window,None::<&gtk::Widget>);
-            }
-        }
-    });
     apply_im(view);view.connect_map(apply_im);
     // Portal settings can arrive after construction, or change while running.
     // Updating only when the selection differs preserves an active preedit.

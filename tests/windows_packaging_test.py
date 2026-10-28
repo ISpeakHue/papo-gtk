@@ -7,11 +7,12 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "packaging/windows"))
 from build import source_state, require_source, sha256, write_json
-from native_inputs import verify_archive, package_set
+from native_inputs import verify_archive, package_set, local_packages
 
 
 class SourceProvenance(unittest.TestCase):
@@ -139,6 +140,15 @@ class NativeInputIntegrity(unittest.TestCase):
     def test_duplicate_package_names_are_rejected(self):
         with self.assertRaisesRegex(RuntimeError, "duplicate"):
             package_set("example 1-1\nexample 2-1\n")
+
+    def test_local_backport_must_match_installed_package_and_be_unique(self):
+        with patch("native_inputs.msys_path", return_value="/fixture/package"), patch("native_inputs.run", return_value="example 1-1"):
+            inventory = local_packages([self.path], {"example": "1-1"})
+            self.assertEqual(inventory["example"]["archive"], self.path.name)
+            with self.assertRaisesRegex(RuntimeError, "installed versions"):
+                local_packages([self.path], {"example": "2-1"})
+            with self.assertRaisesRegex(RuntimeError, "duplicated"):
+                local_packages([self.path, self.path], {"example": "1-1"})
 
 
 if __name__ == "__main__":

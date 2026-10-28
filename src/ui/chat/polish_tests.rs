@@ -31,7 +31,14 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     // A dated jump excludes the recent head; returning restores the true head.
     let count=backend.lock().unwrap().requests.len();chat.emit(ChatMsg::Action(ActionMsg::NavigateAt(MessageCursor::from(&old))));
     until(context,||chat.model().actions.highlight==Some(old.id));assert!(chat.model().history_detached);
-    let requests=backend.lock().unwrap().requests[count..].to_vec();assert_eq!(requests.iter().filter(|(_,p,_)|p.contains("/messages?")).count(),2);
+    // EN-US: Count the two navigation pages, excluding an independent one-message read reconciliation.
+    // PT-BR: Conta as duas páginas da navegação, excluindo a reconciliação independente de uma mensagem lida.
+    let requests=backend.lock().unwrap().requests[count..].to_vec();
+    let pages:Vec<_>=requests.iter().filter_map(|(_,p,_)|reqwest::Url::parse(&format!("http://fixture.invalid{p}")).ok())
+        .filter(|url|url.path().ends_with("/messages")&&url.query_pairs().any(|(key,value)|key=="limit"&&value=="30")&&url.query_pairs().any(|(key,_)|key=="since")).collect();
+    assert_eq!(pages.len(),2);
+    assert!(pages.iter().any(|url|url.query_pairs().any(|(key,value)|key=="order"&&value=="desc")));
+    assert!(pages.iter().any(|url|url.query_pairs().any(|(key,value)|key=="order"&&value=="asc")));
     assert!(!chat.model().history.messages.iter().any(|m|m.id==latest.id),"historical pages must not create an artificial gap to today's messages");
     chat.emit(ChatMsg::Latest);until(context,||!chat.model().history_detached&&chat.model().history.messages.iter().any(|m|m.id==latest.id));
     chat.emit(ChatMsg::Action(ActionMsg::NavigateAt(MessageCursor::from(&old))));until(context,||chat.model().actions.highlight==Some(old.id));

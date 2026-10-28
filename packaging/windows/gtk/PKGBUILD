@@ -1,0 +1,111 @@
+# EN-US: MSYS2 GTK 4.24.1 recipe plus the upstream Win32 IME disposal backport.
+# PT-BR: Receita MSYS2 GTK 4.24.1 com o backport upstream do descarte do IME Win32.
+# https://github.com/msys2/MINGW-packages/tree/master/mingw-w64-gtk4
+# https://github.com/GNOME/gtk/commit/2a50bd4af856d9297f0c569cfc8ad871fcd056c7
+# Maintainer: Christoph Reiter <reiter.christoph@gmail.com>
+
+_realname=gtk4
+pkgbase="mingw-w64-${_realname}"
+pkgname=("${MINGW_PACKAGE_PREFIX}-${_realname}")
+pkgver=4.24.1
+pkgrel=1.1
+pkgdesc="GObject-based multi-platform GUI toolkit (v4) (mingw-w64)"
+arch=('any')
+mingw_arch=('ucrt64' 'clang64' 'clangarm64')
+url="https://www.gtk.org"
+msys2_repository_url="https://gitlab.gnome.org/GNOME/gtk/"
+msys2_references=(
+  'anitya: 13942'
+  'gentoo: gui-libs/gtk'
+  "cpe: cpe:/a:gnome:gtk"
+  "cpe: cpe:/a:gtk:gtk%2b"
+)
+license=('spdx:LGPL-2.1-or-later')
+depends=(
+  "${MINGW_PACKAGE_PREFIX}-adwaita-icon-theme"
+  "${MINGW_PACKAGE_PREFIX}-cairo"
+  "${MINGW_PACKAGE_PREFIX}-cc-libs"
+  "${MINGW_PACKAGE_PREFIX}-gdk-pixbuf2"
+  "${MINGW_PACKAGE_PREFIX}-glib2"
+  "${MINGW_PACKAGE_PREFIX}-graphene"
+  "${MINGW_PACKAGE_PREFIX}-gst-plugins-bad-libs"
+  "${MINGW_PACKAGE_PREFIX}-gtk-update-icon-cache"
+  "${MINGW_PACKAGE_PREFIX}-json-glib"
+  "${MINGW_PACKAGE_PREFIX}-libepoxy"
+  "${MINGW_PACKAGE_PREFIX}-pango"
+  "${MINGW_PACKAGE_PREFIX}-shared-mime-info"
+  "${MINGW_PACKAGE_PREFIX}-vulkan-loader"
+)
+makedepends=(
+  "${MINGW_PACKAGE_PREFIX}-cc"
+  "${MINGW_PACKAGE_PREFIX}-gi-docgen"
+  "${MINGW_PACKAGE_PREFIX}-gobject-introspection"
+  "${MINGW_PACKAGE_PREFIX}-meson"
+  "${MINGW_PACKAGE_PREFIX}-pkgconf"
+  "${MINGW_PACKAGE_PREFIX}-python-docutils"
+  "${MINGW_PACKAGE_PREFIX}-sassc"
+  "${MINGW_PACKAGE_PREFIX}-shaderc"
+  "${MINGW_PACKAGE_PREFIX}-vulkan-headers"
+)
+optdepends=(
+  "${MINGW_PACKAGE_PREFIX}-gst-plugins-good: plugins required in gtk4-widget-factory"
+)
+conflicts=("${MINGW_PACKAGE_PREFIX}-gtk4-media-gstreamer")
+provides=("${MINGW_PACKAGE_PREFIX}-gtk4-media-gstreamer")
+replaces=("${MINGW_PACKAGE_PREFIX}-gtk4-media-gstreamer")
+source=(
+  "https://download.gnome.org/sources/gtk/${pkgver:0:4}/gtk-${pkgver}.tar.xz"
+  "001-fix-font-rendering.patch"
+  "002-fix-ime-dispose.patch"
+)
+sha256sums=('e98abe720e16129c8c0f50761dee0a2e9ae2478055e31018f6cf977fcf6513e9'
+            'ebac78616a7668edbfdd77b9959ad63239aa59ed12b995a9663bf2df7158be26'
+            '3c60b4f19caf3cb2485e42474bebebfadbee583bf521208731ea52ecd6d2d550')
+
+prepare() {
+  cd gtk-${pkgver}
+
+  # Re-enables font hinting
+  patch -Np1 -i ../001-fix-font-rendering.patch
+  # EN-US: Upstream disposal fix; retain native Windows IME and its candidate UI.
+  # PT-BR: Correção upstream do descarte; preserva o IME nativo e sua seleção de candidatos.
+  patch -Np1 -i ../002-fix-ime-dispose.patch
+}
+
+build() {
+  mkdir -p build-${MSYSTEM} && cd build-${MSYSTEM}
+
+  declare -a extra_config
+  if check_option "debug" "n"; then
+    extra_config+=("--buildtype=release")
+  else
+    extra_config+=("--buildtype=debug")
+  fi
+
+  MSYS2_ARG_CONV_EXCL="--prefix=" \
+    meson setup \
+    --prefix="${MINGW_PREFIX}" \
+    --wrap-mode=nodownload \
+    --auto-features=enabled \
+    "${extra_config[@]}" \
+    -Dbuild-examples=false \
+    -Dbuild-tests=false \
+    -Dbuild-testsuite=false \
+    -Dman-pages=true \
+    -Dmacos-backend=false \
+    -Dmedia-gstreamer=enabled \
+    -Dvulkan=enabled \
+    -Dx11-backend=false \
+    -Dwayland-backend=false \
+    -Dwin32-backend=true \
+    -Dintrospection=enabled \
+    ../gtk-${pkgver}
+
+  meson compile -j 2
+}
+
+package() {
+  meson install -C "${srcdir}/build-${MSYSTEM}" --destdir "${pkgdir}"
+
+  install -Dm644 "${srcdir}/gtk-${pkgver}/COPYING" "${pkgdir}${MINGW_PREFIX}/share/licenses/${_realname}/COPYING"
+}

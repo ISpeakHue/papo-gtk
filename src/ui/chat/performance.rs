@@ -3,6 +3,50 @@ use super::*;
 use actions::tests::{descendants, pump};
 use adw::prelude::*;
 
+// Record mapped frame work during sustained wheel input. Timing is diagnostic;
+// assertions cover motion, bounded row ownership and avoiding history rebuilds.
+pub(crate) fn exercise_scroll_frames(context:&gtk::glib::MainContext){
+    use std::{cell::{Cell,RefCell},rc::Rc,time::{Duration,Instant}};
+    let created=chrono::Utc::now();let channel=Uuid::new_v4();let user=Uuid::new_v4();
+    let target:Channel=serde_json::from_value(serde_json::json!({"id":channel,"name":"scroll frames","created_at":created})).unwrap();
+    let count=std::env::var("PAPO_SCROLL_MESSAGES").ok().and_then(|s|s.parse::<usize>().ok()).unwrap_or(1000);
+    let messages:Vec<Message>=(0..count).map(|i|serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"channel_id":channel,"author_id":user,"content":format!("Message {i}: {}", "Readable chat text with accents á é ç and **bold words**. ".repeat(4)),"created_at":created+chrono::Duration::seconds(i as i64)})).unwrap()).collect();
+    let chat=ChatModel::builder().launch(ChatInit{active_channel:Some(target),messages,..Default::default()}).detach();
+    chat.emit(ChatMsg::SetAccess{user_id:user,access:crate::models::Access::direct()});
+    let window=adw::Window::builder().default_width(1000).default_height(720).content(chat.widget()).build();window.present();settle(context);
+    let widgets=descendants(chat.widget().upcast_ref());let scroll=widgets.iter().find_map(|w|w.downcast_ref::<gtk::ScrolledWindow>()).unwrap().clone();
+    let adj=scroll.vadjustment();let start_value=adj.value();let passes=chat.model().render_passes;
+    #[cfg(windows)] for view in widgets.iter().filter_map(|w|w.downcast_ref::<gtk::TextView>()) {
+        if view.is_editable(){assert_ne!(view.im_module().as_deref(),Some("simple"),"composing retains the native IME");}
+        else{assert_eq!(view.im_module().as_deref(),Some("simple"),"display-only text must not reposition native IME windows on scroll");}
+    }
+    let clock=scroll.frame_clock().unwrap();let begun=Rc::new(Cell::new(Instant::now()));let begin=begun.clone();
+    let before=clock.connect_before_paint(move |_|begin.set(Instant::now()));
+    let layout_begin=Rc::new(Cell::new(Instant::now()));let lb=layout_begin.clone();
+    let layout_before=clock.connect_local("layout",false,move |_|{lb.set(Instant::now());None});
+    let layout_after=clock.connect_local("layout",true,move |_|{crate::performance::record("scroll_layout_us",layout_begin.get().elapsed().as_micros() as u64);None});
+    let paint_begin=Rc::new(Cell::new(Instant::now()));let pb=paint_begin.clone();
+    let paint_before=clock.connect_local("paint",false,move |_|{pb.set(Instant::now());None});
+    let paint_after=clock.connect_local("paint",true,move |_|{crate::performance::record("scroll_paint_us",paint_begin.get().elapsed().as_micros() as u64);None});
+    let samples=Rc::new(RefCell::new(Vec::new()));let seen=samples.clone();let painted=begun.clone();let values=Rc::new(RefCell::new(Vec::new()));let offsets=values.clone();let a=adj.clone();
+    let after=clock.connect_after_paint(move |_|{seen.borrow_mut().push(painted.get().elapsed().as_micros() as u64);offsets.borrow_mut().push(a.value());});
+    let deadline=Instant::now()+Duration::from_secs(3);let mut next=Instant::now();let mut events=0;
+    let wheel=scroll.observe_controllers().iter::<gtk::glib::Object>().filter_map(Result::ok).filter_map(|o|o.downcast::<gtk::EventControllerScroll>().ok()).find(|c|c.propagation_phase()==gtk::PropagationPhase::Capture).unwrap();
+    while Instant::now()<deadline{
+        if Instant::now()>=next{wheel.emit_by_name::<bool>("scroll",&[&0.0f64,&-1.0f64]);events+=1;next+=Duration::from_millis(55);}
+        context.iteration(false);std::thread::sleep(Duration::from_millis(1));
+    }
+    settle(context);for hook in [before,after,layout_before,layout_after,paint_before,paint_after]{clock.disconnect(hook);}
+    let mut frames=samples.borrow().clone();frames.sort_unstable();assert!(frames.len()>10,"wheel input must paint intermediate frames");
+    assert!(adj.value()<start_value-500.0,"sustained wheel input must move through history");
+    assert!(chat.model().rendered.len()<=super::window::ROW_LIMIT+5);
+    assert_eq!(passes,chat.model().render_passes,"scrolling within materialized history must reuse rows");
+    assert!(values.borrow().windows(2).all(|v|v[1]<=v[0]+1.0),"upward input must not jump backwards");
+    let distance=start_value-adj.value();
+    eprintln!("Papo scroll frames: {}",serde_json::json!({"events":events,"frames":frames.len(),"paint_p50_us":frames[frames.len()/2],"paint_p95_us":frames[frames.len()*95/100],"paint_max_us":frames.last(),"over_16ms":frames.iter().filter(|v|**v>16667).count(),"distance":distance}));
+    window.set_content(None::<&gtk::Widget>);window.close();drop(chat);pump(context);
+}
+
 pub(crate) fn exercise_cache(context:&gtk::glib::MainContext){super::transfers::exercise_cache_scroll(context);}
 pub(crate) fn exercise_media_scroll(context:&gtk::glib::MainContext){super::viewport::exercise_media_scroll(context);}
 

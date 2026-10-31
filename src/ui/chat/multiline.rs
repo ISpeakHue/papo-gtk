@@ -34,14 +34,14 @@ pub(crate) fn exercise_full_app(context:&gtk::glib::MainContext){
         // a valid explicit preference hands control back to GTK.
         let settings=field.settings();let original=settings.gtk_im_module();settings.set_gtk_im_module(Some("missing-test-module"));assert_eq!(settings.gtk_im_module().as_deref(),Some("gtk-im-context-simple"));assert!(field.im_module().is_none());settings.set_gtk_im_module(Some("simple"));assert!(field.im_module().is_none());settings.set_gtk_im_module(original.as_deref());assert!(field.im_module().is_none());
     }
-    if std::env::var_os("PAPO_NATIVE_INPUT_TEST").is_some(){
+    if cfg!(target_os="linux")&&std::env::var("PAPO_NATIVE_INPUT_TEST").as_deref()==Ok("1"){
         assert!(!wayland,"XTest input is restricted to the private X11 regression display");
         assert!(std::process::Command::new("setxkbmap").args(["-layout","br","-variant",""]).status().unwrap().success());
         for letter in ["a","e"]{keys_for("Papo full input test",&["dead_acute"]);performance::settle(context);keys_for("Papo full input test",&[letter,"space"]);pump(context);}
         keys_for("Papo full input test",&["Control_L+Shift_L+u","e","7","Return"]);
     }else{field.emit_by_name::<()>("insert-at-cursor",&[&"á é ç"]);}
     until(context,||field.text()=="á é ç");
-    if std::env::var_os("PAPO_NATIVE_INPUT_TEST").is_some(){assert!(field.has_focus(),"native typing must keep focus on the chat composer");}
+    if cfg!(target_os="linux")&&std::env::var("PAPO_NATIVE_INPUT_TEST").as_deref()==Ok("1"){assert!(field.has_focus(),"native typing must keep focus on the chat composer");}
     assert!(!backend.lock().unwrap().requests.iter().any(|(method,path,_)|method=="POST"&&path=="/messages"),"committing accents must never send a message");
     window.close();window.set_content(None::<&gtk::Widget>);drop(main);server.abort();pump(context);
 }
@@ -56,7 +56,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let window=adw::Window::builder().title("Papo input test").default_width(850).default_height(700).content(chat.widget()).build();window.present();
     let field=composer::field(chat.widget().upcast_ref());until(context,||field.is_mapped()&&field.width()>0);field.grab_focus();
     let scroll=field.parent().and_downcast::<gtk::ScrolledWindow>().unwrap();let initial=scroll.height();
-    let native=std::env::var_os("PAPO_NATIVE_INPUT_TEST").is_some();
+    let native=cfg!(target_os="linux")&&std::env::var("PAPO_NATIVE_INPUT_TEST").as_deref()==Ok("1");
     if native{let layout=std::env::var("PAPO_NATIVE_INPUT_LAYOUT").unwrap_or_else(|_|"us".into());assert!(std::process::Command::new("setxkbmap").args(["-layout",&layout,"-variant",if layout=="us"{"intl"}else{""}]).status().unwrap().success());}
     field.set_text("á @I");field.set_position(-1);until(context,||chat.model().mention_visible);
     if native{keys(&["Tab"]);}else{chat.emit(ChatMsg::MentionSelected(Some(peer)));}

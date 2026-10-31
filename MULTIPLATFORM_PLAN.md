@@ -254,13 +254,19 @@ remaining GUI assertions are tracked in the provenance record.
    backend, denial/unplug cases recover, and repeated calls release devices and
    processes. Keep synthetic CI checks and record real-hardware results separately.
 
-   **Implementation completed 2026-10-27; Windows acceptance deferred at the
-   user's request:** endpoint identity, device monitoring/recovery, muted defaults,
+   **Implementation completed 2026-10-27; Windows audio hardware checked
+   2026-10-29, remaining acceptance incomplete:** endpoint identity, device monitoring/recovery, muted defaults,
    raw/MJPEG cameras, bounded IPC and whole-process-tree ownership are implemented.
    SFU launchers now use native interpreter/executable paths; synthetic lifecycle,
    cue and device tests are wired into Linux/Windows CI. Local direct-ICE/TURN
    audio/video probes passed. The checkbox remains open for the original hardware
-   completion criteria: no Windows machine is available until release testing.
+   completion criteria. A Windows development machine is now available, and the
+   2026-10-29 local native/SFU checks pass. The physical USB microphone passes
+   20 capture/Opus/mute/gain/release cycles and local direct/TURN buffer transport;
+   the user confirms audible native call cues. No camera or live test accounts
+   are available; attended permission/unplug/default-device tests are deferred
+   at the user's request. Loopback microphone filtering,
+   default aliases and probe reset ordering were corrected during this review.
    See [implementation, verification and deferred checklist](docs/testing/windows-calls.md).
 
 9. [ ] **Implement native Windows notifications and activation.**
@@ -292,8 +298,9 @@ remaining GUI assertions are tracked in the provenance record.
    revoked alerts and logout use serialized removal with durable retry state.
    Shared policy and GTK integration passed, so the Windows capability is enabled
    behind a helper/registration readiness check. GNU cross-compilation passed;
-   native DPAPI/WinRT, package and visible-toast checks are prepared for CI/release
-   testing. No Windows desktop run is claimed. See the
+   native DPAPI/WinRT construction, disposable storage and focused Windows routing
+   checks now pass locally. Visible delivery/click/removal acceptance remains
+   pending under the user's automatic-only boundary. See the
    [implementation and deferred acceptance checklist](docs/testing/windows-notifications.md).
 
 10. [ ] **Implement consent-based Windows screen sharing.**
@@ -327,7 +334,9 @@ remaining GUI assertions are tracked in the provenance record.
     the advertised capability stays disabled until the original native source/
     peer/cleanup completion checks pass. Attended probes and the deferred release
     checklist are in [Windows screen sharing](docs/testing/windows-capture.md).
-    No native Windows run or completed desktop acceptance is claimed.
+    Native Windows bridge ABI/ownership and synthetic appsrc/VP8 checks now pass;
+    picker/source/peer desktop acceptance has not run. See the
+    [2026-10-29 local automatic record](docs/testing/windows-local-2026-10-29.md).
 
 11. [ ] **Complete Windows desktop and input acceptance.**
 
@@ -355,6 +364,12 @@ remaining GUI assertions are tracked in the provenance record.
     dialog and mixed-monitor tests remain the original completion gate; this
     checkbox is not a claim that Windows desktop acceptance has run. See
     [desktop/input checks and remaining matrix](docs/testing/windows-desktop.md).
+
+    **2026-10-29 local automatic checks:** focused Windows desktop fixtures pass;
+    the native-key helper safely refused lost foreground ownership. Real input,
+    accessibility and physical DPI checks remain pending. A broad GUI native
+    failure remains under investigation; fixture portability corrections are
+    recorded separately in the [local record](docs/testing/windows-local-2026-10-29.md).
 
 12. [ ] **Turn CI into a packaged-release gate.**
 
@@ -388,6 +403,12 @@ remaining GUI assertions are tracked in the provenance record.
     [verified preview](docs/testing/windows-preview.md) and
     [packaged CI gate and verification](docs/testing/windows-release-gate.md).
 
+    **2026-10-29 working-tree checks:** 138 Python checks (one named Linux-only
+    skip), 310 regular Rust tests and three explicit native lifecycle tests pass.
+    Packaged runtime checks exposed and now guard a native GStreamer Unicode-path
+    defect; developer and CI provisioning retain its source correction. These
+    local modified-source results are not a new clean-source CI candidate.
+
 13. [ ] **Build the installer and complete a Windows beta.**
 
     Produce the installer selected in step 4 and a self-contained ZIP, with correct
@@ -418,6 +439,11 @@ remaining GUI assertions are tracked in the provenance record.
     attended Windows 11 Home/Pro and real-device beta acceptance remain pending.
     The original completion checkbox stays open. See
     [installer contract, beta matrix and evidence](docs/testing/windows-beta.md).
+
+    **2026-10-29 local automatic checks:** all ten installer tests, including
+    real NSIS compilation with Unicode payload paths, pass on Windows. The
+    existing installation is preserved; current-source installer lifecycle and
+    beta qualification still require a clean candidate and isolated test account.
 
 14. [ ] **Qualify and publish the supported Windows release.**
 

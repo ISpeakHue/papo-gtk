@@ -86,7 +86,27 @@ def restore_gtk(directory, destination, installed):
     return True
 
 
-def capture(directory, local=(), sources=()):
+def seed_cache(directory, cache, installed, excluded=()):
+    # EN-US: Reuse exact cached archives, then let pacman validate their signatures/integrity as usual.
+    # PT-BR: Reutiliza arquivos exatos do cache; o pacman continua validando assinaturas/integridade.
+    for name, version in installed.items():
+        if name in excluded:
+            continue
+        filename_version = version.split(':', 1)[-1]
+        candidates = sorted(Path(cache).glob(f'{name}-{filename_version}-*.pkg.tar.*'))
+        for path in candidates:
+            if path.name.endswith('.sig') or not path.is_file() or path.is_symlink():
+                continue
+            if package_set(run('pacman', '-Qp', msys_path(path))) != {name: version}:
+                raise RuntimeError(f'Cached package identity mismatch: {path.name}')
+            shutil.copy2(path, Path(directory) / path.name)
+            signature = Path(str(path) + '.sig')
+            if signature.is_file() and not signature.is_symlink():
+                shutil.copy2(signature, Path(directory) / signature.name)
+            break
+
+
+def capture(directory, local=(), sources=(), cache=None):
     if sys.platform != "win32":
         raise RuntimeError("Archive native inputs from MSYS2 on Windows")
     directory = directory.resolve()
@@ -95,6 +115,8 @@ def capture(directory, local=(), sources=()):
     directory.mkdir(parents=True)
     installed = package_set(run("pacman", "-Q"))
     custom = local_packages(local, installed)
+    if cache is not None:
+        seed_cache(directory, cache, installed, custom)
     # EN-US: Download and validate in one transaction; reject repository drift after provisioning.
     # PT-BR: Baixa e valida em uma transação; rejeita divergências do repositório após preparar o ambiente.
     import subprocess
@@ -146,9 +168,10 @@ def main():
     parser.add_argument("directory", type=Path)
     parser.add_argument("--local-package", type=Path, action="append", default=[])
     parser.add_argument("--source-input", type=Path, action="append", default=[])
+    parser.add_argument('--cache', type=Path, help='Seed exact archives from an existing pacman cache; normal validation remains mandatory')
     args = parser.parse_args()
     if args.command == "capture":
-        capture(args.directory, args.local_package, args.source_input)
+        capture(args.directory, args.local_package, args.source_input, args.cache)
     else:
         manifest = verify_archive(args.directory)
         print(f"Verified {len(manifest['files'])} retained native inputs")

@@ -43,6 +43,11 @@ pub(super) fn with_profiles(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&
 #[derive(Clone)]enum Target {Link(String),Profile(Uuid),Emoji{offset:i32,details:emoji_details::Details},Spoiler{tag:gtk::TextTag,shown:std::rc::Rc<std::cell::Cell<bool>>,images:std::rc::Rc<std::cell::RefCell<Vec<(i32,gtk::gdk::Paintable,Option<crate::media::animation::Animation>)>>>}}
 fn build(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions,open:Option<std::rc::Rc<dyn Fn(Uuid)>>,compact:bool)->gtk::TextView{
     let view=gtk::TextView::new();view.set_editable(false);view.set_cursor_visible(false);view.set_accepts_tab(false);
+    // Win32's IME context tracks its candidate-window position after every
+    // layout, including for unfocused, read-only views. Hundreds of timeline
+    // contexts turn each scroll frame into native IME calls. Display text
+    // never accepts composition; editable composers retain the native IME.
+    #[cfg(windows)] view.set_im_module(Some("simple"));
     view.set_wrap_mode(gtk::WrapMode::WordChar);view.set_vexpand(false);
     view.add_css_class("papo-message-text");
     // GtkTextView validates its lazy layout inside the allocated viewport. A

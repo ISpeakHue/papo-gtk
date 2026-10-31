@@ -9,12 +9,55 @@ pub fn install() {
     INSTALLED.with(|installed| {
         if installed.get() { return; }
         let Some(display) = gtk::gdk::Display::default() else { return; };
+        #[cfg(windows)] windows_text(&display);
         let provider = gtk::CssProvider::new();
         provider.load_from_string(include_str!("style.css"));
         gtk::style_context_add_provider_for_display(&display, &provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
         super::dialogs::install();
         installed.set(true);
     });
+}
+
+#[cfg(windows)]
+fn windows_text(display:&gtk::gdk::Display){
+    use gtk::prelude::*;
+    let settings=gtk::Settings::for_display(display);
+    // Preserve the system family and larger accessibility sizes. Match the
+    // 11pt Adwaita baseline instead of inheriting Win32's tiny 9pt menu font.
+    let mut font=gtk::pango::FontDescription::from_string(settings.gtk_font_name().as_deref().unwrap_or("Segoe UI 9"));
+    if !font.is_size_absolute()&&font.size()<11*gtk::pango::SCALE {
+        font.set_size(11*gtk::pango::SCALE);settings.set_gtk_font_name(Some(&font.to_string()));
+    }
+    // Available since GTK 4.16; retain the project's GTK 4.12 minimum.
+    if let Some(value)=settings.find_property("gtk-font-rendering")
+        .and_then(|p|gtk::glib::EnumClass::with_type(p.value_type()))
+        .and_then(|c|c.to_value_by_nick("manual")) {
+        settings.set_property_from_value("gtk-font-rendering",&value);
+    }
+    settings.set_gtk_xft_antialias(1);
+    settings.set_gtk_xft_hinting(1);
+    settings.set_gtk_xft_hintstyle(Some("hintslight"));
+    settings.set_gtk_hint_font_metrics(true);
+}
+
+#[cfg(all(test,windows))]
+pub(crate) fn exercise_windows_text(){
+    use gtk::prelude::*;
+    let settings=gtk::Settings::default().unwrap();
+    let font=gtk::pango::FontDescription::from_string(&settings.gtk_font_name().unwrap());
+    assert!(font.is_size_absolute()||font.size()>=11*gtk::pango::SCALE);
+    assert_eq!(settings.gtk_xft_antialias(),1);
+    assert_eq!(settings.gtk_xft_hintstyle().as_deref(),Some("hintslight"));
+    let label=gtk::Label::new(Some("Papo — á é ç 🙂"));
+    assert_eq!(label.layout().unknown_glyphs_count(),0,"Portuguese and emoji must have font fallback");
+    if std::env::var("PANGOCAIRO_BACKEND").as_deref()==Ok("fontconfig") {
+        assert_eq!(label.pango_context().font_map().unwrap().type_().name(),"PangoCairoFcFontMap");
+    }
+    // Larger configured fonts and the system family survive repeated setup.
+    settings.set_gtk_font_name(Some("Segoe UI 15"));
+    windows_text(&gtk::gdk::Display::default().unwrap());
+    assert_eq!(settings.gtk_font_name().as_deref(),Some("Segoe UI 15"));
+    settings.set_gtk_font_name(Some(&font.to_string()));
 }
 
 pub fn role_color(label:&gtk::Label,roles:&[crate::models::RoleSummary]){

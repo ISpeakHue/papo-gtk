@@ -30,5 +30,33 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     assert!(new.iter().filter(|(_,p,_)|p=="/users/profile_batch").count()<=2,"recovery revalidates visible avatars only");
     host.set_visible(false);pump(context);assert!(main.model().refresh_interval(main.widget())>=Duration::from_secs(90));
     eprintln!("recovery benchmark: requests_until_ready={}, avatar_batches={}",ready_requests,new.iter().filter(|(_,p,_)|p=="/users/profile_batch").count());
+    let user=main.model().current_user.clone();
     host.set_content(None::<&gtk::Widget>);host.close();drop(main);server.abort();pump(context);
+    close_during_access(context,user);
+}
+
+fn close_during_access(context:&gtk::glib::MainContext,user:WhoamiResponse){
+    use std::sync::{Arc,atomic::{AtomicBool,Ordering}};
+    use tokio::io::AsyncReadExt;
+    let pending=Arc::new(AtomicBool::new(false));let seen=pending.clone();
+    let (api,server)=tokio::runtime::Handle::current().block_on(async move{
+        let listener=tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let api=crate::api::ApiClient::new(&format!("http://{}",listener.local_addr().unwrap())).unwrap();
+        let server=tokio::spawn(async move{
+            loop{let (mut stream,_)=listener.accept().await.unwrap();let seen=seen.clone();
+                tokio::spawn(async move{let mut bytes=[0;4096];if let Ok(n)=stream.read(&mut bytes).await{
+                    if bytes[..n].starts_with(b"GET /auth/whoami "){seen.store(true,Ordering::SeqCst);}
+                    // EN-US: Hold a real HTTP response across account closure without reading user data.
+                    // PT-BR: Mantém uma resposta HTTP real pendente ao fechar a conta sem ler dados do usuário.
+                    let _=stream.read(&mut bytes).await;
+                }});
+            }
+        });(api,server)
+    });
+    let main=MainWindowModel::builder().launch(MainWindowInit{current_user:user,api_client:api}).detach();
+    main.emit(MainWindowMsg::StartLoading);
+    until(context,||pending.load(Ordering::SeqCst));
+    let request=main.model().access_task.as_ref().unwrap().abort_handle();
+    assert!(!request.is_finished());drop(main);pump(context);
+    until(context,||request.is_finished());server.abort();
 }

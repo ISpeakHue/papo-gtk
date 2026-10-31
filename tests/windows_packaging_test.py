@@ -2,6 +2,7 @@
 PT-BR: Fixtures Git reais e verificações dos pacotes, sem exigir um runtime Windows.
 """
 import copy
+import stat
 from pathlib import Path
 import subprocess
 import sys
@@ -11,11 +12,49 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "packaging/windows"))
-from build import source_state, require_source, sha256, write_json
-from native_inputs import verify_archive, package_set, local_packages, restore_gtk
+from build import source_state, require_source, sha256, write_json, packaged_environment, require_gstreamer, remove_stage
+from native_inputs import verify_archive, package_set, local_packages, restore_gtk, seed_cache
 
 
 class SourceProvenance(unittest.TestCase):
+    def test_repeated_stage_cleanup_handles_copied_readonly_data(self):
+        distribution = self.root / 'dist'
+        stage = distribution / 'preview'
+        data = stage / 'runtime/share/zoneinfo/iso3166.tab'
+        data.parent.mkdir(parents=True)
+        data.write_text('fixture', encoding='ascii')
+        data.chmod(stat.S_IREAD)
+        remove_stage(stage, distribution)
+        self.assertFalse(stage.exists())
+        self.assertTrue(distribution.is_dir())
+
+    def test_stage_cleanup_refuses_parent_and_outside_directories(self):
+        distribution = self.root / 'dist'
+        distribution.mkdir()
+        outside = self.root / 'keep'
+        outside.mkdir()
+        for candidate in (self.root, distribution, outside):
+            with self.subTest(candidate=candidate), self.assertRaisesRegex(RuntimeError, 'cleanup'):
+                remove_stage(candidate, distribution)
+        self.assertTrue(outside.is_dir())
+
+    def test_unfixed_gstreamer_cannot_be_packaged(self):
+        for inventory in ('mingw-w64-ucrt-x86_64-gstreamer 1.28.8-1', '',
+                          'mingw-w64-ucrt-x86_64-gstreamer 1.29.0-1'):
+            with self.subTest(inventory=inventory), self.assertRaisesRegex(RuntimeError, 'Unicode-path'):
+                require_gstreamer(inventory)
+        require_gstreamer('mingw-w64-ucrt-x86_64-gstreamer 1.28.8-1.1\n')
+
+    def test_packaged_check_cannot_inherit_developer_media_or_preview_overrides(self):
+        environment = {'GST_PLUGIN_LOADING_WHITELIST': 'opus,vpx', 'GST_REGISTRY_1_0': 'sdk.bin',
+                       'PAPO_WINDOWS_CAPTURE_PREVIEW': '1', 'PAPO_PYTHON': 'sdk/python.exe',
+                       'PythonPath': 'sdk/modules', 'GI_TYPELIB_PATH': 'sdk/typelibs',
+                       'GIO_EXTRA_MODULES': 'sdk/modules', 'GSETTINGS_SCHEMA_DIR': 'sdk/schemas',
+                       'FONTCONFIG_FILE': 'sdk/fonts.conf', 'XDG_DATA_DIRS': 'sdk/share',
+                       'GSK_RENDERER': 'cairo', 'GTK_A11Y': 'none', 'SystemRoot': 'C:/Windows'}
+        self.assertEqual(packaged_environment(environment),
+                         {'GSK_RENDERER': 'cairo', 'GTK_A11Y': 'none', 'SystemRoot': 'C:/Windows'})
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -110,6 +149,26 @@ class NativeInputIntegrity(unittest.TestCase):
         verified = verify_archive(self.root, installed="example 1-1\n")
         self.assertEqual(verified["installed"], {"example": "1-1"})
         self.assertEqual(len(verified["manifest_sha256"]), 64)
+
+    def test_cache_seed_uses_exact_identity_epoch_and_keeps_signature(self):
+        signature = Path(str(self.path) + '.sig')
+        signature.write_bytes(b'signature fixture')
+        (self.root / 'example-2-1-any.pkg.tar.zst').write_bytes(b'newer unrelated version')
+        with tempfile.TemporaryDirectory() as output, patch('native_inputs.msys_path', return_value='/cache/package'), \
+                patch('native_inputs.run', return_value='example 1:1-1'):
+            seed_cache(output, self.root, {'example': '1:1-1'})
+            self.assertEqual({p.name for p in Path(output).iterdir()}, {self.path.name, signature.name})
+            self.assertEqual((Path(output) / self.path.name).read_bytes(), self.path.read_bytes())
+
+    def test_cache_seed_rejects_mislabeled_archives_and_excludes_local_backports(self):
+        with tempfile.TemporaryDirectory() as output, patch('native_inputs.msys_path', return_value='/cache/package'), \
+                patch('native_inputs.run', return_value='other-package 1-1') as query:
+            with self.assertRaisesRegex(RuntimeError, 'identity mismatch'):
+                seed_cache(output, self.root, {'example': '1-1'})
+            self.assertFalse(list(Path(output).iterdir()))
+            query.reset_mock()
+            seed_cache(output, self.root, {'example': '1-1'}, {'example'})
+            query.assert_not_called()
 
     def test_package_corruption_and_version_drift_fail_closed(self):
         with self.assertRaisesRegex(RuntimeError, "versions differ"):

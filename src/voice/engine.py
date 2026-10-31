@@ -77,9 +77,29 @@ def device_identifier(device):
     return device.get_display_name()
 
 
-def device_snapshot(monitor):
+def call_device(device, kind=None):
+    if kind is not None and kind not in device.get_device_class():
+        return False
+    properties = device.get_properties()
+    # EN-US: WASAPI2 exposes speaker loopback as Audio/Source; it is never a microphone.
+    # PT-BR: WASAPI2 expõe loopback dos alto-falantes como Audio/Source; nunca é um microfone.
+    return not (properties and properties.has_field("wasapi2.device.loopback")
+                and properties.get_value("wasapi2.device.loopback"))
+
+
+def default_alias(device):
+    properties = device.get_properties()
+    return bool(properties and properties.has_field("device.api")
+                and properties.get_value("device.api") == "wasapi2"
+                and properties.has_field("device.default")
+                and properties.get_value("device.default"))
+
+
+def device_snapshot(monitor, kind=None):
     result = {}
     for device in monitor.get_devices():
+        if not call_device(device, kind):
+            continue
         identifier = device_identifier(device)
         # EN-US: Multiple providers may expose one endpoint; retain one selectable entry.
         # PT-BR: Vários provedores podem expor o mesmo endpoint; mantém uma entrada selecionável.
@@ -100,7 +120,7 @@ def device_monitor(*kinds):
 def devices(kind="Audio/Source"):
     monitor = device_monitor(kind)
     try:
-        return device_snapshot(monitor)
+        return device_snapshot(monitor, kind)
     finally:
         monitor.stop()
 
@@ -216,12 +236,16 @@ class Engine:
             device, old = message.parse_device_changed()
         else:
             return
+        if not call_device(device) and not (changed and call_device(old)):
+            return
         identifier = device_identifier(device)
         if message.type == Gst.MessageType.DEVICE_ADDED and identifier in self.device_ids:
             return
         if message.type == Gst.MessageType.DEVICE_REMOVED:
             self.device_ids.discard(identifier)
         else:
+            if changed:
+                self.device_ids.discard(device_identifier(old))
             self.device_ids.add(identifier)
         emit({"type": "devices_changed"})
         removed = message.type == Gst.MessageType.DEVICE_REMOVED
@@ -270,11 +294,12 @@ class Engine:
             source.set_property("freq", config.get("frequency", 440))
             source.set_property("volume", 0.25)
         elif config.get("device"):
-            selected = select_device(config["device"], device_snapshot(self.monitor))
+            selected = select_device(config["device"], device_snapshot(self.monitor, "Audio/Source"))
             if selected is None:
                 self.fail("O microfone escolhido não está disponível.")
                 return
             self.microphone_id = device_identifier(selected)
+            self.default_microphone = default_alias(selected)
             source = selected.create_element("capture")
         else:
             self.default_microphone = True
@@ -541,7 +566,7 @@ class Engine:
                 self.publish_video(kind, source)
             elif kind == "video":
                 self.monitor_devices()
-                selected = select_device(event.get("device"), device_snapshot(self.monitor))
+                selected = select_device(event.get("device"), device_snapshot(self.monitor, "Video/Source"))
                 if selected is None:
                     raise ValueError("missing camera")
                 self.camera_id = device_identifier(selected)

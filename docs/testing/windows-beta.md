@@ -190,6 +190,14 @@ mark a release qualified.
 
 ## Local verification
 
+**2026-10-29 Windows update:** all ten installer tests pass with real NSIS 3.13,
+including Unicode payload paths. The developer setup now installs NSIS. The
+current modified source is still rejected for candidate-installer packaging;
+the owner's existing Papo installation is preserved. A fresh-account lifecycle,
+supported-OS/device beta and signing remain separate acceptance requirements.
+See the [current automatic record](windows-local-2026-10-29.md). The results below
+are the historical Linux implementation checks.
+
 - 61 Python Windows/packaging/gate/beta tests: **58 passed, 3 native-Windows
   compiler checks skipped on Linux**, explicitly not Windows acceptance.
 - NSIS 3.11 compiled the actual recipe and generated inventory with a synthetic,

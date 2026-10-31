@@ -248,5 +248,6 @@ join/leave playback, cancellation, rapid restarts and process cleanup.
 
 [Step 8 call checks](windows-calls.md) document endpoint IDs, device-change
 recovery, raw/MJPEG cameras, process-tree cleanup and portable SFU launchers.
-Windows hardware testing is deferred until a release is available, as requested;
-local synthetic passes do not qualify Windows microphone/camera acceptance.
+Local Windows native/SFU and physical USB microphone/default-output verification
+are recorded in that guide. Camera, deployed-backend and attended device-change
+checks remain incomplete; local audio passes do not qualify those missing cases.

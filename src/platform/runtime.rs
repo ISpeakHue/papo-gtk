@@ -46,6 +46,16 @@ pub(crate) fn directory()->Option<PathBuf>{
 }
 pub fn configure() {
     if CURRENT.os == Os::Linux { return; }
+    // Use the same FreeType rasterizer as the Linux build. The Win32 font map
+    // produces thinner small glyphs and has incomplete fallback for emoji.
+    // Keep an explicit diagnostic/user backend override intact.
+    if CURRENT.os == Os::Windows {
+        set_default("PANGOCAIRO_BACKEND", OsStr::new("fontconfig"));
+        // Rust and the UCRT64 DLLs can have different CRT environment copies.
+        // Set GLib's copy too, before GTK/Pango create their default font map.
+        gtk::glib::setenv("PANGOCAIRO_BACKEND",std::env::var_os("PANGOCAIRO_BACKEND").unwrap(),true)
+            .expect("font backend environment must be writable");
+    }
     let Some(root) = directory().filter(|p| p.is_dir()) else { return; };
     let python = root.join(if CURRENT.os == Os::Windows { "bin/python.exe" } else { "bin/python3" });
     if python.is_file() {

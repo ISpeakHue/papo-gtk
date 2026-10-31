@@ -21,6 +21,65 @@ def device(identifier, name="USB microphone", kind="Audio/Source"):
 
 
 class DeviceTests(unittest.TestCase):
+    def test_microphone_picker_rejects_wasapi_loopback_without_opening_devices(self):
+        microphone = device("mic")
+        loopback = device("speakers", "Speakers (loopback)")
+        loopback.get_properties().set_value("wasapi2.device.loopback", True)
+        camera = device("cam", "Camera", "Video/Source")
+        monitor = Mock()
+        monitor.get_devices.return_value = [loopback, microphone, camera]
+        entries = worker.device_snapshot(monitor, "Audio/Source")
+        self.assertEqual([entry[0] for entry in entries], ["mic"])
+        self.assertIsNone(worker.select_device("speakers", entries))
+        self.assertEqual([entry[0] for entry in worker.device_snapshot(monitor, "Video/Source")], ["cam"])
+        for item in (microphone, loopback, camera):
+            item.create_element.assert_not_called()
+
+    def test_system_default_alias_is_not_a_fixed_microphone_endpoint(self):
+        alias = device("default-mic")
+        props = alias.get_properties()
+        props.set_value("device.api", "wasapi2")
+        props.set_value("device.default", True)
+        self.assertTrue(worker.default_alias(alias))
+        props.set_value("device.default", False)
+        self.assertFalse(worker.default_alias(alias))
+        props.set_value("device.api", "wasapi")
+        props.set_value("device.default", True)
+        self.assertFalse(worker.default_alias(alias))
+
+    def test_native_start_tracks_default_alias_and_gain_never_unmutes(self):
+        engine = worker.Engine()
+        engine.monitor_devices = Mock()
+        engine.monitor = Mock()
+        alias = device("default-mic")
+        props = alias.get_properties()
+        props.set_value("device.api", "wasapi2")
+        props.set_value("device.default", True)
+        alias.create_element.side_effect = lambda name: worker.Gst.ElementFactory.make("audiotestsrc", name)
+        engine.monitor.get_devices.return_value = [alias]
+        try:
+            with patch.object(worker, "emit"):
+                engine.start({"device": "default-mic", "test_sink": True, "audio_slots": 0, "video_slots": 0})
+                self.assertTrue(engine.default_microphone)
+                self.assertEqual(engine.microphone_id, "default-mic")
+                self.assertTrue(engine.microphone.get_property("mute"), "omitted mute must start muted")
+                for gain, expected in ((0, 0), (1.5, 1.5), (3, 3), (99, 3), (-1, 0)):
+                    engine.dispatch({"type": "microphone_gain", "gain": gain})
+                    self.assertEqual(engine.microphone.get_property("volume"), expected)
+                    self.assertTrue(engine.microphone.get_property("mute"))
+        finally:
+            engine.close()
+
+    def test_loopback_hotplug_does_not_interrupt_default_microphone(self):
+        engine = self.engine()
+        engine.default_microphone = True
+        loopback = device("speakers")
+        loopback.get_properties().set_value("wasapi2.device.loopback", True)
+        with patch.object(worker, "emit") as emit:
+            engine.device_message(None, self.message(worker.Gst.MessageType.DEVICE_ADDED, loopback))
+        engine.fail.assert_not_called()
+        emit.assert_not_called()
+
     def test_windows_endpoint_ids_survive_duplicate_friendly_names(self):
         a, b = device("{endpoint-a}"), device("{endpoint-b}")
         monitor = Mock()
@@ -120,6 +179,17 @@ class DeviceTests(unittest.TestCase):
         with patch.object(worker, "emit"):
             engine.device_message(None, message)
         engine.fail.assert_called_once()
+
+    def test_changed_device_retires_the_old_identity_before_replug(self):
+        engine = self.engine()
+        old, new = device("old"), device("new")
+        engine.device_ids.add("old")
+        message = self.message(worker.Gst.MessageType.DEVICE_CHANGED, new)
+        message.parse_device_changed.return_value = (new, old)
+        with patch.object(worker, "emit") as emit:
+            engine.device_message(None, message)
+            engine.device_message(None, self.message(worker.Gst.MessageType.DEVICE_ADDED, old))
+        self.assertEqual(emit.call_count, 2, "a replugged old identity must refresh settings")
 
     def test_default_audio_endpoint_change_ends_call_without_silent_switch(self):
         engine = self.engine()

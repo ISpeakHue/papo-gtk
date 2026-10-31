@@ -99,6 +99,7 @@ mod imp{
 }
 glib::wrapper!{pub struct Animation(ObjectSubclass<imp::Animation>) @implements gdk::Paintable;}
 impl Animation{
+    #[cfg(test)]pub(crate) fn playback_state(&self)->(bool,bool){(self.on_screen(),self.imp().due.get().is_some())}
     pub fn animated(&self)->bool{self.imp().frames.get().unwrap().len()>1}
     pub fn first(&self)->gdk::Texture{self.imp().frames.get().unwrap()[0].0.clone()}
     pub fn picture(&self)->gtk::Picture{

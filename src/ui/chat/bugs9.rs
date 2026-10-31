@@ -31,7 +31,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
         let before=entry.text().to_string();entry.emit_by_name::<()>("insert-at-cursor",&[&"after"]);pump(context);assert_eq!(entry.text(),format!("{before}after"));
     }
     assert!(!backend.lock().unwrap().requests.iter().any(|(m,p,_)|m=="POST"&&p=="/messages"));
-    if std::env::var_os("PAPO_NATIVE_INPUT_TEST").is_some(){
+    if cfg!(target_os="linux")&&std::env::var("PAPO_NATIVE_INPUT_TEST").as_deref()==Ok("1"){
         assert!(std::process::Command::new("setxkbmap").args(["-layout","br","-variant",""]).status().unwrap().success());
         entry.set_text("");navigation.grab_focus();pump(context);
         multiline::keys_for("Papo report9 input",&["a"]);until(context,||entry.text()=="a");assert!(entry.has_focus());

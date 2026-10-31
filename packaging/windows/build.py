@@ -8,7 +8,9 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
+import stat
 import subprocess
 import sys
 import tomllib
@@ -77,6 +79,49 @@ def write_json(path, data):
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
+def packaged_environment(environment):
+    # EN-US: SDK workarounds and capture opt-ins cannot qualify the default shipped runtime.
+    # PT-BR: Ajustes do SDK e captura experimental não validam o runtime padrão distribuído.
+    prefixes = ('PAPO_', 'PYTHON', 'GST_', 'GI_', 'GIO_', 'FONTCONFIG_', 'XDG_')
+    return {key: value for key, value in environment.items()
+            if not key.upper().startswith(prefixes) and key.upper() != 'GSETTINGS_SCHEMA_DIR'}
+
+
+def require_gstreamer(inventory):
+    recipe = (ROOT / 'packaging/windows/gstreamer/GSTREAMER-PKGBUILD').read_text(encoding='utf-8')
+    fields = [re.search(rf'^{name}=([\d.]+)$', recipe, re.MULTILINE) for name in ('pkgver', 'pkgrel')]
+    if not all(fields):
+        raise RuntimeError('Cannot identify the reviewed GStreamer recipe.')
+    expected = 'mingw-w64-ucrt-x86_64-gstreamer ' + '-'.join(field[1] for field in fields)
+    if inventory.strip() != expected:
+        raise RuntimeError(f'GStreamer must match the Unicode-path fixed recipe: {expected}. Run scripts/windows-dev.ps1 Setup.')
+
+
+def remove_stage(stage, distribution):
+    # EN-US: Only remove the generated direct child; never traverse redirected staging paths.
+    # PT-BR: Remove apenas o filho gerado; nunca percorre caminhos de staging redirecionados.
+    stage, distribution = Path(stage).absolute(), Path(distribution).absolute()
+    if stage.parent != distribution or distribution.resolve() != distribution or stage.resolve() != stage:
+        raise RuntimeError('Staging cleanup escaped the distribution directory or follows a redirect')
+    for directory, folders, files in os.walk(stage, followlinks=False):
+        for path in (Path(directory), *(Path(directory) / name for name in folders + files)):
+            info = path.lstat()
+            if stat.S_ISLNK(info.st_mode) or getattr(info, 'st_file_attributes', 0) & 0x400:
+                raise RuntimeError('Staging cleanup refuses links/reparse points')
+
+    def retry_readonly(function, path, error):
+        info = os.lstat(path)
+        if (os.name != 'nt' or not isinstance(error, PermissionError)
+                or not stat.S_ISREG(info.st_mode) or not getattr(info, 'st_file_attributes', 0) & 1):
+            raise error
+        # EN-US: copy2 preserves native read-only data flags; a real lock/ACL failure must still fail.
+        # PT-BR: copy2 preserva arquivos somente leitura; falhas reais de bloqueio/ACL continuam falhando.
+        os.chmod(path, stat.S_IWRITE)
+        function(path)
+
+    shutil.rmtree(stage, onexc=retry_readonly)
+
+
 def toolchain():
     prefix = Path(sys.executable).resolve().parent
     versions = {}
@@ -92,6 +137,9 @@ def toolchain():
     if "host: x86_64-pc-windows-gnu" not in versions["rustc.exe"]["version"]:
         raise RuntimeError("The port requires native x86_64-pc-windows-gnu Rust.")
     versions["python"] = {"path": sys.executable, "version": sys.version}
+    gstreamer = run('pacman', '-Q', 'mingw-w64-ucrt-x86_64-gstreamer')
+    require_gstreamer(gstreamer)
+    versions['gstreamer_package'] = {'version': gstreamer}
     return versions
 
 
@@ -145,7 +193,7 @@ def main():
     version = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))["package"]["version"]
     stage = ROOT / "dist" / f"Papo-{version}-windows-x86_64-dev"
     if stage.exists():
-        shutil.rmtree(stage)
+        remove_stage(stage, ROOT / 'dist')
     stage.mkdir(parents=True)
     from bundle import Bundle
     runtime = Bundle(stage, Path(sys.executable).resolve().parent.parent).prepare(
@@ -182,8 +230,7 @@ def main():
     write_json(diagnostics / "BUILD-INFO.json", info)
     # EN-US: Remove developer runtime overrides; validate the real native bootstrap.
     # PT-BR: Remove substituições do ambiente de desenvolvimento e valida o iniciador nativo.
-    clean_env = {key: value for key, value in os.environ.items()
-                 if key not in {"PAPO_RUNTIME_DIR", "PAPO_PYTHON", "PYTHONHOME", "PYTHONPATH"}}
+    clean_env = packaged_environment(os.environ)
     subprocess.run([str(stage / "Papo.com"), "--platform-info"], check=True, env=clean_env)
     subprocess.run([str(stage / "Papo.com"), "--check-packaged-runtime"], check=True, env=clean_env)
     # EN-US: Recheck after staging too; output is ignored, source mutations are not.

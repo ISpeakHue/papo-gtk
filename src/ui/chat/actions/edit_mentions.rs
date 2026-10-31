@@ -125,7 +125,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     assert_eq!(chat.model().draft.text,"Keep my chat draft");assert_eq!(draft.text(),"Keep my chat draft");
     assert_eq!(chat.model().render_passes,passes,"editing mention text must not rebuild chat history");
     // Native composition must keep working in the editor, too.
-    if std::env::var_os("PAPO_NATIVE_INPUT_TEST").is_some(){
+    if cfg!(target_os="linux")&&std::env::var("PAPO_NATIVE_INPUT_TEST").as_deref()==Ok("1"){
         assert!(std::process::Command::new("setxkbmap").args(["-layout","br","-variant",""]).status().unwrap().success());
         text.grab_focus();multiline::keys_for("Editar mensagem",&["dead_acute"]);performance::settle(context);multiline::keys_for("Editar mensagem",&["a"]);
         until(context,||text.text().ends_with(" á"));expected.push('á');

@@ -10,8 +10,15 @@ Source version 1.1.0 is available as an unsigned
 [Windows preview](docs/testing/windows-preview.md) with a verified installer and
 portable ZIP. The owner confirmed that a signing certificate is unavailable, and
 native Windows 11 desktop/device/beta acceptance remains pending.
+The [2026-10-29 local automatic record](docs/testing/windows-local-2026-10-29.md)
+adds physical-host runtime, notification, capture-ABI and packaging checks. Its
+modified-source development ZIP does not qualify the supported-release matrix.
 See the [publication gate](docs/testing/windows-publication.md); no Windows
 download is represented as a supported or signed release.
+
+The [2026-10-30 scrolling and text record](docs/testing/windows-scroll-2026-10-30.md)
+documents a fix for read-only message views updating native IME positions during
+scrolling, plus Windows font rasterization and size defaults.
 
 ## Release targets
 
@@ -62,7 +69,7 @@ package versions and retained archive hashes. The rolling repository itself is n
 | Windows Credential Store | `keyring` 3.6.3 with `windows-native`; exact-account hashed targets, bounded UTF-8 blobs and guarded legacy migration. [Native CI/standard-user Enterprise Evaluation VM acceptance passed](docs/testing/windows-storage.md#verification-record-2026-10-22) for restart, rotation, logout/revocation and safe store failures. | Repeat on the Home/Pro release rows and exercise real-backend account flows. Ordinary tests retain memory-only credentials. |
 | Isolated converters | AppContainer plus Job Objects; explicit runtime/input access, private profiles and resource limits. Native security/conversion checks passed before enabling the capability. [Isolation contract](docs/testing/windows-isolation.md). | The [step 7 packaged fixture gate](docs/testing/windows-media.md) passed CI and a standard-user Windows VM replay. Repeat on Home/Pro and physical GPU/audio hardware; retain the recorded emoji-pause investigation. |
 | Screen capture | A native WGC picker/worker bridge is implemented as an opt-in preview; the default capture capability remains unavailable until attended validation. Microsoft's desktop `CreateForWindow` API documents Windows 10 1903 / build 18362 as its minimum. | Native picker/permission/source/peer and cleanup acceptance remains pending; see [step 10](docs/testing/windows-capture.md). The API floor and synthetic frames do not establish desktop acceptance. |
-| Desktop notifications | The step 9 runtime-gated WinRT adapter implements account/session routing, preferences, cold activation and removal with the stable `br.com.papo.gtk` identity. Step 4's prototype evidence remains historical. | Native current-package WinRT/DPAPI and attended delivery/activation/removal acceptance remain pending; see [notification checks](docs/testing/windows-notifications.md). |
+| Desktop notifications | The step 9 runtime-gated WinRT adapter implements account/session routing, preferences, cold activation and removal with the stable `br.com.papo.gtk` identity. Local Windows WinRT/DPAPI and focused routing checks pass; step 4's prototype evidence remains historical. | Attended delivery/activation/removal and supported-OS qualification remain pending; see [notification checks](docs/testing/windows-notifications.md). |
 
 Requirements checked against the [MSYS2 Windows policy](https://www.msys2.org/docs/windows_support/),
 [UCRT64 environment documentation](https://www.msys2.org/docs/environments/),

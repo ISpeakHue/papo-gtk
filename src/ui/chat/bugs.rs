@@ -7,6 +7,9 @@ fn settle(context:&gtk::glib::MainContext){for _ in 0..80{pump(context);std::thr
 fn row(chat:&Controller<ChatModel>,id:Uuid)->gtk::Widget{descendants(chat.widget().upcast_ref()).into_iter().find(|w|w.widget_name()==format!("message-{id}")).unwrap()}
 
 pub(crate) fn exercise(context:&gtk::glib::MainContext){
+    // EN-US: Keep native failures attributable to a bounded, replayable fixture phase.
+    // PT-BR: Mantém falhas nativas associadas a uma fase delimitada e reproduzível da fixture.
+    let progress=|phase:&str|eprintln!("Papo timeline fixture: {phase}");progress("history");
     let channel=Uuid::new_v4();let user=Uuid::new_v4();let start=chrono::DateTime::parse_from_rfc3339("2026-10-07T12:00:00Z").unwrap();
     let mut messages:Vec<Message>=(0..70).map(|i|serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"channel_id":channel,"author_id":user,"content":format!("Mensagem {i}: teste de rolagem e respostas."),"created_at":start+chrono::Duration::minutes(i)})).unwrap()).collect();
     let mentioned=Uuid::new_v4();messages[67].content=Some(format!("Olá @mention(<@{mentioned}>)"));messages[68].reply_to=Some(messages[67].id);let mut edited=messages[67].clone();
@@ -47,6 +50,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let request=Uuid::new_v4();chat.emit(ChatMsg::BeginHistory{request_id:request,cursor:None});chat.emit(ChatMsg::HistoryLoaded{request_id:request,append:true,result:Ok(MessageListResponse{channel_id:channel,has_more:false,messages:vec![serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"channel_id":channel,"author_id":user,"content":"Mensagem anterior","created_at":start-chrono::Duration::days(1)})).unwrap()]})});settle(context);
     assert_eq!(row(&chat,ids[35]),visible,"pagination must preserve unchanged message widgets");
     assert!((f64::from(row(&chat,ids[35]).compute_bounds(&list).unwrap().y())-adj.value()-offset).abs()<1.0,"pagination must retain the same visible message and offset: before offset={}, now={}, adjustment={}",offset,f64::from(row(&chat,ids[35]).compute_bounds(&list).unwrap().y())-adj.value(),adj.value());
+    progress("keyboard navigation");
     let keyboard_row=row(&chat,ids[60]);keyboard_row.grab_focus();settle(context);assert!((f64::from(visible.compute_bounds(&list).unwrap().y())-adj.value()-offset).abs()<1.0,"programmatic focus must not scroll the timeline");
     let keys=scroll.observe_controllers();let keys=(0..keys.n_items()).find_map(|i|keys.item(i).and_downcast::<gtk::EventControllerKey>()).unwrap();
     let _:bool=keys.emit_by_name("key-pressed",&[&gtk::gdk::Key::Down,&0u32,&gtk::gdk::ModifierType::empty()]);settle(context);
@@ -59,7 +63,9 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     chat.emit(ChatMsg::Action(ActionMsg::Navigate(ids[36])));settle(context);
     chat.emit(ChatMsg::ContextAt{id:ids[36],x:90.0,y:20.0});settle(context);let message=row(&chat,ids[36]);
     let menu=descendants(&message).into_iter().find_map(|w|w.downcast::<gtk::MenuButton>().ok()).unwrap();let (pointing,rectangle)=menu.popover().unwrap().pointing_to();assert!(pointing);let point=message.compute_point(&menu,&gtk::graphene::Point::new(90.0,20.0)).unwrap();assert!((rectangle.x() as f32-point.x()).abs()<2.0&&(rectangle.y() as f32-point.y()).abs()<2.0,"the native menu must anchor at the clicked point");
+    progress("clipboard");
     let copy=find_button(&message,"Copiar texto");assert!(copy.is_visible());copy.emit_clicked();pump(context);let clipboard=gtk::gdk::Display::default().unwrap().clipboard();assert_eq!(context.block_on(clipboard.read_text_future()).unwrap().unwrap().as_str(),"Mensagem 36: teste de rolagem e respostas.");
+    progress("reply controls");
     // Use the actual button signal, then timer updates, to ensure the click survives.
     let reply=find_button(&message,"Responder");reply.emit_clicked();chat.emit(ChatMsg::ClearStaleTyping);settle(context);assert_eq!(chat.model().draft.reply.as_ref().map(|m|m.id),Some(ids[36]));assert_eq!(row(&chat,ids[36]),message);
     let banner=descendants(chat.widget().upcast_ref()).into_iter().find(|w|w.has_css_class("papo-reply-banner")).unwrap();assert!(banner.is_visible()&&!banner.has_css_class("dim-label"));assert!(descendants(&banner).iter().filter_map(|w|w.downcast_ref::<gtk::Label>()).any(|l|l.text()=="Alice"&&l.attributes().is_some()),"reply banner uses the author's role color");
@@ -74,6 +80,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let mention=descendants(chat.widget().upcast_ref()).into_iter().find(|w|w.widget_name()=="mention-suggestions").unwrap();
     // Insert characters as the native editable does, pumping after each keystroke.
     // A whole-string set_text misses focus and cursor races on the @ character.
+    progress("mention input");
     for c in "Olá @Rob".chars(){let mut position=entry.position();entry.insert_text(&c.to_string(),&mut position);entry.set_position(position);settle(context);assert!(entry.state_flags().contains(gtk::StateFlags::FOCUS_WITHIN),"completion must preserve typing focus after {c}");}
     assert_eq!(entry.text(),"Olá @Rob");assert!(mention.is_visible(),"typing @ must show suggestions");
     find_button(&mention,"@Bob").emit_clicked();settle(context);assert!(entry.text().contains("@Robert"));assert!(chat.model().draft.text.contains(&format!("@mention(<@{mentioned}>)")));assert!(!mention.is_visible());
@@ -87,6 +94,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     // Consecutive live arrivals with large preview payloads must reuse old rows,
     // keep the composer/caret, and store a bounded visual signature.
     entry.set_text("Próxima mensagem");entry.set_position(4);settle(context);let unchanged=row(&chat,ids[35]);
+    progress("media burst");
     let preview_message=Uuid::new_v4();let data="A".repeat(4<<20);
     chat.emit(ChatMsg::AddMessage(serde_json::from_value(serde_json::json!({"id":preview_message,"channel_id":channel,"author_id":user,"content":"https://example.test/photo","created_at":start+chrono::Duration::hours(4),"previews":[{"id":Uuid::new_v4(),"url":"https://example.test/photo","kind":"og","title":"Photo","image_data":data,"fetched_at":start}]})).unwrap()));settle(context);
     let media_row=row(&chat,preview_message);let now=std::time::Instant::now();
@@ -97,5 +105,5 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let emoji_id=Uuid::new_v4();let mut bytes=std::io::Cursor::new(Vec::new());image::DynamicImage::new_rgba8(32,32).write_to(&mut bytes,image::ImageFormat::Png).unwrap();let texture=crate::media::bounded_texture_size(&bytes.into_inner(),32,32).unwrap();
     let mut actions=Actions::default();actions.emojis.push(serde_json::from_value(serde_json::json!({"id":emoji_id,"name":"gambiarra","format":"PNG","created_at":start})).unwrap());actions.textures.insert(emoji_id,texture);actions.emoji_names.insert("gambiarra".into(),emoji_id);
     let text=text::widget("Oi :gambiarra: :unknown:",&HashMap::new(),&actions);assert!(!text.is_editable()&&!text.is_cursor_visible());assert!(text.buffer().iter_at_offset(3).paintable().is_some());assert!(text.buffer().text(&text.buffer().start_iter(),&text.buffer().end_iter(),false).contains(":unknown:"));
-    window.close();
+    progress("shutdown");window.close();progress("finished");
 }

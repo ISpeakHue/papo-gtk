@@ -1,8 +1,11 @@
 # Windows calls: implementation and deferred acceptance
 
-Step 8 implementation, 2026-10-27. **Windows hardware acceptance is NOT RUN.**
-The user has no Windows machine available and requested that device tests wait
-until a release is ready. W17/W18 in the [acceptance matrix](windows.md) stay open.
+Step 8 implementation, 2026-10-27, updated on Windows on 2026-10-29.
+Physical USB microphone and default-output checks have now run on this Windows
+machine. Camera and deployed-backend acceptance remain incomplete: the user
+confirmed no camera or live test accounts are available, and requested automatic
+local checks rather than attended unplug/privacy/default-device changes.
+W17/W18 in the [acceptance matrix](windows.md) therefore stay partially verified.
 No supported-Windows release or macOS device-support claim follows from this work.
 
 ## Implemented behavior
@@ -11,6 +14,10 @@ No supported-Windows release or macOS device-support claim follows from this wor
   deduplicates provider entries and migrates an old friendly-name selection only
   when unambiguous. Enumeration stops its monitor even on failure. On Windows,
   reading an element's device property does not put it into a capture state.
+- WASAPI2 speaker-loopback sources are excluded from microphone enumeration,
+  selection and hotplug handling. A combined monitor filters selection by device
+  class. The WASAPI2 default alias retains default-device recovery behavior;
+  changed endpoints retire their old IDs so replugging refreshes settings.
 - Default Windows input prefers WASAPI2, then WASAPI. The worker itself defaults
   to muted capture even if the caller omits `muted`. Gain stays bounded to 0–300%.
   No silence-producing `continue-on-error` override masks an unavailable device.
@@ -132,6 +139,109 @@ the adjacent backend `3252cfc`; these are not final release artifact results.
   display. `voice-controls` failed its camera-controls/Concluir geometry assertion;
   that layout assertion is not counted as a pass or Windows device evidence.
 
-The new Windows Job Object path, provider identifiers, device permissions and
-real audible/camera behavior have **not** been executed on Windows for this change.
-The updated native CI checks are prepared for the next CI run; no run is claimed.
+Those results describe the original Linux implementation run. Current Windows
+verification and its remaining limits are recorded below.
+
+## Local Windows verification, 2026-10-29
+
+The development working tree is based on frontend `52df9a9`; it is modified and
+has not been packaged or qualified as a release. The host is Windows 11 Home
+23H2, build 22631.6199, outside the release's planned Home/Pro OS rows. Tests use
+the native UCRT64 runtime and the explicit developer `-ExcludeHip` override.
+
+- Native device metadata exposed WASAPI2 speaker-loopback entries in the old
+  microphone list. Filtering now rejects those entries without opening devices.
+  Default aliases and real endpoint identifiers were inspected locally; no
+  physical microphone or camera was activated.
+- Nineteen worker tests cover endpoint identity, loopback filtering, hotplug,
+  default aliases, synthetic permission failure, raw/MJPEG decoding, muted native
+  startup and gain changes that never unmute capture.
+- The actual backend SFU fixture was built from the existing Git object
+  `3252cfc2b0563d31d6c6eedd535c94fe5f15aceb`, exported into ignored test files.
+  The adjacent backend checkout was not restored or modified. Two native clients
+  exchange decoded synthetic Opus through direct ICE and forced local TURN;
+  routes, speakers, mute, leave and missing-device cleanup pass.
+- Three native clients exchange decoded VP8 over direct ICE and forced TURN.
+  Camera/screen restarts, publisher/kind switches, missing-camera recovery,
+  concurrent audio, bounded IPC and leave pass. The probe now waits for
+  `video_reset` before subscribing, matching GTK's existing barrier. The original
+  probe raced reset against incoming RTP and timed out on Windows. Sources and
+  playback sinks are synthetic; this is transport/lifecycle evidence, not camera
+  or consent-picker acceptance.
+- Focused `voice-controls`, `voice-chat` and `call-sounds` GUI fixtures pass.
+  The shared full-GUI voice fixture now checks disabled local capture when the
+  platform preview is unavailable, while still checking remote viewing.
+- The patched lockfile passes 310 regular Rust tests (six opt-in cases excluded
+  from that run), followed by three explicit native voice/cue/process-tree tests.
+  Twenty additional native synthetic startup/gain/drop cycles pass. The Python
+  runs cover 51 distinct passing tests, with the Linux-only PulseAudio identity
+  test explicitly skipped on Windows. Native Windows cue decoding is tested.
+- The development application builds successfully. `recovery` verifies cancelled
+  permission refresh at account closure; `recent-media` passes ten native
+  fullscreen/latest/history-eviction cycles. These focused passes do not qualify
+  the broad default GUI fixture, which still has a separate native failure
+  tracked in [Follow-ups](../FOLLOW_UPS.md).
+
+`https://api.cyberasilo.online/health` returned HTTP 200 during the initial
+read-only check. No account login, production call or server mutation was made;
+after the user selected local-only testing, no further server checks were run.
+Local logs are under `target/windows-dev/step8/`; the ordinary developer wrapper
+also retains Python, regular Rust and native-worker results in
+`target/windows-dev/`. Synthetic passes do not close the seven physical/packaged
+acceptance items above or the step 8 completion checkbox.
+
+## Physical Windows audio verification, 2026-10-29
+
+This continues the local run above on the actual Windows machine. Captured audio
+was decoded and discarded locally; no recording was written and no production
+account or server was used.
+
+- Windows enumerates a KT USB Audio microphone/headphones, Steam virtual audio
+  endpoints and the system-default aliases. No `Video/Source` is exposed; the
+  user confirmed that no camera is available.
+- The default physical microphone opens and decodes through Opus. The explicit
+  USB endpoint passes **20 actual capture/encode/decode/release cycles**. Each
+  cycle verifies initially muted capture, 0/150/300% gain, gain changes preserving
+  mute, silence at zero gain/when muted, decoded buffer flow and a native NULL
+  state after shutdown. These are physical pipelines, not synthetic sources.
+- The application's Rust `Engine`/Windows Job Object path also passes **20
+  physical-microphone startup/gain/drop cycles**. Every cycle starts muted and
+  verifies termination through a retained native process handle. The separate
+  physical pipeline check above verifies decoded samples and device release;
+  neither count is relabeled as twenty deployed-backend calls.
+- Papo's real Python voice workers use that microphone through the local backend
+  SFU. Direct ICE passes decoded non-silent audio, routes, speaker activity, mute
+  and leave. A strict TURN speech check times out with both peers connected and
+  relay candidates present but without qualifying non-silent samples. A separate,
+  explicitly selected quiet-input mode passes captured/decoded buffer transport,
+  routes, mute and leave over **both direct ICE and forced TURN**. That mode
+  does not claim speech/active-speaker or conversational-quality acceptance.
+- The actual bundled join/leave cues select `wasapi2sink`; the user confirms
+  hearing both. The cue helper reports its native output factory so a discard
+  sink cannot be mistaken for physical playback evidence.
+
+Reports: `target/windows-dev/step8/device-inventory.json`,
+`default-microphone.json`, `usb-microphone.json`, and `physical-cues.json`.
+`physical-worker-cycles.json` and `physical-worker-cycles.log` retain the real
+application-worker repetition results.
+These are development-tree results, not a clean packaged-release qualification.
+
+Use the matching UCRT64 runtime. All physical operations are explicit:
+
+```sh
+python tests/windows_devices_probe.py --list
+python tests/windows_devices_probe.py --microphone 'Microfone (KT USB Audio)' --cycles 20
+python tests/windows_devices_probe.py --cues
+python tests/voice_probe.py --sfu target/windows-dev/step8/voice-sfu.exe --microphone 'Microfone (KT USB Audio)'
+# Transport only when no operator can supply speech; does not qualify speech quality.
+python tests/voice_probe.py --sfu target/windows-dev/step8/voice-sfu.exe --microphone 'Microfone (KT USB Audio)' --allow-quiet-microphone
+# Explicitly use the physical microphone in the real Rust worker lifecycle test.
+PAPO_TEST_VOICE_DEVICE='Microfone (KT USB Audio)' cargo test --locked native_voice -- --ignored --test-threads=1
+```
+
+The device probe owns its process tree before native initialization and bounds
+startup, test duration, output and cleanup. Ordinary tests still use synthetic
+capture by default. The remaining acceptance blockers are concrete: a physical
+camera, two authorized deployed-backend clients, attended permission/unplug/
+default-output changes, and the packaged supported-OS checks. Windows availability
+itself is no longer the reason these checks are pending.

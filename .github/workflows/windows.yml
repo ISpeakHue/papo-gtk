@@ -148,6 +148,15 @@ jobs:
           fi
           cd "$papo_gtk_build"
           pacman -U --noconfirm mingw-w64-ucrt-x86_64-gtk4-4.24.1-1.1-any.pkg.tar.zst
+      - name: Fix native GStreamer Unicode executable paths
+        run: |
+          test "$(pacman -Q mingw-w64-ucrt-x86_64-gstreamer)" = 'mingw-w64-ucrt-x86_64-gstreamer 1.28.8-1'
+          papo_gst_build="$(cygpath -u "$RUNNER_TEMP")/papo-gstreamer-unicode"
+          mkdir -p "$papo_gst_build"
+          cp packaging/windows/gstreamer/GSTREAMER-PKGBUILD "$papo_gst_build/PKGBUILD"
+          cp packaging/windows/gstreamer/*.patch "$papo_gst_build/"
+          (cd "$papo_gst_build" && MINGW_INSTALLS=ucrt64 makepkg-mingw --noconfirm --nodeps --nocheck)
+          pacman -U --noconfirm "$papo_gst_build/mingw-w64-ucrt-x86_64-gstreamer-1.28.8-1.1-any.pkg.tar.zst"
       - name: Diagnose source differences with MSYS2 Git before compiling
         run: |
           python - <<'PYCODE'
@@ -167,7 +176,13 @@ jobs:
       - name: Retain exact installed native dependency packages
         run: |
           papo_gtk_build="$(cygpath -u "$RUNNER_TEMP")/papo-gtk-ime"
+          papo_gst_build="$(cygpath -u "$RUNNER_TEMP")/papo-gstreamer-unicode"
           python packaging/windows/native_inputs.py capture target/windows-native-inputs \
+            --cache /var/cache/pacman/pkg \
+            --local-package "$papo_gst_build/mingw-w64-ucrt-x86_64-gstreamer-1.28.8-1.1-any.pkg.tar.zst" \
+            --source-input "$papo_gst_build/gstreamer-1.28.8.tar.xz" \
+            --source-input packaging/windows/gstreamer/GSTREAMER-PKGBUILD \
+            --source-input packaging/windows/gstreamer/001-fix-unicode-executable-path.patch \
             --local-package "$papo_gtk_build/mingw-w64-ucrt-x86_64-gtk4-4.24.1-1.1-any.pkg.tar.zst" \
             --source-input "$papo_gtk_build/gtk-4.24.1.tar.xz" \
             --source-input "$papo_gtk_build/PKGBUILD" \
@@ -202,6 +217,7 @@ jobs:
           python -m unittest discover -s tests -p icon_assets_test.py
           PAPO_UI_CASE=symbolic-icons cargo test --locked ui_smoke -- --ignored --test-threads=1
           PAPO_UI_CASE=startup cargo test --locked ui_smoke -- --ignored --test-threads=1
+          PAPO_UI_CASE=scroll-frames cargo test --locked ui_smoke -- --ignored --test-threads=1
           PAPO_UI_CASE=clipboard cargo test --locked ui_smoke -- --ignored --test-threads=1
       - name: Test session persistence policies with memory storage
         if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only

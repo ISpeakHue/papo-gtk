@@ -129,9 +129,19 @@ pub(in crate::ui::chat::transfers) fn picture(window:&gtk::Window)->Option<gtk::
     if std::env::var_os("PAPO_NATIVE_FULLSCREEN_TEST").is_none(){return;}
     find_button(window.upcast_ref(),"Tela cheia").emit_clicked();until(context,||window.is_fullscreen());assert!(zoom.is_visible());
     find_button(window.upcast_ref(),"Tamanho original (100%)").emit_clicked();until(context,||picture.width_request()==width&&picture.width()==width);assert_eq!(picture.height_request(),height);
-    assert!(scroll.hadjustment().upper()>scroll.hadjustment().page_size(),"large originals must be scrollable at 100%");
+    performance::settle(context);
+    let horizontal=scroll.hadjustment();
+    if f64::from(width)>horizontal.page_size(){assert!(horizontal.upper()>horizontal.page_size(),"an original wider than the viewport must scroll at 100%");}
+    else{assert!(horizontal.upper()<=horizontal.page_size()+1.0,"a fitting original must not overflow at 100%");}
     find_button(window.upcast_ref(),"Aumentar zoom").emit_clicked();until(context,||picture.width_request()>width&&picture.width()==picture.width_request());
     let enlarged=picture.width_request();find_button(window.upcast_ref(),"Diminuir zoom").emit_clicked();until(context,||picture.width_request()<enlarged);assert_eq!(picture.width_request(),width);
+    // EN-US: A 1800px original fits larger physical displays; establish overflow before testing panning.
+    // PT-BR: O original de 1800px cabe em telas maiores; estabelece overflow antes de testar arraste.
+    for _ in 0..12{
+        performance::settle(context);if scroll.hadjustment().upper()>scroll.hadjustment().page_size(){break;}
+        let before=picture.width_request();find_button(window.upcast_ref(),"Aumentar zoom").emit_clicked();until(context,||picture.width_request()>before&&picture.width()==picture.width_request());
+    }
+    assert!(scroll.hadjustment().upper()>scroll.hadjustment().page_size(),"zoomed images must scroll before panning is tested");
     // Native drag changes the viewport instead of dismissing a zoomed image.
     performance::settle(context);let h=scroll.hadjustment();h.set_value((h.upper()-h.page_size())/2.0);let before=h.value();
     let controllers=picture.observe_controllers();let drag=(0..controllers.n_items()).find_map(|i|controllers.item(i).and_downcast::<gtk::GestureDrag>()).unwrap();drag.emit_by_name::<()>("drag-begin",&[&0.0f64,&0.0f64]);drag.emit_by_name::<()>("drag-update",&[&-80.0f64,&0.0f64]);assert!(h.value()>before&&window.is_visible());

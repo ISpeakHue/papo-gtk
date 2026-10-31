@@ -1561,11 +1561,11 @@ pub(crate) fn exercise_retention(context:&gtk::glib::MainContext){
     let first=pictures[0].paintable().unwrap().current_image();until(context,||pictures[0].paintable().unwrap().current_image()!=first);
     // The backend's video fallback must loop without sound, preserving the
     // normal video's audio policy and fullscreen controls.
-    let path=std::env::temp_dir().join(format!("papo-gif-test-{}.webm",Uuid::new_v4()));std::fs::copy("tests/fixtures/chat-video.webm",&path).unwrap();
+    let path=std::env::temp_dir().join(format!("papo-gif-test-{}.webm",Uuid::new_v4()));std::fs::write(&path,include_bytes!("../../../tests/fixtures/chat-video.webm")).unwrap();
     chat.state().get_mut().model.transfers.invalidate(keys[1]);
     chat.emit(ChatMsg::Transfer(TransferMsg::File{epoch,message:messages[1].id,key:keys[1],token:None,destination:None,result:Ok(crate::api::features::TemporaryFile(path.clone()))}));until(context,||chat.model().transfers.animations.contains_key(&keys[1])&&chat.model().media_render_pending.is_none());assert!(chat.model().transfers.videos.is_empty(),"automatic GIF fallback uses frames rather than a GTK player");
     chat.state().get_mut().model.transfers.invalidate(keys[1]);
-    let cancelled=std::env::temp_dir().join(format!("papo-gif-cancel-{}.webm",Uuid::new_v4()));std::fs::copy("tests/fixtures/chat-video.webm",&cancelled).unwrap();
+    let cancelled=std::env::temp_dir().join(format!("papo-gif-cancel-{}.webm",Uuid::new_v4()));std::fs::write(&cancelled,include_bytes!("../../../tests/fixtures/chat-video.webm")).unwrap();
     chat.emit(ChatMsg::Transfer(TransferMsg::File{epoch,message:messages[1].id,key:keys[1],token:None,destination:None,result:Ok(crate::api::features::TemporaryFile(cancelled.clone()))}));
     chat.emit(ChatMsg::ClearChannel);pump(context);until(context,||!cancelled.exists());assert!(!path.exists());assert!(chat.model().transfers.animations.is_empty());
     window.set_content(None::<&gtk::Widget>);window.close();drop(chat);pump(context);

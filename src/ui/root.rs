@@ -57,6 +57,15 @@ mod tests {
         let window = controller.widget();
         window.present();
         let context = gtk::glib::MainContext::default();
+        // EN-US: Identify the active full-suite fixture when native code aborts without a Rust panic.
+        // PT-BR: Identifica a fixture ativa quando código nativo encerra sem panic Rust.
+        macro_rules! stage {
+            ($check:path) => {{
+                eprintln!("Papo GUI stage: {}", stringify!($check));
+                $check(&context);
+                eprintln!("Papo GUI complete: {}", stringify!($check));
+            }};
+        }
         if let Some(renderer)=window.renderer(){println!("Papo GUI renderer: {}",renderer.type_().name());}
         for _ in 0..100 {
             if !context.pending() { break; }
@@ -105,10 +114,16 @@ mod tests {
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("report11"){crate::ui::chat::composer::exercise_inline(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("backend-contracts"){crate::ui::chat::transfers::exercise_metadata(&context);crate::ui::main_window::search::exercise_backend_identity(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("history-navigation"){crate::ui::chat::exercise_navigation(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("timeline-controls"){stage!(crate::ui::chat::bugs::exercise);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("rich-width"){crate::ui::chat::rich::exercise_text_width(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("history-retention"){crate::ui::chat::performance::exercise_corrections(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("report10"){crate::ui::chat::polish_tests::exercise(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("search-recycling"){crate::ui::main_window::search::exercise_recycling(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("avatar-viewport"){crate::ui::user_list::exercise_viewport(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("scroll-frames"){
+            #[cfg(windows)] crate::ui::style::exercise_windows_text();
+            crate::ui::chat::performance::exercise_scroll_frames(&context);window.close();return;
+        }
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("perf-baseline"){crate::ui::chat::performance::exercise_corrections(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("gnome-layout"){
             exercise_gnome_layout(&controller,&context);window.close();return;
@@ -244,7 +259,7 @@ mod tests {
         let captured = outputs.clone();
         let chat = ChatModel::builder().launch(ChatInit::default())
             .connect_receiver(move |_, output| captured.borrow_mut().push(output));
-        crate::ui::style::exercise_accents(&context);
+        stage!(crate::ui::style::exercise_accents);
         let channel_id = Uuid::new_v4();
         let channel: Channel = serde_json::from_value(serde_json::json!({
             "id":channel_id,"name":"general","channel_type":"text","position":0,
@@ -359,43 +374,43 @@ mod tests {
             assert_fallback(members.widget().upcast_ref(), 24);
         }
 
-        crate::ui::chat::actions::tests::exercise(&context);
-        crate::ui::chat::bugs::exercise(&context);
-        crate::ui::chat::bugs5::exercise(&context);
-        crate::ui::chat::bugs6::exercise(&context);
-        crate::ui::chat::bugs7::exercise(&context);
-        crate::ui::chat::clipboard::exercise(&context);
-        crate::ui::chat::actions::exercise_edit_mentions(&context);
-        crate::ui::chat::composer::exercise(&context);
-        crate::ui::main_window::account::exercise_profile_emojis(&context);
-        crate::ui::main_window::account::exercise_presence_selector(&context);
-        crate::ui::status::exercise(&context);
-        crate::ui::chat::transfers::exercise_viewer(&context);
-        crate::ui::chat::transfers::exercise_retention(&context);
-        crate::ui::chat::transfers::exercise_geometry(&context);
-        crate::ui::chat::rich::exercise(&context);
+        stage!(crate::ui::chat::actions::tests::exercise);
+        stage!(crate::ui::chat::bugs::exercise);
+        stage!(crate::ui::chat::bugs5::exercise);
+        stage!(crate::ui::chat::bugs6::exercise);
+        stage!(crate::ui::chat::bugs7::exercise);
+        stage!(crate::ui::chat::clipboard::exercise);
+        stage!(crate::ui::chat::actions::exercise_edit_mentions);
+        stage!(crate::ui::chat::composer::exercise);
+        stage!(crate::ui::main_window::account::exercise_profile_emojis);
+        stage!(crate::ui::main_window::account::exercise_presence_selector);
+        stage!(crate::ui::status::exercise);
+        stage!(crate::ui::chat::transfers::exercise_viewer);
+        stage!(crate::ui::chat::transfers::exercise_retention);
+        stage!(crate::ui::chat::transfers::exercise_geometry);
+        stage!(crate::ui::chat::rich::exercise);
         crate::ui::chat::video::exercise_initial_audio();
-        crate::ui::chat::bugs6::exercise_send_feedback(&context);
-        crate::ui::chat::video::exercise_fullscreen(&context);
-        crate::ui::chat::performance::exercise_channel_cache(&context);
-        crate::ui::chat::performance::exercise_startup(&context);
-        crate::ui::sidebar::exercise_startup(&context);
-        crate::ui::chat::performance::exercise_media_scroll(&context);
-        crate::ui::chat::performance::exercise_opening(&context);
-        crate::ui::chat::performance::exercise_smooth_updates(&context);
-        crate::ui::chat::performance::exercise(&context);
-        crate::ui::chat::performance::exercise_corrections(&context);
-        crate::ui::user_list::exercise_corrections(&context);
-        crate::media::avatars::exercise_corrections(&context);
-        crate::media::animation::exercise(&context);
-        crate::ui::chat::multiline::exercise(&context);
-        crate::ui::chat::multiline::exercise_full_app(&context);
-        crate::ui::chat::mention_background::exercise(&context);
-        crate::ui::chat::exercise_animated_emojis(&context);
-        crate::ui::main_window::notifications::exercise_filters(&context);
-        crate::ui::main_window::notifications::exercise_tabs(&context);
-        crate::ui::main_window::webhooks::exercise(&context);
-        crate::media::sound::exercise(&context);
+        stage!(crate::ui::chat::bugs6::exercise_send_feedback);
+        stage!(crate::ui::chat::video::exercise_fullscreen);
+        stage!(crate::ui::chat::performance::exercise_channel_cache);
+        stage!(crate::ui::chat::performance::exercise_startup);
+        stage!(crate::ui::sidebar::exercise_startup);
+        stage!(crate::ui::chat::performance::exercise_media_scroll);
+        stage!(crate::ui::chat::performance::exercise_opening);
+        stage!(crate::ui::chat::performance::exercise_smooth_updates);
+        stage!(crate::ui::chat::performance::exercise);
+        stage!(crate::ui::chat::performance::exercise_corrections);
+        stage!(crate::ui::user_list::exercise_corrections);
+        stage!(crate::media::avatars::exercise_corrections);
+        stage!(crate::media::animation::exercise);
+        stage!(crate::ui::chat::multiline::exercise);
+        stage!(crate::ui::chat::multiline::exercise_full_app);
+        stage!(crate::ui::chat::mention_background::exercise);
+        stage!(crate::ui::chat::exercise_animated_emojis);
+        stage!(crate::ui::main_window::notifications::exercise_filters);
+        stage!(crate::ui::main_window::notifications::exercise_tabs);
+        stage!(crate::ui::main_window::webhooks::exercise);
+        stage!(crate::media::sound::exercise);
 
         // Authenticating must actually switch the watched stack to the main view.
         let whoami = serde_json::from_value(serde_json::json!({
@@ -466,7 +481,7 @@ mod tests {
         use crate::ui::chat::{composer,multiline,InputExt};
         use crate::ui::chat::actions::tests::{mock,pump,until};
         let window=controller.widget();window.set_title(Some("Papo login input test"));
-        let native=std::env::var_os("PAPO_NATIVE_INPUT_TEST").is_some();
+        let native=cfg!(target_os="linux")&&std::env::var("PAPO_NATIVE_INPUT_TEST").as_deref()==Ok("1");
         if native{assert_eq!(window.upcast_ref::<gtk::Widget>().display().type_().name(),"GdkX11Display");assert!(std::process::Command::new("setxkbmap").args(["-layout","br","-variant",""]).status().unwrap().success());}
         let row=descendants(&window.content().unwrap()).into_iter().find_map(|w|w.downcast::<adw::EntryRow>().ok().filter(|row|row.title()=="Usuário")).unwrap();
         let text=row.delegate().and_downcast::<gtk::Text>().unwrap();row.set_text("");row.grab_focus();

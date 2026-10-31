@@ -34,6 +34,8 @@ and remaining validation. The portable preview bundles its own native runtime;
 see [Windows runtime checks](docs/testing/windows-runtime.md) and
 [identity, GUI launch and diagnostics](docs/testing/windows-identity.md).
 
+For Windows development, see the [PowerShell setup, checks and build commands](MULTIPLATFORM.md#windows-developer-build-x86_64).
+
 ## Build and run (Linux)
 
 Requires Rust, a C compiler, pkg-config, GLib development tools (`glib-compile-resources`), OpenSSL development files, GTK 4.12+

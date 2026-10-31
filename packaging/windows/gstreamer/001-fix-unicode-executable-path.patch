@@ -1,0 +1,20 @@
+--- a/gst/gst.c
++++ b/gst/gst.c
+@@ -327,12 +327,14 @@
+ static void
+ find_executable_path (void)
+ {
+-  char buffer[MAX_PATH];
++  gunichar2 buffer[32768];
++  DWORD length;
+ 
+-  if (!GetModuleFileName (NULL, buffer, MAX_PATH))
++  length = GetModuleFileNameW (NULL, (WCHAR *) buffer, G_N_ELEMENTS (buffer));
++  if (!length || length >= G_N_ELEMENTS (buffer))
+     return;
+ 
+-  _gst_executable_path = g_strdup (buffer);
++  _gst_executable_path = g_utf16_to_utf8 (buffer, length, NULL, NULL, NULL);
+ }
+ #elif defined(__APPLE__) && !TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR && !TARGET_OS_EMBEDDED
+ static void

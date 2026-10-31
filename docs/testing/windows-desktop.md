@@ -199,3 +199,17 @@ physical fractional/mixed-monitor DPI and Windows dead-key/IME results are pendi
 The PowerShell driver is prepared for later CI/release execution; no native pass
 is claimed. The historical step 8 call-controls failure is retained in that
 step's original record; the focused pass above applies to this changed layout.
+
+## Local Windows automatic verification, 2026-10-29
+
+Thirteen focused desktop/notification/voice-text cases now pass on the physical
+Windows host; timeline, rich-width and backend-GIF regressions pass separately.
+The broad GUI fixture remains an investigation, and GTK profile measurement
+warnings remain visible. Correcting fixture paths and font-dependent test data
+does not establish a fix for its intermittent native access violation.
+
+An explicit native-key attempt stopped because the fixture did not own the
+foreground window; no input was sent. Do not bypass this ownership check. Real
+keyboard/IME, accessibility, dialogs and physical fractional/mixed-monitor DPI
+remain the attended matrix above. The user requested automatic checks only.
+See [commands, evidence scope and remaining release work](windows-local-2026-10-29.md).

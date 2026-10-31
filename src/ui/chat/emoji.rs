@@ -155,7 +155,18 @@ impl Picker {
     let column=gtk::Box::new(gtk::Orientation::Vertical,0);column.append(&view);let spacer=gtk::Box::new(gtk::Orientation::Vertical,0);spacer.set_height_request(1000);column.append(&spacer);
     let scroll=gtk::ScrolledWindow::builder().child(&column).build();let window=gtk::Window::builder().default_width(400).default_height(200).child(&scroll).build();window.present();until(context,||view.is_mapped());
     let first=inline.current_image();until(context,||inline.current_image()!=first);
-    scroll.vadjustment().set_value(800.0);pump(context);let clipped=inline.current_image();for _ in 0..80{pump(context);std::thread::sleep(std::time::Duration::from_millis(5));}assert_eq!(inline.current_image(),clipped,"offscreen inline emojis must pause");
+    // EN-US: Scroll allocation and the visibility wakeup finish on later frames; sample after paint.
+    // PT-BR: A alocação da rolagem e a visibilidade terminam em quadros posteriores; amostra após pintura.
+    let painted=std::rc::Rc::new(std::cell::Cell::new(0));let count=painted.clone();
+    let clock=window.frame_clock().unwrap();let after=clock.connect_after_paint(move |_|count.set(count.get()+1));
+    let count=painted.clone();window.add_tick_callback(move |_,_|if count.get()<2{gtk::glib::ControlFlow::Continue}else{gtk::glib::ControlFlow::Break});
+    scroll.vadjustment().set_value(800.0);until(context,||painted.get()>=2);clock.disconnect(after);
+    let bounds=view.compute_bounds(&scroll).unwrap();
+    assert!(bounds.y()+bounds.height()<=0.0||bounds.y()>=scroll.height() as f32,"emoji fixture must be clipped after allocation: {bounds:?}, viewport={}",scroll.height());
+    until(context,||animation.playback_state()==(false,false));
+    eprintln!("Papo inline pause sample: after_paints={}, bounds={bounds:?}, viewport={}, onscreen/timer={:?}",painted.get(),scroll.height(),animation.playback_state());
+    let clipped=inline.current_image();for _ in 0..80{pump(context);std::thread::sleep(std::time::Duration::from_millis(5));}assert_eq!(inline.current_image(),clipped,"offscreen inline emojis must pause");
+    assert_eq!(animation.playback_state(),(false,false),"clipped emoji must retain no playback deadline");
     scroll.vadjustment().set_value(0.0);until(context,||inline.current_image()!=clipped);
     window.set_child(None::<&gtk::Widget>);window.close();pump(context);let hidden=animation.current_image();for _ in 0..40{pump(context);std::thread::sleep(std::time::Duration::from_millis(5));}assert_eq!(animation.current_image(),hidden,"cached channel/profile emoji must not keep animating");
     let list=gtk::Box::new(gtk::Orientation::Vertical,0);{let model=chat.model();picker(&list,&model.unicode_emojis,&model.actions.emojis,&model.actions.textures,&model.actions.animations,|_|{});}

@@ -103,10 +103,13 @@ impl Engine {
 mod tests {
     use super::*;
     #[tokio::test]
-    #[ignore="requires native GStreamer/libnice and local ICE sockets; uses synthetic audio"]
+    #[ignore="requires native GStreamer/libnice; synthetic unless PAPO_TEST_VOICE_DEVICE explicitly selects a microphone"]
     async fn native_voice_worker_drop_releases_process() {
         let (tx,mut rx)=mpsc::unbounded_channel();
-        let engine=Engine::start(serde_json::json!({"type":"start","test_source":true,"muted":true,"microphone_gain":2.0}),move|e|{let _=tx.send(e);});
+        // EN-US: Physical capture is opt-in; ordinary CI never opens a microphone.
+        // PT-BR: A captura física é opcional; a CI normal nunca abre um microfone.
+        let device=std::env::var("PAPO_TEST_VOICE_DEVICE").ok().filter(|value|!value.is_empty());
+        let engine=Engine::start(serde_json::json!({"type":"start","test_source":device.is_none(),"device":device,"muted":true,"microphone_gain":2.0}),move|e|{let _=tx.send(e);});
         let pid=tokio::time::timeout(Duration::from_secs(10),async {loop{match rx.recv().await.unwrap(){EngineEvent::Started{pid}=>break pid,EngineEvent::Error{message}=>panic!("{message}"),_=>{}}}}).await.unwrap();
         assert_ne!(pid,0,"worker reports a native process identifier");
         let gain=tokio::time::timeout(Duration::from_secs(5),async{loop{match rx.recv().await.unwrap(){EngineEvent::MicrophoneGain{gain}=>break gain,EngineEvent::Error{message}=>panic!("{message}"),_=>{}}}}).await.unwrap();assert_eq!(gain,2.0,"startup honors the configured capture gain");

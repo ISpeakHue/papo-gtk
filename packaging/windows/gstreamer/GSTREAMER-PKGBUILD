@@ -1,0 +1,35 @@
+# EN-US: MSYS2 core recipe with a narrow UTF-16 executable-path correction.
+# PT-BR: Receita MSYS2 do core com correção restrita do caminho executável UTF-16.
+# https://github.com/msys2/MINGW-packages/tree/master/mingw-w64-gstreamer
+_realname=gstreamer
+pkgbase=mingw-w64-${_realname}
+pkgname="${MINGW_PACKAGE_PREFIX}-${_realname}"
+pkgver=1.28.8
+pkgrel=1.1
+pkgdesc="GStreamer Multimedia Framework (Unicode executable paths) (mingw-w64)"
+arch=('any')
+mingw_arch=('ucrt64')
+url="https://gstreamer.freedesktop.org/"
+license=('spdx:LGPL-2.1-or-later')
+depends=("${MINGW_PACKAGE_PREFIX}-cc-libs" "${MINGW_PACKAGE_PREFIX}-gettext-runtime" "${MINGW_PACKAGE_PREFIX}-glib2" "${MINGW_PACKAGE_PREFIX}-libwinpthread")
+makedepends=("${MINGW_PACKAGE_PREFIX}-cc" "${MINGW_PACKAGE_PREFIX}-gobject-introspection" "${MINGW_PACKAGE_PREFIX}-meson" "${MINGW_PACKAGE_PREFIX}-pkgconf" "${MINGW_PACKAGE_PREFIX}-ninja" "${MINGW_PACKAGE_PREFIX}-gettext-tools" "${MINGW_PACKAGE_PREFIX}-rust")
+source=("${url}/src/gstreamer/gstreamer-${pkgver}.tar.xz" '001-fix-unicode-executable-path.patch')
+sha256sums=('baa8e86985ad6417cc0ad6e7b79ff2884c6779c8b1c7a6240e7121822c86e524' '359e131648fb840a575c0adc1bf7667c30ada4958d94417fa4ccc2ca127d8874')
+prepare() {
+  cd "gstreamer-${pkgver}"
+  patch -Np1 -i ../001-fix-unicode-executable-path.patch
+}
+build() {
+  LDFLAGS+=" -pthread" MSYS2_ARG_CONV_EXCL="--prefix=" meson setup \
+    --prefix="${MINGW_PREFIX}" --buildtype=release --wrap-mode=nofallback \
+    -Dauto_features=enabled -Dpackage-origin='https://www.msys2.org' \
+    -Dtests=disabled -Dexamples=disabled -Dbenchmarks=disabled -Ddoc=disabled \
+    -Dlibunwind=disabled -Dlibdw=disabled -Ddbghelp=disabled -Dbash-completion=disabled \
+    "build-${MSYSTEM}" "gstreamer-${pkgver}"
+  meson compile -C "build-${MSYSTEM}" -j 2
+}
+package() {
+  DESTDIR="${pkgdir}" meson install -C "build-${MSYSTEM}"
+  find "${pkgdir}${MINGW_PREFIX}/lib/gstreamer-1.0" -name '*.a' -type f -delete
+  install -Dm644 "gstreamer-${pkgver}/COPYING" "${pkgdir}${MINGW_PREFIX}/share/licenses/gstreamer/COPYING"
+}

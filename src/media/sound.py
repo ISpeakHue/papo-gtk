@@ -40,6 +40,12 @@ def main():
     # autoaudiosink creates its real sink during the state transition. Configure
     # it before opening its stream, including when PulseAudio is backed by PipeWire.
     pipeline.connect("deep-element-added", configure_audio_output)
+    outputs = set()
+    def output_added(_pipeline, _bin, element):
+        factory = element.get_factory()
+        if factory and factory.get_name() in ("wasapi2sink", "wasapisink", "pulsesink", "osxaudiosink"):
+            outputs.add(factory.get_name())
+    pipeline.connect("deep-element-added", output_added)
     decoded = [0]
 
     def buffer_probe(_pad, info):
@@ -67,7 +73,9 @@ def main():
             raise RuntimeError(error.message)
         if decoded[0] == 0:
             raise RuntimeError("call cue produced no decoded audio")
-        print(json.dumps({"decoded_bytes": decoded[0]}), flush=True)
+        # EN-US: Report real output selection so acceptance can distinguish it from a discard sink.
+        # PT-BR: Relata a saída real para que a aceitação a diferencie de um descarte de áudio.
+        print(json.dumps({"decoded_bytes": decoded[0], "output_factories": sorted(outputs)}), flush=True)
     finally:
         pipeline.set_state(Gst.State.NULL)
 

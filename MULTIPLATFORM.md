@@ -53,6 +53,69 @@ whose isolation adapter is not yet implemented.
 
 ## Windows developer build (x86_64)
 
+For local PowerShell development, use the repository's UCRT64 wrapper:
+
+```powershell
+.\scripts\windows-dev.ps1 Setup
+.\scripts\windows-dev.ps1 Check
+.\scripts\windows-dev.ps1 Build
+.\scripts\windows-dev.ps1 Test
+.\scripts\windows-dev.ps1 Run
+.\scripts\windows-dev.ps1 Debug
+```
+
+The default toolchain root is `%LOCALAPPDATA%\papo-dev\msys64`. Install or extract
+the [official MSYS2 distribution](https://www.msys2.org/docs/installer/) there first,
+or pass `-MsysRoot C:\msys64` for an existing installation. Commands also work
+directly in UCRT64 as `bash scripts/windows-dev.sh check` (or `setup`, `build`,
+`test`, `run`, `debug`). `Check` is the default and installs nothing. If PowerShell's local
+script policy blocks the wrapper, use the UCRT64 command instead; no system-wide
+policy change is required. Alternatively, a local script can be run with a
+process-only policy: `powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File
+.\scripts\windows-dev.ps1 Check`.
+
+`Setup` updates the complete MSYS2 installation, installs native build/media/debug
+tools (including NSIS) and builds the reviewed GTK IME-disposal backport using
+`packaging/windows/gtk/PKGBUILD`, plus the
+[GStreamer Unicode executable-path correction](packaging/windows/gstreamer/README.md).
+It skips rebuilding an already matching native
+package and refuses an unreviewed version rather than applying an old patch to a
+different GTK release. If a core MSYS2 update requests a shell restart, rerun
+`Setup` in a new shell. This is local developer provisioning, not an exact native
+input archive or release qualification.
+
+The preflight reuses the packaging toolchain checks, verifies the GNU Rust target,
+same-prefix tools, GTK/libadwaita requirements, reviewed GTK package and native
+GI/GStreamer factories without opening a window, device, picker or account.
+Its result is written to `target/windows-dev/preflight.json`. Environment/runtime
+selection applies only to the child shell; the wrapper restores its process
+variables and does not change persistent PATH settings. `Test` records focused
+Python checks (all Windows packaging/native checks and shared worker checks),
+runs regular Rust tests and the opt-in synthetic voice/process-tree
+tests. It does not run attended desktop/device acceptance.
+Python results and Rust/native-worker logs remain under `target/windows-dev`;
+the developer GStreamer registry also stays there instead of replacing the user's
+normal plugin cache.
+
+Native plugin discovery runs in a hidden, 45-second child probe whose Windows Job
+also owns the GStreamer scanner. A stalled probe fails and records an error;
+it does not hang setup or silently qualify the runtime. On one local Windows 11
+23H2/AMD host, a scanner backtrace stalled inside `libgsthip.dll` and AMD HIP
+driver initialization. Excluding only HIP allowed discovery to finish. For that
+diagnosed case, add `-ExcludeHip` to the developer commands, including `Setup` (UCRT64:
+`PAPO_DEV_EXCLUDE_HIP=1 bash scripts/windows-dev.sh check`). This explicit developer
+override leaves the installed SDK/package files and other hardware plugins
+unchanged, uses a separate registry and records `hip_excluded: true`. It does not
+qualify HIP, repair the vendor driver or change the distributed application.
+
+`Run` launches the source-tree executable with the developer runtime; `Debug`
+builds it and opens GDB in the same environment (enter `run` at its prompt). Packaged
+bootstrap, shell/notification registration and bundled capture-DLL behavior still
+need the standalone package and matching instrumented test artifact described
+below; source-tree startup is not packaged acceptance.
+Close other Papo instances before `Run`/`Debug` so Windows activation reaches the
+newly built process.
+
 Use [MSYS2 UCRT64](https://www.msys2.org/docs/environments/), including its Rust
 package. Do not mix MSVC, MINGW64/MSVCRT or another Python runtime into this build.
 The [GTK Rust Windows guide](https://gtk-rs.org/gtk4-rs/stable/latest/book/installation_windows.html)
@@ -72,9 +135,31 @@ pacman -S --needed git \
   mingw-w64-ucrt-x86_64-libnice
 export PAPO_RUNTIME_DIR="$(cygpath -w "$MINGW_PREFIX")"
 cargo run --locked
-python packaging/windows/native_inputs.py capture target/windows-native-inputs
+```
+
+The raw package commands above do not install the local native corrections. Run
+the wrapper's `Setup` before packaging. From UCRT64, retain both local packages
+and their sources (use the directories where they were built):
+
+```sh
+python packaging/windows/native_inputs.py capture target/windows-native-inputs \
+  --cache "$(cygpath -w /var/cache/pacman/pkg)" \
+  --local-package target/windows-dev/gtk/mingw-w64-ucrt-x86_64-gtk4-4.24.1-1.1-any.pkg.tar.zst \
+  --source-input target/windows-dev/gtk/PKGBUILD \
+  --source-input target/windows-dev/gtk/001-fix-font-rendering.patch \
+  --source-input target/windows-dev/gtk/002-fix-ime-dispose.patch \
+  --source-input target/windows-dev/gtk/gtk-4.24.1.tar.xz \
+  --local-package target/windows-dev/gstreamer/mingw-w64-ucrt-x86_64-gstreamer-1.28.8-1.1-any.pkg.tar.zst \
+  --source-input packaging/windows/gstreamer/GSTREAMER-PKGBUILD \
+  --source-input packaging/windows/gstreamer/001-fix-unicode-executable-path.patch \
+  --source-input target/windows-dev/gstreamer/gstreamer-1.28.8.tar.xz
 python packaging/windows/build.py --native-inputs target/windows-native-inputs
 ```
+
+`--cache` reuses only exact archive identities; pacman signature/integrity and
+installed/archive equality checks still run. No missing or newer package is
+substituted silently. The local [2026-10-29 automatic Windows record](docs/testing/windows-local-2026-10-29.md)
+separates these checks from attended acceptance and supported-release qualification.
 
 Git is required to record the source revision. Packaging requires a clean checkout
 by default; `--allow-dirty` is an explicit local-preview override. The source state

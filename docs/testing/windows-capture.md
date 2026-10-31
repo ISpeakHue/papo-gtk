@@ -131,6 +131,13 @@ Local results on 2026-10-28:
 
 ## Attended Windows completion checklist
 
+**2026-10-29 automatic Windows result:** bridge compilation, native ABI/owner/
+frame bounds and actual BGRA/appsrc/VP8 resize/restart checks pass. The packaged
+runtime loads the bridge without opening capture. The user requested automatic
+checks only, so picker cancellation/selection, real source/peer and physical
+cleanup acceptance below remain pending. `screen_capture` remains false. See the
+[current local record](windows-local-2026-10-29.md).
+
 Use disposable content with a standard-user Windows 11 account and the standalone
 runtime. Preserve the source revision, native inputs/package hash, OS build, GPU/
 driver versions and results. Do not run these tests unattended: they intentionally

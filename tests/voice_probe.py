@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Two native clients, real Go SFU and local TURN; never open the microphone.
+"""Two native clients, real Go SFU and local TURN; synthetic unless --microphone is explicit.
 Build tests/voice-sfu into target/voice-sfu[.exe], or pass --sfu PATH.
 """
 import asyncio
+import argparse
 import json
 from pathlib import Path
 import sys
@@ -24,7 +25,10 @@ async def close(process):
         process.kill()
         await process.wait()
 
-async def run(relay, device=None):
+async def run(relay, device=None, allow_quiet=False):
+    if device is not None:
+        prompt = 'capture/transport check; no speech required' if allow_quiet else 'speak into the selected microphone during this stage (up to 40 seconds)'
+        print(('TURN relay' if relay else 'Direct ICE') + ': ' + prompt, flush=True)
     queue = asyncio.Queue()
     processes = []
     pumps = []
@@ -49,6 +53,8 @@ async def run(relay, device=None):
     muted = False
     left = False
     started = False
+    captured = {}
+    decoded = {}
     deadline = asyncio.get_running_loop().time() + 40
     try:
         while asyncio.get_running_loop().time() < deadline:
@@ -66,7 +72,7 @@ async def run(relay, device=None):
                         await send(sfu, {"peer": peer, "event": {"type": "voice_join"}})
                 elif kind == "voice_joined":
                     await send(sfu, {"peer": peer, "event": {"type": "voice_mute", "muted": False}})
-                    await send(clients[peer], {"type": "start", "muted": False, "ice_servers": config, "relay": relay, "test_source": device is None, "device": device, "test_sink": True, "frequency": 440 if peer == "a" else 880})
+                    await send(clients[peer], {"type": "start", "muted": device is not None, "ice_servers": config, "relay": relay, "test_source": device is None, "device": device, "test_sink": True, "frequency": 440 if peer == "a" else 880})
                 elif kind in ("voice_answer", "voice_offer", "voice_ice_candidate", "voice_audio_routes"):
                     if kind == "voice_audio_routes":
                         routes[peer] = event["routes"]
@@ -89,30 +95,47 @@ async def run(relay, device=None):
                     await send(sfu, {"peer": label, "event": event})
                 elif kind == "connection" and event["state"] == "connected":
                     connected.add(label)
+                elif kind == "started" and device is not None:
+                    # EN-US: Physical/virtual capture starts muted; this explicit probe action enables it.
+                    # PT-BR: A captura física/virtual inicia silenciada; esta ação explícita do teste a ativa.
+                    await send(clients[label], {"type": "mute", "muted": False})
                 elif kind == "speaking":
                     if event["active"]:
                         local_speakers.add(label)
                     elif label == "a":
                         local_muted = True
-                elif kind == "audio" and event["energy"] > 0.0001:
-                    assert any(r["track_id"] == event["track_id"] for r in routes.get(label, [])), "audio must have a current SFU route"
-                    audible.add(label)
+                elif kind == "captured":
+                    captured[label] = event['buffers']
+                elif kind == "audio":
+                    if event['energy'] > 0.0001 or (allow_quiet and not started):
+                        assert any(r["track_id"] == event["track_id"] for r in routes.get(label, [])), "audio must have a current SFU route"
+                    decoded[label] = event['buffers']
+                    if event["energy"] > 0.0001:
+                        audible.add(label)
                 elif kind == "error":
                     raise AssertionError("Native worker: " + event["message"])
                 elif kind == "eof":
                     raise AssertionError("native worker exited unexpectedly: " + str(await clients[label].wait()))
-            if audible == connected == speakers == local_speakers == {"a", "b"} and not started:
+            speech_ready = audible == connected == speakers == local_speakers == {"a", "b"}
+            transport_ready = connected == {'a', 'b'} and all(captured.get(p, 0) >= 50 and decoded.get(p, 0) >= 25 for p in clients)
+            if (transport_ready if allow_quiet else speech_ready) and not started:
                 assert not relay or candidates == {"a", "b"}, "relay-only peers must use TURN"
-                assert speakers == {"a", "b"}, "real RFC6464 active speaker detection"
+                if not allow_quiet:
+                    assert speakers == {"a", "b"}, "real RFC6464 active speaker detection"
                 started = True
                 await send(clients["a"], {"type": "mute", "muted": True})
                 await send(sfu, {"peer": "a", "event": {"type": "voice_mute", "muted": True}})
             if started and muted and not routes.get("b") and not left:
                 await send(sfu, {"peer": "b", "event": {"type": "voice_leave"}})
-            if left and not routes.get("a") and local_muted:
-                print(("TURN relay" if relay else "Direct ICE") + ": bidirectional decoded audio, routes, active speakers, mute and leave passed")
+            if left and not routes.get("a") and (local_muted or allow_quiet):
+                description = 'physical capture/decoded-buffer flow, routes, mute and leave passed; speech quality NOT VERIFIED' if allow_quiet else 'bidirectional decoded audio, routes, active speakers, mute and leave passed'
+                print(("TURN relay" if relay else "Direct ICE") + ": " + description, flush=True)
                 return
-        raise AssertionError("audio probe timed out")
+        raise AssertionError("audio probe timed out; " + repr({
+            'connected': sorted(connected), 'decoded_non_silent': sorted(audible),
+            'sfu_speakers': sorted(speakers), 'local_speakers': sorted(local_speakers),
+            'captured_buffers': captured, 'decoded_buffers': decoded,
+            'relay_candidates': sorted(candidates)}))
     finally:
         for process in processes[1:]:
             await close(process)
@@ -163,10 +186,21 @@ async def virtual_capture():
             await pactl("unload-module", module)
 
 async def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--microphone', help='Explicitly capture this endpoint ID or unique name locally; speak during the test')
+    parser.add_argument('--transport', choices=('both', 'direct', 'relay'), default='both')
+    parser.add_argument('--allow-quiet-microphone', action='store_true', help='Verify physical buffer transport without claiming speech/active-speaker acceptance')
+    args, _ = parser.parse_known_args()
     if "--capture" in sys.argv and not sys.platform.startswith("linux"):
         raise SystemExit("--capture requires Linux; the default probe uses synthetic audio on every OS")
-    await run(False)
-    await run(True)
+    if args.microphone and '--capture' in sys.argv:
+        raise SystemExit('Choose --microphone or --capture')
+    if args.allow_quiet_microphone and not args.microphone:
+        raise SystemExit('--allow-quiet-microphone requires --microphone')
+    if args.transport in ('both', 'direct'):
+        await run(False, args.microphone, args.allow_quiet_microphone)
+    if args.transport in ('both', 'relay'):
+        await run(True, args.microphone, args.allow_quiet_microphone)
     await invalid_device()
     if "--capture" in sys.argv:
         await virtual_capture()

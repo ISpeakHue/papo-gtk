@@ -136,13 +136,13 @@ pub(super) fn footer(card:&gtk::Box,p:&Embed,image_available:bool,users:&HashMap
     exercise_mentions(context);
 }
 
-#[cfg(test)]fn exercise_text_width(context:&gtk::glib::MainContext){
+#[cfg(test)]pub(crate) fn exercise_text_width(context:&gtk::glib::MainContext){
     use adw::prelude::*;use actions::tests::{descendants,pump};use performance::settle;
     let peer=Uuid::new_v4();let now=chrono::Utc::now();let users=HashMap::from([(peer,serde_json::from_value(serde_json::json!({"id":peer,"username":"bob","nickname":"Bob","created_at":now})).unwrap())]);
     // The sentence must fit the wide card but exceed the toolbar-constrained
     // minimum window width; a shorter fixture can still fit after resizing.
-    let source=format!("Uma **mensagem** para @mention(<@{peer}>) sem quebra inesperada na frase.");
-    let expected="Uma mensagem para @Bob sem quebra inesperada na frase.";
+    let source=format!("Uma **mensagem** para @mention(<@{peer}>) sem quebra inesperada na frase ao ler.");
+    let expected="Uma mensagem para @Bob sem quebra inesperada na frase ao ler.";
     let channel=Uuid::new_v4();let user=Uuid::new_v4();
     let target=serde_json::from_value(serde_json::json!({"id":channel,"name":"Bot text width","created_at":now})).unwrap();
     let embed:Embed=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"source_type":"custom","fetch_method":"manual","author":{"name":"a"},"description":source,"created_at":now})).unwrap();

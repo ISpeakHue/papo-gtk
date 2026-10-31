@@ -79,6 +79,7 @@ pub struct MainWindowModel {
     connection_status:Option<String>,
     poll_jitter:u64,
     refresh_task: Option<tokio::task::JoinHandle<()>>,
+    access_task: Option<tokio::task::JoinHandle<()>>,
     ws_listener: Option<tokio::task::JoinHandle<()>>,
     preview_requests: HashMap<(Uuid, Uuid), Uuid>,
     avatars: AvatarCache,
@@ -244,6 +245,7 @@ impl Component for MainWindowModel {
             show_user_list: true,layout,
             last_activity: None,last_access_refresh:None,socket_ready:false,had_connection:false,reconnect_pending:false,history_recovering:true,access_valid:false,connection_status:None,poll_jitter:(Uuid::new_v4().as_u128()%6) as u64,
             refresh_task: None,
+            access_task: None,
             ws_listener: None,
             preview_requests: HashMap::new(),
             avatars,members:Default::default(),
@@ -370,6 +372,7 @@ impl Component for MainWindowModel {
             MainWindowMsg::AccessLoaded { request_id, result } => {
                 if self.access_request != Some(request_id) { return; }
                 self.access_request = None;
+                self.access_task = None;
 
                 if std::mem::take(&mut self.access_refresh_again) { self.refresh_channels(sender.clone()); }
                 match result {
@@ -694,7 +697,7 @@ impl MainWindowModel {
         let client = self.api_client.clone();
         let read_version=self.notifications.journal.version;
         let member_version=self.members.version();
-        tokio::spawn(async move {
+        self.access_task = Some(tokio::spawn(async move {
             let result = async {
                 let user = client.whoami().await?;
                 let server = match client.get_server().await {
@@ -713,8 +716,10 @@ impl MainWindowModel {
                     user.roles.as_deref().unwrap_or(&[]), &roles, &[]).without_channel();
                 Ok(AccessSnapshot { user, server, roles, channels, access, server_access, read_version, member_version })
             }.await;
-            sender.input(MainWindowMsg::AccessLoaded { request_id, result });
-        });
+            // EN-US: Closing the account may close its input before the model is dropped.
+            // PT-BR: Fechar a conta pode encerrar sua entrada antes de liberar o modelo.
+            let _ = sender.input_sender().send(MainWindowMsg::AccessLoaded { request_id, result });
+        }));
     }
 
     fn refresh_users(&mut self, sender: ComponentSender<Self>, id: Option<Uuid>) {
@@ -790,6 +795,7 @@ impl MainWindowModel {
 impl Drop for MainWindowModel {
     fn drop(&mut self) {
         if let Some(task) = self.refresh_task.take() { task.abort(); }
+        if let Some(task) = self.access_task.take() { task.abort(); }
         if let Some(task) = self.ws_listener.take() { task.abort(); }
     }
 }

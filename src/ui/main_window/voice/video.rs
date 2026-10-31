@@ -171,6 +171,7 @@ pub(super) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::Mai
     let engine=|event|{main.emit(MainWindowMsg::Voice(VoiceMsg::Engine{call,event}));pump(context);};
     let room=main.model().voice.call.as_ref().unwrap().channel;
     engine(EngineEvent::Negotiated);
+    if crate::platform::capture::available(){
     assert!(main.model().voice.video.screen.is_sensitive());
     main.model().voice.video.screen.emit_clicked();pump(context);
     assert!(main.model().voice.video.busy);
@@ -186,6 +187,13 @@ pub(super) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::Mai
     engine(EngineEvent::MediaError{kind:"screen".into(),message:"Cancelado".into()});
     engine(EngineEvent::MediaState{kind:"screen".into(),on:false});engine(EngineEvent::Negotiated);
     assert!(main.model().voice.call.is_some());assert!(main.model().voice.video.screen.is_sensitive());
+    }else{
+        // EN-US: An unavailable capture preview must not disable remote camera/screen viewing.
+        // PT-BR: Uma prévia de captura indisponível não deve desativar a visualização remota.
+        assert!(!main.model().voice.video.screen.is_sensitive());
+        main.model().voice.video.screen.emit_clicked();pump(context);
+        assert!(!main.model().voice.video.busy&&main.model().voice.call.is_some());
+    }
     main.emit(MainWindowMsg::WsReceived(WsEvent::Voice(VoiceEvent::State{channel_id:room,member:VoiceMember{user_id:peer,muted:false,camera_on:true,screen_sharing:true}})));pump(context);
     find_button(main.model().sidebar.widget().upcast_ref(),"Ver câmera").emit_clicked();pump(context);assert!(main.model().voice.video.viewer_window.is_visible());
     let epoch=main.model().voice.video.epoch;engine(EngineEvent::VideoReset{epoch});

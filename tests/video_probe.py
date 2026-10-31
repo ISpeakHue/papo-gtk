@@ -25,6 +25,7 @@ async def main():
         raise RuntimeError('--windows-capture requires Windows and PAPO_WINDOWS_CAPTURE_PREVIEW=1; opens a real picker')
     processes, tasks = [], []
     states, negotiated, frames, connected, offers = {}, {}, {}, set(), {}
+    resets = {}
     epochs = {"a": 0, "b": 0, "c": 0}
     patterns = {("a","video"):4,("a","screen"):5,("b","video"):6,("b","screen"):4}
     errors = []
@@ -82,6 +83,8 @@ async def main():
                     await signal(peer, {"type": "voice_camera", "on": event["on"]} if event["kind"] == "video" else {"type": "screen_share_start" if event["on"] else "screen_share_stop"})
                 elif kind == "negotiated":
                     negotiated[peer] = negotiated.get(peer, 0) + 1
+                elif kind == "video_reset":
+                    resets[peer] = event["epoch"]
                 elif kind == "video_frame":
                     jpeg = base64.b64decode(event["jpeg"])
                     assert jpeg.startswith(b"\xff\xd8"), "decoded video must be JPEG"
@@ -137,6 +140,9 @@ async def main():
         await send(clients[peer], {"type": "video_watch", "epoch": epochs[peer], "enabled": True})
         watches[peer] = publisher, kind
         before = frames.get(peer, 0)
+        # EN-US: Match GTK's reset acknowledgement barrier before subscribing to new RTP.
+        # PT-BR: Aguarda a confirmação de reinício, como o GTK, antes de assinar o novo RTP.
+        await until(lambda: resets.get(peer) == epochs[peer], "video decoder reset")
         await signal(peer, {"type": "track_subscribe", "publisher_id": publisher, "kind": kind})
         if "--diagnostics" in sys.argv:
             print("watch", peer, publisher, kind, epochs[peer], file=sys.stderr)

@@ -128,10 +128,21 @@ build, runtime manifest and backend revision. Check:
    normal close/reopen and logout during delivery, and check that helpers exit.
    Distinguish OS suppression from application delivery failure.
 
-Local results: ten actor/policy tests, the focused GTK integration and existing
+Historical implementation results: ten actor/policy tests, the focused GTK integration and existing
 notification/filter GUI checks passed;
 all-target compilation passed without warnings; the full headless Rust suite
 passed 307 tests (six ignored). The extended helper cross-compiled
 with MinGW GNU and `-Wall -Wextra -Werror`; two identity/resource tests passed on
 Linux, with native execution explicitly skipped. No new DPAPI/WinRT package check
 or real toast-click result on Windows is claimed.
+
+## Local Windows verification, 2026-10-29
+
+The current-source helper compiled and ran on native Windows. Real WinRT toast
+construction, DPAPI encrypted storage, cold restoration, session rejection and
+replay checks pass. The development ZIP also passes `--check-notifications` with
+developer paths removed. Focused Windows notification routing/window/filter GUI
+fixtures pass. The probe reports `desktop_delivery: false`, registers nothing
+and displays no alert. Delivery, actual clicks, minimized/cold-start navigation
+and desktop removal remain attended checks, deferred by the user's automatic-only
+request. See [source/artifact scope and remaining work](windows-local-2026-10-29.md).

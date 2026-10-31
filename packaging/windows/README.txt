@@ -3,12 +3,19 @@ Papo Windows portable preview / Previa portatil para Windows
 Extract the entire ZIP and open Papo.exe without a console. Use Papo.com for CLI diagnostics.
 Extraia o ZIP inteiro e abra Papo.exe sem console. Use Papo.com para diagnosticos CLI.
 
-A separate per-user Windows installer preview is also built from these exact files.
+Use a short writable extraction folder, such as Papo under your user directory.
+Deeply nested folders can prevent camera/GPU media components from starting;
+that limitation remains under investigation.
+Use uma pasta curta e gravavel, como Papo dentro da pasta do seu usuario.
+Pastas muito aninhadas podem impedir componentes de camera/GPU de iniciar;
+essa limitacao continua em investigacao.
+
+Installer previews are distributed separately for matching tested releases.
 It installs under LocalAppData/Programs/Papo, creates the owned Start menu and
 notification identity, and adds an Installed Apps entry. It needs no terminal or
 external runtime. Upgrades retain a previous copy for recovery; uninstall keeps
 settings, caches and saved sessions. Native installer/beta acceptance is pending.
-Um instalador separado por usuario tambem e gerado com estes mesmos arquivos.
+Previas do instalador sao distribuidas separadamente para versoes testadas correspondentes.
 Instala em LocalAppData/Programs/Papo, cria o atalho e a identidade de avisos e
 aparece em Aplicativos instalados. Nao requer terminal nem runtime externo.
 Atualizacoes preservam a copia anterior para recuperacao; a desinstalacao mantem

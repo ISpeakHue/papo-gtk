@@ -122,6 +122,14 @@ Linux skips are not native acceptance evidence and would fail Windows CI.
 validation, not execution on Windows PowerShell 5.1. Native runtime/desktop probes
 are deliberately left to the configured Windows jobs and attended acceptance.
 No new Windows run, VM acceptance or supported-release qualification is claimed.
+That statement describes the historical Linux implementation record above.
+The [2026-10-29 local Windows automatic record](windows-local-2026-10-29.md)
+adds 138 Python checks (one explicitly Linux-only skip), 310 regular Rust passes,
+native lifecycle checks and modified-source portable diagnostics. It also records
+the corrected GStreamer Unicode scanner defect. CI provisioning retains that
+native correction; packaging removes SDK plugin exclusions before its runtime
+probe. These local results do not replace a full clean-source workflow or change
+the gate's dirty-source, missing-attended-evidence and artifact-identity rules.
 Step 13's expanded verification record is in the [installer/beta guide](windows-beta.md).
 The structured Python runner also passes 21 local worker/probe/cue/input checks;
 both bundled call cues decode through their real GStreamer helper to a test sink.

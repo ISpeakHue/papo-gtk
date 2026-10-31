@@ -94,8 +94,27 @@ CI includes native regressions, the playlist sentinel and the icon GUI case.
 Its disposable container permits namespace creation so Bubblewrap can apply the
 stricter inner sandbox; production desktop security policies are not changed.
 
-Dependency advisory scanning remains **incomplete**: `cargo audit` is not installed;
-no RustSec database scan or audit of bundled system codec libraries was performed.
+Dependency scanning was updated on 2026-10-29: cargo-audit 0.22.2 scanned the
+lockfile against RustSec revision `40f5be6fb12ed93fc591bf4ab23b7d793b3f2239`
+(1,381 advisories). Compatible updates to pulldown-cmark 0.13.5, rustls 0.23.46,
+rustls-webpki 0.103.16 and Tokio 1.53.3 remove six vulnerability findings and the
+Tokio unsoundness warning. Updating yoke-derive to 0.8.4 removes a yanked-package
+warning. The same database snapshot reports **zero vulnerability findings**;
+four unmaintained-dependency notices remain: bincode through syntect, and
+zbus_names/zvariant/zvariant_derive through the Linux credential-store chain.
+These notices are retained, without an ignore list; migration requires a separate
+syntax-cache/credential-store compatibility review. Raw before/after reports are
+in `target/windows-dev/step8/cargo-audit-{before,after}.json`.
+
+The installed preview's runtime manifest lists GStreamer 1.28.8. A targeted
+upstream review checked [RTCP SDES](https://gstreamer.freedesktop.org/security/sa-2026-0091.html),
+[Matroska/Xiph](https://gstreamer.freedesktop.org/security/sa-2026-0089.html),
+[WebRTC fingerprint validation](https://gstreamer.freedesktop.org/security/sa-2026-0061.html)
+and [Opus decoding](https://gstreamer.freedesktop.org/security/sa-2026-0053.html):
+their published fixed versions are at or below 1.28.8. This is a targeted check,
+not a complete advisory audit of FFmpeg and the other bundled native libraries;
+the native dependency review remains open. Lockfile fixes do not update already
+installed previews: a new source-bound package still needs release validation.
 Existing keyring storage, credential/log redaction, private temporary media files
 and native Markdown rendering remain in place. Backend authorization and native
 codec/dependency vulnerabilities require continued review.

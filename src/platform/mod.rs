@@ -34,7 +34,7 @@ impl Os {
     pub const fn capabilities(self)->Capabilities{
         match self{
             Self::Linux=>Capabilities{os:self,credential_store:"secret_service",desktop_notifications:true,screen_capture:true,isolated_media_helpers:true},
-            Self::Windows=>Capabilities{os:self,credential_store:"windows_credential_store",desktop_notifications:true,screen_capture:false,isolated_media_helpers:true},
+            Self::Windows=>Capabilities{os:self,credential_store:"windows_credential_store",desktop_notifications:true,screen_capture:true,isolated_media_helpers:true},
             Self::Macos=>Capabilities{os:self,credential_store:"apple_keychain",desktop_notifications:false,screen_capture:false,isolated_media_helpers:false},
         }
     }
@@ -48,7 +48,7 @@ pub const CURRENT:Capabilities=if cfg!(target_os="windows"){Os::Windows.capabili
     #[test]fn native_credentials_and_unfinished_features_are_explicit(){
         assert_eq!(Os::Windows.capabilities().credential_store,"windows_credential_store");
         assert_eq!(Os::Macos.capabilities().credential_store,"apple_keychain");
-        for os in [Os::Windows,Os::Macos]{assert!(!os.capabilities().screen_capture);}
+        assert!(Os::Windows.capabilities().screen_capture);assert!(!Os::Macos.capabilities().screen_capture);
         assert!(Os::Windows.capabilities().desktop_notifications);assert!(!Os::Macos.capabilities().desktop_notifications);
         assert!(Os::Windows.capabilities().isolated_media_helpers);assert!(!Os::Macos.capabilities().isolated_media_helpers);
         let linux=Os::Linux.capabilities();assert!(linux.isolated_media_helpers&&linux.screen_capture&&linux.desktop_notifications);

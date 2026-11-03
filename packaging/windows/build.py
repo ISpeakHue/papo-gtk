@@ -80,8 +80,8 @@ def write_json(path, data):
 
 
 def packaged_environment(environment):
-    # EN-US: SDK workarounds and capture opt-ins cannot qualify the default shipped runtime.
-    # PT-BR: Ajustes do SDK e captura experimental não validam o runtime padrão distribuído.
+    # EN-US: Developer media and worker overrides cannot qualify the default shipped runtime.
+    # PT-BR: Ajustes de mídia e workers de desenvolvimento não validam o runtime padrão distribuído.
     prefixes = ('PAPO_', 'PYTHON', 'GST_', 'GI_', 'GIO_', 'FONTCONFIG_', 'XDG_')
     return {key: value for key, value in environment.items()
             if not key.upper().startswith(prefixes) and key.upper() != 'GSETTINGS_SCHEMA_DIR'}

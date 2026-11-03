@@ -7,6 +7,9 @@
 int main() {
     assert(papo_capture_abi() == 1);
     assert(papo_capture_state(nullptr) == FAILED);
+    assert(papo_capture_error(nullptr) == E_INVALIDARG);
+    assert(papo_capture_stage(nullptr) == 0);
+    assert(papo_capture_owner_flags(nullptr) == 0);
     assert(papo_capture_close(nullptr) == 1);
     assert(valid_size({3840, 2160}));
     assert(!valid_size({0, 360}) && !valid_size({8192, 8192}) && !valid_size({INT32_MAX, 1}));
@@ -15,6 +18,9 @@ int main() {
     assert(owner && valid_owner(owner) && !valid_owner(nullptr));
     DestroyWindow(owner); assert(!valid_owner(owner));
     Capture sample;
+    sample.error = E_FAIL; sample.stage = 85; sample.owner_flags = 3;
+    assert(papo_capture_error(&sample) == E_FAIL);
+    assert(papo_capture_stage(&sample) == 85 && papo_capture_owner_flags(&sample) == 3);
     sample.latest = {1, 2, 3, 4}; sample.width = 1; sample.height = 1;
     BYTE buffer[4]{}; UINT32 width{}, height{};
     // EN-US: Pending/cancelled/closed sources may not expose even a queued frame.

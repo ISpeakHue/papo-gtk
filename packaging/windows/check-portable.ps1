@@ -64,7 +64,7 @@ try {
     $launcher = Join-Path $package 'Papo.com'
     $null = Invoke-Check 'version' '--version'
     $caps = Invoke-Check 'capabilities' '--platform-info' | ConvertFrom-Json
-    if ($caps.os -ne 'windows' -or $caps.credential_store -ne 'windows_credential_store' -or !$caps.desktop_notifications -or !$caps.isolated_media_helpers -or $caps.screen_capture) { throw 'Unexpected Windows capabilities; capture must remain opt-in preview' }
+    if ($caps.os -ne 'windows' -or $caps.credential_store -ne 'windows_credential_store' -or !$caps.desktop_notifications -or !$caps.isolated_media_helpers -or !$caps.screen_capture) { throw 'Unexpected Windows capabilities; screen capture must be enabled by default' }
     $report.capabilities = $caps
     $null = Invoke-Check 'runtime' '--check-packaged-runtime'
     $notifications = Invoke-Check 'notifications' '--check-notifications' | ConvertFrom-Json

@@ -24,6 +24,26 @@ constexpr size_t MAX_BYTES = 64 * 1024 * 1024;
 constexpr INT32 BGRA = 87;
 enum State { PICKING = 0, RUNNING = 1, CANCELLED = 2, ENDED = 3, FAILED = 4 };
 void check(HRESULT hr) { if (FAILED(hr)) throw hr; }
+void retain_capture_module() {
+    // EN-US: WinRT leaves a late callback in GraphicsCapture.dll after Close.
+    // On this host its unload preceded that callback at worker exit. Keep only
+    // the system code mapped for the worker lifetime; sessions still close.
+    // PT-BR: O WinRT mantém um callback tardio em GraphicsCapture.dll após Close.
+    // Neste host a DLL era descarregada antes do callback ao sair. Mantém só
+    // o código do sistema mapeado; as sessões continuam sendo encerradas.
+    static INIT_ONCE once = INIT_ONCE_STATIC_INIT;
+    BOOL ok = InitOnceExecuteOnce(&once, [](PINIT_ONCE, PVOID, PVOID*)->BOOL {
+        HMODULE module = LoadLibraryExW(L"GraphicsCapture.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+        if (!module) return FALSE;
+        HMODULE pinned = nullptr;
+        BOOL kept = GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
+            reinterpret_cast<LPCWSTR>(module), &pinned);
+        DWORD error = GetLastError(); FreeLibrary(module);
+        if (!kept) SetLastError(error);
+        return kept;
+    }, nullptr, nullptr);
+    if (!ok) throw HRESULT_FROM_WIN32(GetLastError());
+}
 GUID guid(const wchar_t* text) { GUID id{}; check(CLSIDFromString(text, &id)); return id; }
 template<class T> ComPtr<T> query(IUnknown* object, const wchar_t* id) {
     ComPtr<T> result; check(object->QueryInterface(guid(id), reinterpret_cast<void**>(result.GetAddressOf()))); return result;
@@ -74,6 +94,11 @@ struct Capture {
     HANDLE stop = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     HANDLE thread = nullptr;
     std::atomic<int> state{PICKING};
+    // EN-US: Diagnostics contain only API stages/HRESULTs, never selected content.
+    // PT-BR: Diagnósticos contêm só etapas/HRESULTs, nunca o conteúdo escolhido.
+    std::atomic<HRESULT> error{S_OK};
+    std::atomic<int> stage{0};
+    std::atomic<int> owner_flags{0};
     std::shared_ptr<std::atomic<bool>> closed = std::make_shared<std::atomic<bool>>(false);
     std::mutex mutex;
     std::vector<BYTE> latest;
@@ -107,33 +132,39 @@ bool valid_owner(HWND owner) {
     DWORD pid = 0;
     return IsWindow(owner) && GetWindowThreadProcessId(owner, &pid) == GetCurrentThreadId() && pid == GetCurrentProcessId();
 }
-ComPtr<CaptureItem> pick(Capture& capture, HWND owner) {
+ComPtr<CaptureItem> pick(Capture& capture, HWND owner, ULONGLONG deadline) {
     if (capture.stopped()) return {};
     HSTRING name{};
     check(WindowsCreateString(L"Windows.Graphics.Capture.GraphicsCapturePicker", 46, &name));
     ComPtr<IInspectable> object;
+    capture.stage = 41;
     HRESULT hr = RoActivateInstance(name, &object); WindowsDeleteString(name); check(hr);
+    capture.stage = 42;
     auto picker = query<CapturePicker>(object.Get(), L"{5A1711B3-AD79-4B4A-9336-1318FDDE3539}");
+    capture.stage = 43;
     auto init = query<IInitializeWithWindow>(object.Get(), L"{3E68D4BD-7135-4D10-8018-9FB6D9F33FA1}");
     if (!valid_owner(owner)) throw E_INVALIDARG;
-    check(init->Initialize(owner));
+    capture.stage = 44; check(init->Initialize(owner));
+    capture.stage = 45;
     ComPtr<CaptureOperation> operation; check(picker->PickSingleItemAsync(&operation));
     AsyncGuard pending{query<IAsyncInfo>(operation.Get(), L"{00000036-0000-0000-C000-000000000046}")};
     // EN-US: Leave time for first-frame setup and renegotiation before the shared UI deadline.
     // PT-BR: Reserva tempo para o primeiro quadro e renegociação antes do limite da interface.
-    auto deadline = GetTickCount64() + 90000;
     AsyncStatus status = Started;
     while (!capture.stopped() && GetTickCount64() < deadline) {
         pump(); check(pending.info->get_Status(&status));
         if (status != Started) break;
         MsgWaitForMultipleObjects(1, &capture.stop, FALSE, 20, QS_ALLINPUT);
     }
-    if (capture.stopped() || status == Started || status == Canceled) return {};
+    if (!capture.stopped() && status == Started) throw HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+    if (capture.stopped() || status == Canceled) return {};
+    capture.stage = 47;
     ComPtr<CaptureItem> item;
     hr = operation->GetResults(&item); check(hr);
     return item;
 }
 void capture_frames(Capture& capture, CaptureItem* item) {
+    capture.stage = 5;
     CaptureSize size{}; check(item->get_Size(&size));
     if (!valid_size(size)) throw E_INVALIDARG;
     ComPtr<ID3D11Device> device; ComPtr<ID3D11DeviceContext> context;
@@ -153,6 +184,7 @@ void capture_frames(Capture& capture, CaptureItem* item) {
     auto api = factory<CapturePoolFactory>(L"Windows.Graphics.Capture.Direct3D11CaptureFramePool",
         L"{589B103F-6BBC-5DF5-A991-02E28B3B66D5}");
     ComPtr<CapturePool> pool;
+    capture.stage = 6;
     check(api->CreateFreeThreaded(capture_device.Get(), BGRA, 2, size, &pool));
     ComPtr<CaptureSession> session;
     ComPtr<CaptureClosed> handler; handler.Attach(new ClosedHandler(capture.closed));
@@ -163,14 +195,17 @@ void capture_frames(Capture& capture, CaptureItem* item) {
         if (!capture.stopped() && !capture.closed->load()) {
             // EN-US: Only the item returned by the picker can start capture. Keep the system border.
             // PT-BR: Só o item retornado pelo seletor inicia captura. Mantém a borda do sistema.
-            check(session->StartCapture()); capture.state = RUNNING;
+            capture.stage = 7; check(session->StartCapture()); capture.state = RUNNING;
         }
         ComPtr<ID3D11Texture2D> staging;
         while (!capture.stopped() && !capture.closed->load()) {
+            capture.stage = 8;
             pump();
             if (WaitForSingleObject(capture.stop, 66) == WAIT_OBJECT_0) break;
+            capture.stage = 81;
             FrameGuard frame; check(pool->TryGetNextFrame(&frame.frame));
             if (!frame.frame) continue;
+            capture.stage = 82;
             CaptureSize actual{}; check(frame.frame->get_ContentSize(&actual));
             if (actual.width <= 0 || actual.height <= 0) continue;
             if (!valid_size(actual)) throw E_INVALIDARG;
@@ -179,24 +214,33 @@ void capture_frames(Capture& capture, CaptureItem* item) {
                 // PT-BR: Descarta o quadro de tamanho antigo antes de recriar; não copia margens não inicializadas.
                 close_object(frame.frame.Get()); frame.frame.Reset(); staging.Reset();
                 { std::lock_guard<std::mutex> lock(capture.mutex); capture.latest.clear(); }
+                capture.stage = 83;
                 size = actual; check(pool->Recreate(capture_device.Get(), BGRA, 2, size)); continue;
             }
+            capture.stage = 84;
             ComPtr<IInspectable> surface; check(frame.frame->get_Surface(&surface));
             auto access = query<CaptureDxgiAccess>(surface.Get(), L"{A9B3D012-3DF2-4EE3-B8D1-8695F457D3C1}");
             ComPtr<ID3D11Texture2D> texture;
             check(access->GetInterface(__uuidof(ID3D11Texture2D), reinterpret_cast<void**>(texture.GetAddressOf())));
             D3D11_TEXTURE2D_DESC desc{}; texture->GetDesc(&desc);
-            if (desc.Width < static_cast<UINT32>(size.width) || desc.Height < static_cast<UINT32>(size.height) ||
-                desc.Format != DXGI_FORMAT_B8G8R8A8_UNORM) throw E_INVALIDARG;
+            capture.stage = 85;
+            if (desc.Format != DXGI_FORMAT_B8G8R8A8_UNORM) throw E_INVALIDARG;
+            // EN-US: During resize WGC can report new content dimensions on an old-size
+            // texture. Wait for a matching texture rather than copying outside it.
+            // PT-BR: Ao redimensionar, o WGC pode informar dimensões novas em textura
+            // antiga. Aguarda uma textura compatível sem copiar além de seus limites.
+            if (desc.Width < static_cast<UINT32>(size.width) || desc.Height < static_cast<UINT32>(size.height)) continue;
             if (!staging) {
                 desc.Width = size.width; desc.Height = size.height; desc.MipLevels = 1; desc.ArraySize = 1;
                 desc.SampleDesc = {1, 0}; desc.Usage = D3D11_USAGE_STAGING;
                 desc.BindFlags = 0; desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ; desc.MiscFlags = 0;
                 check(device->CreateTexture2D(&desc, nullptr, &staging));
             }
+            capture.stage = 86;
             D3D11_BOX box{0, 0, 0, static_cast<UINT>(size.width), static_cast<UINT>(size.height), 1};
             context->CopySubresourceRegion(staging.Get(), 0, 0, 0, 0, texture.Get(), 0, &box);
             D3D11_MAPPED_SUBRESOURCE mapped{};
+            capture.stage = 87;
             check(context->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped));
             if (!mapped.pData || mapped.RowPitch < static_cast<UINT32>(size.width) * 4) {
                 context->Unmap(staging.Get(), 0); throw E_FAIL;
@@ -226,8 +270,12 @@ DWORD WINAPI run(void* value) {
     HRESULT apartment = RoInitialize(RO_INIT_SINGLETHREADED);
     HWND owner = nullptr;
     try {
+        capture.stage = 1;
         check(apartment);
+        capture.stage = 2;
         if (!supported()) throw E_NOINTERFACE;
+        retain_capture_module();
+        capture.stage = 3;
         WNDCLASSW cls{}; cls.lpfnWndProc = owner_proc; cls.hInstance = GetModuleHandleW(nullptr);
         cls.lpszClassName = L"PapoCapturePickerOwner"; cls.hCursor = LoadCursorW(nullptr, IDC_ARROW);
         if (!RegisterClassW(&cls) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) throw E_FAIL;
@@ -239,12 +287,29 @@ DWORD WINAPI run(void* value) {
         // EN-US: The temporary picker host must not itself become a capture target.
         // PT-BR: A janela temporária do seletor não pode virar uma fonte de captura.
         if (!SetWindowDisplayAffinity(owner, 0x11 /* WDA_EXCLUDEFROMCAPTURE */)) throw E_FAIL;
-        ShowWindow(owner, SW_SHOWNORMAL); SetForegroundWindow(owner);
-        auto item = pick(capture, owner);
+        ShowWindow(owner, SW_SHOWNORMAL);
+        if (!SetWindowPos(owner, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW))
+            throw HRESULT_FROM_WIN32(GetLastError());
+        if (!IsWindowVisible(owner)) throw E_UNEXPECTED;
+        SetForegroundWindow(owner);
+        capture.owner_flags = (IsWindowVisible(owner) ? 1 : 0) | (GetForegroundWindow() == owner ? 2 : 0);
+        capture.stage = 4;
+        // EN-US: Windows can silently cancel a picker owned by a background HWND.
+        // The app grants foreground rights; an operator can also activate this owner.
+        // PT-BR: O Windows pode cancelar um seletor cujo HWND fica em segundo plano.
+        // O app concede ativação; o operador também pode ativar esta janela.
+        auto deadline = GetTickCount64() + 90000;
+        while (!capture.stopped() && GetForegroundWindow() != owner && GetTickCount64() < deadline) {
+            pump(); MsgWaitForMultipleObjects(1, &capture.stop, FALSE, 20, QS_ALLINPUT);
+        }
+        if (!capture.stopped() && GetForegroundWindow() != owner) throw HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+        capture.owner_flags = (IsWindowVisible(owner) ? 1 : 0) | (GetForegroundWindow() == owner ? 2 : 0);
+        auto item = pick(capture, owner, deadline);
         ShowWindow(owner, SW_HIDE);
         if (!item || capture.stopped()) capture.state = CANCELLED;
         else { capture_frames(capture, item.Get()); capture.state = ENDED; }
-    } catch (...) { capture.state = FAILED; }
+    } catch (HRESULT hr) { capture.error = hr; capture.state = FAILED; }
+    catch (...) { capture.error = E_FAIL; capture.state = FAILED; }
     if (owner) DestroyWindow(owner);
     { std::lock_guard<std::mutex> lock(capture.mutex); capture.latest.clear(); }
     if (SUCCEEDED(apartment)) RoUninitialize();
@@ -278,6 +343,15 @@ extern "C" __declspec(dllexport) int papo_capture_state(void* value) {
     int state = capture.state.load();
     if (state == RUNNING && (capture.stopped() || capture.closed->load())) return ENDED;
     return state;
+}
+extern "C" __declspec(dllexport) HRESULT papo_capture_error(void* value) {
+    return value ? static_cast<Capture*>(value)->error.load() : E_INVALIDARG;
+}
+extern "C" __declspec(dllexport) int papo_capture_stage(void* value) {
+    return value ? static_cast<Capture*>(value)->stage.load() : 0;
+}
+extern "C" __declspec(dllexport) int papo_capture_owner_flags(void* value) {
+    return value ? static_cast<Capture*>(value)->owner_flags.load() : 0;
 }
 extern "C" __declspec(dllexport) int papo_capture_read(void* value, BYTE* bytes, UINT32 capacity, UINT32* width, UINT32* height) {
     if (!value || !width || !height) return -1;

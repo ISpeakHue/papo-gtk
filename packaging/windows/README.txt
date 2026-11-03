@@ -37,14 +37,15 @@ THIRD-PARTY-NOTICES.txt points to upstream notices and included license texts.
 Byte-identical rebuilds have not been demonstrated.
 
 Native desktop alerts use the optional per-user desktop registration described below.
-Local screen sharing has an opt-in Windows Graphics Capture preview; native
-desktop acceptance is pending. In PowerShell, before opening Papo:
-    $env:PAPO_WINDOWS_CAPTURE_PREVIEW = '1'
-Sharing requires an explicit selection in the Windows picker on every start.
+Local screen/window sharing is enabled by default through Windows Graphics Capture.
+Click the share button and explicitly select a source in the Windows picker on
+every start. No environment variable is needed. Unsupported devices report a
+recoverable capture error; the call can continue.
 Avisos nativos usam o registro opcional do desktop por usuario descrito abaixo.
-Compartilhamento local de tela tem previa opcional; a aceitacao nativa esta
-pendente. Use a variavel acima no PowerShell antes de abrir o Papo. Cada inicio
-exige selecionar explicitamente uma janela ou tela no seletor do Windows.
+Compartilhamento local de tela/janela esta habilitado por padrao pelo Windows
+Graphics Capture. Clique em compartilhar e escolha uma fonte no seletor do
+Windows a cada inicio. Nao exige variavel de ambiente. Em dispositivos sem suporte,
+a captura informa um erro recuperavel e a chamada pode continuar.
 Video poster/GIF conversion uses AppContainer and bounded Job Objects. Failed
 isolation never falls back to an unrestricted converter. Complete media/UI and
 real-device qualification remain later port steps.

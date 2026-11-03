@@ -1,10 +1,13 @@
 # Windows screen sharing — step 10
 
-Implementation dated 2026-10-28. **Native Windows desktop acceptance has not run.**
-The user has no Windows machine available until release testing. This implements
-the port and its tests without treating Linux/synthetic evidence as Windows
-capture evidence. The step 10 checkbox and `screen_capture` capability remain
-open/false until the attended completion checks below pass.
+Implementation dated 2026-10-28; attended Windows checks continued on 2026-11-03.
+Native picker cancellation, real selected-window/monitor capture, resizing,
+source closure, local direct/TURN peers and clean process exit passed. The user
+subsequently reported that their local testing all worked. Windows screen sharing
+is now enabled by default, with `screen_capture` true. Broader Windows release
+qualification remains separate; no additional OS/hardware results are inferred
+from that report. See the
+[attended test record](windows-capture-2026-11-03.md).
 
 ## Source and ownership contract
 
@@ -18,7 +21,10 @@ avoiding a plugin's default primary-monitor selection or unavailable WGC build.
 On an explicit share action, the voice worker creates an STA thread and a small
 native picker-owner window. `IInitializeWithWindow` receives that thread's own
 HWND; the bridge checks both its process and thread identity. The temporary owner
-is excluded from capture. The system picker chooses the screen/window; its
+is excluded from capture. The foreground GTK process grants activation rights
+only to its owned voice worker. The bridge explicitly shows the owner and waits
+for foreground activation before opening the picker; the user can activate that
+window if Windows refuses programmatic activation. The system picker chooses the screen/window; its
 `GraphicsCaptureItem` remains in the same native thread/process for the entire
 session. GTK HWNDs and COM pointers are never transported as JSON. Cancelling,
 closing the owner, unsupported APIs or any setup failure starts no substitute
@@ -39,6 +45,8 @@ desktop capture, or persist capture consent.
 - Frames must have positive dimensions, at most 8192 pixels per side and at most
   64 MiB of packed BGRA data. Oversized sources fail recoverably. Actual content
   size changes discard old pending data and recreate the pool/staging texture.
+  During resize, a new content size can arrive with an old, smaller texture;
+  that transient frame is discarded until the texture can contain the content.
   Gst caps change with the new pixel dimensions; no global DPI workaround is used.
 - Python retains at most one previous frame to keep static windows producing
   VP8 keyframes for newly subscribed peers. It stops repeating on detecting source
@@ -60,6 +68,13 @@ desktop capture, or persist capture consent.
   the Python worker exits rather than detaching capture. The existing Rust voice
   worker ownership reaps the process and its Windows Job Object; leave, disconnect
   and application exit retain the graceful-stop/forced-kill bound from step 8.
+- Windows `GraphicsCapture.dll` is loaded from System32 and pinned once per worker.
+  On the test host, unloading it after normal capture cleanup caused a late callback
+  to execute unmapped code at process exit. Keeping the OS module mapped prevents
+  that observed failure; sessions, frame pools and capture indicators still close.
+  This uses the documented [GetModuleHandleEx PIN lifetime](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandleexw).
+  The additional ABI diagnostics expose only HRESULT, API stage and owner visibility/
+  foreground flags, allowing cancellation to be distinguished from setup failure.
 
 This is SDR BGRA capture with CPU readback and the shared software VP8 encoder.
 HDR tone mapping, GPU encoding and audio capture from the shared application are
@@ -67,7 +82,7 @@ not implemented here. Peak frame storage is bounded, but several native/Python/
 GStreamer copies can coexist; the 64 MiB frame bound is not a total-process RAM
 limit. Qualify performance with 4K and multiple GPU/monitor configurations.
 
-## Packaging and preview
+## Packaging and availability
 
 `packaging/windows/capture.py` builds `runtime/bin/papo-capture.dll`, statically
 linking its GNU support runtime. The normal package import closure, native input
@@ -77,18 +92,13 @@ DLLs. The packaged runtime check validates ABI 1 and bounded `appsrc` support
 without opening a picker or capturing anything. A device reporting WGC unsupported
 does not fail the general runtime check; attempting capture fails closed.
 
-For later attended testing, in PowerShell with the newly built package:
-
-```powershell
-$env:PAPO_WINDOWS_CAPTURE_PREVIEW = '1'
-& 'C:\Papo preview\Papo.exe'
-```
-
-The share button is available only with that explicit opt-in and the bundled DLL.
-The worker checks WGC support again before selection. `--platform-info` continues
-to report the conservative, release-qualified capability as false. Remove the
-environment variable to leave the preview. macOS retains its unavailable capture
-adapter; Linux retains its consent-based portal/PipeWire adapter.
+Open the newly built package normally. The share button is available when the
+bundled bridge DLL is present; no environment opt-in is required. Starting a share
+checks WGC support and opens the system picker for a fresh explicit selection.
+Missing bridge/support and capture setup errors remain recoverable.
+`--platform-info` reports `screen_capture: true`, describing feature availability
+rather than certifying a particular device or Windows release. macOS retains its
+unavailable capture adapter; Linux retains its consent-based portal/PipeWire adapter.
 
 ## Automated checks
 
@@ -135,8 +145,9 @@ Local results on 2026-10-28:
 frame bounds and actual BGRA/appsrc/VP8 resize/restart checks pass. The packaged
 runtime loads the bridge without opening capture. The user requested automatic
 checks only, so picker cancellation/selection, real source/peer and physical
-cleanup acceptance below remain pending. `screen_capture` remains false. See the
-[current local record](windows-local-2026-10-29.md).
+cleanup acceptance below remained pending. `screen_capture` was false at that
+time. See the [historical local record](windows-local-2026-10-29.md). The user
+acceptance and default enablement above supersede that opt-in policy.
 
 Use disposable content with a standard-user Windows 11 account and the standalone
 runtime. Preserve the source revision, native inputs/package hash, OS build, GPU/
@@ -148,7 +159,6 @@ From the checkout, point the probes at the extracted runtime and its interpreter
 
 ```powershell
 $env:PAPO_RUNTIME_DIR = 'C:\Papo preview\runtime'
-$env:PAPO_WINDOWS_CAPTURE_PREVIEW = '1'
 $env:PATH = (Join-Path $env:PAPO_RUNTIME_DIR 'bin') + ';' + $env:PATH
 $env:PYTHONHOME = $env:PAPO_RUNTIME_DIR
 $env:PYTHONNOUSERSITE = '1'
@@ -161,6 +171,16 @@ $python = Join-Path $env:PAPO_RUNTIME_DIR 'bin\python.exe'
 & $python tests/video_probe.py --windows-capture --sfu target/voice-sfu.exe
 & $python tests/video_probe.py --windows-capture --relay --sfu target/voice-sfu.exe
 ```
+
+For a reproducible disposable source, run `tests/windows_screen_test_window.py
+--control target/windows-capture/control.json` in a second terminal with the same
+runtime environment. Add `--test-pattern --resize-control
+target/windows-capture/control.json` to the frame probe. For the SFU probe, set
+`PAPO_CAPTURE_TEST_CONTROL` to that control path and add `--preview`; two local
+receiver panels show the decoded frames. After visually confirming both panels,
+write `{}` to `target/windows-capture/visual-confirmed.json`. The probe then
+resizes the source and closes it during the second selected-window session.
+This fixture displays generated content only and saves no captured images.
 
 The source revision must match the tested package. The first two probes count
 and discard frames without recording/transmission. The SFU probe first requires
@@ -188,5 +208,6 @@ application; a valid decoded frame alone cannot establish correct picker choice.
    increasing working set remains. Check the two-second native-close/three-second
    worker fallback using a controlled failure harness, without a real stuck driver.
 7. Record direct and forced-TURN peer results from the extracted/relocated package.
-   Only after these checks pass, enable the Windows `screen_capture` capability,
-   remove the preview-only policy and mark step 10 complete.
+   Local results and user acceptance enabled the feature by default on 2026-11-03.
+   Repeat the required checks on supported OS rows for release qualification;
+   default availability alone does not qualify a Windows release.

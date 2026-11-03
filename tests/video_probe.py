@@ -21,8 +21,8 @@ async def send(p, e):
 
 async def main():
     native_screen = '--windows-capture' in sys.argv
-    if native_screen and (sys.platform != 'win32' or os.environ.get('PAPO_WINDOWS_CAPTURE_PREVIEW') != '1'):
-        raise RuntimeError('--windows-capture requires Windows and PAPO_WINDOWS_CAPTURE_PREVIEW=1; opens a real picker')
+    if native_screen and sys.platform != 'win32':
+        raise RuntimeError('--windows-capture requires Windows; opens a real picker')
     processes, tasks = [], []
     states, negotiated, frames, connected, offers = {}, {}, {}, set(), {}
     resets = {}
@@ -36,6 +36,31 @@ async def main():
     relay_candidates = set()
     acknowledgements = True
     config = []
+    control = Path(os.environ['PAPO_CAPTURE_TEST_CONTROL']) if native_screen and os.environ.get('PAPO_CAPTURE_TEST_CONTROL') else None
+    preview = None
+    pictures = {}
+    preview_task = None
+    if '--preview' in sys.argv:
+        gi.require_version('Gtk','4.0')
+        gi.require_version('Gdk','4.0')
+        from gi.repository import Gtk,Gdk,GLib
+        Gtk.init()
+        preview=Gtk.Window(title='Papo — Local Screen Sharing Receivers',default_width=1100,default_height=410)
+        box=Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL,spacing=12)
+        for peer in ('b','c'):
+            column=Gtk.Box(orientation=Gtk.Orientation.VERTICAL,spacing=6)
+            column.append(Gtk.Label(label='Local receiving peer '+peer))
+            picture=Gtk.Picture(hexpand=True,vexpand=True,can_shrink=True)
+            pictures[peer]=picture;column.append(picture);box.append(column)
+        preview.set_child(box);preview.present()
+        async def pump_preview():
+            context=GLib.MainContext.default()
+            while True:
+                for _ in range(100):
+                    if not context.pending():break
+                    context.iteration(False)
+                await asyncio.sleep(.01)
+        preview_task=asyncio.create_task(pump_preview())
     async def spawn(*args):
         p = await asyncio.create_subprocess_exec(*args, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=None if "--diagnostics" in sys.argv else asyncio.subprocess.DEVNULL, limit=256*1024, **spawn_options())
         processes.append(p)
@@ -93,12 +118,22 @@ async def main():
                         loader.write(jpeg)
                         loader.close()
                         pixels = loader.get_pixbuf()
+                        if peer in pictures:
+                            pictures[peer].set_paintable(Gdk.Texture.new_for_pixbuf(pixels))
                         assert (pixels.get_width(), pixels.get_height()) == (640,360)
                         offset = 180*pixels.get_rowstride() + 320*pixels.get_n_channels()
                         rgb = pixels.get_pixels()[offset:offset+3]
                         expected = patterns[watches[peer]] - 4
                         if not (native_screen and watches[peer] == ('a', 'screen')):
                             assert rgb[expected] > 200 and all(v < 50 for i,v in enumerate(rgb) if i != expected), "wrong publisher/kind after subscription switch: " + repr((peer,watches[peer],tuple(rgb)))
+                        elif control:
+                            # EN-US: Verify the disposable source without storing any received image.
+                            # PT-BR: Verifica a fonte descartável sem salvar imagens recebidas.
+                            data=pixels.get_pixels();stride=pixels.get_rowstride();channels=pixels.get_n_channels()
+                            wanted=((217,26,26),(26,204,51),(26,77,230),(242,204,26))
+                            for (x,y),color in zip(((.25,.35),(.75,.35),(.25,.75),(.75,.75)),wanted):
+                                at=int(360*y)*stride+int(640*x)*channels
+                                assert all(abs(v-w)<60 for v,w in zip(data[at:at+3],color)), 'Wrong disposable source at receiving peer '+peer
                         frames[peer] = frames.get(peer, 0) + 1
                     if acknowledgements:
                         await send(process, {"type": "frame_ack"})
@@ -172,7 +207,13 @@ async def main():
             await watch("c", "a", "screen")
             if native_screen:
                 if cycle == 0:
-                    print('Resize/move the selected window between DPI scales now; continuing capture for 15 seconds.', flush=True)
+                    if control:
+                        print('ATTENDED: both local receivers show the selected window. Confirm the colored source before continuing.',flush=True)
+                        visual=control.parent/'visual-confirmed.json'
+                        await until(visual.exists,'visual confirmation',120)
+                        visual.unlink()
+                        control.write_text(json.dumps({'width':1080,'height':600}),encoding='utf-8')
+                    print('Continuing capture for 15 seconds through resize; physical mixed-DPI movement requires a separate check.', flush=True)
                     before_frames = frames.get('b', 0)
                     await asyncio.sleep(15)
                     assert frames.get('b', 0) > before_frames + 10, 'Selected stream must continue through resize/DPI changes'
@@ -181,6 +222,7 @@ async def main():
                     failures = len(media_errors)
                     before_closed = negotiated['a']
                     print('CLOSE the selected test window now. Audio must stay connected.', flush=True)
+                    if control:control.write_text(json.dumps({'close':True}),encoding='utf-8')
                     await until(lambda: len(media_errors) > failures and negotiated['a'] > before_closed and not states.get('a', {}).get('screen_sharing'), 'selected window closure', 140)
                     expected_error = False
             await media("a", "video", False)
@@ -224,5 +266,14 @@ async def main():
         for t in tasks:
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+        if preview_task:
+            preview_task.cancel()
+            await asyncio.gather(preview_task,return_exceptions=True)
+        if preview:preview.close()
+    # EN-US: Successful frame delivery must not hide a native shutdown crash.
+    # PT-BR: A entrega de quadros não pode ocultar uma falha nativa ao encerrar.
+    exits = [p.returncode for p in processes]
+    assert all(code == 0 for code in exits), 'Local SFU/worker cleanup failed: ' + repr(exits)
+    print('Local SFU and all workers exited cleanly:', exits, flush=True)
 
 asyncio.run(main())

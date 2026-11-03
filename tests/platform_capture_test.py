@@ -52,6 +52,27 @@ class WindowsCaptureTests(unittest.TestCase):
         self.assertFalse(self.capture.poll())
         self.ended.assert_called_once_with()
 
+    def test_native_failure_is_not_reported_as_picker_cancellation(self):
+        self.capture.start()
+        self.bridge.state.return_value = 4
+        self.bridge.diagnostics.return_value = {'error':'0x80004005','stage':45}
+        self.assertFalse(self.capture.poll())
+        self.assertEqual(self.capture.terminal_state,4)
+        self.assertEqual(self.capture.failure,{'error':'0x80004005','stage':45})
+        self.ready.assert_not_called()
+        self.source.emit.assert_not_called()
+        self.ended.assert_called_once()
+        self.bridge.close.assert_called_once_with(123)
+
+    def test_cancellation_keeps_its_terminal_state_after_cleanup(self):
+        self.capture.start()
+        self.bridge.state.return_value = 2
+        self.bridge.diagnostics.return_value = {'error':'0x00000000','stage':47}
+        self.assertFalse(self.capture.poll())
+        self.assertEqual(self.capture.terminal_state,2)
+        self.assertIsNone(self.capture.failure)
+        self.assertTrue(self.capture.closed)
+
     def test_explicit_selection_is_required_before_first_frame_and_bounded_push(self):
         self.capture.start()
         self.bridge.read.assert_not_called()
@@ -155,11 +176,21 @@ class WindowsCaptureTests(unittest.TestCase):
         self.ready.assert_not_called()
         self.bridge.close.assert_called_once()
 
-    def test_preview_requires_explicit_opt_in_and_mac_stays_unavailable(self):
-        for platform, enabled in [('win32', '0'), ('darwin', '1')]:
-            with patch.object(windows.sys, 'platform', platform), patch.dict(windows.os.environ, {'PAPO_WINDOWS_CAPTURE_PREVIEW': enabled}):
+    def test_windows_factory_is_available_without_environment_opt_in(self):
+        with patch.object(windows.sys, 'platform', 'win32'), patch.dict(windows.os.environ, {}, clear=True), \
+                patch.object(windows, 'WindowsCapture', return_value=self.capture) as factory:
+            self.assertIs(windows.create_screen_capture(self.ready, self.ended), self.capture)
+        factory.assert_called_once_with(self.ready, self.ended)
+        self.bridge.start.assert_not_called()
+        self.ready.assert_not_called()
+
+    def test_other_platforms_cannot_construct_windows_capture(self):
+        for platform in ('darwin', 'linux'):
+            with self.subTest(platform=platform), patch.object(windows.sys, 'platform', platform), \
+                    patch.object(windows, 'WindowsCapture') as factory:
                 with self.assertRaises(NotImplementedError):
                     windows.create_screen_capture(self.ready, self.ended)
+                factory.assert_not_called()
 
     def test_native_close_timeout_terminates_worker_instead_of_detaching_capture(self):
         bridge = windows.WindowsCaptureBridge.__new__(windows.WindowsCaptureBridge)

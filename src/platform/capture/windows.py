@@ -67,6 +67,19 @@ class WindowsCaptureBridge:
             os._exit(1)
         self.buffer = None
 
+    def diagnostics(self, handle):
+        # EN-US: Additive ABI exports; older preview DLLs retain state-only diagnostics.
+        # PT-BR: Exports adicionais da ABI; DLLs antigas mantêm só o estado diagnóstico.
+        result = {}
+        for name in ('error', 'stage', 'owner_flags'):
+            function = getattr(self.dll, 'papo_capture_' + name, None)
+            if function is not None:
+                function.argtypes = (ctypes.c_void_p,)
+                function.restype = ctypes.c_int32
+                value = function(handle)
+                result[name] = f'0x{value & 0xffffffff:08X}' if name == 'error' else value
+        return result
+
 
 def valid_frame_size(width, height):
     return 0 < width <= 8192 and 0 < height <= 8192 and width * height * 4 <= 64 * 1024 * 1024
@@ -88,6 +101,9 @@ class WindowsCapture:
         self.delivered = False
         self.started_at = None
         self.last_frame = None
+        self.terminal_state = None
+        self.terminal_diagnostics = None
+        self.failure = None
 
     def start(self):
         if self.closed or self.handle is not None:
@@ -109,6 +125,10 @@ class WindowsCapture:
         try:
             state = self.bridge.state(self.handle)
             if state not in (0, 1):
+                self.terminal_state = state
+                self.terminal_diagnostics = self.bridge.diagnostics(self.handle)
+                if state == 4:
+                    self.failure = self.terminal_diagnostics
                 return self.finish()
             if state == 0:
                 return True
@@ -145,7 +165,8 @@ class WindowsCapture:
             if self.source.emit("push-buffer", buffer) != self.gst.FlowReturn.OK:
                 return self.finish()
             return True
-        except Exception:
+        except Exception as error:
+            self.failure = {'exception': type(error).__name__, 'message': str(error)}
             return self.finish()
 
     def finish(self):
@@ -169,8 +190,8 @@ class WindowsCapture:
 
 
 def create_screen_capture(ready, ended):
-    # EN-US: Native desktop acceptance is deferred; preview requires explicit launch-time opt-in.
-    # PT-BR: A aceitação no desktop nativo está pendente; a prévia exige opção explícita ao iniciar.
-    if sys.platform != "win32" or os.environ.get("PAPO_WINDOWS_CAPTURE_PREVIEW") != "1":
-        raise NotImplementedError("Windows capture preview is not enabled")
+    # EN-US: Construction checks the bundled bridge and WGC support; start still requires a picker.
+    # PT-BR: A construção verifica a ponte incluída e WGC; iniciar ainda exige o seletor.
+    if sys.platform != "win32":
+        raise NotImplementedError("Windows capture requires Windows")
     return WindowsCapture(ready, ended)

@@ -86,7 +86,14 @@ impl Engine {
                         Ok(Some(line))=>match serde_json::from_slice::<EngineEvent>(&line){Ok(event)=>{started|=matches!(event,EngineEvent::Started{..});report(event);},Err(_)=>{report(EngineEvent::Error{message:"Resposta inválida do processo de áudio.".into()});break;}},
                         _=>{report(EngineEvent::Error{message:"O processo de áudio foi encerrado.".into()});break;}
                     },
-                    command=rx.recv()=>match command{Some(c)=>if write(&mut input,&c).await.is_err(){report(EngineEvent::Error{message:"O processo de áudio não responde.".into()});break;},None=>break},
+                    command=rx.recv()=>match command{Some(c)=>{
+                        // EN-US: Share is a foreground app action; grant only its owned worker permission to show the system picker.
+                        // PT-BR: Compartilhar é uma ação do app ativo; só seu worker recebe permissão para exibir o seletor.
+                        #[cfg(windows)] if c["type"]=="media"&&c["kind"]=="screen"&&c["on"]==true {
+                            if let Some(pid)=child.id(){unsafe{windows_sys::Win32::UI::WindowsAndMessaging::AllowSetForegroundWindow(pid);}}
+                        }
+                        if write(&mut input,&c).await.is_err(){report(EngineEvent::Error{message:"O processo de áudio não responde.".into()});break;}
+                    },None=>break},
                 }}
             }else if cancelled.try_recv()==Err(oneshot::error::TryRecvError::Empty){
                 report(EngineEvent::Error{message:"Não foi possível configurar o processo de áudio.".into()});

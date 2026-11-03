@@ -45,9 +45,9 @@ class SourceProvenance(unittest.TestCase):
                 require_gstreamer(inventory)
         require_gstreamer('mingw-w64-ucrt-x86_64-gstreamer 1.28.8-1.1\n')
 
-    def test_packaged_check_cannot_inherit_developer_media_or_preview_overrides(self):
+    def test_packaged_check_cannot_inherit_developer_media_or_worker_overrides(self):
         environment = {'GST_PLUGIN_LOADING_WHITELIST': 'opus,vpx', 'GST_REGISTRY_1_0': 'sdk.bin',
-                       'PAPO_WINDOWS_CAPTURE_PREVIEW': '1', 'PAPO_PYTHON': 'sdk/python.exe',
+                       'PAPO_RUNTIME_DIR': 'sdk/runtime', 'PAPO_PYTHON': 'sdk/python.exe',
                        'PythonPath': 'sdk/modules', 'GI_TYPELIB_PATH': 'sdk/typelibs',
                        'GIO_EXTRA_MODULES': 'sdk/modules', 'GSETTINGS_SCHEMA_DIR': 'sdk/schemas',
                        'FONTCONFIG_FILE': 'sdk/fonts.conf', 'XDG_DATA_DIRS': 'sdk/share',

@@ -42,9 +42,10 @@ This is an unsigned experimental prerelease. Windows may show an unknown-publish
 or reputation prompt. No signing certificate is available. Windows 11 Home/Pro,
 physical audio/video devices, real keyboard/IME composition, mixed-DPI displays,
 accessibility and real-backend beta acceptance remain pending. Native WGC screen
-capture remains opt-in. Windows Server CI does not establish Windows 11 support.
+capture is enabled by default following local checks and user acceptance; each
+share still requires system-picker selection. Windows Server CI does not establish Windows 11 support.
 
 The [support policy](../../WINDOWS_SUPPORT.md), [acceptance matrix](windows.md)
 and [beta checklist](windows-beta.md) retain those boundaries. The remaining
-plan checkboxes are unchanged. macOS has no downloadable bundle; Linux 1.0.2
+release qualification checks remain open. macOS has no downloadable bundle; Linux 1.0.2
 remains the latest stable release.

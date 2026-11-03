@@ -13,6 +13,16 @@ the action fixture; its current logs are in `target/windows-dev/scroll/regressio
 
 ## Investigations that need current evidence
 
+- **Windows screen-sharing release acceptance:** the [attended local record](testing/windows-capture-2026-11-03.md)
+  now covers real picker cancellation, window/monitor capture, resizing, source
+  closure, two receiving peers over direct and local TURN, and clean worker exit.
+  Background picker activation, transient resize textures and an unloaded Windows
+  GraphicsCapture.dll exit crash were corrected. Following user-reported successful
+  local acceptance, screen sharing is enabled by default. Detailed mixed-DPI/
+  multiple-monitor, lifecycle stress, full application/deployed-backend and
+  supported-OS evidence remains part of release qualification. This does not resolve the separate
+  timeline-history native crash below.
+
 - **Deep Windows extraction roots:** after the core Unicode-path correction,
   a deeply nested accented ZIP root still terminates several GPU plugin scanners
   and loses `mfvideosrc`. The same bytes pass full runtime/relocation checks and

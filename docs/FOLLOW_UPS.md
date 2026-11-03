@@ -217,6 +217,17 @@ inventory and persistent churn remain failures; runtime-origin allowlists are
 unchanged. Regression fixtures cover these cases. A new native build and package
 validation are required before publishing the installer.
 
+That validation completed at `cf42364`: [full workflow 41711207542](https://github.com/ISpeakHue/papo-gtk/actions/runs/41711207542)
+passed every required job and the candidate gate, including the complete
+installer lifecycle. Both Linux workflows passed 308 Rust tests and all 40 GUI
+cases. [Papo 1.1.0](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.1.0)
+was published with stable Linux AppImage/Flatpak packages and unsigned
+experimental Windows installer/ZIP downloads. Uploaded SHA-256 digests matched
+all 16 verified assets. The release tag retains the tested revision; subsequent
+documentation updates do not rebuild or replace its binaries. Windows supported
+release qualification and the known external GStreamer issue remain separate
+follow-ups.
+
 ## Deferred product and backend decisions
 
 - **Disk thumbnails/avatars:** retain the current in-memory caches until measured

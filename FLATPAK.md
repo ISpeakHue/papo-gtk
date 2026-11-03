@@ -6,13 +6,13 @@ Application control icons are embedded in the executable with Papo-specific
 names; they remain available when the desktop selects a theme absent from the
 Flatpak runtime. GTK applies the active foreground colors to the symbolic SVGs.
 
-## Install version 1.0.2
+## Install version 1.1.0
 
-Download `Papo-1.0.2-x86_64.flatpak` from
-[GitHub Releases](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.0.2), then:
+Download `Papo-1.1.0-x86_64.flatpak` from
+[GitHub Releases](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.1.0), then:
 
 ```sh
-flatpak install --user ./Papo-1.0.2-x86_64.flatpak
+flatpak install --user ./Papo-1.1.0-x86_64.flatpak
 flatpak run br.com.papo.gtk
 ```
 

@@ -19,6 +19,28 @@ Both packages contain the application-owned runtime. A separate Rust, MSYS2,
 Python or GStreamer installation is unnecessary. Dependency notices and licenses
 are included. Uninstall preserves settings, caches and saved sessions.
 
+## Current 1.1.0 verification
+
+The current downloads come from clean revision
+`cf42364708465a16bcf16463a0e3f5d3f3e9795f`, tagged `v1.1.0`.
+[Workflow 41711207542](https://github.com/ISpeakHue/papo-gtk/actions/runs/41711207542)
+passed the complete automated candidate gate: Windows source tests, fresh-runner
+portable/media/desktop checks, the seven installer lifecycle cases, Linux
+regressions and macOS compile/link. The independent Linux workflow also passed
+308 Rust tests and all 40 GUI cases. The actual Linux packages passed their
+runtime checks, including isolated Flatpak media conversions.
+
+Release verification checked all 7,863 Windows ZIP payload files, the 7,852-file
+runtime manifest, installer identity and matching modified GTK/GStreamer source.
+GitHub's uploaded sizes and SHA-256 digests matched all 16 release assets before
+publication. The release notes link the checksums and per-platform verification
+report. The runtime diagnostic now retains DLL references while reading module
+paths, avoiding the stale-handle failure found during release preparation.
+
+The automated gate still reports `release_qualified: false`: these Windows
+downloads are unsigned and experimental, with native desktop/signing acceptance
+pending. Linux is the stable platform for this release.
+
 ## Historical preview 1 verification
 
 The release-profile build comes from clean commit

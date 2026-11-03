@@ -16,7 +16,7 @@ on:
         type: string
         default: ''
       runtime_artifact_run:
-        description: Only recheck the portable ZIP from this run ID (does not qualify a release)
+        description: Recheck portable and installer packages from this run ID (does not qualify a release)
         type: string
         default: ''
       bridge_probe:

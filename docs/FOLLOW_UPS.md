@@ -144,7 +144,7 @@ the action fixture; its current logs are in `target/windows-dev/scroll/regressio
 
 ## Multiplatform source-merge review (2026-11-03)
 
-The local review starts from `b795c69`. Prepared changes isolate the simulated
+The local review starts from `b795c69`. Merge-preparation changes isolate the simulated
 Windows toolchain from host symlinks, add that fixture to Linux CI, and enable the
 Windows/macOS workflow for pushes and pull requests targeting `main` as well as
 `multiplatform`. Both workflows pass actionlint. The Windows-related Python suite
@@ -174,10 +174,33 @@ were checked. The report contains only a Python/GI/media failure plus the icon
 probe's success JSON; redirected stdout/stderr are empty. The underlying probe
 error is not captured, so its cause is not established and installer validation
 is not claimed. Preserve `target/merge-review-windows-installer/` and obtain the
-full probe exit/output before assigning a frontend or dependency cause. This
-separate Windows verification issue still needs diagnosis.
+full probe exit/output before assigning a frontend or dependency cause.
 
-The prepared changes still require committing and PR review before merging.
+The installer harness now starts probes with separate output files, a bounded
+wait and explicit exit-code handling. This avoids PowerShell 5.1 terminating on
+native stderr before retaining the complete diagnostic. A synthetic process
+check verifies that successful stderr is retained and a failed process reports
+both streams and its exit status. Diagnostic probes also enable Python fault
+traces and unbuffered output.
+
+[Package replay 41700709345](https://github.com/ISpeakHue/papo-gtk/actions/runs/41700709345)
+at merge-preparation revision `9e4132a` passes all four fresh-runner jobs: portable,
+media, desktop and installer. It checks the **same** `b795c69` packages as the
+earlier failed installer job. The installer report confirms installation,
+upgrade, stale-uninstaller safety, locked-uninstall rejection, interrupted
+recovery, uninstall and data preservation; machine PATH is unchanged. Its final
+installed-runtime probe exits successfully with empty stderr. The original
+failure was not reproduced, so this does not establish its native cause or claim
+a runtime bug fix. Full output will be available if it recurs.
+
+The source-merge checks are complete, with the owner's external-GStreamer
+exclusion recorded above. Application source is unchanged from `b795c69`; the
+merge adds CI coverage, the isolated test fixture, installer diagnostics and this
+review record. [Full CI for the preparation revision](https://github.com/ISpeakHue/papo-gtk/actions/runs/41700691629)
+is also running. A package replay deliberately skips the release candidate gate
+and is not a new clean-source release qualification. Preserve the previous failed
+run as well as the successful replay. Existing release tags and downloads remain
+unchanged by source integration.
 
 ## Deferred product and backend decisions
 

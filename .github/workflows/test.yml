@@ -55,6 +55,7 @@ jobs:
       - name: Check Windows provenance and retained input policy
         run: |
           python3 -m unittest discover -s tests -p 'windows_packaging_test.py'
+          python3 -m unittest discover -s tests -p 'windows_dev_test.py' -v
           python3 -m unittest discover -s tests -p 'windows_release_gate_test.py' -v
           python3 -m unittest discover -s tests -p 'windows_release_test.py' -v
       - name: Check AppImage media plugin and host driver boundaries

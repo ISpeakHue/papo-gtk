@@ -2,9 +2,9 @@ name: Windows release checks
 
 on:
   push:
-    branches: [multiplatform]
+    branches: [main, multiplatform]
   pull_request:
-    branches: [multiplatform]
+    branches: [main, multiplatform]
   workflow_dispatch:
     inputs:
       packaging_only:
@@ -452,7 +452,10 @@ jobs:
 
   installer-runtime:
     needs: windows
-    if: ${{ always() && !cancelled() && !inputs.bridge_probe && inputs.runtime_artifact_run == '' && needs.windows.result == 'success' }}
+    if: ${{ always() && !cancelled() && !inputs.bridge_probe && (needs.windows.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.runtime_artifact_run != '')) }}
+    permissions:
+      contents: read
+      actions: read
     runs-on: windows-2022
     timeout-minutes: 60
     steps:
@@ -463,6 +466,8 @@ jobs:
         with:
           name: Papo-Windows-x86_64-installer-preview
           path: installer-download
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.runtime_artifact_run || github.run_id }}
       - name: Exercise per-user installation, replacement, recovery and data preservation
         shell: powershell
         run: |

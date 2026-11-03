@@ -85,15 +85,14 @@ the action fixture; its current logs are in `target/windows-dev/scroll/regressio
   `emoji-notifications`, `account-notices` and `backend-contracts` passed. These
   are not Linux reruns and do not close that platform's qualification record.
 
-- **Native playback teardown:** the [2026-10-13 crash analysis](archive/CRASH_ANALYSIS_2026-10-13.md)
-  records a GStreamer cleanup SIGSEGV after leaving fullscreen and jumping to the
-  latest messages. Synthetic passing runs did not establish its root cause or
-  prove it fixed. Preserve the matching executable for any new dump; reproduce
-  the actual fullscreen-to-history-eviction path before attributing the fault.
-  `recent-media` now exercises ten cycles with Papo's actual chat, native
-  H.264/AAC playback, fullscreen restoration, the Latest action and history/player
-  eviction. All ten passed on Windows on 2026-10-29. The original Linux crash is
-  still unproven fixed; rerun this regression there with matching native symbols.
+- **External GStreamer playback teardown:** the user diagnosed the Linux
+  `recent-media` SIGSEGV as a GStreamer failure unrelated to the frontend during
+  the 2026-11-03 merge review. It is excluded from the frontend merge checklist.
+  Keep the failed CI result and native crash records for dependency tracking;
+  this classification does not claim that GStreamer was fixed or that its test
+  passed. The [2026-10-13 crash analysis](archive/CRASH_ANALYSIS_2026-10-13.md)
+  remains historical evidence. The same ten-cycle playback/fullscreen/Latest/
+  history-eviction regression passed on Windows on 2026-10-29.
 - **Shutdown diagnostics:** the earlier warning-cleanup run recorded GTK
   measurement/focus diagnostics and an `AccessLoaded` callback after a fixture
   component shut down. Those observations were separate from compiler warnings.
@@ -142,6 +141,43 @@ the action fixture; its current logs are in `target/windows-dev/scroll/regressio
   WASAPI call cues now pass. The user has no camera/live test accounts available
   and deferred attended unplug/privacy/default-device changes; those specific
   acceptance gaps remain open rather than claiming Windows hardware was not run.
+
+## Multiplatform source-merge review (2026-11-03)
+
+The local review starts from `b795c69`. Prepared changes isolate the simulated
+Windows toolchain from host symlinks, add that fixture to Linux CI, and enable the
+Windows/macOS workflow for pushes and pull requests targeting `main` as well as
+`multiplatform`. Both workflows pass actionlint. The Windows-related Python suite
+passes 93 tests on Linux; six native Windows checks are explicitly skipped.
+The application source previously passed all-target Linux compilation and all
+308 regular Rust tests (six optional integration tests ignored).
+
+Fresh local `Papo-1.1.0-x86_64.AppImage` and `Papo-1.1.0-x86_64.flatpak` review
+builds pass their checksums and runtime smoke tests. The actual AppImage was
+checked with separate configuration/cache directories. The Flatpak was installed
+in a workspace-only installation, reports `Papo 1.1.0`, and passes the 38-element
+runtime check and isolated MP4/MOV/WebM conversions. These local working-tree
+builds are not published release artifacts or a clean-source qualification.
+Logs and hashes are retained under `target/merge-review-*`; package outputs are
+under ignored `dist/`.
+
+The user-diagnosed external GStreamer crash is excluded from the frontend merge
+checklist; original CI diagnostics remain unchanged. Source integration can keep
+Windows experimental and macOS as groundwork. Signing, the full supported-OS
+matrix and attended device/accessibility/beta qualification remain release work.
+The latest [Windows run for `b795c69`](https://github.com/ISpeakHue/papo-gtk/actions/runs/41691433701)
+passes the Windows source build and portable, media and desktop package jobs;
+macOS compile/link also passes. Its
+[installer job](https://github.com/ISpeakHue/papo-gtk/actions/runs/41691433701/job/126133187265)
+fails on the first installed `--check-packaged-runtime` probe after payload hashes
+were checked. The report contains only a Python/GI/media failure plus the icon
+probe's success JSON; redirected stdout/stderr are empty. The underlying probe
+error is not captured, so its cause is not established and installer validation
+is not claimed. Preserve `target/merge-review-windows-installer/` and obtain the
+full probe exit/output before assigning a frontend or dependency cause. This
+separate Windows verification issue still needs diagnosis.
+
+The prepared changes still require committing and PR review before merging.
 
 ## Deferred product and backend decisions
 

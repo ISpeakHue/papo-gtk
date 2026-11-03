@@ -28,6 +28,19 @@ function Current-Slot {
  if(!$slot -or [IO.Path]::GetDirectoryName($slot) -ne (Join-Path $root 'versions')){throw 'Installed path escapes the fixed per-user root'}
  return $slot
 }
+function Run-InstalledProbe([string]$slot,[string]$argument,[string]$stdoutName,[string]$stderrName){
+ # EN-US: PowerShell 5.1 can turn native stderr into a terminating error before saving the complete diagnostic.
+ # PT-BR: O PowerShell 5.1 pode transformar stderr nativo em erro terminante antes de salvar o diagnóstico completo.
+ $stdout=Join-Path $OutputDirectory $stdoutName;$stderr=Join-Path $OutputDirectory $stderrName
+ $script:process=Start-Process -FilePath (Join-Path $slot 'Papo.com') -ArgumentList @($argument) -NoNewWindow -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+ $null=$process.Handle
+ if(!$process.WaitForExit(180000)){& "$env:SystemRoot/System32/taskkill.exe" /PID $process.Id /T /F|Out-Null;throw 'Installed runtime probe timed out'}
+ $process.WaitForExit()
+ if($process.ExitCode -ne 0){
+  $out=[IO.File]::ReadAllText($stdout,[Text.Encoding]::UTF8);$err=[IO.File]::ReadAllText($stderr,[Text.Encoding]::UTF8)
+  throw "Installed probe $argument exited with code $($process.ExitCode).`n$out`n$err"
+ }
+}
 function Check-Installed([string]$slot){
  if($RequireSignatures){
   $env:PAPO_SIGNING_THUMBPRINT=$signingThumbprint;$env:PAPO_SIGNTOOL=$signTool
@@ -39,10 +52,8 @@ function Check-Installed([string]$slot){
  if((Get-FileHash (Join-Path $slot 'BUILD-INFO.json') -Algorithm SHA256).Hash -ne $metadata.build_info_sha256){throw 'Installed BUILD-INFO differs from portable ZIP'}
  $manifest=Get-Content (Join-Path $slot 'runtime/RUNTIME-MANIFEST.json') -Raw -Encoding UTF8|ConvertFrom-Json
  foreach($entry in $manifest.files){if((Get-FileHash (Join-Path $slot $entry.path) -Algorithm SHA256).Hash -ne $entry.sha256){throw 'Installed runtime differs from portable ZIP'}}
- & (Join-Path $slot 'Papo.com') --check-packaged-runtime > (Join-Path $OutputDirectory 'installed-runtime.stdout.txt') 2> (Join-Path $OutputDirectory 'installed-runtime.stderr.txt')
- if($LASTEXITCODE -ne 0){throw 'Installed runtime probe failed'}
- & (Join-Path $slot 'Papo.com') --desktop-info > (Join-Path $OutputDirectory 'desktop-info.json')
- if($LASTEXITCODE -ne 0){throw 'Installed shell identity is invalid'}
+ Run-InstalledProbe $slot '--check-packaged-runtime' 'installed-runtime.stdout.txt' 'installed-runtime.stderr.txt'
+ Run-InstalledProbe $slot '--desktop-info' 'desktop-info.json' 'desktop-info.stderr.txt'
  $link=(New-Object -ComObject WScript.Shell).CreateShortcut($shortcut)
  if($link.TargetPath -ne (Join-Path $slot 'Papo.exe')){throw 'Start menu points to the wrong GUI executable'}
  $entry=Get-ItemProperty $arp
@@ -64,7 +75,7 @@ try {
  # PT-BR: O bootstrap nativo deve funcionar sem caminhos de descoberta de Python/GStreamer de desenvolvimento.
  Get-ChildItem Env:|Where-Object Name -Match '^(PAPO_|PYTHON|GST_|GI_|GTK_|GSK_|GDK_|GIO_|GSETTINGS_SCHEMA_DIR|FONTCONFIG_|XDG_)'|ForEach-Object{Remove-Item "Env:$($_.Name)"}
  $env:PATH="$env:SystemRoot\System32;$env:SystemRoot;$env:SystemRoot\System32\WindowsPowerShell\v1.0"
- $env:GSK_RENDERER='cairo';$env:GTK_A11Y='none';$env:PYTHONUTF8='1'
+ $env:GSK_RENDERER='cairo';$env:GTK_A11Y='none';$env:PYTHONUTF8='1';$env:PYTHONFAULTHANDLER='1';$env:PYTHONUNBUFFERED='1'
  # EN-US: Fixtures never replace real settings and never enumerate saved account credentials.
  # PT-BR: Fixtures nunca substituem ajustes reais nem enumeram credenciais de contas salvas.
  foreach($base in @((Join-Path $env:APPDATA 'papo-gtk'),(Join-Path $env:LOCALAPPDATA 'papo-gtk'))){

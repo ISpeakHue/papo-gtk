@@ -83,14 +83,22 @@ class WindowsDevelopment(unittest.TestCase):
         media.assert_not_called()
 
     def test_success_requires_tools_patch_and_media(self):
-        prefix = Path(sys.executable).resolve().parent
-        with patch.object(devcheck.sys, 'platform', 'win32'), patch.dict(devcheck.os.environ, {'MSYSTEM': 'UCRT64'}), \
-                patch.object(devcheck, 'toolchain', return_value={'rustc': 'GNU'}), \
-                patch.object(devcheck.shutil, 'which', side_effect=lambda name: str(prefix / name)), \
-                patch.object(devcheck, 'run', return_value='reviewed gtk'), \
-                patch.object(devcheck, 'require_gtk') as gtk, \
-                patch.object(devcheck, 'media', return_value={'factories': ['opusenc']}):
-            report = devcheck.inspect()
+        # EN-US: Own the mock prefix so host tool symlinks cannot alter a simulated Windows check.
+        # PT-BR: Usa um prefixo próprio para que links das ferramentas do host não alterem o teste Windows simulado.
+        with tempfile.TemporaryDirectory() as directory:
+            prefix = Path(directory) / 'ucrt64' / 'bin'
+            prefix.mkdir(parents=True)
+            python = prefix / 'python.exe'
+            python.touch()
+            with patch.object(devcheck.sys, 'platform', 'win32'), \
+                    patch.object(devcheck.sys, 'executable', str(python)), \
+                    patch.dict(devcheck.os.environ, {'MSYSTEM': 'UCRT64', 'CARGO_BUILD_TARGET': 'x86_64-pc-windows-gnu'}), \
+                    patch.object(devcheck, 'toolchain', return_value={'rustc': 'GNU'}), \
+                    patch.object(devcheck.shutil, 'which', side_effect=lambda name: str(prefix / name)), \
+                    patch.object(devcheck, 'run', return_value='reviewed gtk'), \
+                    patch.object(devcheck, 'require_gtk') as gtk, \
+                    patch.object(devcheck, 'media', return_value={'factories': ['opusenc']}):
+                report = devcheck.inspect()
         self.assertEqual(report['status'], 'pass')
         self.assertEqual(report['errors'], [])
         gtk.assert_called_once_with('reviewed gtk')

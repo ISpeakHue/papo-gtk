@@ -115,8 +115,19 @@ jobs:
             mingw-w64-ucrt-x86_64-sassc
             mingw-w64-ucrt-x86_64-shaderc
             mingw-w64-ucrt-x86_64-vulkan-headers
-      # EN-US: Reuse only dependency bytes, never test results, from the initial audited GTK build.
-      # PT-BR: Reutiliza só dependências, nunca resultados de testes, da compilação GTK inicial auditada.
+      # EN-US: Match the retained post-build dependency inventory before checking whether GTK can be reused.
+      # PT-BR: Iguala o inventário preservado de dependências antes de verificar se o GTK pode ser reutilizado.
+      - name: Fix native GStreamer Unicode executable paths
+        run: |
+          test "$(pacman -Q mingw-w64-ucrt-x86_64-gstreamer)" = 'mingw-w64-ucrt-x86_64-gstreamer 1.28.8-1'
+          papo_gst_build="$(cygpath -u "$RUNNER_TEMP")/papo-gstreamer-unicode"
+          mkdir -p "$papo_gst_build"
+          cp packaging/windows/gstreamer/GSTREAMER-PKGBUILD "$papo_gst_build/PKGBUILD"
+          cp packaging/windows/gstreamer/*.patch "$papo_gst_build/"
+          (cd "$papo_gst_build" && MINGW_INSTALLS=ucrt64 makepkg-mingw --noconfirm --nodeps --nocheck)
+          pacman -U --noconfirm "$papo_gst_build/mingw-w64-ucrt-x86_64-gstreamer-1.28.8-1.1-any.pkg.tar.zst"
+      # EN-US: Reuse only dependency bytes, never test results, from the retained audited GTK build.
+      # PT-BR: Reutiliza só dependências, nunca resultados de testes, da compilação GTK auditada preservada.
       # Artifact expiry or different native inputs falls back to building the pinned recipe.
       # A expiração do artefato ou entradas nativas diferentes recompilam a receita fixada.
       - name: Fetch the retained GTK backport build when available
@@ -126,7 +137,7 @@ jobs:
           name: Windows-UCRT64-native-inputs
           path: target/windows-gtk-restore
           github-token: ${{ github.token }}
-          run-id: '40687585032'
+          run-id: '41702893674'
       - name: Backport the upstream native GTK IME disposal fix
         run: |
           test "$(pacman -Q mingw-w64-ucrt-x86_64-gtk4)" = 'mingw-w64-ucrt-x86_64-gtk4 4.24.1-1'
@@ -148,15 +159,6 @@ jobs:
           fi
           cd "$papo_gtk_build"
           pacman -U --noconfirm mingw-w64-ucrt-x86_64-gtk4-4.24.1-1.1-any.pkg.tar.zst
-      - name: Fix native GStreamer Unicode executable paths
-        run: |
-          test "$(pacman -Q mingw-w64-ucrt-x86_64-gstreamer)" = 'mingw-w64-ucrt-x86_64-gstreamer 1.28.8-1'
-          papo_gst_build="$(cygpath -u "$RUNNER_TEMP")/papo-gstreamer-unicode"
-          mkdir -p "$papo_gst_build"
-          cp packaging/windows/gstreamer/GSTREAMER-PKGBUILD "$papo_gst_build/PKGBUILD"
-          cp packaging/windows/gstreamer/*.patch "$papo_gst_build/"
-          (cd "$papo_gst_build" && MINGW_INSTALLS=ucrt64 makepkg-mingw --noconfirm --nodeps --nocheck)
-          pacman -U --noconfirm "$papo_gst_build/mingw-w64-ucrt-x86_64-gstreamer-1.28.8-1.1-any.pkg.tar.zst"
       - name: Diagnose source differences with MSYS2 Git before compiling
         run: |
           python - <<'PYCODE'

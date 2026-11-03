@@ -26,6 +26,13 @@ Windows developer-preflight fixtures with an isolated mock toolchain prefix.
 The Linux job’s rootless Fedora container supplies the GTK and libadwaita versions
 required by `Cargo.toml`.
 
+The Windows runtime diagnostic holds references to enumerated DLLs while reading
+their paths with the current-process loader API. It retries a changed inventory
+within a fixed bound and rejects incomplete inventories, truncated paths and
+unrelated API failures. Unit fixtures exercise unloading, newly loaded modules,
+cleanup and failure handling; native Windows checks repeat the actual inventory.
+The packaged install/upgrade checks still audit all active module origins.
+
 Compilation includes all UI components,
 so errors such as the invalid application-window child assignment fail CI. Focused
 CI cases run the GTK smoke test in Xvfb to verify the header bar, window controls,

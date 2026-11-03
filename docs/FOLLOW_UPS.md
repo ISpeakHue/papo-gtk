@@ -206,6 +206,17 @@ and is not a new clean-source release qualification. Preserve the previous faile
 run as well as the successful replay. Existing release tags and downloads remain
 unchanged by source integration.
 
+The subsequent 1.1.0 release build at `c9e8d1e` captured the previously truncated
+Windows diagnostic failure: `GetModuleFileNameExW` raised WinError 6 from
+`loaded_modules()` during the installed-runtime check. Install, upgrade,
+stale-uninstaller and locked-uninstall cases had already passed. The correction
+holds DLL references with `GetModuleHandleExW`, reads current-process paths with
+`GetModuleFileNameW`, releases every acquired reference and requires a complete
+stable snapshot within a fixed bound. Unrelated errors, truncation, an oversized
+inventory and persistent churn remain failures; runtime-origin allowlists are
+unchanged. Regression fixtures cover these cases. A new native build and package
+validation are required before publishing the installer.
+
 ## Deferred product and backend decisions
 
 - **Disk thumbnails/avatars:** retain the current in-memory caches until measured

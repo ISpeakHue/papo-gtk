@@ -51,22 +51,56 @@ ConvertTo-Json -InputObject $packages -Compress
 def loaded_modules():
     kernel = ctypes.WinDLL('kernel32', use_last_error=True)
     psapi = ctypes.WinDLL('psapi', use_last_error=True)
+    kernel.GetCurrentProcess.argtypes = ()
     kernel.GetCurrentProcess.restype = wintypes.HANDLE
     process = kernel.GetCurrentProcess()
-    modules = (wintypes.HMODULE * 2048)()
-    needed = wintypes.DWORD()
     psapi.EnumProcessModulesEx.argtypes = (wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD), wintypes.DWORD)
-    if not psapi.EnumProcessModulesEx(process, modules, ctypes.sizeof(modules), ctypes.byref(needed), 3):
-        raise ctypes.WinError(ctypes.get_last_error())
-    assert needed.value <= ctypes.sizeof(modules), 'Loaded-module audit buffer exhausted'
-    psapi.GetModuleFileNameExW.argtypes = (wintypes.HANDLE, wintypes.HMODULE, wintypes.LPWSTR, wintypes.DWORD)
-    names = []
-    for module in modules[:needed.value // ctypes.sizeof(wintypes.HMODULE)]:
-        buffer = ctypes.create_unicode_buffer(32768)
-        if not psapi.GetModuleFileNameExW(process, module, buffer, len(buffer)):
+    psapi.EnumProcessModulesEx.restype = wintypes.BOOL
+    kernel.GetModuleHandleExW.argtypes = (wintypes.DWORD, ctypes.c_void_p, ctypes.POINTER(wintypes.HMODULE))
+    kernel.GetModuleHandleExW.restype = wintypes.BOOL
+    kernel.GetModuleFileNameW.argtypes = (wintypes.HMODULE, wintypes.LPWSTR, wintypes.DWORD)
+    kernel.GetModuleFileNameW.restype = wintypes.DWORD
+    kernel.FreeLibrary.argtypes = (wintypes.HMODULE,)
+    kernel.FreeLibrary.restype = wintypes.BOOL
+
+    def snapshot():
+        modules = (wintypes.HMODULE * 2048)()
+        needed = wintypes.DWORD()
+        if not psapi.EnumProcessModulesEx(process, modules, ctypes.sizeof(modules), ctypes.byref(needed), 3):
             raise ctypes.WinError(ctypes.get_last_error())
-        names.append(Path(buffer.value).resolve())
-    return names
+        assert needed.value <= ctypes.sizeof(modules), 'Loaded-module audit buffer exhausted'
+        assert needed.value % ctypes.sizeof(wintypes.HMODULE) == 0, 'Invalid loaded-module inventory'
+        return modules[:needed.value // ctypes.sizeof(wintypes.HMODULE)]
+
+    # EN-US: Media workers can unload DLLs after enumeration. Hold references and require a complete, stable snapshot.
+    # PT-BR: Workers de mídia podem descarregar DLLs após enumerá-las. Mantém referências e exige inventário estável completo.
+    # https://learn.microsoft.com/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandleexw
+    for _ in range(4):
+        modules = snapshot()
+        retained, names = [], []
+        try:
+            for module in modules:
+                handle = wintypes.HMODULE()
+                if not kernel.GetModuleHandleExW(4, module, ctypes.byref(handle)):
+                    error = ctypes.get_last_error()
+                    if error in (6, 126):  # ERROR_INVALID_HANDLE / ERROR_MOD_NOT_FOUND
+                        break
+                    raise ctypes.WinError(error)
+                retained.append(handle)
+                buffer = ctypes.create_unicode_buffer(32768)
+                length = kernel.GetModuleFileNameW(handle, buffer, len(buffer))
+                if not length:
+                    raise ctypes.WinError(ctypes.get_last_error())
+                assert length < len(buffer), 'Loaded-module path was truncated'
+                names.append(Path(buffer.value).resolve())
+            else:
+                if set(snapshot()) == set(modules):
+                    return names
+        finally:
+            for handle in reversed(retained):
+                if not kernel.FreeLibrary(handle):
+                    raise ctypes.WinError(ctypes.get_last_error())
+    raise RuntimeError('Loaded-module inventory did not stabilize; runtime origins were not verified')
 
 
 def main():

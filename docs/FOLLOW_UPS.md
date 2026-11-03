@@ -196,8 +196,12 @@ a runtime bug fix. Full output will be available if it recurs.
 The source-merge checks are complete, with the owner's external-GStreamer
 exclusion recorded above. Application source is unchanged from `b795c69`; the
 merge adds CI coverage, the isolated test fixture, installer diagnostics and this
-review record. [Full CI for the preparation revision](https://github.com/ISpeakHue/papo-gtk/actions/runs/41700691629)
-is also running. A package replay deliberately skips the release candidate gate
+review record. The implementation was fast-forwarded into `main` at `382073e`,
+preserving its history. [Post-merge CI](https://github.com/ISpeakHue/papo-gtk/actions/runs/41702027825)
+and [Rust/Linux CI](https://github.com/ISpeakHue/papo-gtk/actions/runs/41702027681)
+were started on that revision; redundant branch runs were canceled in their
+favor. Their final results are separate from the completed source review and
+package replay. A package replay deliberately skips the release candidate gate
 and is not a new clean-source release qualification. Preserve the previous failed
 run as well as the successful replay. Existing release tags and downloads remain
 unchanged by source integration.

@@ -21,9 +21,9 @@ transport logging directive. Authentication models and cookie header values
 also redact secrets in debug output.
 
 Windows-first port development and macOS groundwork are described in
-[MULTIPLATFORM.md](MULTIPLATFORM.md). The source version is **1.1.0**. An unsigned
-[Windows preview](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.1.0-preview.1)
-provides a per-user installer and portable ZIP; see its
+[MULTIPLATFORM.md](MULTIPLATFORM.md). Version **1.1.0** provides stable Linux packages
+and unsigned [experimental Windows downloads](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.1.0).
+The Windows packages provide a per-user installer and portable ZIP; see the
 [verified build and remaining acceptance](docs/testing/windows-preview.md).
 Windows remains experimental. The
 [signing and publication guide](docs/testing/windows-publication.md) records the
@@ -83,8 +83,10 @@ See [SECURITY_REVIEW.md](SECURITY_REVIEW.md) for media isolation and supported c
 
 ## Downloads
 
-[Version 1.0.2](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.0.2) provides
-an x86_64 AppImage and Flatpak bundle, SHA-256 checksums and matching source.
+[Version 1.1.0](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.1.0) provides
+stable Linux x86_64 AppImage and Flatpak bundles, experimental Windows x86_64
+installer/portable downloads, SHA-256 checksums and matching source.
+Windows remains unsigned and experimental; macOS has no downloadable bundle.
 See [APPIMAGE.md](APPIMAGE.md) for the modern Fedora/Arch baseline and
 [FLATPAK.md](FLATPAK.md) for installation and runtime details.
 

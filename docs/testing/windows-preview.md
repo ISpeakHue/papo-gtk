@@ -1,7 +1,15 @@
 # Windows 1.1.0 preview
 
-The unsigned [Windows preview 1](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.1.0-preview.1)
-is available for testing the Windows-first port:
+The [1.1.0 release](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.1.0)
+includes unsigned **experimental Windows** packages alongside stable Linux
+downloads. Publishing these downloads does not qualify Windows as supported.
+
+- [Per-user installer (.exe)](https://github.com/ISpeakHue/papo-gtk/releases/download/v1.1.0/Papo-1.1.0-windows-x86_64.exe).
+- [Portable ZIP](https://github.com/ISpeakHue/papo-gtk/releases/download/v1.1.0/Papo-1.1.0-windows-x86_64-dev.zip): extract the entire archive and open `Papo.exe`.
+- [Checksums](https://github.com/ISpeakHue/papo-gtk/releases/download/v1.1.0/SHA256SUMS), matching application source and modified native-library source accompany the downloads.
+
+The earlier [Windows preview 1](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.1.0-preview.1)
+remains available as a historical build:
 
 - [Per-user installer (.exe)](https://github.com/ISpeakHue/papo-gtk/releases/download/v1.1.0-preview.1/Papo-1.1.0-windows-x86_64.exe).
 - [Portable ZIP](https://github.com/ISpeakHue/papo-gtk/releases/download/v1.1.0-preview.1/Papo-1.1.0-windows-x86_64-dev.zip): extract the entire archive and open `Papo.exe`.
@@ -11,7 +19,7 @@ Both packages contain the application-owned runtime. A separate Rust, MSYS2,
 Python or GStreamer installation is unnecessary. Dependency notices and licenses
 are included. Uninstall preserves settings, caches and saved sessions.
 
-## Verified build
+## Historical preview 1 verification
 
 The release-profile build comes from clean commit
 `474f256554f55d9279916dd5701643ca45653127`, tagged `v1.1.0-preview.1`.
@@ -38,7 +46,7 @@ explicit UTF-8, with a real compiler regression test for accented paths.
 
 ## Remaining acceptance
 
-This is an unsigned experimental prerelease. Windows may show an unknown-publisher
+Windows downloads remain unsigned and experimental. Windows may show an unknown-publisher
 or reputation prompt. No signing certificate is available. Windows 11 Home/Pro,
 physical audio/video devices, real keyboard/IME composition, mixed-DPI displays,
 accessibility and real-backend beta acceptance remain pending. Native WGC screen
@@ -47,5 +55,6 @@ share still requires system-picker selection. Windows Server CI does not establi
 
 The [support policy](../../WINDOWS_SUPPORT.md), [acceptance matrix](windows.md)
 and [beta checklist](windows-beta.md) retain those boundaries. The remaining
-release qualification checks remain open. macOS has no downloadable bundle; Linux 1.0.2
-remains the latest stable release.
+release qualification checks remain open. macOS has no downloadable bundle;
+Linux 1.1.0 is the stable release. The current release's notes and checksum-bound
+verification report identify its source and checks separately from preview 1.

@@ -153,6 +153,9 @@ class Publication(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+        # EN-US: Publication fixtures keep their own version instead of following the working tree's next release.
+        # PT-BR: As fixtures de publicação têm sua própria versão, independente da próxima versão do projeto.
+        (self.root / "Cargo.toml").write_text('[package]\nversion = "1.1.0"\n', encoding="utf-8")
         self.candidate_dir = self.root / "candidate"
         self.candidate_dir.mkdir()
         self.candidate = {"schema": 1, "version": "1.1.0", "repository": "fixture/papo", "source_commit": "a" * 40,
@@ -180,7 +183,7 @@ class Publication(unittest.TestCase):
         self.source = {"commit": "a" * 40, "status": ""}
 
     def stage(self):
-        with patch.object(publication, "source_state", return_value=self.source):
+        with patch.object(publication, "ROOT", self.root), patch.object(publication, "source_state", return_value=self.source):
             return publication.stage(self.candidate_dir, self.qualification, self.output)
 
     def test_local_staging_contains_checksums_exact_source_and_dependency_licenses(self):

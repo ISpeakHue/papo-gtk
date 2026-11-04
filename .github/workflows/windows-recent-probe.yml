@@ -1,0 +1,123 @@
+name: Recent Windows GUI compatibility probe
+on:
+  push:
+    branches: [ci/windows-recent-20261104]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  recent-windows:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: msys2 {0}
+    env:
+      RUSTFLAGS: '-D warnings'
+      GSK_RENDERER: cairo
+      GTK_A11Y: test
+      PYTHONUTF8: '1'
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Record checkout Git configuration before MSYS2
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force target/windows-build | Out-Null
+          git --version | Out-File -Encoding utf8 target/windows-build/checkout-git.txt
+          git config --show-origin --get-regexp '^core\.(autocrlf|eol|filemode|symlinks|ignorecase)$' | Out-File -Append -Encoding utf8 target/windows-build/checkout-git.txt
+          git status --porcelain=v1 --untracked-files=all | Out-File -Append -Encoding utf8 target/windows-build/checkout-git.txt
+          git diff --stat HEAD | Out-File -Append -Encoding utf8 target/windows-build/checkout-git.txt
+          git diff --summary HEAD | Out-File -Append -Encoding utf8 target/windows-build/checkout-git.txt
+          git ls-files --eol | Out-File -Append -Encoding utf8 target/windows-build/checkout-git.txt
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          path-type: minimal
+          install: >-
+            base-devel
+            git
+            mingw-w64-ucrt-x86_64-rust
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-gtk4
+            mingw-w64-ucrt-x86_64-libadwaita
+            mingw-w64-ucrt-x86_64-librsvg
+            mingw-w64-ucrt-x86_64-python-gobject
+            mingw-w64-ucrt-x86_64-gst-python
+            mingw-w64-ucrt-x86_64-gst-plugins-base
+            mingw-w64-ucrt-x86_64-gst-plugins-good
+            mingw-w64-ucrt-x86_64-gst-plugins-bad
+            mingw-w64-ucrt-x86_64-gst-libav
+            mingw-w64-ucrt-x86_64-libnice
+            mingw-w64-ucrt-x86_64-nsis
+            mingw-w64-ucrt-x86_64-meson
+            mingw-w64-ucrt-x86_64-gi-docgen
+            mingw-w64-ucrt-x86_64-gobject-introspection
+            mingw-w64-ucrt-x86_64-python-docutils
+            mingw-w64-ucrt-x86_64-sassc
+            mingw-w64-ucrt-x86_64-shaderc
+            mingw-w64-ucrt-x86_64-vulkan-headers
+      # EN-US: Match the retained post-build dependency inventory before checking whether GTK can be reused.
+      # PT-BR: Iguala o inventário preservado de dependências antes de verificar se o GTK pode ser reutilizado.
+      - name: Fix native GStreamer Unicode executable paths
+        run: |
+          test "$(pacman -Q mingw-w64-ucrt-x86_64-gstreamer)" = 'mingw-w64-ucrt-x86_64-gstreamer 1.28.8-1'
+          papo_gst_build="$(cygpath -u "$RUNNER_TEMP")/papo-gstreamer-unicode"
+          mkdir -p "$papo_gst_build"
+          cp packaging/windows/gstreamer/GSTREAMER-PKGBUILD "$papo_gst_build/PKGBUILD"
+          cp packaging/windows/gstreamer/*.patch "$papo_gst_build/"
+          (cd "$papo_gst_build" && MINGW_INSTALLS=ucrt64 makepkg-mingw --noconfirm --nodeps --nocheck)
+          pacman -U --noconfirm "$papo_gst_build/mingw-w64-ucrt-x86_64-gstreamer-1.28.8-1.1-any.pkg.tar.zst"
+      # EN-US: Reuse only dependency bytes, never test results, from the retained audited GTK build.
+      # PT-BR: Reutiliza só dependências, nunca resultados de testes, da compilação GTK auditada preservada.
+      # Artifact expiry or different native inputs falls back to building the pinned recipe.
+      # A expiração do artefato ou entradas nativas diferentes recompilam a receita fixada.
+      - name: Fetch the retained GTK backport build when available
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: Windows-UCRT64-native-inputs
+          path: target/windows-gtk-restore
+          github-token: ${{ github.token }}
+          run-id: '41774323962'
+      - name: Backport the upstream native GTK IME disposal fix
+        run: |
+          test "$(pacman -Q mingw-w64-ucrt-x86_64-gtk4)" = 'mingw-w64-ucrt-x86_64-gtk4 4.24.1-1'
+          papo_gtk_build="$(cygpath -u "$RUNNER_TEMP")/papo-gtk-ime"
+          mkdir -p "$papo_gtk_build"
+          python - "$papo_gtk_build" <<'PYCODE'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path('packaging/windows').resolve()))
+          from native_inputs import restore_gtk, package_set, run
+          saved = Path('target/windows-gtk-restore')
+          if (saved / 'NATIVE-INPUTS.json').exists():
+              reused = restore_gtk(saved, Path(sys.argv[1]), package_set(run('pacman', '-Q')))
+              print('Reused exact GTK dependency build' if reused else 'Native inputs changed; rebuilding GTK')
+          PYCODE
+          if [[ ! -f "$papo_gtk_build/mingw-w64-ucrt-x86_64-gtk4-4.24.1-1.1-any.pkg.tar.zst" ]]; then
+            cp packaging/windows/gtk/* "$papo_gtk_build/"
+            (cd "$papo_gtk_build" && MINGW_INSTALLS=ucrt64 makepkg-mingw --noconfirm --nodeps --nocheck)
+          fi
+          cd "$papo_gtk_build"
+          pacman -U --noconfirm mingw-w64-ucrt-x86_64-gtk4-4.24.1-1.1-any.pkg.tar.zst
+      - name: Exercise recent native GUI changes with metadata-only wheel diagnostics
+        env:
+          G_DEBUG: fatal-criticals
+        run: |
+          export PAPO_RUNTIME_DIR="$(cygpath -w "$MINGW_PREFIX")"
+          cargo test --locked --no-run
+          papo_failed=0
+          for papo_case in window-scrolling notification-filters emoji-grid report8 report10 mentions mention-suggestions embeds backend-update retention recent-media; do
+            printf '\nCASE %s\n' "$papo_case"
+            if [[ "$papo_case" == window-scrolling || "$papo_case" == notification-filters || "$papo_case" == emoji-grid ]]; then
+              papo_env=(env PAPO_NATIVE_INPUT_TEST=1 PAPO_SCROLL_DIAGNOSTICS=1)
+            else
+              papo_env=(env -u PAPO_NATIVE_INPUT_TEST)
+            fi
+            "${papo_env[@]}" PAPO_UI_CASE="$papo_case" cargo test --locked ui_smoke -- --ignored --test-threads=1 --nocapture || papo_failed=1
+          done
+          exit "$papo_failed"

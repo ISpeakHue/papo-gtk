@@ -58,8 +58,8 @@ def pointer_events(action):
 def run(pid, title, chords, pointer=None):
     if os.name != 'nt' or pid != os.getppid() or os.environ.get('PAPO_NATIVE_INPUT_TEST') != '1':
         raise RuntimeError('Native input requires explicit opt-in and the invoking test process')
-    expected = 'Papo smooth scrolling test' if pointer is not None else 'Papo desktop input test'
-    if title != expected:
+    expected = ('Papo smooth scrolling test',) if pointer is not None else ('Papo desktop input test', 'Papo emoji Escape test')
+    if title not in expected:
         raise RuntimeError('Unexpected native test window title')
     if pointer is not None and (len(chords) != 1 or not all(0 <= value <= 4096 for value in pointer)):
         raise ValueError('Invalid private fixture pointer coordinates/actions')
@@ -118,6 +118,11 @@ def run(pid, title, chords, pointer=None):
                 raise RuntimeError('Pointer is outside the owned test window')
             if not api.ClientToScreen(target, point) or not api.SetCursorPos(*point):
                 raise c.WinError(c.get_last_error())
+            if os.environ.get('PAPO_SCROLL_DIAGNOSTICS') == '1':
+                api.WindowFromPoint.argtypes = (c.c_int64,)
+                api.WindowFromPoint.restype = c.c_void_p
+                packed = (point[0] & 0xffffffff) | ((point[1] & 0xffffffff) << 32)
+                print(f'Native pointer: logical={pointer}, screen={tuple(point)}, dpi_scale={scale}, client={tuple(bounds)}, owned_hit={api.WindowFromPoint(packed) == target}', flush=True)
             batch = pointer_events(chord)
         else:
             batch = events(chord)

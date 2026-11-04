@@ -166,6 +166,7 @@ fn observe_window(window:&gtk::Window){
     let wheels=states.clone();
     controller.connect_event(move |_,event|{
         let Some(wheel)=event.downcast_ref::<gtk::gdk::ScrollEvent>()else{return gtk::glib::Propagation::Proceed;};
+        #[cfg(test)]if std::env::var_os("PAPO_SCROLL_DIAGNOSTICS").is_some(){eprintln!("Wheel metadata: direction={:?}, unit={:?}, delta={:?}, position={:?}, modifiers={:?}",wheel.direction(),wheel.unit(),wheel.deltas(),event.position(),event.modifier_state());}
         let (dx,dy)=match wheel.direction(){
             gtk::gdk::ScrollDirection::Up=>(0.0,-1.0),gtk::gdk::ScrollDirection::Down=>(0.0,1.0),
             gtk::gdk::ScrollDirection::Left=>(-1.0,0.0),gtk::gdk::ScrollDirection::Right=>(1.0,0.0),
@@ -176,12 +177,15 @@ fn observe_window(window:&gtk::Window){
         };
         let location=event.position().zip(event.surface()).map(|((x,y),s)|(s,x,y)).or_else(||{
             let device=event.seat().and_then(|s|s.pointer()).or_else(||event.device())?;
-            let (surface,x,y)=device.surface_at_position();Some((surface?,x,y))
+            let (surface,x,y)=device.surface_at_position();
+            #[cfg(test)]if std::env::var_os("PAPO_SCROLL_DIAGNOSTICS").is_some(){eprintln!("Wheel pointer fallback: device={}, surface={}, position=({x},{y})",device.type_().name(),surface.is_some());}
+            Some((surface?,x,y))
         });
         let Some((surface,x,y))=location else{return gtk::glib::Propagation::Proceed;};
         let Some(native)=gtk::Native::for_surface(&surface)else{return gtk::glib::Propagation::Proceed;};
         let (tx,ty)=native.surface_transform();
         let picked=native.upcast::<gtk::Widget>().pick(x+tx,y+ty,gtk::PickFlags::DEFAULT);
+        #[cfg(test)]if std::env::var_os("PAPO_SCROLL_DIAGNOSTICS").is_some(){eprintln!("Wheel hit: position=({x},{y}), transform=({tx},{ty}), widget={:?}",picked.as_ref().map(|w|w.type_().name()));}
         let Some(scroll)=destination(picked,axis,delta)else{return gtk::glib::Propagation::Proceed;};
         // EN-US: Chat anchoring and member recycling already own a compatible wheel controller; never animate twice.
         // PT-BR: A ancoragem do chat e a lista de membros já têm um controlador compatível; nunca anima duas vezes.

@@ -73,7 +73,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
 
     if native_input(&window){
         let values=Rc::new(RefCell::new(Vec::new()));let captured=values.clone();adj.connect_value_changed(move |a|captured.borrow_mut().push(a.value()));
-        input(&inner,"down");until(context,||(adj.value()-step).abs()<0.75);
+        input(&inner,"down");spin(context,300);eprintln!("Native nested wheel: value={}, expected={step}, outer={}, samples={:?}",adj.value(),outer.vadjustment().value(),values.borrow());until(context,||(adj.value()-step).abs()<0.75);
         assert!(values.borrow().iter().any(|value|*value>0.0&&*value<step-0.5),"a real wheel event must traverse intermediate animation frames: {:?}, step={step}",values.borrow());
         assert_eq!(outer.vadjustment().value(),0.0,"nested scrolling must not move the outer dialog");
         spin(context,200);

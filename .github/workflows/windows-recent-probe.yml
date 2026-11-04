@@ -17,6 +17,7 @@ jobs:
       RUSTFLAGS: '-D warnings'
       GSK_RENDERER: cairo
       GTK_A11Y: test
+      PAPO_NATIVE_FULLSCREEN_TEST: '1'
       PYTHONUTF8: '1'
       GST_PLUGIN_FEATURE_RANK: 'fakeaudiosink:512'
     steps:

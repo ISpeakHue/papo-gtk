@@ -23,6 +23,20 @@ pub(super) fn animate_wheel(
     animate_axis(scroll,wheel,gtk::Orientation::Vertical,dy);
 }
 
+// EN-US: Win32 positionless wheel events can miss a descendant Scroll controller; viewer zoom belongs to its window.
+// PT-BR: Eventos Win32 de roda sem posição podem não chegar ao controlador filho; o zoom pertence à janela do visualizador.
+pub(super) fn connect_primary_wheel(window:&impl IsA<gtk::Widget>,callback:impl Fn(f64)->gtk::glib::Propagation+'static){
+    let controller=gtk::EventControllerLegacy::new();
+    controller.set_propagation_phase(gtk::PropagationPhase::Capture);
+    controller.connect_event(move |_,event|{
+        let Some(wheel)=event.downcast_ref::<gtk::gdk::ScrollEvent>()else{return gtk::glib::Propagation::Proceed;};
+        if !crate::platform::shortcuts::primary_pressed(event.modifier_state()){return gtk::glib::Propagation::Proceed;}
+        let (_,dy)=wheel.deltas();
+        if !dy.is_finite()||dy==0.0{return gtk::glib::Propagation::Proceed;}
+        callback(dy)
+    });window.add_controller(controller);
+}
+
 fn animate_axis(scroll:&gtk::ScrolledWindow,wheel:&RefCell<Option<adw::TimedAnimation>>,axis:gtk::Orientation,dy:f64){
     if !dy.is_finite() || dy == 0.0 { return; }
     let adj = adjustment(scroll,axis);

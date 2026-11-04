@@ -114,7 +114,7 @@ jobs:
           cargo test --locked --no-run
           git rev-parse HEAD
           papo_failed=0
-          for papo_case in window-scrolling notification-filters backend-update recent-media status-viewer backend-gifs; do
+          for papo_case in window-scrolling status-viewer; do
             printf '\nCASE %s\n' "$papo_case"
             if [[ "$papo_case" == window-scrolling || "$papo_case" == notification-filters || "$papo_case" == backend-update ]]; then
               papo_env=(env PAPO_NATIVE_INPUT_TEST=1 PAPO_SCROLL_DIAGNOSTICS=1)

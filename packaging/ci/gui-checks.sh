@@ -13,7 +13,7 @@ papo_failures=0
 : > target/ci/gui/results.tsv
 papo_cases=(symbolic-icons security-icons syntax-highlighting reaction-participants default
     desktop-input multiline full-app-input login-input backend-update embeds style-palette attachment-media
-    media-cache report8 report10 report11 emoji-grid notification-filters account-notices
+    media-cache report8 report10 report11 emoji-grid notification-filters account-notices window-scrolling
     account-settings webhook-chat report9 edit-mentions emoji-details backend-gifs
     backend-contracts voice-chat avatar-viewport search-recycling emoji-notifications
     notification-window recovery media-loading recent-media draft-previews clipboard

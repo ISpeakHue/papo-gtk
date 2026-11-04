@@ -15,13 +15,8 @@ impl PreparedAnimation{
     /// EN-US: Fast-path decode of the first frame (max 420x300) to display an immediate placeholder while remaining frames decode.
     /// PT-BR: Decodificação rápida do primeiro quadro (máx 420x300) para exibir uma prévia imediata enquanto os demais quadros são processados.
     pub fn first(bytes:&[u8])->Option<PreparedImage>{
-        use image::{AnimationDecoder,ImageDecoder};
-        // EN-US: Reject files larger than 5MB. / PT-BR: Rejeita arquivos maiores que 5MB.
-        if bytes.len()>5<<20{return None;}
-        let mut decoder=image::codecs::gif::GifDecoder::new(std::io::Cursor::new(bytes)).ok()?;
-        let(w,h)=decoder.dimensions();if w==0||h==0||w>2048||h>2048{return None;}
-        let mut limits=image::Limits::default();limits.max_alloc=Some(32<<20);decoder.set_limits(limits).ok()?;
-        let frame=decoder.into_frames().next()?.ok()?;
+        let ((w,h),mut frames)=Self::frames(bytes)?;
+        let frame=frames.next()?.ok()?;
         let pixels=image::DynamicImage::ImageRgba8(frame.into_buffer()).thumbnail(420.min(w),300.min(h)).into_rgba8();
         Some(PreparedImage{width:pixels.width(),height:pixels.height(),pixels:pixels.into_raw()})
     }
@@ -29,13 +24,9 @@ impl PreparedAnimation{
     /// EN-US: Decodes all frames up to a limit of 300 frames. If memory exceeds 48MB, dynamically downscales all frames to fit in RAM.
     /// PT-BR: Decodifica todos os quadros até o limite de 300 quadros. Se a memória exceder 48MB, reduz dinamicamente a resolução de todos os quadros para caber na RAM.
     pub fn decode(bytes:&[u8])->Option<Self>{
-        use image::{AnimationDecoder,ImageDecoder};
-        if bytes.len()>5<<20{return None;}
-        let mut decoder=image::codecs::gif::GifDecoder::new(std::io::Cursor::new(bytes)).ok()?;
-        let(w,h)=decoder.dimensions();if w==0||h==0||w>2048||h>2048{return None;}
-        let mut limits=image::Limits::default();limits.max_alloc=Some(32<<20);decoder.set_limits(limits).ok()?;
+        let ((w,h),source)=Self::frames(bytes)?;
         let mut frames:Vec<(PreparedImage,Duration)>=vec![];let mut total=0usize;let mut target=(420.min(w),300.min(h));
-        for (index,frame) in decoder.into_frames().enumerate(){if index>=300{return None;}let frame=frame.ok()?;let(n,d)=frame.delay().numer_denom_ms();
+        for (index,frame) in source.enumerate(){if index>=300{return None;}let frame=frame.ok()?;let(n,d)=frame.delay().numer_denom_ms();
             let delay=Duration::from_millis((u64::from(n)/u64::from(d.max(1))).clamp(20,10_000));
             let pixels=image::DynamicImage::ImageRgba8(frame.into_buffer()).thumbnail(target.0,target.1).into_rgba8();
             total+=pixels.len();
@@ -55,6 +46,25 @@ impl PreparedAnimation{
         }
         if frames.is_empty(){None}else{Some(Self{frames})}
     }
+
+    // EN-US: GIF, animated WebP and APNG share the same frame, input and allocation budgets.
+    // PT-BR: GIF, WebP animado e APNG compartilham os limites de quadros, entrada e alocação.
+    fn frames(bytes:&[u8])->Option<((u32,u32),image::Frames<'_>)>{
+        use image::{AnimationDecoder,ImageDecoder};
+        if bytes.len()>5<<20{return None;}
+        let format=image::guess_format(bytes).ok()?;
+        let dimensions=image::ImageReader::with_format(std::io::Cursor::new(bytes),format).into_dimensions().ok()?;
+        if dimensions.0==0||dimensions.1==0||dimensions.0>2048||dimensions.1>2048{return None;}
+        let mut limits=image::Limits::default();limits.max_alloc=Some(32<<20);
+        let frames=match format{
+            image::ImageFormat::Gif=>{let mut decoder=image::codecs::gif::GifDecoder::new(std::io::Cursor::new(bytes)).ok()?;decoder.set_limits(limits).ok()?;decoder.into_frames()},
+            image::ImageFormat::WebP=>{let mut decoder=image::codecs::webp::WebPDecoder::new(std::io::Cursor::new(bytes)).ok()?;decoder.set_limits(limits).ok()?;if !decoder.has_animation(){return None;}decoder.into_frames()},
+            image::ImageFormat::Png=>{let mut decoder=image::codecs::png::PngDecoder::new(std::io::Cursor::new(bytes)).ok()?;decoder.set_limits(limits).ok()?;if !decoder.is_apng().ok()?{return None;}decoder.apng().ok()?.into_frames()},
+            _=>return None,
+        };
+        Some((dimensions,frames))
+    }
+    pub fn is_animated(bytes:&[u8])->bool{Self::frames(bytes).is_some()}
 
     pub async fn video(path:&std::path::Path)->anyhow::Result<Self>{
         let checked=path.to_owned();tokio::task::spawn_blocking(move||super::container::validate(&checked)).await??;
@@ -201,7 +211,13 @@ fn reschedule(advance:bool){
         let animation=PreparedAnimation::video_frames(&data).unwrap();assert_eq!(animation.frames.len(),1);assert_eq!(animation.bytes(),16);assert_eq!(animation.frames[0].1,Duration::from_millis(100));
         assert!(PreparedAnimation::video_frames(&data[..data.len()-1]).is_err());data[8..12].copy_from_slice(&9999u32.to_le_bytes());assert!(PreparedAnimation::video_frames(&data).is_err());
     }
-    #[test]fn supplied_giphy_sample_decodes_when_provided(){if let Ok(path)=std::env::var("PAPO_GIPHY_SAMPLE"){let data=std::fs::read(path).unwrap();let animation=PreparedAnimation::decode(&data).expect("public Giphy sample must decode");assert!(animation.frames.len()>1);println!("Giphy sample: {} frames, {} decoded bytes",animation.frames.len(),animation.bytes());}}
+    #[test]fn supplied_giphy_sample_decodes_when_provided(){if let Ok(path)=std::env::var("PAPO_GIPHY_SAMPLE"){let data=std::fs::read(path).unwrap();let animation=PreparedAnimation::decode(&data).expect("public animation sample must decode");assert!(animation.frames.len()>1);println!("Animation sample: {} frames, {} decoded bytes",animation.frames.len(),animation.bytes());}}
+    #[test]fn webp_and_apng_keep_frames_and_share_the_thumbnail_budget(){
+        for data in [include_bytes!("../../tests/fixtures/animated-emoji.webp").as_slice(),include_bytes!("../../tests/fixtures/animated-emoji.png").as_slice()]{
+            assert!(PreparedAnimation::is_animated(data));let first=PreparedAnimation::first(data).unwrap();let animation=PreparedAnimation::decode(data).unwrap();
+            assert!(animation.frames.len()>1);assert_eq!(first.pixels,animation.frames[0].0.pixels);assert!(animation.bytes()<=48<<20);
+        }
+    }
     #[test]fn gifs_keep_frames_timing_and_enforce_input_limits(){let gif=PreparedAnimation::decode(&fixture()).unwrap();assert_eq!(gif.frames.len(),2);assert_eq!(gif.frames[0].1,Duration::from_millis(40));assert_ne!(gif.frames[0].0.pixels,gif.frames[1].0.pixels);assert_eq!(gif.bytes(),512);assert!(PreparedAnimation::decode(&vec![0; (4<<20)+1]).is_none());assert!(PreparedAnimation::decode(b"invalid").is_none());}
     #[test]fn accepts_backend_gif_thumbnails_with_three_hundred_frames(){
         let mut bytes=Vec::new();{

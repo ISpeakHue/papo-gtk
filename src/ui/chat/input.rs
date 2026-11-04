@@ -94,12 +94,17 @@ pub(super) fn connect_size(view:&gtk::TextView,scroll:&gtk::ScrolledWindow){
             pending.set(false);let(Some(view),Some(scroll))=(weak.upgrade(),weak_scroll.upgrade())else{return;};
             if view.width()<=0{return;}
             let end=view.buffer().end_iter();let(y,height)=view.line_yrange(&end);
-            let text_height=y+height;
+            let cursor=view.iter_location(&end);
+            let text_height=(y+height).max(cursor.y()+cursor.height());
             // Wrapped lines need only a small inset. Keep short drafts centered
             // in the toolbar's minimum height without adding that padding to
             // every multiline draft as well.
-            let content=text_height+8;
-            let padding=(40-text_height).max(8);
+            // EN-US: The scrollable page can be smaller than its widget; budget that inset before sizing text padding.
+            // PT-BR: A página rolável pode ser menor que o widget; inclui essa diferença antes de dimensionar o espaçamento.
+            let adjustment=scroll.vadjustment();
+            let inset=if adjustment.page_size()>0.0{(scroll.height() as f64-adjustment.page_size()).round().max(0.0) as i32}else{0};
+            let padding=(40-inset-text_height).max(8);
+            let content=text_height+padding+inset;
             let top=padding/2;let bottom=padding-top;
             if view.top_margin()!=top{view.set_top_margin(top);}
             if view.bottom_margin()!=bottom{view.set_bottom_margin(bottom);}
@@ -107,6 +112,9 @@ pub(super) fn connect_size(view:&gtk::TextView,scroll:&gtk::ScrolledWindow){
             if scroll.vscrollbar_policy()!=policy{scroll.set_vscrollbar_policy(policy);}
             let height=content.clamp(40,160);
             if scroll.height_request()!=height{scroll.set_height_request(height);}
+            // EN-US: A queued cursor scroll can retain an offset from the previous, shorter viewport.
+            // PT-BR: A rolagem pendente do cursor pode manter o deslocamento da área anterior, mais baixa.
+            if content<=160&&scroll.vadjustment().value()!=0.0{scroll.vadjustment().set_value(0.0);}
         });
     });
     let refresh=update.clone();view.buffer().connect_changed(move |_|refresh());

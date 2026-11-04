@@ -427,6 +427,7 @@ impl Transfers {
 
 #[cfg(test)]
 pub(super) fn exercise_performance(context:&gtk::glib::MainContext){
+    resident::exercise_budget(context);
     use super::performance::settle;
     let channel=Uuid::new_v4();let user=Uuid::new_v4();let start=chrono::Utc::now();
     let target=serde_json::from_value(serde_json::json!({"id":channel,"name":"media burst","created_at":start})).unwrap();

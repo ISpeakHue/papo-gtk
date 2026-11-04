@@ -56,6 +56,19 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let window=adw::Window::builder().title("Papo input test").default_width(850).default_height(700).content(chat.widget()).build();window.present();
     let field=composer::field(chat.widget().upcast_ref());until(context,||field.is_mapped()&&field.width()>0);field.grab_focus();
     let scroll=field.parent().and_downcast::<gtk::ScrolledWindow>().unwrap();let initial=scroll.height();
+    for text in ["one\ntwo","one\ntwo\nthree","one\ntwo\nthree\nfour"]{
+        field.set_text(text);field.set_position(-1);performance::settle(context);
+        let (y,height)=field.line_yrange(&field.buffer().end_iter());
+        let rect=field.iter_location(&field.buffer().end_iter());
+        let (_,bottom)=field.buffer_to_window_coords(gtk::TextWindowType::Widget,0,(y+height).max(rect.y()+rect.height()));
+        let point=field.compute_point(&scroll,&gtk::graphene::Point::new(0.0,bottom as f32)).unwrap();
+        let gap=scroll.height() as f32-point.y();
+        let inset=(scroll.height() as f64-scroll.vadjustment().page_size()).max(0.0) as f32;
+        assert!((gap-field.bottom_margin() as f32-inset).abs()<=2.0,"composer has excess bottom space: gap={gap}, margins={}/{}, line={y}/{height}, glyph={rect:?}, viewport={}, adjustment={}/{}/{}",field.top_margin(),field.bottom_margin(),scroll.height(),scroll.vadjustment().value(),scroll.vadjustment().upper(),scroll.vadjustment().page_size());
+        assert!(scroll.vadjustment().value()<1.0,"a draft that fits must not scroll its first line out of view");
+    }
+    crate::ui::main_window::layout::tests::preview(&window,"composer-lines",context);
+    field.set_text("");performance::settle(context);
     let native=cfg!(target_os="linux")&&std::env::var("PAPO_NATIVE_INPUT_TEST").as_deref()==Ok("1");
     if native{let layout=std::env::var("PAPO_NATIVE_INPUT_LAYOUT").unwrap_or_else(|_|"us".into());assert!(std::process::Command::new("setxkbmap").args(["-layout",&layout,"-variant",if layout=="us"{"intl"}else{""}]).status().unwrap().success());}
     field.set_text("á @I");field.set_position(-1);until(context,||chat.model().mention_visible);

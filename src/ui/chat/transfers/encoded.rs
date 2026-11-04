@@ -4,14 +4,15 @@ use std::{collections::{HashMap,HashSet,VecDeque},sync::Arc};
 use uuid::Uuid;
 use crate::ui::chat::state::Change;
 
-const BYTE_LIMIT:usize=192<<20;
+const BYTE_LIMIT:usize=64<<20;
 const ENTRY_LIMIT:usize=512;
-const OLD_BYTES:usize=64<<20;
+const OLD_BYTES:usize=16<<20;
 const OLD_ENTRIES:usize=192;
 struct Entry {channel:Uuid,message:Uuid,bytes:Arc<[u8]>,video:bool,touched:std::time::Instant}
 #[derive(Default)]
 pub(in crate::ui::chat) struct Cache {entries:HashMap<Uuid,Entry>,order:VecDeque<Uuid>,bytes:usize,recent:HashMap<Uuid,HashSet<Uuid>>,channels:VecDeque<Uuid>}
 impl Cache {
+    #[cfg(test)]pub(super) fn memory_bytes(&self)->usize{self.bytes}
     pub fn set_recent(&mut self,channel:Uuid,keys:HashSet<Uuid>){
         self.channels.retain(|id|*id!=channel);self.channels.push_back(channel);self.recent.insert(channel,keys);
         while self.channels.len()>8{if let Some(old)=self.channels.pop_front(){self.invalidate_channel(old);}}

@@ -19,7 +19,7 @@ from build import ROOT, run, toolchain, write_json
 GTK_PACKAGE = 'mingw-w64-ucrt-x86_64-gtk4'
 FACTORIES = ('opusenc', 'opusdec', 'vp8enc', 'vp8dec', 'webrtcbin', 'nicesrc',
              'nicesink', 'dtlsenc', 'dtlsdec', 'mfvideosrc', 'jpegdec', 'decodebin',
-             'volume', 'level', 'appsrc')
+             'volume', 'level', 'appsrc', 'tee', 'valve', 'videorate', 'videoscale', 'jpegenc', 'appsink')
 
 
 def expected_gtk():

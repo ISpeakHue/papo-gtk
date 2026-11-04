@@ -278,6 +278,36 @@ Validation: warning-free all-target compilation; the extended `avatar-viewport`
 case passed for 100 and 5,000 members. The shared chat implementation also passed
 the `scroll-media` and `smooth-updates` GTK regressions on the private display.
 
+## Scrolling across windows
+
+App-owned windows share the chat/member list's 160 ms ease-out cubic mouse-wheel
+animation, including notification tabs, settings, search results, emoji/reaction
+pickers, sidebars, editors and media panning. A capture controller on each window
+resolves the innermost pane that can scroll in the requested direction, yielding
+to its parent at a boundary. Content created after presentation is covered
+without traversing or observing every message row. Existing chat/member wheel
+controllers retain their anchoring/recycling behavior and are not animated twice.
+
+Horizontal wheel input and Shift-wheel use horizontal adjustments. Pixel-based
+touchpad motion remains native; primary-modifier wheel zoom and native value
+controls retain their gestures. Clicks, scrollbar drags, navigation keys and
+unmapping stop pending animations. GTK's reduced-motion setting is respected.
+Animation state uses weak widget references, and temporary unmap handlers are
+disconnected when state is released.
+
+The `window-scrolling` GUI case exercises actual wheel events, nested boundaries,
+dynamic panes, horizontal movement, zoom modifiers and reduced motion. The
+`notification-filters` case additionally checks wheel easing in both notification
+tabs with expanded groups and overflowing real notice rows. Private X11 input
+is restricted to a specifically named test window; production input uses GTK/GDK
+on every supported platform.
+
+Validation: 318 Rust tests passed and the application/test builds were warning-free.
+The private-display `window-scrolling`, `notification-filters`, `avatar-viewport`,
+`scroll-media` and `status-viewer` cases passed. Native wheel testing includes
+positionless GDK events, resolving their coordinates from the seat's logical
+pointer instead of a physical device without its own cursor.
+
 ## Recent-media retention and dated navigation (2026-10-19)
 
 Static previews now remain in a 192 MiB/256-entry LRU across eight recently
@@ -333,6 +363,39 @@ These are ownership/accounting bounds, not a guarantee about process RSS: active
 widgets, open viewers, decoder work, GTK and the graphics allocator also use
 memory. Synthetic tests check contiguous bidirectional paging, retry/stale-result
 handling, metadata bounds, historical cache expiry and recent-channel reuse.
+
+## Media retention after long sessions (2026-11-03)
+
+One major contributor to gradual memory growth was the combined cache policy:
+compressed input and resident decoded previews could each retain 192 MiB across
+eight channel heads. These are separate allocations. Active textures, animation
+frames, avatars, GTK widgets and decoder work also consume memory; texture
+references shared between caches are not additional pixel copies.
+
+| Retained media | Previous ceiling | Current ceiling |
+| --- | ---: | ---: |
+| Compressed image/GIF input | 192 MiB | 64 MiB |
+| Resident thumbnails/first frames | 192 MiB | 96 MiB |
+| Historical compressed input within that total | 64 MiB | 16 MiB |
+| Historical resident previews within that total | 32 MiB | 16 MiB |
+
+Entry counts and recent-opening-batch priority remain unchanged. The latest
+message batch still preloads; channel returns and short scrolls reuse cached
+bytes/textures. Larger histories evict colder entries earlier. No private media
+is persisted to disk. Full-animation and active-texture budgets are unchanged.
+
+The synthetic regression warms eight channels with thirty 640×360 previews and
+1 MiB compressed inputs per channel. Before the change it retained approximately
+384 MiB of media and reached 697 MiB process RSS. Afterward it retained 160 MiB
+and reached 461 MiB RSS, about 236 MiB less in that run. The regression also
+checks that an evicted native texture is actually released. The existing
+`retention` and `recent-media` workflows verify paging and recent-cache reuse.
+
+This is an ownership limit, not a process-RSS guarantee: native rendering,
+decoding, open viewers and allocator high-water marks remain outside it. RSS
+measurements used synthetic data on a private display, not a replay of the
+user's server history. The supplied animated WebP sample decoded all 78 frames
+within the existing animation budget (24,429,600 decoded pixel bytes).
 
 Validation: all-target compilation passed without warnings; 276 automated tests
 passed (four native/display tests skipped by that command). Seven GTK cases

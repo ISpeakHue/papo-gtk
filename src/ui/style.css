@@ -23,6 +23,10 @@
 .papo-user-footer { background: alpha(@window_fg_color, .035); padding: 10px 8px; border-top: 1px solid alpha(@window_fg_color, .08); }
 .papo-user-footer button { padding: 4px; }
 .papo-chat { background: @window_bg_color; }
+.papo-conversation-name { font-weight: bold; }
+.papo-conversation-topic { font-size: .85em; opacity: .65; }
+.papo-conversation-text { line-height: 1; }
+.papo-conversation-text, .papo-conversation-text text { background: transparent; }
 .papo-history-cover, .papo-history-surface { background: @window_bg_color; }
 .papo-chat-history { background: transparent; padding: 8px 0; }
 .papo-chat-history row { padding: 0; border-radius: 0; background-color: transparent; transition: background-color 900ms ease-out, box-shadow 900ms ease-out; }

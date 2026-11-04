@@ -32,6 +32,8 @@ pub enum EngineEvent {
     #[serde(rename="media_error")]MediaError{kind:String,message:String},
     #[serde(rename="video_frame")]VideoFrame{track_id:String,epoch:u64,jpeg:String},
     #[serde(rename="video_reset")]VideoReset{epoch:u64},
+    #[serde(rename="local_preview_frame")]LocalPreviewFrame{epoch:u64,jpeg:String},
+    #[serde(rename="local_preview_reset")]LocalPreviewReset{epoch:u64},
 }
 impl std::fmt::Debug for EngineEvent{fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result{f.write_str("EngineEvent { media details: [redacted] }")}}
 // EN-US: Send embedded source over the private pipe; Windows command lines have a 32K limit.

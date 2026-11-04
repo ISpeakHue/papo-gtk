@@ -17,7 +17,7 @@ pub(crate) struct Backend {
     pub(crate) media_ranges:Vec<(String,String)>,
     pub(crate) fail_status:bool,
     pub(crate) attachment_thumbnails:std::collections::HashMap<String,Vec<u8>>,
-    pub(crate) fail_channel_read:bool,
+    pub(crate) fail_channel_read:bool, pub(crate) fail_channel_settings:bool,
     pub(crate) paged_messages:Vec<Value>,pub(crate) fail_newer:bool,
     pub(crate) channel_messages:std::collections::HashMap<String,Vec<Value>>,
     pub(crate) embed_values:std::collections::HashMap<String,Value>,
@@ -63,7 +63,7 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
     let api = ApiClient::new(&format!("http://{}", listener.local_addr().unwrap())).unwrap();
     let state = Arc::new(Mutex::new(Backend {
         discovery_notifications:None,search_results:None,webhooks:vec![],fail_webhooks:false,range_media:false,media_ranges:vec![],attachment_thumbnails:Default::default(),
-        paged_messages:vec![],fail_newer:false,fail_status:false,fail_channel_read:false,channel_messages:Default::default(),
+        paged_messages:vec![],fail_newer:false,fail_status:false,fail_channel_read:false,fail_channel_settings:false,channel_messages:Default::default(),
         embed_values:Default::default(),
         peer_banned:false,fail_moderation:true,fail_audit:false,
         server_missing:false,server_value:json!({"id":CHANNEL,"name":"Test","owner_id":USER,"public":true,"created_at":DATE}),admin_roles:vec![],admin_channels:vec![json!({"id":CHANNEL,"name":"general","type":"text","position":1,"created_at":DATE}),json!({"id":"12345678-1234-4234-8234-123456789ac2","name":"other","type":"text","position":2,"created_at":DATE})],dms:vec![],dm_messages:vec![],blocks:vec![],fail_role:true,deny_dm:false,fail_server:true,
@@ -160,7 +160,15 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
                     }
                     else if route == format!("/users/{USER}/avatar") {b.profile["avatar_blob"]=Value::Null;(200,json!({"response":"saved"}))}
                     else if route == format!("/users/{USER}/banner") {b.profile["banner_media"]=Value::Null;(200,json!({"response":"saved"}))}
-                    else if route.ends_with("/settings") && method=="POST" {b.channel_setting=body["notification_settings"].clone();(200,json!({"response":"saved"}))}
+                    else if route.ends_with("/settings") && method=="POST" {
+                        if b.fail_channel_settings{b.fail_channel_settings=false;(500,json!({"detail":"Channel settings failed"}))}
+                        else{
+                            let id=route.split('/').nth(2).unwrap();
+                            if id==CHANNEL{b.channel_setting=body["notification_settings"].clone();}
+                            if let Some(c)=b.admin_channels.iter_mut().find(|c|c["id"]==id){c["notification_settings"]=body["notification_settings"].clone();}
+                            (200,json!({"response":"saved"}))
+                        }
+                    }
                     else if route.starts_with("/attachments/")&&route.split('/').count()==3{(200,Value::Null)}
                     else if let Some(value)=route.strip_prefix("/embeds/").and_then(|id|b.embed_values.get(id)) {(200,value.clone())}
                     else if route.starts_with("/embeds/") {(200,json!({"id":EMOJI,"source_type":"link","fetch_method":"opengraph","url":"https://example.test/","created_at":"2026-10-03T00:00:00Z","fetched_at":"2026-10-03T00:00:00Z","thumbnail":{"mime_type":"image/png"},"image_data":tiny_png_base64(),"video":{"url":"https://example.test/video.mp4","mime_type":"video/mp4"},"provider":"X","title":"g1 (@g1)","description":"Elefante-marinho boceja e coça a cabeça durante soneca em praia de SC"}))}

@@ -3,13 +3,28 @@ use super::*;
 use adw::prelude::*;
 use actions::tests::{mock,pump,until,descendants,find_button};
 
+fn assert_reply_alignment(host:&adw::Window){
+    let banner=descendants(host.upcast_ref()).into_iter().find(|w|w.has_css_class("papo-reply-banner")).unwrap();
+    let children=descendants(&banner);
+    let author=children.iter().find_map(|w|w.downcast_ref::<gtk::Label>().filter(|l|l.has_css_class("heading"))).unwrap();
+    let preview=children.iter().find_map(|w|w.downcast_ref::<gtk::TextView>().filter(|v|v.widget_name()=="reply-preview-text")).unwrap();
+    // EN-US: Check rendered line geometry, including emoji metrics, rather than only widget alignment properties.
+    // PT-BR: Confere a geometria da linha renderizada, incluindo emojis, e não só propriedades de alinhamento.
+    let (y,height)=preview.line_yrange(&preview.buffer().start_iter());
+    let (_,y)=preview.buffer_to_window_coords(gtk::TextWindowType::Widget,0,y);
+    let center=preview.compute_point(&banner,&gtk::graphene::Point::new(0.0,y as f32+height as f32/2.0)).unwrap();
+    let bounds=author.compute_bounds(&banner).unwrap();
+    let offset=center.y()-(bounds.y()+bounds.height()/2.0);
+    assert!(offset.abs()<=2.0,"reply text and author must be vertically centered together: offset={offset}, line_height={height}, author={bounds:?}");
+}
+
 pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let(api,backend,server)=tokio::runtime::Handle::current().block_on(mock());
     let (mut latest,old)={let b=backend.lock().unwrap();(serde_json::from_value::<Message>(b.message.clone()).unwrap(),serde_json::from_value::<Message>(b.old.clone()).unwrap())};
     let user=latest.author_id.unwrap();let channel=latest.channel_id;let emoji=Uuid::new_v4();
     let long=format!("😄 :dance: {} end", "wide preview ".repeat(35));latest.content=Some(long.clone());
     let target:Channel=serde_json::from_value(serde_json::json!({"id":channel,"name":"Polish","created_at":latest.created_at})).unwrap();
-    let mut reply=latest.clone();reply.id=Uuid::new_v4();reply.reply_to=Some(latest.id);reply.content=Some("Reply".into());reply.created_at+=chrono::Duration::seconds(1);
+    let mut reply=latest.clone();reply.id=Uuid::new_v4();reply.reply_to=Some(latest.id);reply.content=Some("Reply :dance:".into());reply.created_at+=chrono::Duration::seconds(1);
     let chat=ChatModel::builder().launch(ChatInit{api:Some(api.clone()),active_channel:Some(target),messages:vec![latest.clone(),reply.clone()],user_id:Some(user),..Default::default()}).detach();
     chat.emit(ChatMsg::SetAccess{user_id:user,access:crate::models::Access::direct()});
     let texture=crate::media::PreparedImage{width:64,height:32,pixels:vec![255;64*32*4]}.texture();
@@ -20,7 +35,16 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     assert_eq!(previews.len(),2,"composer and message reference both use rich previews");
     for preview in &previews{let b=preview.buffer();assert!(b.slice(&b.start_iter(),&b.end_iter(),true).ends_with(" end"),"available width, not a character cutoff, controls clipping");let mut iter=b.start_iter();let mut paints=0;loop{paints+=usize::from(iter.paintable().is_some());if let Some(p)=iter.paintable(){let metrics=preview.pango_context().metrics(None,None);let height=(metrics.ascent()+metrics.descent()+pango::SCALE-1)/pango::SCALE;assert!(p.intrinsic_height()<=height);let next=iter.clone();let rect=preview.iter_location(&next);assert!(rect.height()<=preview.parent().unwrap().height(),"emoji and adjacent glyphs fit the single-line preview");}if !iter.forward_char(){break;}}assert_eq!(paints,1);assert!(b.text(&b.start_iter(),&b.end_iter(),false).contains("😄"));}
     assert_eq!(texture.height(),32,"compact previews must not resize the shared chat texture");
+    let body=descendants(host.upcast_ref()).into_iter().filter_map(|w|w.downcast::<gtk::TextView>().ok()).find(|v|v.buffer().text(&v.buffer().start_iter(),&v.buffer().end_iter(),false).starts_with("Reply ")).unwrap();
+    assert!(body.buffer().iter_at_offset(6).paintable().is_some());assert!(body.height()<=texture.height()+8,"inline emoji must not add a large baseline gap to reply bodies: {}px",body.height());
+    crate::ui::main_window::layout::tests::preview(&host,"reply-banner",context);
+    assert_reply_alignment(&host);
     let before=previews[0].parent().unwrap().width();crate::ui::chat::actions::tests::resize_window(&host,600,680);until(context,||host.width()<700);assert!(previews[0].parent().unwrap().width()<before);
+    performance::settle(context);assert_reply_alignment(&host);
+    for content in ["Vou montar o PC no fim de semana.","😄 Resposta com emoji",":dance: Resposta com emoji personalizado"]{
+        let mut quoted=latest.clone();quoted.content=Some(content.into());
+        chat.emit(ChatMsg::SetReply(Some(quoted)));performance::settle(context);assert_reply_alignment(&host);
+    }
     // Recently viewed images outside the opening batch survive a visit elsewhere.
     let mut resident=transfers::resident::Cache::default();let key=Uuid::new_v4();let owners=std::collections::HashSet::from([latest.id]);
     resident.select(channel,&HashMap::new());resident.insert(channel,key,&owners,&texture);

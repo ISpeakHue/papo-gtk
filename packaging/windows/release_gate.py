@@ -20,7 +20,7 @@ MEDIA = {"media-emojis", "draft-previews", "attachment-media", "mov-media", "bac
 AUTO_MEDIA = {"mov-media", "backend-gifs", "status-viewer", "video-audio"}
 DESKTOP = {"desktop-input", "login-input", "multiline", "edit-mentions", "search-recycling",
            "account-settings", "voice-controls", "symbolic-icons", "status-viewer",
-           "windows-notifications", "notification-window", "notification-filters", "voice-chat",
+           "windows-notifications", "notification-window", "notification-filters", "window-scrolling", "voice-chat",
            "native_voice_worker_drop_releases_process", "native_call_worker_drop_closes_descendant_pipes",
            "native_call_cues_complete_and_cancel_without_devices"}
 REPORTS = {"portable-runtime.json": PORTABLE, "media-ui-cairo.json": MEDIA,

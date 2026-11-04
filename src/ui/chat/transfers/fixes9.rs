@@ -89,7 +89,7 @@ pub(crate) fn exercise_backend_gifs(context:&gtk::glib::MainContext){
     use base64::Engine;
     let(api,backend,server)=tokio::runtime::Handle::current().block_on(mock());
     let user=Uuid::new_v4();let channel=Uuid::new_v4();let now=chrono::Utc::now();
-    let urls=["https://klipy.com/gifs/halloween-scary-22","https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExYnlmcjdvMHN1a2p2aDBiajlyYmtpMjczMnptMTFyamdtdjh2MThuMCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/okfvUCpgArv3y/giphy.gif","https://tenor.com/view/cat-123"];
+    let urls=["https://klipy.com/gifs/halloween-scary-22","https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExYnlmcjdvMHN1a2p2aDBiajlyYmtpMjczMnptMTFyamdtdjh2MThuMCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/okfvUCpgArv3y/giphy.gif","https://tenor.com/view/cat-123","https://gif.fxtwitter.com/tweet_video/HT-DVvMWoAASeEm.webp"];
     let target:Channel=serde_json::from_value(serde_json::json!({"id":channel,"name":"Backend GIF media","created_at":now})).unwrap();
     let mut messages:Vec<Message>=urls.iter().map(|url|serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"channel_id":channel,"author_id":user,"content":url,"created_at":now})).unwrap()).collect();
     let chat=ChatModel::builder().launch(ChatInit{api:Some(api),active_channel:Some(target.clone()),messages:messages.clone(),user_id:Some(user),..Default::default()}).detach();
@@ -101,19 +101,20 @@ pub(crate) fn exercise_backend_gifs(context:&gtk::glib::MainContext){
         let key=Uuid::new_v4();keys.push(key);
         let mut bytes=crate::media::animation::fixture();
         if index==0{bytes.resize((4<<20)+32,0);}
-        let mut value=serde_json::json!({"id":key,"source_type":"link","fetch_method":"gif","provider":(["KLIPY","GIPHY","Tenor"][index]),"url":urls[index],"title":"GIF from backend","thumbnail":{"mime_type":"image/gif","width":8,"height":8},"created_at":now});
+        if index==3{bytes=include_bytes!("../../../../tests/fixtures/animated-emoji.webp").to_vec();}
+        let mut value=serde_json::json!({"id":key,"source_type":"link","fetch_method":"gif","provider":(["KLIPY","GIPHY","Tenor","FxTwitter"][index]),"url":urls[index],"title":"GIF from backend","thumbnail":{"mime_type":if index==3{"image/webp"}else{"image/gif"},"width":8,"height":8},"created_at":now});
         // Resolved Klipy/Giphy embeds can carry both renditions. The GIF
         // bytes must win without a relay request or a video player.
         if index<2{value["video"]=serde_json::json!({"url":"https://example.test/fallback.mp4","mime_type":"video/mp4"});}
         let data=base64::engine::general_purpose::STANDARD.encode(bytes);
-        if index==2{value["image_data"]=data.into();}else{let mut response=value.clone();response["image_data"]=data.into();backend.lock().unwrap().embed_values.insert(key.to_string(),response);}
+        if index>=2{value["image_data"]=data.into();}else{let mut response=value.clone();response["image_data"]=data.into();backend.lock().unwrap().embed_values.insert(key.to_string(),response);}
         message.embeds=Some(vec![serde_json::from_value(value).unwrap()]);
         chat.emit(ChatMsg::AddMessage(message.clone()));
     }
     until(context,||keys.iter().all(|key|chat.model().transfers.animations.contains_key(key))&&chat.model().media_render_pending.is_none());performance::settle(context);
     assert!(chat.model().transfers.videos.is_empty());
     assert!(chat.model().transfers.encoded.contains(keys[0]),"the backend's 5 MiB GIF limit must fit the compressed cache");
-    for(index,key) in keys.iter().enumerate(){let requests=backend.lock().unwrap().requests.clone();assert_eq!(requests.iter().filter(|(_,p,_)|p==&format!("/embeds/{key}")).count(),usize::from(index!=2));assert!(!requests.iter().any(|(_,p,_)|p==&format!("/embeds/{key}/video")));}
+    for(index,key) in keys.iter().enumerate(){let requests=backend.lock().unwrap().requests.clone();assert_eq!(requests.iter().filter(|(_,p,_)|p==&format!("/embeds/{key}")).count(),usize::from(index<2));assert!(!requests.iter().any(|(_,p,_)|p==&format!("/embeds/{key}/video")));}
     let widgets=descendants(chat.widget().upcast_ref());assert!(!widgets.iter().any(|w|w.is::<gtk::Video>()||w.is::<gtk::LinkButton>()));drop(widgets);
     let before=backend.lock().unwrap().requests.iter().filter(|(_,p,_)|p.starts_with("/embeds/")).count();
     let mut other=target.clone();other.id=Uuid::new_v4();chat.emit(ChatMsg::SetChannel(other));pump(context);chat.emit(ChatMsg::SetChannel(target));

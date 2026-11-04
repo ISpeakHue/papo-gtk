@@ -183,6 +183,10 @@ class Engine:
         self.video_enabled = False
         self.video_epoch = 0
         self.frame_pending = False
+        self.local_preview_enabled = False
+        self.local_preview_pending = False
+        self.local_preview_epoch = 0
+        self.local_preview_last = 0
         self.video_receivers = []
         self.last_frame = 0
         self.monitor = None
@@ -526,6 +530,7 @@ class Engine:
     def stop_capture(self, kind):
         if kind == "screen":
             self.capture_generation += 1
+            self.reset_local_preview()
         if kind == "video":
             self.camera_id = None
         item = self.video.get(kind)
@@ -604,11 +609,19 @@ class Engine:
         capture = Gst.Bin.new(None)
         item["bin"] = capture
         self.pipeline.add(capture)
-        codec = Gst.parse_bin_from_description(
+        description = (
             "queue max-size-buffers=2 leaky=downstream ! videoconvert ! videoscale ! videorate ! "
             "video/x-raw,format=I420,width=640,height=360,framerate=15/1 ! "
+            + ("tee name=preview_raw preview_raw. ! queue max-size-buffers=2 leaky=downstream ! " if kind == "screen" else "") +
             "vp8enc deadline=1 cpu-used=8 target-bitrate=700000 keyframe-max-dist=15 ! "
-            "rtpvp8pay name=pay pt=97 picture-id-mode=15-bit ! capsfilter name=rtpcaps ! valve name=gate drop=true drop-mode=forward-sticky-events", True)
+            "rtpvp8pay name=pay pt=97 picture-id-mode=15-bit ! capsfilter name=rtpcaps ! valve name=gate drop=true drop-mode=forward-sticky-events")
+        if kind == "screen":
+            description += " preview_raw. ! " + self.local_preview_branch()
+        codec = Gst.parse_bin_from_description(description, True)
+        item["codec"] = codec
+        if kind == "screen":
+            self.reset_local_preview()
+            self.connect_local_preview(codec)
         codec.get_by_name("pay").set_property("ssrc", item["ssrc"])
         codec.get_by_name("rtpcaps").set_property("caps", Gst.Caps.from_string(self.video_caps().to_string() + ",ssrc=(uint)" + str(item["ssrc"])))
         capture.add(source)
@@ -627,6 +640,49 @@ class Engine:
         if not capture.sync_state_with_parent():
             raise ValueError("video source could not start")
         self.offer()
+
+    @staticmethod
+    def local_preview_branch():
+        # EN-US: Reuse the transmitted raw frames; never open a second capture or block the RTP branch.
+        # PT-BR: Reutiliza os quadros transmitidos, sem abrir outra captura nem bloquear o ramo RTP.
+        # EN-US: async=false also prevents a closed preview valve from holding the call in preroll.
+        # PT-BR: async=false também impede que o ramo fechado da prévia segure a chamada no preroll.
+        return ("queue max-size-buffers=1 leaky=downstream ! valve name=preview_gate drop=true drop-mode=forward-sticky-events ! "
+                "videorate drop-only=true ! video/x-raw,framerate=3/1 ! videoscale ! video/x-raw,width=320,height=180 ! "
+                "jpegenc quality=60 ! appsink name=local_preview emit-signals=true sync=false async=false max-buffers=1 drop=true")
+
+    def reset_local_preview(self):
+        self.local_preview_epoch += 1
+        self.local_preview_enabled = False
+        self.local_preview_pending = False
+        self.local_preview_last = 0
+        emit({"type": "local_preview_reset", "epoch": self.local_preview_epoch})
+
+    def set_local_preview(self, enabled):
+        self.local_preview_enabled = bool(enabled)
+        item = self.video.get("screen", {})
+        codec = item.get("codec") if item.get("bin") else None
+        gate = codec.get_by_name("preview_gate") if codec else None
+        if gate:
+            gate.set_property("drop", not self.local_preview_enabled)
+
+    def connect_local_preview(self, codec):
+        epoch = self.local_preview_epoch
+        def frame(sink):
+            sample = sink.emit("pull-sample")
+            if sample is None:
+                return Gst.FlowReturn.OK
+            if self.closed or epoch != self.local_preview_epoch or not self.local_preview_enabled or self.local_preview_pending or time.monotonic() - self.local_preview_last < 0.3:
+                return Gst.FlowReturn.OK
+            buffer = sample.get_buffer()
+            if buffer.get_size() > 80000:
+                return Gst.FlowReturn.OK
+            data = buffer.extract_dup(0, buffer.get_size())
+            self.local_preview_pending = True
+            self.local_preview_last = time.monotonic()
+            emit({"type": "local_preview_frame", "epoch": epoch, "jpeg": base64.b64encode(data).decode("ascii")})
+            return Gst.FlowReturn.OK
+        codec.get_by_name("local_preview").connect("new-sample", frame)
 
     def receive_video(self, pad):
         track = self.track_ids.get(pad.get_property("transceiver").get_property("mid"), "")
@@ -733,6 +789,11 @@ class Engine:
                 emit({"type": "video_reset", "epoch": self.video_epoch})
             elif kind == "frame_ack":
                 self.frame_pending = False
+            elif kind == "local_preview":
+                self.set_local_preview(event.get("enabled", False))
+            elif kind == "local_preview_ack":
+                if int(event.get("epoch", -1)) == self.local_preview_epoch:
+                    self.local_preview_pending = False
             elif kind == "microphone_gain":
                 gain = self.set_microphone_gain(event.get("gain"))
                 emit({"type": "microphone_gain", "gain": gain})

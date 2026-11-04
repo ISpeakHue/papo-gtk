@@ -129,7 +129,7 @@ def main():
         gi.require_version(namespace, version)
     from gi.repository import Gst, GstVideo, GstApp, GstPbutils, GstWebRTC, GstSdp, Gtk, Adw, GdkPixbuf, Gio
     Gst.init(None)
-    factories = ('opusenc', 'opusdec', 'vp8enc', 'vp8dec', 'webrtcbin', 'nicesrc', 'nicesink', 'dtlsenc', 'dtlsdec', 'mfvideosrc', 'jpegdec', 'decodebin', 'volume', 'level', 'appsrc')
+    factories = ('opusenc', 'opusdec', 'vp8enc', 'vp8dec', 'webrtcbin', 'nicesrc', 'nicesink', 'dtlsenc', 'dtlsdec', 'mfvideosrc', 'jpegdec', 'decodebin', 'volume', 'level', 'appsrc', 'tee', 'valve', 'videorate', 'videoscale', 'jpegenc', 'appsink')
     for name in factories:
         assert Gst.ElementFactory.find(name), f'Missing packaged media factory: {name}'
     # EN-US: Loading/ABI checks never open a picker or start desktop capture; support is device-dependent.

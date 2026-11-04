@@ -19,6 +19,12 @@ fn page(value:&str)->Option<Url>{
 pub fn media_url(value:&str)->Option<Url>{
     let url=Url::parse(value).ok()?;
     if url.scheme()!="https"||!url.username().is_empty()||url.password().is_some()||url.port().is_some()||value.len()>2048{return None;}
+    if url.host_str()==Some("gif.fxtwitter.com"){
+        let path:Vec<_>=url.path_segments()?.collect();
+        if path.len()!=2||path[0]!="tweet_video"{return None;}
+        let name=path[1].strip_suffix(".webp").or_else(||path[1].strip_suffix(".gif"))?;
+        return (!name.is_empty()&&name.bytes().all(|b|b.is_ascii_alphanumeric()||matches!(b,b'_'|b'-'))).then_some(url);
+    }
     if !matches!(url.host_str()?,"media.tenor.com"|"media1.tenor.com"|"media2.tenor.com"|"media3.tenor.com"|"media4.tenor.com"|"static.klipy.com"|"static1.klipy.com"|"static2.klipy.com"){return None;}
     if !url.path().to_ascii_lowercase().ends_with(".gif"){return None;}Some(url)
 }
@@ -65,6 +71,9 @@ pub fn is_provider(value:&str)->bool{super::giphy::id(value).is_some()||page(val
         assert!(links(&format!("`{tenor}` ```\n{klipy}\n``` ")).is_empty());
         for bad in ["https://tenor.com.evil/view/a","https://user@tenor.com/view/a","https://klipy.com:8080/gifs/a","http://klipy.com/gifs/a"]{assert!(!is_provider(bad));}
         assert!(is_provider("https://tenor.com/nihxadXt69o.gif"));
+        let twitter="https://gif.fxtwitter.com/tweet_video/HT-DVvMWoAASeEm.webp";
+        assert_eq!(links(twitter),[twitter]);
+        for bad in ["https://gif.fxtwitter.com.evil.test/tweet_video/a.webp","https://gif.fxtwitter.com/elsewhere/a.webp","https://gif.fxtwitter.com/tweet_video/a.webp/extra","https://alice@gif.fxtwitter.com/tweet_video/a.webp"]{assert!(!is_provider(bad));}
         assert!(is_video(include_bytes!("../../tests/fixtures/chat-h264.mp4")));assert!(!is_video(b"GIF89a"));
     }
 }

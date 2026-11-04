@@ -240,6 +240,14 @@ jobs:
           for papo_case in search-recycling account-settings voice-controls; do
             PAPO_UI_CASE="$papo_case" GTK_A11Y=test cargo test --locked ui_smoke -- --ignored --test-threads=1
           done
+          for papo_case in window-scrolling notification-filters; do
+            PAPO_UI_CASE="$papo_case" PAPO_NATIVE_INPUT_TEST=1 GTK_A11Y=test cargo test --locked ui_smoke -- --ignored --test-threads=1
+          done
+          # EN-US: Cover the recent shared renderer, unread deletion and bounded image-cache changes natively.
+          # PT-BR: Testa nativamente as mudanças recentes do renderizador, exclusão de não lidas e cache limitado.
+          for papo_case in report10 mentions mention-suggestions embeds backend-update retention; do
+            PAPO_UI_CASE="$papo_case" cargo test --locked ui_smoke -- --ignored --test-threads=1
+          done
       - name: Test media classification, decoded bounds and cache budgets
         if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only
         run: |

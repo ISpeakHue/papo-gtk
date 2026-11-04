@@ -7,7 +7,7 @@ use adw::prelude::*;
 use relm4::prelude::*;
 use uuid::Uuid;
 
-use crate::models::{Channel, ChannelType, DirectConversation, Access, Server, UserStatus, WhoamiResponse};
+use crate::models::{Channel, ChannelType, NotificationSettings, DirectConversation, Access, Server, UserStatus, WhoamiResponse};
 
 #[derive(Debug,Clone,PartialEq,Eq)]
 pub struct VoiceParticipant{pub id:Uuid,pub name:String,pub muted:bool,pub speaking:bool,pub camera:bool,pub screen:bool}
@@ -67,6 +67,7 @@ pub enum SidebarMsg {
     SetChannels(Vec<Channel>),
     SelectChannel(Uuid),
     MarkChannelRead(Uuid),
+    ChannelNotifications(Uuid,NotificationSettings),
     VoiceSelect(Uuid),
     SetSelection(Uuid),
     LogoutClicked,
@@ -79,6 +80,7 @@ pub enum SidebarOutput {
     DirectSelect(Uuid), HideDirect(Uuid), Blocks, Administration, Webhooks, Moderation,
     ChannelSelected(Channel),
     MarkChannelRead(Uuid),
+    ChannelNotifications(Uuid,NotificationSettings),
     VoiceSelect(Uuid),
     Logout,
     Profile(Uuid), Settings,
@@ -328,6 +330,7 @@ impl Component for SidebarModel {
                 self.rebuild_direct(&widgets.direct_list,&sender);
             }
             SidebarMsg::MarkChannelRead(id)=>{if self.channels.iter().any(|c|c.id==id&&c.supports_messages()&&!self.voice_rooms.iter().any(|r|r.id==id&&!r.can_chat)){let _=sender.output(SidebarOutput::MarkChannelRead(id));}},
+            SidebarMsg::ChannelNotifications(id,value)=>{if self.channels.iter().any(|c|c.id==id&&c.supports_messages()&&!self.voice_rooms.iter().any(|r|r.id==id&&!r.can_chat)){let _=sender.output(SidebarOutput::ChannelNotifications(id,value));}},
             SidebarMsg::LogoutClicked => {
                 if let Some(dialog)=&self.logout_dialog {
                     dialog.present(Some(_root));
@@ -369,7 +372,8 @@ fn rebuild_channel_list(
         let is_voice = matches!(channel.channel_type, Some(ChannelType::Voice));
 
         let room=rooms.iter().find(|r|r.id==channel.id);let can_chat=!is_voice||room.is_some_and(|r|r.can_chat);let can_connect=is_voice&&room.is_some_and(|r|r.can_connect);
-        let key=format!("channel-{}",channel.id);let signature=format!("{}|{:?}|{:?}|{can_chat}|{can_connect}",channel.name,channel.channel_type,(channel.has_unread(),counts.get(&channel.id)));
+        let muted=channel.notification_settings==Some(NotificationSettings::Off);
+        let key=format!("channel-{}",channel.id);let signature=format!("{}|{:?}|{:?}|{can_chat}|{can_connect}|{muted}",channel.name,channel.channel_type,(channel.has_unread(),counts.get(&channel.id)));
         if let Some((old_signature,row))=cache.get(&key).filter(|(old,_)|*old==signature){
             desired.push((old_signature.clone(),row.clone()));
         } else {
@@ -414,6 +418,10 @@ fn rebuild_channel_list(
             label.set_ellipsize(pango::EllipsizeMode::End);
             box_row.append(&label);
 
+            if muted{
+                let icon=gtk::Image::from_icon_name("papo-audio-volume-muted-symbolic");icon.set_pixel_size(14);icon.add_css_class("dim-label");
+                icon.set_widget_name(&format!("muted-{}",channel.id));icon.set_tooltip_text(Some("Canal silenciado"));box_row.append(&icon);
+            }
             if channel.has_unread() {
                 let badge=gtk::Label::new(Some("●"));badge.add_css_class("accent");
                 badge.set_widget_name(&format!("unread-{}",channel.id));
@@ -439,7 +447,11 @@ fn rebuild_channel_list(
             click.connect_pressed(move |gesture,_,x,y|{
                 let Some(row)=weak.upgrade()else{return;};gesture.set_state(gtk::EventSequenceState::Claimed);
                 let popover=gtk::Popover::new();popover.set_parent(&row);popover.set_pointing_to(Some(&gtk::gdk::Rectangle::new(x as i32,y as i32,1,1)));
-                let mark=gtk::Button::with_label("Marcar canal como lido");let s=input.clone();let weak=popover.downgrade();mark.connect_clicked(move |_|{let _=s.send(SidebarMsg::MarkChannelRead(id));if let Some(p)=weak.upgrade(){p.popdown();}});popover.set_child(Some(&mark));
+                let menu=gtk::Box::new(gtk::Orientation::Vertical,4);
+                let mark=gtk::Button::with_label("Marcar canal como lido");let s=input.clone();let weak=popover.downgrade();mark.connect_clicked(move |_|{let _=s.send(SidebarMsg::MarkChannelRead(id));if let Some(p)=weak.upgrade(){p.popdown();}});menu.append(&mark);
+                let mute=gtk::Button::with_label(if muted{"Ativar notificações do canal"}else{"Silenciar canal"});let s=input.clone();let weak=popover.downgrade();
+                mute.connect_clicked(move |_|{let _=s.send(SidebarMsg::ChannelNotifications(id,if muted{NotificationSettings::OnlyMentions}else{NotificationSettings::Off}));if let Some(p)=weak.upgrade(){p.popdown();}});menu.append(&mute);
+                popover.set_child(Some(&menu));
                 popover.connect_closed(|p|p.unparent());let weak=popover.downgrade();row.connect_destroy(move |_|{if let Some(p)=weak.upgrade(){if p.parent().is_some(){p.unparent();}}});popover.popup();
             });row.add_controller(click);
         }

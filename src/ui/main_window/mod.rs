@@ -188,6 +188,7 @@ impl Component for MainWindowModel {
             .forward(sender.input_sender(), |output| match output {
                 SidebarOutput::ChannelSelected(ch) => MainWindowMsg::ChannelSelected(ch),
                 SidebarOutput::MarkChannelRead(id)=>MainWindowMsg::MarkChannelRead(id),
+                SidebarOutput::ChannelNotifications(channel,value)=>MainWindowMsg::Account(AccountMsg::SaveChannel{token:None,channel,value}),
                 SidebarOutput::DirectSelect(id)=>MainWindowMsg::Direct(DirectMsg::Select(id,None)),
                 SidebarOutput::HideDirect(id)=>MainWindowMsg::Direct(DirectMsg::Hide(id)),
                 SidebarOutput::Blocks=>MainWindowMsg::Direct(DirectMsg::Blocks),
@@ -566,7 +567,7 @@ impl Component for MainWindowModel {
                         self.chat.emit(ChatMsg::ApplyChange(Change::Edit(id, content, edited_at)));
                     } else { self.chat.emit(ChatMsg::CacheChange(Change::Edit(id,content,edited_at))); }
                 }
-                WsEvent::MessageDelete { id, .. } => {self.notifications.inbox.delete(id);self.chat.emit(ChatMsg::DeleteMessage(id));self.render_inbox(&sender);self.deliver_notices(sender.clone());if self.channels.iter().any(|c|c.last_message.as_ref().is_some_and(|m|m.id==id)){self.refresh_channels(sender);}},
+                WsEvent::MessageDelete { id, .. } => {let refresh=self.notifications.journal.delete(id,&mut self.channels);self.notifications.inbox.delete(id);self.chat.emit(ChatMsg::DeleteMessage(id));self.publish_voice_channels();self.render_inbox(&sender);self.deliver_notices(sender.clone());if refresh{self.refresh_channels(sender);}},
                 WsEvent::Typing { user_id, channel_id, is_typing } => {
                     if user_id != self.current_user.id && Some(channel_id) == self.active_channel_id {
                         self.chat.emit(ChatMsg::UserTyping { user_id, is_typing });

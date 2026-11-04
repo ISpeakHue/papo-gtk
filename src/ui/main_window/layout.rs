@@ -68,7 +68,7 @@ pub(crate) mod tests {
     fn settle(context:&gtk::glib::MainContext){for _ in 0..120{pump(context);std::thread::sleep(Duration::from_millis(5));}}
     pub(crate) fn preview(window:&impl IsA<gtk::Window>,name:&str,context:&gtk::glib::MainContext){if std::env::var_os("PAPO_DESIGN_PREVIEW").is_some(){settle(context);snapshot(window,name,context);}}
 
-    fn assert_chat_center(main:&Controller<MainWindowModel>,title:&adw::WindowTitle,header:&adw::HeaderBar){
+    fn assert_chat_center(main:&Controller<MainWindowModel>,title:&gtk::Box,header:&adw::HeaderBar){
         let title=title.compute_bounds(header).unwrap();let chat=main.model().chat.widget().compute_bounds(header).unwrap();
         let offset=title.x()+title.width()/2.0-chat.x()-chat.width()/2.0;
         assert!(offset.abs()<=1.0,"title must follow the chat center, offset {offset}px");
@@ -77,14 +77,15 @@ pub(crate) mod tests {
     pub(crate) fn exercise_header(main:&Controller<MainWindowModel>,window:&adw::ApplicationWindow,context:&gtk::glib::MainContext){
         until(context,||main.model().active_channel_id.is_some()&&main.model().background_started);
         let header=descendants(main.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<adw::HeaderBar>().ok()).unwrap();
-        let title=descendants(header.upcast_ref()).into_iter().find_map(|w|w.downcast::<adw::WindowTitle>().ok()).unwrap();
+        let title=descendants(header.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Box>().ok().filter(|w|w.widget_name()=="conversation-title")).unwrap();
+        let name=||title.first_child().and_downcast::<gtk::Label>().unwrap().text();
         assert!(header.shows_end_title_buttons());
         assert!(!descendants(main.model().chat.widget().upcast_ref()).iter().any(|w|w.is::<adw::HeaderBar>()),"the conversation has no duplicate content toolbar");
         let channel=main.model().channels.iter().find(|c|Some(c.id)==main.model().active_channel_id).unwrap().clone();
-        assert_eq!(title.title(),format!("# {}",channel.name));
+        assert_eq!(name(),format!("# {}",channel.name));
         let mut edited=channel.clone();edited.name="Canal de teste".into();edited.topic=Some("Um tópico longo para conferir que o cabeçalho permanece compacto. ".repeat(12));
-        main.model().chat.emit(ChatMsg::UpdateChannel(edited.clone()));until(context,||title.title()=="# Canal de teste");
-        assert_eq!(title.subtitle(),edited.topic.as_deref().unwrap());
+        main.model().chat.emit(ChatMsg::UpdateChannel(edited.clone()));until(context,||name()=="# Canal de teste");
+        assert_eq!(title.last_child().and_downcast::<gtk::Label>().unwrap().text(),edited.topic.as_deref().unwrap().trim());
         for width in [1280,900,540,360]{
             crate::ui::chat::actions::tests::resize_window(window,width,760);settle(context);
             preview(window,&format!("gnome-{width}"),context);
@@ -100,7 +101,7 @@ pub(crate) mod tests {
                 assert!(bounds.width()>0.0,"the channel name remains visible");
                 let chat=main.model().chat.widget().compute_bounds(&header).unwrap();
                 let offset=center-(chat.x()+chat.width()/2.0);
-                assert!(offset.abs()<=1.0,"title shifted {offset}px at width {width}, topic {:?}",title.subtitle());
+                assert!(offset.abs()<=1.0,"title shifted {offset}px at width {width}, topic {:?}",title.tooltip_text());
                 if let Some(previous)=previous_center{assert!((center-previous).abs()<=1.0,"topic length moved the title at width {width}");}
                 previous_center=Some(center);
             }

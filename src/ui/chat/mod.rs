@@ -26,6 +26,7 @@ pub(crate) mod transfers;
 pub(crate) mod clipboard;
 mod viewport;
 mod text;
+mod header;
 mod markdown;
 mod syntax;
 #[cfg(test)]pub(crate) use syntax::exercise as exercise_syntax;
@@ -228,11 +229,10 @@ impl Component for ChatModel {
                 #[wrap(Some)]
                 set_title_widget = &gtk::Box {
                     #[name="conversation_title"]
-                    adw::WindowTitle {
+                    gtk::Box {
                         set_widget_name:"conversation-title",
-                        #[watch] set_title:&match model.active_channel.as_ref(){Some(c) if c.is_direct()=>c.name().to_owned(),Some(c) if c.is_voice()=>format!("Voz · {}",c.name()),Some(c)=>format!("# {}",c.name()),None=>"Selecione um canal".into()},
-                        #[watch] set_subtitle:model.active_channel.as_ref().and_then(|c|c.topic()).unwrap_or(""),
-                        #[watch] set_tooltip_text:model.active_channel.as_ref().and_then(|c|c.topic()),
+                        set_orientation:gtk::Orientation::Vertical,
+                        set_valign:gtk::Align::Center,
                     },
                     #[name="header_title_offset"]
                     gtk::Box {set_width_request:0},
@@ -371,7 +371,7 @@ impl Component for ChatModel {
                 },
 
                 #[name="reply_preview"]
-                gtk::Box {set_orientation:gtk::Orientation::Vertical,set_hexpand:true},
+                gtk::Box {set_orientation:gtk::Orientation::Vertical,set_hexpand:true,set_valign:gtk::Align::Center},
                 gtk::Button {
                     set_icon_name: "papo-window-close-symbolic",
                     set_has_frame: false,
@@ -472,10 +472,11 @@ impl Component for ChatModel {
                 set_widget_name:"emoji-suggestions",
                 #[watch] set_visible:model.emoji_visible,
                 set_hscrollbar_policy:gtk::PolicyType::Never,
+                set_min_content_height:0,set_valign:gtk::Align::Start,set_vexpand:false,
                 set_max_content_height:220,set_propagate_natural_height:true,
                 add_css_class:"papo-mention-suggestions",
                 #[name="emoji_choices"]
-                gtk::Box{set_orientation:gtk::Orientation::Vertical,set_spacing:2},
+                gtk::Box{set_orientation:gtk::Orientation::Vertical,set_spacing:2,set_valign:gtk::Align::Start},
             },
             // ── Message Composer ─────────────────────────────────────────────
             gtk::Box {
@@ -610,6 +611,7 @@ impl Component for ChatModel {
         // Cover the whole application once rooted, including clicks on the same thumbnail.
         let controller=outside.clone();root.connect_root_notify(move |root|{if let Some(parent)=root.root().and_downcast::<gtk::Window>(){if controller.widget().is_none(){parent.add_controller(controller.clone());}}else if let Some(parent)=controller.widget(){parent.remove_controller(&controller);}});
 
+        header::render(&widgets.conversation_title,model.active_channel.as_ref(),&model.actions,false);
         model.composer.connect(&widgets.message_entry,&sender);
         widgets.message_entry.update_property(&[gtk::accessible::Property::Label("Mensagem"),gtk::accessible::Property::Description("Enter envia; Shift+Enter insere uma nova linha. Ctrl+Tab muda o foco.")]);
         model.composer.set_emojis(&widgets.message_entry,&model.actions);
@@ -720,6 +722,8 @@ impl Component for ChatModel {
         let update_edit_mentions=matches!(&message,ChatMsg::SetUsers(_)|ChatMsg::SetAvatars(_)|ChatMsg::SetConfig(_)|ChatMsg::SetAccess{..});
         let update_mentions=matches!(&message,ChatMsg::OpenMentions|ChatMsg::MentionCursorChanged|ChatMsg::CloseMentions|ChatMsg::SendClicked|ChatMsg::SendFinished{..}|ChatMsg::InputChanged(_)|ChatMsg::MentionSelected(_)|ChatMsg::SetUsers(_)|ChatMsg::SetConfig(_)|ChatMsg::SetAccess{..}|ChatMsg::SetTarget(_)|ChatMsg::ClearChannel);
         let update_reply=matches!(&message,ChatMsg::SetReply(_)|ChatMsg::SetUsers(_)|ChatMsg::SetConfig(_)|ChatMsg::SetTarget(_)|ChatMsg::ClearChannel|ChatMsg::Action(ActionMsg::EmojiPage{..}|ActionMsg::EmojisLoaded{..}));
+        let refresh_header_emojis=matches!(&message,ChatMsg::Action(ActionMsg::EmojiPage{..}|ActionMsg::EmojisLoaded{..}));
+        let update_header=refresh_header_emojis||matches!(&message,ChatMsg::SetTarget(_)|ChatMsg::UpdateChannel(_)|ChatMsg::UpdateDirect(_)|ChatMsg::ClearChannel);
         let update_files=matches!(&message,ChatMsg::SetAccess{..}|ChatMsg::SetTarget(_)|ChatMsg::ClearChannel|ChatMsg::SendClicked|ChatMsg::SendFinished{..}|ChatMsg::Transfer(TransferMsg::Selected{..}|TransferMsg::PasteReady{..}|TransferMsg::Remove(_)|TransferMsg::Cancel));
         let following=self.viewport.following();let mut position=None;let mut render_history=false;let mut restore_avatars=false;
         // Keep inactive snapshots current without rebuilding the active chat.
@@ -1264,7 +1268,10 @@ impl Component for ChatModel {
                     }
                     if self.emoji_manual{let all=gtk::Button::with_label("Todos os emojis Unicode…");let input=sender.input_sender().clone();all.connect_clicked(move |_|{let _=input.send(ChatMsg::UnicodePicker);});widgets.emoji_choices.prepend(&all);}
                     if choices.is_empty(){widgets.emoji_choices.append(&gtk::Label::new(Some("Nenhum emoji encontrado")));}
-                }self.emoji_visible=true;
+                }
+                let height=widgets.emoji_choices.measure(gtk::Orientation::Vertical,-1).1;
+                widgets.emoji_panel.set_vscrollbar_policy(if height>220{gtk::PolicyType::Automatic}else{gtk::PolicyType::External});
+                self.emoji_visible=true;
             }else{self.emoji_visible=false;self.emoji_manual=false;}
         }
         if let Some(Position::Message(id))=position.as_ref(){
@@ -1324,6 +1331,7 @@ impl Component for ChatModel {
         if let Some(roles)=self.draft.reply.as_ref().and_then(|m|m.author_id).and_then(|id|self.users_map.get(&id)).and_then(|u|u.roles.as_deref()){crate::ui::style::role_color(&widgets.reply_author,roles);}
         if render_history||update_moderation{self.schedule_moderation(&sender,root.is_mapped());}
         self.schedule_error_timeout(previous_error.as_deref(),new_error,&sender);
+        if update_header{header::render(&widgets.conversation_title,self.active_channel.as_ref(),&self.actions,refresh_header_emojis);}
         self.update_view(widgets, sender);
     }
 }

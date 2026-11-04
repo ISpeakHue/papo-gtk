@@ -2,6 +2,7 @@
 //! PT-BR: Renderiza cartões nativos com metadados fornecidos pelo backend, sem executar HTML remoto.
 use super::*;
 mod flow;
+mod reddit;
 
 pub(super) fn safe_url(value:&str)->Option<reqwest::Url>{
     reqwest::Url::parse(value).ok().filter(|u|matches!(u.scheme(),"http"|"https")&&u.host_str().is_some()&&u.username().is_empty()&&u.password().is_none())
@@ -36,8 +37,11 @@ pub(super) fn display_signature(p:&Embed,users:&HashMap<Uuid,UserSummary>,action
 pub(super) fn body(p:&Embed,author_texture:Option<&gtk::gdk::Texture>,users:&HashMap<Uuid,UserSummary>,actions:&Actions,sender:&ComponentSender<ChatModel>)->gtk::Box{
     let card=gtk::Box::new(gtk::Orientation::Vertical,6);card.set_widget_name(&format!("embed-{}",p.id));card.set_valign(gtk::Align::Start);card.set_overflow(gtk::Overflow::Hidden);card.set_margin_bottom(8);card.add_css_class("card");card.add_css_class("papo-link-preview");
     if p.source_type=="custom"{card.add_css_class("papo-custom-embed");}
-    crate::ui::style::embed_accent(&card,p.color.as_deref());
-    if let Some(provider)=p.site_name.as_deref().or(p.provider.as_deref()){let l=label(provider);l.add_css_class("caption");l.add_css_class("dim-label");card.append(&l);}
+    let reddit=reddit::post(p);
+    if reddit.is_some(){card.add_css_class("papo-reddit-embed");}
+    crate::ui::style::embed_accent(&card,p.color.as_deref().or(reddit.as_ref().map(|_|"#ff4500")));
+    if let Some(post)=&reddit{reddit::heading(&card,post);}
+    else if let Some(provider)=p.site_name.as_deref().or(p.provider.as_deref()){let l=label(provider);l.add_css_class("caption");l.add_css_class("dim-label");card.append(&l);}
     if let Some(author)=&p.author{
         let header=gtk::Box::new(gtk::Orientation::Horizontal,6);header.set_valign(gtk::Align::Start);
         if author.media.is_some()||author_texture.is_some(){
@@ -46,7 +50,7 @@ pub(super) fn body(p:&Embed,author_texture:Option<&gtk::gdk::Texture>,users:&Has
         if let Some(name)=author.name.as_deref(){let w=linked(name,author.url.as_deref());w.set_valign(gtk::Align::Center);w.add_css_class("heading");header.append(&w);}
         if header.first_child().is_some(){card.append(&header);}
     }
-    if let Some(title)=p.title.as_deref().filter(|s|!s.is_empty()).or(p.url.as_deref()) {let w=linked(title,p.url.as_deref());w.add_css_class("heading");card.append(&w);}
+    if let Some(title)=p.title.as_deref().filter(|s|!s.is_empty()).or(reddit.as_ref().map(|p|if p.comment{"Comentário no Reddit"}else{"Publicação no Reddit"})).or(p.url.as_deref()) {let w=linked(title,p.url.as_deref());w.add_css_class("heading");card.append(&w);}
     if let Some(description)=p.description.as_deref(){card.append(&content(description,users,actions,sender));}
     let grid=gtk::Grid::new();grid.set_column_spacing(12);grid.set_row_spacing(8);grid.set_column_homogeneous(true);grid.set_hexpand(true);
     let mut fields:Vec<_>=p.fields.iter().collect();fields.sort_by_key(|f|f.position);let(mut row,mut col)=(0,0);
@@ -65,9 +69,11 @@ pub(super) fn footer(card:&gtk::Box,p:&Embed,image_available:bool,users:&HashMap
     // by downloading their original URLs or content hashes.
     if p.image.is_some()&&!image_available{let l=label("Imagem incorporada indisponível no servidor.");l.add_css_class("dim-label");card.append(&l);}
     if let Some(text)=p.footer.as_ref().and_then(|f|f.text.as_deref()){let l=content(text,users,actions,sender);l.add_css_class("caption");l.add_css_class("dim-label");card.append(&l);}
+    if let Some(post)=reddit::post(p){reddit::action(card,&post);}
 }
 
 #[cfg(test)]pub(crate) fn exercise(context:&gtk::glib::MainContext){
+    reddit::exercise(context);
     use adw::prelude::*;
     use actions::tests::{descendants,find_button,pump,until};
     use performance::settle;

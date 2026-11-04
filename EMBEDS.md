@@ -97,3 +97,45 @@ Follow-up validation on 2026-10-09: both new regressions failed before the fixes
 and passed afterward. The complete GTK workflow passed in 135.17 seconds,
 all 167 headless Rust tests passed (three opt-in tests ignored), and the
 application build passed. Tests used a private display and local fixtures.
+
+## Reddit
+
+Reddit post, comment, gallery and share links render native cards with a Reddit
+heading, linked subreddit when available, backend-supplied author/title/text,
+and a link to open the original post or comment. A missing color defaults to
+Reddit orange. Custom cards and unrelated URLs keep their existing appearance.
+
+Thumbnails and backend-provided videos use the regular authorized media
+endpoints, bounded loading queue, cache and viewers. Text-only embed metadata
+requires no additional request. Live embed updates add or replace card content;
+the complete empty list removes it. Remote HTML is never executed.
+
+The replacement provider in
+[backend PR #45](https://github.com/Papo-Chat/papo-backend/pull/45) reads Reddit's
+first-party embed document for title/author/body, one image and packaged MP4
+video, with official oEmbed metadata as a fallback. It rejects challenge pages
+and renews expiring video URLs through the authorized backend relay. It is based
+on the maintainer's reverted main, independently of the previous website scraper.
+The patch, real public-network validation and deployment instructions are in
+[docs/backend](docs/backend/README.md). The frontend does not fetch Reddit pages;
+inline images/video appear when the backend exposes their media fields.
+
+The follow-up in [backend PR #46](https://github.com/Papo-Chat/papo-backend/pull/46)
+accepts Reddit's additional preview CDN and excludes header icons from image
+selection. Automatically translated documents use the original oEmbed title,
+retaining media; translated body text is omitted when its original is unavailable.
+The included cache-expiry migration lets subsequent shares/refetches replace old
+translations or incorrect icons while preserving existing message associations.
+
+## Other animated image formats
+
+Animated WebP and APNG use the same bounded, progressive frame decoder and
+motion settings as GIF. FxTwitter's exact `gif.fxtwitter.com/tweet_video/`
+animation URLs are recognised as bare animated media, including when supplied
+in bot embed metadata. Cached bytes are reused on channel returns. Generic
+static WebP images and ordinary videos keep their existing presentation.
+
+Automatic embeds for direct FxTwitter CDN links use the backend's X proxy media
+support. The accompanying [provider patch](docs/backend/fxtwitter-animations.patch)
+is retained as historical material for its older base revision; see
+[docs/backend](docs/backend/README.md) before applying it to another checkout.

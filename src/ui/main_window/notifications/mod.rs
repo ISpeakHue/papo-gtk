@@ -8,6 +8,7 @@ mod filters;
 #[cfg(test)]pub(crate) use filters::exercise as exercise_filters;
 mod read;
 pub(crate) mod state;
+#[cfg(test)]mod deleted;
 use super::*;
 use crate::models::{Message,NotificationList,NotificationEvent};
 use state::{Inbox,ReadJournal};
@@ -452,6 +453,7 @@ pub(crate) fn exercise_denied(main:&Controller<MainWindowModel>,context:&gtk::gl
 }
 
 #[cfg(test)]pub(crate) fn exercise_backend_update(context:&gtk::glib::MainContext){
+    deleted::exercise(context);
     use adw::prelude::*;
     use crate::ui::chat::actions::tests::{mock,pump,until};
     let (api,backend,server)=tokio::runtime::Handle::current().block_on(mock());

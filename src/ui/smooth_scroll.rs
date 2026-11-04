@@ -23,20 +23,6 @@ pub(super) fn animate_wheel(
     animate_axis(scroll,wheel,gtk::Orientation::Vertical,dy);
 }
 
-// EN-US: Win32 positionless wheel events can miss a descendant Scroll controller; viewer zoom belongs to its window.
-// PT-BR: Eventos Win32 de roda sem posição podem não chegar ao controlador filho; o zoom pertence à janela do visualizador.
-pub(super) fn connect_primary_wheel(window:&impl IsA<gtk::Widget>,callback:impl Fn(f64)->gtk::glib::Propagation+'static){
-    let controller=gtk::EventControllerLegacy::new();
-    controller.set_propagation_phase(gtk::PropagationPhase::Capture);
-    controller.connect_event(move |_,event|{
-        let Some(wheel)=event.downcast_ref::<gtk::gdk::ScrollEvent>()else{return gtk::glib::Propagation::Proceed;};
-        if !crate::platform::shortcuts::primary_pressed(event.modifier_state()){return gtk::glib::Propagation::Proceed;}
-        let (_,dy)=wheel.deltas();
-        if !dy.is_finite()||dy==0.0{return gtk::glib::Propagation::Proceed;}
-        callback(dy)
-    });window.add_controller(controller);
-}
-
 fn animate_axis(scroll:&gtk::ScrolledWindow,wheel:&RefCell<Option<adw::TimedAnimation>>,axis:gtk::Orientation,dy:f64){
     if !dy.is_finite() || dy == 0.0 { return; }
     let adj = adjustment(scroll,axis);
@@ -196,7 +182,9 @@ fn observe_window(window:&gtk::Window){
         let Some((surface,x,y))=location else{return gtk::glib::Propagation::Proceed;};
         let Some(native)=gtk::Native::for_surface(&surface)else{return gtk::glib::Propagation::Proceed;};
         let (tx,ty)=native.surface_transform();
-        let picked=native.upcast::<gtk::Widget>().pick(x+tx,y+ty,gtk::PickFlags::DEFAULT);
+        // EN-US: Match GTK's event routing: subtract the surface's decoration offset to obtain widget coordinates.
+        // PT-BR: Segue o roteamento do GTK: subtrai o deslocamento da decoração para obter coordenadas do widget.
+        let picked=native.upcast::<gtk::Widget>().pick(x-tx,y-ty,gtk::PickFlags::DEFAULT);
         #[cfg(test)]if std::env::var_os("PAPO_SCROLL_DIAGNOSTICS").is_some(){eprintln!("Wheel hit: position=({x},{y}), transform=({tx},{ty}), widget={:?}",picked.as_ref().map(|w|w.type_().name()));}
         let Some(scroll)=destination(picked,axis,delta)else{return gtk::glib::Propagation::Proceed;};
         // EN-US: Chat anchoring and member recycling already own a compatible wheel controller; never animate twice.

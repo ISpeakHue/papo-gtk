@@ -36,7 +36,7 @@ fn input(widget:&impl IsA<gtk::Widget>,action:&str){
         command.creation_flags(0x08000000).arg(directory.join("windows_input.py")).arg(std::process::id().to_string()).arg("Papo smooth scrolling test").arg("--pointer");
     }
     #[cfg(not(windows))]command.arg(directory.join("scroll_input.py")).arg("Papo smooth scrolling test");
-    let status=command.arg(((point.x() as f64-tx).round() as i32).to_string()).arg(((point.y() as f64-ty).round() as i32).to_string()).arg(action).status().unwrap();
+    let status=command.arg(((point.x() as f64+tx).round() as i32).to_string()).arg(((point.y() as f64+ty).round() as i32).to_string()).arg(action).status().unwrap();
     assert!(status.success(),"native wheel helper failed");
     }
     let widget=widget.as_ref();
@@ -99,7 +99,8 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
         let h=horizontal.hadjustment();input(&horizontal,"right");until(context,||h.value()>0.0);spin(context,200);
         let before=h.value();input(&horizontal,"Shift_L+down");until(context,||h.value()>before+1.0);spin(context,200);
         let zooms=Rc::new(Cell::new(0));let count=zooms.clone();
-        connect_primary_wheel(&window,move |_|{count.set(count.get()+1);gtk::glib::Propagation::Stop});
+        let zoom=gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
+        zoom.connect_scroll(move |c,_,_|{if crate::platform::shortcuts::primary_pressed(c.current_event_state()){count.set(count.get()+1);gtk::glib::Propagation::Stop}else{gtk::glib::Propagation::Proceed}});horizontal.add_controller(zoom);
         let before=h.value();input(&horizontal,"Control_L+down");until(context,||zooms.get()>0);assert_eq!(zooms.get(),1);assert!((h.value()-before).abs()<0.5,"primary-wheel zoom must not pan the viewer");
 
         outer.vadjustment().set_value(0.0);spin(context,50);input(&button,"click");until(context,||clicks.get()==1);

@@ -8,6 +8,7 @@ mod filters;
 #[cfg(test)]pub(crate) use filters::exercise as exercise_filters;
 mod read;
 pub(crate) mod state;
+#[cfg(test)]mod deleted;
 use super::*;
 use crate::models::{Message,NotificationList,NotificationEvent};
 use state::{Inbox,ReadJournal};
@@ -452,6 +453,7 @@ pub(crate) fn exercise_denied(main:&Controller<MainWindowModel>,context:&gtk::gl
 }
 
 #[cfg(test)]pub(crate) fn exercise_backend_update(context:&gtk::glib::MainContext){
+    deleted::exercise(context);
     use adw::prelude::*;
     use crate::ui::chat::actions::tests::{mock,pump,until};
     let (api,backend,server)=tokio::runtime::Handle::current().block_on(mock());
@@ -501,6 +503,12 @@ pub(crate) fn exercise_denied(main:&Controller<MainWindowModel>,context:&gtk::gl
     until(context,||main.model().active_channel_id==Some(dm)&&main.model().chat.model().read_candidate().is_some());
     if gtk::prelude::WidgetExt::display(&host).type_().name()=="GdkX11Display"{
         assert!(std::process::Command::new("python3").arg(concat!(env!("CARGO_MANIFEST_DIR"),"/tests/helpers/input_keys.py")).arg("Papo backend update test").status().unwrap().success());until(context,||host.is_active());
+    }
+    #[cfg(windows)]{
+        // EN-US: Native read acknowledgements require the fixture's host to regain focus after its modal dialogs.
+        // PT-BR: A confirmação nativa de leitura exige que a janela de teste recupere o foco após os diálogos modais.
+        if std::env::var("PAPO_NATIVE_INPUT_TEST").as_deref()==Ok("1"){crate::ui::chat::multiline::keys_for("Papo backend update test",&[]);}else{host.present();}
+        until(context,||host.is_active());
     }
     main.emit(MainWindowMsg::TickCleanup);until(context,||main.model().direct.items.iter().any(|d|d.id==dm&&d.unread_count==0));
     let writes:Vec<_>=backend.lock().unwrap().requests.iter().filter(|(m,p,_)|m=="PUT"&&p==&format!("/channels/{dm}/read")).cloned().collect();

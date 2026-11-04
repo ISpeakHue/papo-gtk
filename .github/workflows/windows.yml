@@ -137,7 +137,7 @@ jobs:
           name: Windows-UCRT64-native-inputs
           path: target/windows-gtk-restore
           github-token: ${{ github.token }}
-          run-id: '41702893674'
+          run-id: '41774323962'
       - name: Backport the upstream native GTK IME disposal fix
         run: |
           test "$(pacman -Q mingw-w64-ucrt-x86_64-gtk4)" = 'mingw-w64-ucrt-x86_64-gtk4 4.24.1-1'
@@ -239,6 +239,14 @@ jobs:
           PAPO_UI_CASE=edit-mentions cargo test --locked ui_smoke -- --ignored --test-threads=1
           for papo_case in search-recycling account-settings voice-controls; do
             PAPO_UI_CASE="$papo_case" GTK_A11Y=test cargo test --locked ui_smoke -- --ignored --test-threads=1
+          done
+          for papo_case in window-scrolling notification-filters emoji-grid backend-update; do
+            PAPO_UI_CASE="$papo_case" PAPO_NATIVE_INPUT_TEST=1 GTK_A11Y=test cargo test --locked ui_smoke -- --ignored --test-threads=1
+          done
+          # EN-US: Cover the recent shared renderer, unread deletion and bounded image-cache changes natively.
+          # PT-BR: Testa nativamente as mudanças recentes do renderizador, exclusão de não lidas e cache limitado.
+          for papo_case in report8 report10 mentions mention-suggestions embeds retention; do
+            PAPO_UI_CASE="$papo_case" cargo test --locked ui_smoke -- --ignored --test-threads=1
           done
       - name: Test media classification, decoded bounds and cache budgets
         if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only

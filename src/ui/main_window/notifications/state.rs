@@ -86,16 +86,20 @@ pub fn delivery(n:&Notice,config:&UserConfig,channels:&[NoticeChannel],user:Uuid
 pub struct ReadJournal {
     pub version:u64,last:HashMap<Uuid,(u64,ChannelLastMessage)>,read:HashMap<Uuid,(u64,MessageCursor)>,
     preferences:HashMap<Uuid,(u64,NotificationSettings)>,
+    previous:HashMap<Uuid,(Uuid,Option<MessageCursor>)>,
+    deleted:HashSet<Uuid>,deletion_order:VecDeque<Uuid>,
 }
 impl ReadJournal {
     pub fn preference(&mut self,channel:Uuid,setting:NotificationSettings){self.version+=1;self.preferences.insert(channel,(self.version,setting));}
     pub fn message(&mut self,m:&Message,channels:&mut [Channel]){
+        if self.deleted.contains(&m.id){return;}
         let Some(c)=channels.iter_mut().find(|c|c.id==m.channel_id) else{return;};
         if c.last_message.as_ref().is_some_and(|old|(old.created_at,old.id)>=(m.created_at,m.id)){return;}
+        self.previous.insert(c.id,(m.id,c.last_message.as_ref().map(|last|MessageCursor{id:last.id,created_at:last.created_at})));
         self.version+=1;let last=ChannelLastMessage{id:m.id,content:m.content.clone(),author_id:m.author_id,author_username:m.external().map(|a|a.name.clone()),created_at:m.created_at};c.last_message=Some(last.clone());self.last.insert(c.id,(self.version,last));
     }
     pub fn observed_read(&mut self,channel:Uuid,messages:&[Message],channels:&mut [Channel]){
-        let Some(newest)=messages.iter().filter(|m|m.channel_id==channel).max_by_key(|m|(m.created_at,m.id)) else{return;};
+        let Some(newest)=messages.iter().filter(|m|m.channel_id==channel&&!self.deleted.contains(&m.id)).max_by_key(|m|(m.created_at,m.id)) else{return;};
         self.message(newest,channels);let Some(c)=channels.iter_mut().find(|c|c.id==channel)else{return;};
         let cursor=MessageCursor::from(newest);
         if self.read.get(&channel).is_some_and(|(_,old)|(old.created_at,old.id)>=(cursor.created_at,cursor.id)){return;}
@@ -103,8 +107,29 @@ impl ReadJournal {
         if c.last_read_message==c.last_message.as_ref().map(|m|m.id)&&c.last_message.as_ref().is_some_and(|m|(m.created_at,m.id)>(cursor.created_at,cursor.id)){return;}
         self.version+=1;c.last_read_message=Some(cursor.id);c.last_read_at=Some(chrono::Utc::now());self.read.insert(channel,(self.version,cursor));
     }
+    pub fn delete(&mut self,id:Uuid,channels:&mut [Channel])->bool{
+        let affected=channels.iter().any(|c|c.last_message.as_ref().is_some_and(|m|m.id==id)||c.last_read_message==Some(id));
+        if self.deleted.insert(id){
+            self.version+=1;self.deletion_order.push_back(id);
+            while self.deletion_order.len()>2048{if let Some(old)=self.deletion_order.pop_front(){self.deleted.remove(&old);}}
+        }
+        // EN-US: A deleted head/read cursor must not override the server's surviving predecessor during reconciliation.
+        // PT-BR: A última mensagem ou leitura apagada não pode sobrescrever sua antecessora retornada pelo servidor.
+        self.last.retain(|_,(_,last)|last.id!=id);self.read.retain(|_,(_,cursor)|cursor.id!=id);
+        for channel in channels.iter_mut().filter(|c|c.last_message.as_ref().is_some_and(|m|m.id==id)){
+            if let Some((_,previous))=self.previous.remove(&channel.id).filter(|(head,p)|*head==id&&p.is_none_or(|m|!self.deleted.contains(&m.id))){
+                // EN-US: Restore the known predecessor immediately; keep only its cursor, never another message body.
+                // PT-BR: Restaura a antecessora conhecida de imediato; guarda só seu cursor, nunca outro corpo de mensagem.
+                channel.last_message=previous.map(|m|ChannelLastMessage{id:m.id,created_at:m.created_at,content:None,author_id:None,author_username:None});
+                if let Some(last)=&channel.last_message{self.last.insert(channel.id,(self.version,last.clone()));}
+            }
+        }
+        self.previous.retain(|_,(_,previous)|previous.is_none_or(|m|m.id!=id));
+        affected
+    }
     pub fn reconcile(&self,snapshot_version:u64,channels:&mut [Channel]){
         for c in channels {
+            if c.last_message.as_ref().is_some_and(|m|self.deleted.contains(&m.id)){c.last_message=None;}
             if let Some((_,setting))=self.preferences.get(&c.id).filter(|(v,_)|*v>snapshot_version){c.notification_settings=Some(setting.clone());}
             if let Some((version,last))=self.last.get(&c.id).filter(|(v,_)|*v>snapshot_version){let _=version;if c.last_message.as_ref().map_or(true,|old|(old.created_at,old.id)<(last.created_at,last.id)){c.last_message=Some(last.clone());}}
             if let Some((_,read))=self.read.get(&c.id).filter(|(v,_)|*v>snapshot_version){c.last_read_message=Some(read.id);c.last_read_at=Some(chrono::Utc::now());}
@@ -132,6 +157,40 @@ impl ReadJournal {
     fn message(channel:Uuid,id:Uuid,second:i64)->Message{serde_json::from_value(serde_json::json!({"id":id,"channel_id":channel,"author_id":Uuid::nil(),"content":"hello","created_at":chrono::DateTime::from_timestamp(second,0).unwrap()})).unwrap()}
     fn channel(id:Uuid)->Channel{serde_json::from_value(serde_json::json!({"id":id,"name":"general","created_at":"2026-10-03T00:00:00Z"})).unwrap()}
     fn event(id:Uuid,message_id:Uuid)->NotificationEvent{NotificationEvent{id,message_id,user_id:Some(Uuid::nil()),message_content:"hello".into()}}
+    #[test]fn deleting_unseen_head_restores_read_state_and_cannot_be_resurrected(){
+        let id=Uuid::new_v4();let first=message(id,Uuid::new_v4(),1);let deleted=message(id,Uuid::new_v4(),2);
+        let mut channels=vec![channel(id)];let mut journal=ReadJournal::default();journal.observed_read(id,&[first.clone()],&mut channels);
+        let snapshot_version=journal.version;let before=channels.clone();journal.message(&deleted,&mut channels);let mut stale=channels.clone();assert!(channels[0].has_unread());
+        assert!(journal.delete(deleted.id,&mut channels));assert_eq!(channels[0].last_message.as_ref().unwrap().id,first.id);assert!(!channels[0].has_unread());
+        journal.reconcile(snapshot_version,&mut stale);assert_eq!(stale[0].last_message.as_ref().unwrap().id,first.id);assert!(!stale[0].has_unread());
+        let mut fresh=before;journal.reconcile(snapshot_version,&mut fresh);assert!(!fresh[0].has_unread());
+        journal.message(&deleted,&mut fresh);journal.observed_read(id,&[deleted],&mut fresh);assert_eq!(fresh[0].last_read_message,Some(first.id));assert_eq!(fresh[0].last_message.as_ref().unwrap().id,first.id);
+    }
+    #[test]fn deleting_a_head_preserves_older_unread_messages_and_newer_live_heads(){
+        let id=Uuid::new_v4();let first=message(id,Uuid::new_v4(),1);let deleted=message(id,Uuid::new_v4(),2);let later=message(id,Uuid::new_v4(),3);
+        let mut channels=vec![channel(id)];let mut journal=ReadJournal::default();journal.message(&first,&mut channels);let version=journal.version;
+        journal.message(&deleted,&mut channels);assert!(journal.delete(deleted.id,&mut channels));assert!(channels[0].has_unread());assert!(channels[0].last_read_message.is_none());
+        let mut snapshot=channels.clone();journal.message(&later,&mut channels);assert!(!journal.delete(deleted.id,&mut channels));journal.reconcile(version,&mut snapshot);
+        assert_eq!(snapshot[0].last_message.as_ref().unwrap().id,later.id);assert!(snapshot[0].has_unread());
+    }
+    #[test]fn deleting_the_only_message_clears_the_dot_and_deletion_metadata_is_bounded(){
+        let id=Uuid::new_v4();let m=message(id,Uuid::new_v4(),1);let mut channels=vec![channel(id)];let mut journal=ReadJournal::default();
+        journal.message(&m,&mut channels);let mut stale=channels.clone();assert!(journal.delete(m.id,&mut channels));assert!(!channels[0].has_unread());
+        journal.reconcile(0,&mut stale);assert!(stale[0].last_message.is_none());
+        for _ in 0..3000{journal.delete(Uuid::new_v4(),&mut channels);}assert_eq!(journal.deleted.len(),2048);assert_eq!(journal.deletion_order.len(),2048);
+    }
+    #[test]fn a_newer_snapshot_head_cannot_use_an_unrelated_live_predecessor(){
+        let id=Uuid::new_v4();let read=message(id,Uuid::new_v4(),1);let live=message(id,Uuid::new_v4(),2);let snapshot=message(id,Uuid::new_v4(),3);
+        let mut channels=vec![channel(id)];let mut journal=ReadJournal::default();journal.observed_read(id,&[read],&mut channels);journal.message(&live,&mut channels);
+        channels[0].last_message=Some(ChannelLastMessage{id:snapshot.id,created_at:snapshot.created_at,content:None,author_id:None,author_username:None});
+        assert!(journal.delete(snapshot.id,&mut channels));assert!(channels[0].has_unread(),"unknown predecessors need an authoritative refresh, not an unrelated read cursor");
+        assert_eq!(channels[0].last_message.as_ref().unwrap().id,snapshot.id);
+    }
+    #[test]fn a_deleted_read_cursor_does_not_override_the_servers_repaired_cursor(){
+        let id=Uuid::new_v4();let first=message(id,Uuid::new_v4(),1);let deleted=message(id,Uuid::new_v4(),2);let mut channels=vec![channel(id)];let mut journal=ReadJournal::default();
+        journal.observed_read(id,&[first.clone()],&mut channels);let version=journal.version;let mut fresh=channels.clone();journal.observed_read(id,&[deleted.clone()],&mut channels);
+        journal.delete(deleted.id,&mut channels);journal.reconcile(version,&mut fresh);assert_eq!(fresh[0].last_read_message,Some(first.id));assert!(!fresh[0].has_unread());
+    }
     #[test]fn channel_acknowledgements_mark_only_known_messages_through_the_exact_cursor(){
         let channel=Uuid::new_v4();let other=Uuid::new_v4();let first=message(channel,Uuid::from_u128(1),1);let next=message(channel,Uuid::from_u128(2),1);
         let mut inbox=Inbox::default();

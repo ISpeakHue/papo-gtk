@@ -145,6 +145,7 @@ mod tests {
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("notification-filters"){
             crate::ui::main_window::notifications::exercise_filters(&context);crate::ui::main_window::notifications::exercise_tabs(&context);window.close();return;
         }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("window-scrolling"){crate::ui::smooth_scroll::exercise(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("emoji-categories"){crate::ui::chat::exercise_emoji_categories(&context);window.close();return;}
         if std::env::var("PAPO_UI_CASE").as_deref()==Ok("emoji-grid"){
             crate::ui::chat::exercise_animated_emojis(&context);crate::ui::chat::bugs8::exercise(&context);window.close();return;
@@ -398,6 +399,7 @@ mod tests {
         stage!(crate::ui::chat::performance::exercise_media_scroll);
         stage!(crate::ui::chat::performance::exercise_opening);
         stage!(crate::ui::chat::performance::exercise_smooth_updates);
+        stage!(crate::ui::smooth_scroll::exercise);
         stage!(crate::ui::chat::performance::exercise);
         stage!(crate::ui::chat::performance::exercise_corrections);
         stage!(crate::ui::user_list::exercise_corrections);

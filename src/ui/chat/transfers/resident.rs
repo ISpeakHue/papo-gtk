@@ -2,10 +2,10 @@
 //! PT-BR: Retenção limitada de primeiros quadros e miniaturas do lote recente carregado ao abrir o canal.
 use super::*;
 
-const BYTE_LIMIT: u64 = 192 << 20;
+const BYTE_LIMIT: u64 = 96 << 20;
 const ENTRY_LIMIT: usize = 256;
 const CHANNEL_LIMIT: usize = 8;
-const OLD_BYTES:u64=32<<20;
+const OLD_BYTES:u64=16<<20;
 const OLD_ENTRIES:usize=64;
 struct Entry {
     texture: gtk::gdk::Texture,
@@ -162,4 +162,25 @@ impl Transfers {
             if let Some(messages)=self.preview_owners.get(&key){self.resident.insert(channel,key,messages,texture);}
         }
     }
+}
+
+#[cfg(test)]pub(super) fn exercise_budget(context:&gtk::glib::MainContext){
+    let rss=||std::fs::read_to_string("/proc/self/status").ok().and_then(|s|s.lines().find(|line|line.starts_with("VmRSS:")).and_then(|line|line.split_whitespace().nth(1)).and_then(|value|value.parse::<u64>().ok()));
+    let before=rss();let mut resident=Cache::default();let mut encoded=super::encoded::Cache::default();
+    let mut first=None;
+    for index in 0..8u128{
+        let channel=Uuid::from_u128(100+index);let keys:HashMap<_,_>=(0..30u128).map(|i|{let id=Uuid::from_u128(1000+index*30+i);(id,HashSet::from([id]))}).collect();
+        resident.select(channel,&keys);encoded.set_recent(channel,keys.keys().copied().collect());
+        for (key,owners) in &keys{
+            let texture=crate::media::PreparedImage{width:640,height:360,pixels:vec![index as u8;640*360*4]}.texture();
+            if first.is_none(){first=Some(texture.downgrade());}
+            resident.insert(channel,*key,owners,&texture);
+            encoded.insert(*key,channel,*owners.iter().next().unwrap(),vec![index as u8;1<<20].into());
+            actions::tests::pump(context);
+        }
+    }
+    let after=rss();
+    println!("Papo synthetic warm-cache memory: {}",serde_json::json!({"resident_bytes":resident.bytes,"encoded_bytes":encoded.memory_bytes(),"rss_before_kib":before,"rss_after_kib":after}));
+    assert!(resident.bytes+encoded.memory_bytes() as u64<=160<<20,"warm caches must share a smaller combined residency allowance");
+    assert!(first.unwrap().upgrade().is_none(),"evicted native textures must be released, not just removed from accounting");
 }

@@ -42,11 +42,29 @@ def events(chord):
             for keys, up in [(codes, 0), (list(reversed(codes)), 2)] for code in keys]
 
 
-def run(pid, title, chords):
+def pointer_events(action):
+    modifier, _, action = action.rpartition('+')
+    if action == 'move' and not modifier:
+        return []
+    if modifier not in ('', 'Shift_L', 'Control_L') or action not in ('up', 'down', 'quarter-down', 'left', 'right', 'click'):
+        raise ValueError('Unsupported native test pointer action')
+    keys = events(modifier) if modifier else []
+    flags, data = {'up': (0x800, 120), 'down': (0x800, -120), 'quarter-down': (0x800, -30),
+                   'left': (0x1000, -120), 'right': (0x1000, 120), 'click': (2, 0)}[action]
+    mouse = [Input(0, Payload(mouse=Mouse(0, 0, data & 0xffffffff, flags, 0, 0)))]
+    if action == 'click':
+        mouse.append(Input(0, Payload(mouse=Mouse(0, 0, 0, 4, 0, 0))))
+    return keys[:len(keys)//2] + mouse + keys[len(keys)//2:]
+
+
+def run(pid, title, chords, pointer=None):
     if os.name != 'nt' or pid != os.getppid() or os.environ.get('PAPO_NATIVE_INPUT_TEST') != '1':
         raise RuntimeError('Native input requires explicit opt-in and the invoking test process')
-    if title != 'Papo desktop input test':
+    expected = ('Papo smooth scrolling test',) if pointer is not None else ('Papo desktop input test', 'Papo emoji Escape test', 'Papo backend update test')
+    if title not in expected:
         raise RuntimeError('Unexpected native test window title')
+    if pointer is not None and (len(chords) != 1 or not all(0 <= value <= 4096 for value in pointer)):
+        raise ValueError('Invalid private fixture pointer coordinates/actions')
     api = c.WinDLL('user32', use_last_error=True)
     callback = c.WINFUNCTYPE(c.c_int, c.c_void_p, c.c_ssize_t)
     api.EnumWindows.argtypes = (callback, c.c_ssize_t)
@@ -59,6 +77,9 @@ def run(pid, title, chords):
     api.SendInput.restype = U32
     api.GetAsyncKeyState.argtypes = (c.c_int,)
     api.GetAsyncKeyState.restype = c.c_int16
+    api.ClientToScreen.argtypes = (c.c_void_p, c.c_void_p)
+    api.SetCursorPos.argtypes = (c.c_int, c.c_int)
+    api.GetClientRect.argtypes = (c.c_void_p, c.c_void_p)
     targets = []
     def visit(hwnd, _):
         owner, text = U32(), c.create_unicode_buffer(256)
@@ -82,16 +103,47 @@ def run(pid, title, chords):
             raise RuntimeError('Test lost foreground ownership; no input was sent')
         if any(api.GetAsyncKeyState(key) & 0x8000 for key in (0x10, 0x11, 0x12, 0x5b, 0x5c)):
             raise RuntimeError('Release physical modifier keys before the disposable input test')
-        batch = events(chord)
+        if pointer is not None:
+            # EN-US: GDK coordinates are logical; SendInput targets physical client pixels at the window's DPI.
+            # PT-BR: Coordenadas GDK são lógicas; SendInput usa pixels físicos do cliente no DPI da janela.
+            api.GetWindowDpiAwarenessContext.argtypes = (c.c_void_p,)
+            api.GetWindowDpiAwarenessContext.restype = c.c_void_p
+            api.SetThreadDpiAwarenessContext.argtypes = (c.c_void_p,)
+            api.SetThreadDpiAwarenessContext.restype = c.c_void_p
+            api.SetThreadDpiAwarenessContext(api.GetWindowDpiAwarenessContext(target))
+            api.GetDpiForWindow.argtypes = (c.c_void_p,)
+            api.GetDpiForWindow.restype = U32
+            scale = api.GetDpiForWindow(target) / 96
+            point = (c.c_long * 2)(round(pointer[0] * scale), round(pointer[1] * scale))
+            bounds = (c.c_long * 4)()
+            if not api.GetClientRect(target, bounds) or not (0 <= point[0] < bounds[2] and 0 <= point[1] < bounds[3]):
+                raise RuntimeError('Pointer is outside the owned test window')
+            if not api.ClientToScreen(target, point) or not api.SetCursorPos(*point):
+                raise c.WinError(c.get_last_error())
+            if os.environ.get('PAPO_SCROLL_DIAGNOSTICS') == '1':
+                api.WindowFromPoint.argtypes = (c.c_int64,)
+                api.WindowFromPoint.restype = c.c_void_p
+                packed = (point[0] & 0xffffffff) | ((point[1] & 0xffffffff) << 32)
+                print(f'Native pointer: logical={pointer}, screen={tuple(point)}, dpi_scale={scale}, client={tuple(bounds)}, owned_hit={api.WindowFromPoint(packed) == target}', flush=True)
+            batch = pointer_events(chord)
+        else:
+            batch = events(chord)
+        if not batch:
+            continue
         inputs = (Input * len(batch))(*batch)
         if api.SendInput(len(inputs), inputs, c.sizeof(Input)) != len(inputs):
             # EN-US: Release the test's keys after a partial batch; never leave a synthetic modifier held.
             # PT-BR: Libera as teclas do teste após um lote parcial; não deixa modificador sintético pressionado.
-            releases = [event for event in batch if event.payload.keyboard.flags & 2]
+            releases = [event for event in batch if event.kind == 1 and event.payload.keyboard.flags & 2]
+            if pointer is not None and chord == 'click':
+                releases.append(Input(0, Payload(mouse=Mouse(0, 0, 0, 4, 0, 0))))
             api.SendInput(len(releases), (Input * len(releases))(*releases), c.sizeof(Input))
             raise RuntimeError('Windows rejected native test input')
         time.sleep(.015)
 
 
 if __name__ == '__main__':
-    run(int(sys.argv[1]), sys.argv[2], sys.argv[3:])
+    if len(sys.argv) > 3 and sys.argv[3] == '--pointer':
+        run(int(sys.argv[1]), sys.argv[2], sys.argv[6:], pointer=(int(sys.argv[4]), int(sys.argv[5])))
+    else:
+        run(int(sys.argv[1]), sys.argv[2], sys.argv[3:])

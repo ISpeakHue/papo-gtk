@@ -40,6 +40,16 @@ pub(crate) fn exercise_suggestions(context:&gtk::glib::MainContext){
     assert_eq!(descendants(panel.upcast_ref()).iter().filter(|w|w.is::<gtk::Button>()).count(),50);assert!(panel.height()<=260,"long suggestion lists must remain bounded");assert!(panel.vadjustment().upper()>panel.vadjustment().page_size(),"long lists must remain scrollable");
     panel.vadjustment().set_value(panel.vadjustment().upper());entry.set_text("@dan");entry.set_position(-1);pump(context);performance::settle(context);compact(&first_mention_button(panel.upcast_ref()).unwrap());assert!(panel.vadjustment().value()<1.0,"filtering back to one item must reset the scroll position");
     entry.set_text("@missing-user");entry.set_position(-1);pump(context);performance::settle(context);assert!(first_mention_button(panel.upcast_ref()).is_none());assert!(panel.height()<=64,"empty results must not reserve the tall list's height");
+    let emoji=Uuid::new_v4();
+    {let mut state=chat.state().get_mut();let actions=&mut state.model.actions;
+        actions.emojis.push(serde_json::from_value(serde_json::json!({"id":emoji,"name":"only_one_fixture_emoji","format":"PNG","created_at":date})).unwrap());
+        actions.emoji_names.insert("only_one_fixture_emoji".into(),emoji);actions.textures.insert(emoji,texture);
+    }
+    entry.set_text(":only_one_fixture_emoji");entry.set_position(-1);until(context,||chat.model().emoji_visible);performance::settle(context);
+    let emoji_panel=descendants(chat.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::ScrolledWindow>().ok().filter(|w|w.widget_name()=="emoji-suggestions")).unwrap();
+    let buttons:Vec<_>=descendants(emoji_panel.upcast_ref()).into_iter().filter_map(|w|w.downcast::<gtk::Button>().ok()).collect();assert_eq!(buttons.len(),1);
+    assert!(emoji_panel.height()<=buttons[0].height()+16,"a single emoji suggestion must not reserve scrollbar space");
+    assert_eq!(emoji_panel.vscrollbar_policy(),gtk::PolicyType::External);
     window.set_content(None::<&gtk::Widget>);window.close();drop(chat);pump(context);
 }
 

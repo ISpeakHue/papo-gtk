@@ -63,6 +63,7 @@ All ordinary fixtures use synthetic data; real device/server checks are opt-in.
 | [Windows packaged media](docs/testing/windows-media.md) | Instrumented standalone GTK media matrix, cache/player lifetime, fullscreen and renderer/decoder observations |
 | [Windows screen sharing](docs/testing/windows-capture.md) | WGC picker ownership, bounded frame handoff, synthetic checks and deferred attended capture/SFU acceptance |
 | [Windows desktop and input](docs/testing/windows-desktop.md) | Native editing/shortcut policies, packaged desktop fixtures, keyboard/accessibility/DPI acceptance |
+| [Recent Windows compatibility review](docs/testing/windows-recent-2026-11-04.md) | Recent frontend changes, native wheel/zoom regressions and source-build evidence |
 | [Windows packaged CI gate](docs/testing/windows-release-gate.md) | Required cross-platform jobs, source/ZIP-bound evidence, explicit skips and tested-input rebuild restrictions |
 | [Windows installer and beta](docs/testing/windows-beta.md) | Per-user NSIS lifecycle/recovery, standalone ZIP identity, preservation checks and opt-in beta/Linux measurements |
 | [Windows signing and publication](docs/testing/windows-publication.md) | Owner-key signing, final signed-file rechecks, full native qualification and explicit guarded publication |

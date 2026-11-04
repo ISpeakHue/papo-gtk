@@ -159,6 +159,16 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     main.state().get_mut().model.direct.items.retain(|dm|dm.id!=dm_b);
     main.emit(MainWindowMsg::Notification(NoticeMsg::TabChanged));pump(context);
     assert_eq!(dm_page.title().as_deref(),Some("Mensagens diretas"));
+    // EN-US: Both notification tabs use the global wheel easing with real grouped notice rows.
+    // PT-BR: Ambas as abas usam a suavização global da roda com linhas reais de notificações agrupadas.
+    let overflow=(0..12).flat_map(|i|[(a,peer_a),(dm_a,peer_a)].map(|(channel,author)|{let mut row=notice(Uuid::new_v4(),channel,author,100+i);row.read=true;row})).collect();
+    main.state().get_mut().model.notifications.inbox.merge(overflow);
+    main.emit(MainWindowMsg::Notification(NoticeMsg::TabChanged));pump(context);
+    for (tab,body) in [("server",&rows),("personal",&personal)]{
+        tabs.set_visible_child_name(tab);pump(context);
+        let scroll=body.ancestor(gtk::ScrolledWindow::static_type()).and_downcast::<gtk::ScrolledWindow>().unwrap();
+        crate::ui::smooth_scroll::exercise_pane(&window,&scroll,context);
+    }
     // A row nested inside a group still opens the exact DM/message.
     tabs.set_visible_child_name("personal");pump(context);group(peer_a).set_expanded(true);pump(context);
     let open=descendants(personal.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Button>().ok().filter(|w|w.widget_name()==format!("notification-{dm1}"))).unwrap();open.emit_clicked();until(context,||main.model().active_channel_id==Some(dm_a));

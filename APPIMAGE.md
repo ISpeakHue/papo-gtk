@@ -85,12 +85,12 @@ libadwaita downgrade or source rebuild is performed.
 
 Versioned release outputs in ignored `dist/` are:
 
-- `Papo-1.0.2-x86_64.AppImage`
+- `Papo-1.1.1-x86_64.AppImage`
 - Its `.sha256` checksum
-- `papo-gtk-1.0.2-source.tar.gz`
-- `Papo-1.0.2-AppImage-README.txt`, installation and runtime notes
+- `papo-gtk-1.1.1-source.tar.gz`
+- `Papo-1.1.1-AppImage-README.txt`, installation and runtime notes
 
-Version 1.0.2 is available from [GitHub Releases](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.0.2).
+Version 1.1.1 is available from [GitHub Releases](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.1.1).
 The package retains the modern desktop/font policy described above.
 
 The AppDir is assembled under `target/appimage-fedora44/AppDir`, containing only
@@ -103,9 +103,9 @@ system Python interpreter; the AppImage sets its own `PAPO_PYTHON`.
 Make the new AppImage executable and run:
 
 ```sh
-./Papo-1.0.2-x86_64.AppImage --runtime-check
-./Papo-1.0.2-x86_64.AppImage --font-check
-./Papo-1.0.2-x86_64.AppImage
+./Papo-1.1.1-x86_64.AppImage --runtime-check
+./Papo-1.1.1-x86_64.AppImage --font-check
+./Papo-1.1.1-x86_64.AppImage
 ```
 
 The runtime check uses synthetic audio/video and validates imports, codecs,

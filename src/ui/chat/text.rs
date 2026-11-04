@@ -66,7 +66,7 @@ fn build(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions,open:Option
     let tag=gtk::TextTag::builder().foreground("#3584e4").underline(pango::Underline::Single).build();buffer.tag_table().add(&tag);
     let mention=gtk::TextTag::builder().name("papo-mention").background("#3584e4").foreground("#ffffff").build();buffer.tag_table().add(&mention);
     let mut spoilers=HashMap::<usize,Target>::new();
-    let mut tags=HashMap::<markdown::Style,gtk::TextTag>::new();let mut registered=std::collections::HashSet::new();let mut code_blocks=Vec::new();
+    let mut tags=HashMap::<markdown::Style,gtk::TextTag>::new();let mut baselines=HashMap::new();let mut registered=std::collections::HashSet::new();let mut code_blocks=Vec::new();
     let shade=if adw::StyleManager::default().is_dark(){"#29292d"}else{"#dddde1"};
     for run in markdown::parse(text){
         let begin=iter.offset();let mut hidden_images=Vec::new();
@@ -94,8 +94,16 @@ fn build(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions,open:Option
                         let(w,h)=(paintable.intrinsic_width().clamp(1,128),paintable.intrinsic_height().clamp(1,128));let color=gtk::gdk::RGBA::parse(shade).unwrap();
                         let mut pixels=Vec::with_capacity((w*h*4) as usize);for _ in 0..w*h{pixels.extend_from_slice(&[(color.red()*255.0) as u8,(color.green()*255.0) as u8,(color.blue()*255.0) as u8,255]);}
                         let mask=gtk::gdk::MemoryTexture::new(w,h,gtk::gdk::MemoryFormat::R8g8b8a8,&gtk::glib::Bytes::from_owned(pixels),w as usize*4);
-                        buffer.insert_paintable(&mut iter,&mask);hidden_images.push((offset,paintable,animation.cloned()));
+                        buffer.insert_paintable(&mut iter,&mask);hidden_images.push((offset,paintable.clone(),animation.cloned()));
                     }else{buffer.insert_paintable(&mut iter,&paintable);if let Some(animation)=animation{animation.watch(&view,Some(offset));}}
+                    // EN-US: Inline images otherwise sit entirely above the baseline, pushing adjacent reply text down.
+                    // PT-BR: Sem ajuste, imagens ficam inteiras acima da linha de base e empurram o texto das respostas para baixo.
+                    let middle=(metrics.ascent()-metrics.descent())/pango::SCALE;
+                    let shift=(paintable.intrinsic_height()-middle).max(0)/2;
+                    if shift>0{
+                        let tag=baselines.entry(shift).or_insert_with(||{let tag=gtk::TextTag::builder().rise(-shift*pango::SCALE).build();buffer.tag_table().add(&tag);tag});
+                        buffer.apply_tag(tag,&buffer.iter_at_offset(start),&iter);
+                    }
                 }else{buffer.insert(&mut iter,&format!(":{name}:"));}
                 if run.style.link.is_none(){targets.push((start,iter.offset(),Target::Emoji{offset:start,details}));}
             },
@@ -165,6 +173,7 @@ fn install_targets(view:&gtk::TextView,targets:Vec<(i32,i32,Target)>,launch:impl
     let motion=gtk::EventControllerMotion::new();let weak=view.downgrade();motion.connect_motion(move |_,x,y|{if let Some(view)=weak.upgrade(){view.set_cursor_from_name(Some(if target_at(&view,&targets,x,y).is_some(){"pointer"}else{"text"}));}});view.add_controller(motion);
  }
 #[cfg(test)]pub(super) fn exercise(context:&gtk::glib::MainContext){
+    exercise_hit_bounds(context);
     use actions::tests::{pump,until};use std::{rc::Rc,cell::RefCell};use adw::prelude::*;
     let view=gtk::TextView::new();view.set_editable(false);view.buffer().set_text("é https://example.test/hello");let opened=Rc::new(RefCell::new(Vec::new()));let captured=opened.clone();install_links(&view,links("é https://example.test/hello"),move |_,url|captured.borrow_mut().push(url.to_owned()));
     let window=adw::Window::builder().default_width(500).default_height(160).content(&view).build();window.present();until(context,||view.is_mapped());for _ in 0..10{pump(context);std::thread::sleep(std::time::Duration::from_millis(5));}
@@ -174,6 +183,25 @@ fn install_targets(view:&gtk::TextView,targets:Vec<(i32,i32,Target)>,launch:impl
     click.emit_by_name::<()>("pressed",&[&1i32,&x,&y]);click.emit_by_name::<()>("released",&[&1i32,&(x+25.0),&y]);assert_eq!(opened.borrow().len(),1,"dragging text must not launch links");
     view.buffer().select_range(&view.buffer().start_iter(),&view.buffer().end_iter());click.emit_by_name::<()>("pressed",&[&1i32,&x,&y]);click.emit_by_name::<()>("released",&[&1i32,&x,&y]);assert_eq!(opened.borrow().len(),1,"selecting or copying must not launch links");
     window.set_content(None::<&gtk::Widget>);window.close();
+}
+#[cfg(test)]fn exercise_hit_bounds(context:&gtk::glib::MainContext){
+    use actions::tests::{pump,until};use adw::prelude::*;
+    let view=gtk::TextView::new();view.set_editable(false);view.set_cursor_visible(false);let buffer=view.buffer();
+    buffer.set_text("WWW ");let mut end=buffer.end_iter();buffer.insert_paintable(&mut end,&crate::media::PreparedImage{width:32,height:32,pixels:vec![255;32*32*4]}.texture());
+    let clicks=std::rc::Rc::new(std::cell::Cell::new(0));let count=clicks.clone();
+    install_links(&view,vec![(0,3,"https://example.test".into()),(4,5,"https://example.test/emoji".into())],move |_,_|count.set(count.get()+1));
+    let window=adw::Window::builder().default_width(500).default_height(100).content(&view).build();window.present();until(context,||view.is_mapped());super::performance::settle(context);
+    let controllers=view.observe_controllers();let click=(0..controllers.n_items()).find_map(|i|controllers.item(i).and_downcast::<gtk::GestureClick>().filter(|g|g.propagation_phase()==gtk::PropagationPhase::Capture)).unwrap();
+    for offset in [0,2,4]{
+        let rect=view.iter_location(&buffer.iter_at_offset(offset));
+        for x in [0.1,0.5,0.9]{for y in [0.2,0.5,0.8]{
+            let (x,y)=view.buffer_to_window_coords(gtk::TextWindowType::Widget,rect.x()+(rect.width() as f64*x) as i32,rect.y()+(rect.height() as f64*y) as i32);let before=clicks.get();
+            click.emit_by_name::<()>("pressed",&[&1i32,&f64::from(x),&f64::from(y)]);click.emit_by_name::<()>("released",&[&1i32,&f64::from(x),&f64::from(y)]);
+            assert_eq!(clicks.get(),before+1,"the full glyph must be clickable: offset {offset}, point {x},{y}, rect {rect:?}");
+        }}
+    }
+    let before=clicks.get();click.emit_by_name::<()>("pressed",&[&1i32,&450.0f64,&10.0f64]);click.emit_by_name::<()>("released",&[&1i32,&450.0f64,&10.0f64]);assert_eq!(clicks.get(),before,"empty line space is not a link");
+    window.set_content(None::<&gtk::Widget>);window.close();pump(context);
 }
 /// Character offsets are relative to the rendered buffer, never UTF-8 bytes.
 pub(super) fn links(text:&str)->Vec<(i32,i32,String)>{
@@ -189,8 +217,11 @@ pub(super) fn links(text:&str)->Vec<(i32,i32,String)>{
     }links
 }
 fn target_at(view:&gtk::TextView,targets:&[(i32,i32,Target)],x:f64,y:f64)->Option<Target>{
-    let(x,y)=view.window_to_buffer_coords(gtk::TextWindowType::Widget,x as i32,y as i32);let iter=view.iter_at_location(x,y)?;let rect=view.iter_location(&iter);
-    if x<rect.x()||x>rect.x()+rect.width().max(1)||y<rect.y()||y>rect.y()+rect.height(){return None;}
+    let(x,y)=view.window_to_buffer_coords(gtk::TextWindowType::Widget,x as i32,y as i32);
+    // EN-US: Hit the glyph, not the nearest caret; the latter misses the right half of emoji and link characters.
+    // PT-BR: Testa o caractere, não o cursor mais próximo, que perde a metade direita de emojis e letras de links.
+    let(iter,_)=view.iter_at_position(x,y)?;let rect=view.iter_location(&iter);let(line_y,line_height)=view.line_yrange(&iter);
+    if x<rect.x()-2||x>rect.x()+rect.width().max(1)+2||y<line_y-2||y>line_y+line_height+2{return None;}
     let hit=|(start,end,_):&&(i32,i32,Target)|iter.offset()>=*start&&iter.offset()<*end;
     targets.iter().filter(hit).find(|(_,_,target)|matches!(target,Target::Spoiler{shown,..} if !shown.get()))
         .or_else(||targets.iter().filter(hit).find(|(_,_,target)|!matches!(target,Target::Spoiler{..}))).map(|(_,_,target)|target.clone())
@@ -198,8 +229,11 @@ fn target_at(view:&gtk::TextView,targets:&[(i32,i32,Target)],x:f64,y:f64)->Optio
 pub(super) fn compact(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions)->gtk::ScrolledWindow{
     let view=build(&excerpt(text),users,actions,None,true);view.set_widget_name("reply-preview-text");view.set_wrap_mode(gtk::WrapMode::None);view.set_can_target(false);view.set_focusable(false);
     view.set_height_request(-1);
+    // EN-US: Center both the single-line viewport and its text beside taller reply controls.
+    // PT-BR: Centraliza a área de uma linha e seu texto ao lado dos controles mais altos de resposta.
+    view.set_valign(gtk::Align::Center);
     let metrics=view.pango_context().metrics(None,None);let height=((metrics.ascent()+metrics.descent())/pango::SCALE+6).max(26);
-    let scroll=gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::External).vscrollbar_policy(gtk::PolicyType::External).height_request(height).hexpand(true).child(&view).build();
+    let scroll=gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::External).vscrollbar_policy(gtk::PolicyType::External).height_request(height).hexpand(true).valign(gtk::Align::Center).child(&view).build();
     scroll.set_can_target(false);scroll.set_overflow(gtk::Overflow::Hidden);scroll
 }
 pub(super) fn excerpt(text:&str)->String{

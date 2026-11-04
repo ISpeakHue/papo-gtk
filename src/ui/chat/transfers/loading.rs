@@ -67,7 +67,7 @@ pub(super) fn queue_image(
             let dimensions = image::ImageReader::new(std::io::Cursor::new(bytes.as_ref()))
                 .with_guessed_format().ok().and_then(|r| r.into_dimensions().ok())
                 .filter(|(w,h)| *w > 0 && *h > 0 && *w <= 4096 && *h <= 4096);
-            let gif = bytes.starts_with(b"GIF8");
+            let gif = crate::media::animation::PreparedAnimation::is_animated(&bytes);
             let image = if gif && animate && has_preview {
                 None
             } else if gif {

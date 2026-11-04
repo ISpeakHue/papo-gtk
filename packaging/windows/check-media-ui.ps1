@@ -65,10 +65,10 @@ try {
  $beforePath=[Environment]::GetEnvironmentVariable('PATH','Machine')
  foreach($case in $Cases){
   $lifecycle=@('native_voice_worker_drop_releases_process','native_call_worker_drop_closes_descendant_pipes','native_call_cues_complete_and_cancel_without_devices')
-  $allowed=if($DesktopSuite){@('desktop-input','login-input','multiline','edit-mentions','search-recycling','account-settings','voice-controls','symbolic-icons','status-viewer','windows-notifications','notification-window','notification-filters','voice-chat')+$lifecycle}else{@('media-emojis','draft-previews','attachment-media','mov-media','backend-gifs','media-cache','recent-media','status-viewer','send-video','video-audio')}
+  $allowed=if($DesktopSuite){@('desktop-input','login-input','multiline','edit-mentions','search-recycling','account-settings','voice-controls','symbolic-icons','status-viewer','windows-notifications','notification-window','notification-filters','window-scrolling','voice-chat')+$lifecycle}else{@('media-emojis','draft-previews','attachment-media','mov-media','backend-gifs','media-cache','recent-media','status-viewer','send-video','video-audio')}
   if($case -notin $allowed){throw 'Invalid UI case name for this suite'}
   Remove-Item Env:PAPO_NATIVE_INPUT_TEST -ErrorAction SilentlyContinue
-  if($NativeKeys -and $case -eq 'desktop-input'){$env:PAPO_NATIVE_INPUT_TEST='1';$env:PAPO_TEST_HELPERS_DIR=Join-Path $TestDirectory 'test-helpers'}
+  if($NativeKeys -and $case -in @('desktop-input','window-scrolling','notification-filters')){$env:PAPO_NATIVE_INPUT_TEST='1';$env:PAPO_TEST_HELPERS_DIR=Join-Path $TestDirectory 'test-helpers'}
   $env:PAPO_UI_CASE=$case;$begin=[DateTime]::UtcNow
   $stdout=Join-Path $OutputDirectory ($case+'.stdout.txt');$stderr=Join-Path $OutputDirectory ($case+'.stderr.txt')
   # EN-US: Native lifecycle tests use embedded workers from the same executable and shipped runtime.

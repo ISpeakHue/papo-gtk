@@ -164,6 +164,7 @@ impl Viewport {
             }
         });
         let controller=gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
+        controller.set_name(Some(crate::ui::smooth_scroll::VERTICAL_CONTROLLER));
         controller.set_propagation_phase(gtk::PropagationPhase::Capture);
         let pending=self.pending.clone();let generation=self.generation.clone();let wheel=self.wheel.clone();let weak=scroll.downgrade();let input=sender.input_sender().clone();
         let input_epoch=self.input_epoch.clone();

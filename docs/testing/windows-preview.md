@@ -1,12 +1,12 @@
-# Windows 1.1.0 preview
+# Windows 1.1.1 preview
 
-The [1.1.0 release](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.1.0)
+The [1.1.1 release](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.1.1)
 includes unsigned **experimental Windows** packages alongside stable Linux
 downloads. Publishing these downloads does not qualify Windows as supported.
 
-- [Per-user installer (.exe)](https://github.com/ISpeakHue/papo-gtk/releases/download/v1.1.0/Papo-1.1.0-windows-x86_64.exe).
-- [Portable ZIP](https://github.com/ISpeakHue/papo-gtk/releases/download/v1.1.0/Papo-1.1.0-windows-x86_64-dev.zip): extract the entire archive and open `Papo.exe`.
-- [Checksums](https://github.com/ISpeakHue/papo-gtk/releases/download/v1.1.0/SHA256SUMS), matching application source and modified native-library source accompany the downloads.
+- [Per-user installer (.exe)](https://github.com/ISpeakHue/papo-gtk/releases/download/v1.1.1/Papo-1.1.1-windows-x86_64.exe).
+- [Portable ZIP](https://github.com/ISpeakHue/papo-gtk/releases/download/v1.1.1/Papo-1.1.1-windows-x86_64-dev.zip): extract the entire archive and open `Papo.exe`.
+- [Checksums](https://github.com/ISpeakHue/papo-gtk/releases/download/v1.1.1/SHA256SUMS), matching application source and modified native-library source accompany the downloads.
 
 The earlier [Windows preview 1](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.1.0-preview.1)
 remains available as a historical build:
@@ -19,7 +19,7 @@ Both packages contain the application-owned runtime. A separate Rust, MSYS2,
 Python or GStreamer installation is unnecessary. Dependency notices and licenses
 are included. Uninstall preserves settings, caches and saved sessions.
 
-## Current 1.1.0 verification
+## Historical 1.1.0 verification
 
 The current downloads come from clean revision
 `cf42364708465a16bcf16463a0e3f5d3f3e9795f`, tagged `v1.1.0`.
@@ -78,5 +78,5 @@ share still requires system-picker selection. Windows Server CI does not establi
 The [support policy](../../WINDOWS_SUPPORT.md), [acceptance matrix](windows.md)
 and [beta checklist](windows-beta.md) retain those boundaries. The remaining
 release qualification checks remain open. macOS has no downloadable bundle;
-Linux 1.1.0 is the stable release. The current release's notes and checksum-bound
+Linux 1.1.1 is the stable release. The current release's notes and checksum-bound
 verification report identify its source and checks separately from preview 1.

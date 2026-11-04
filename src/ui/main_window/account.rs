@@ -8,6 +8,7 @@ pub(crate) mod settings;
 mod preferences;
 mod profile;
 use settings::{profile_values,preferences_values,watch_profile,watch_preferences};
+use std::collections::HashSet;
 #[derive(Debug)]
 pub enum AccountMsg {
     Dirty, CloseSettings, CloseChoice(String), ProfileAccepted{token:Uuid,generation:Uuid,draft:Vec<String>,result:anyhow::Result<(UserProfile,Option<Vec<u8>>,Option<crate::media::PreparedImage>)>},
@@ -27,17 +28,27 @@ pub enum AccountMsg {
         token: Uuid, result: anyhow::Result<WhoamiResponse>
     }, SavePreferences(Uuid), PreferencesSaved {
         token: Uuid, motion:crate::config::Motion, result: anyhow::Result<UserSettings>
-    }, SaveChannel {
-        token: Uuid, channel: Uuid, value: NotificationSettings
+    }, SelectNotificationChannel(Uuid), SaveChannel {
+        token: Option<Uuid>, channel: Uuid, value: NotificationSettings
     }, ChannelSaved {
-        token: Uuid, channel: Uuid, value: NotificationSettings, result: anyhow::Result<()>
+        channel: Uuid, value: NotificationSettings, result: anyhow::Result<()>
     },
 }
 #[derive(Default)]
 pub(super) struct Account {
     settings:Option<settings::View>,
     close_after_save:bool,
-    parked_profile:Option<ProfileView>,profile: Option<ProfileView>, preferences: Option<PreferencesView>, channel: Option<(Uuid, gtk::Window, gtk::Box, gtk::Label)>, jobs: Vec<tokio::task::JoinHandle<()>>, mutation: Option<Uuid>, settings_pending: bool, channel_pending: bool, pub config: UserConfig, css: Option<gtk::CssProvider>,
+    parked_profile:Option<ProfileView>,profile: Option<ProfileView>, preferences: Option<PreferencesView>, channel: Option<ChannelView>, jobs: Vec<tokio::task::JoinHandle<()>>, mutation: Option<Uuid>, settings_pending: bool, channel_pending: HashSet<Uuid>, pub config: UserConfig, css: Option<gtk::CssProvider>,
+}
+struct ChannelView {
+    token:Uuid, window:gtk::Window, body:gtk::Box, error:gtk::Label,
+    channels:Vec<Uuid>, selector:gtk::DropDown, mode:gtk::DropDown,
+}
+impl ChannelView {
+    fn selected(&self)->Option<Uuid>{self.channels.get(self.selector.selected() as usize).copied()}
+}
+fn notification_index(setting:Option<&NotificationSettings>)->u32{
+    match setting{Some(NotificationSettings::Off)=>0,Some(NotificationSettings::All)=>2,_=>1}
 }
 struct ProfileView {
     baseline:Vec<String>,reconcile:Option<Uuid>,identity:Option<(adw::Avatar,gtk::Label)>,banner:Option<gtk::Picture>,
@@ -68,8 +79,8 @@ impl Drop for Account {
         if let Some(v) = self.preferences.take() {
             v.window.close();
         }
-        if let Some((_, w, _, _)) = self.channel.take() {
-            w.close();
+        if let Some(v) = self.channel.take() {
+            v.window.close();
         }
         if let (Some(display), Some(css)) = (gtk::gdk::Display::default(), self.css.take()) {
             gtk::style_context_remove_provider_for_display(&display, &css);
@@ -687,80 +698,82 @@ impl MainWindowModel {
                 self.settings_dirty();self.finish_settings_close();
             }
             AccountMsg::ChannelPreferences => {
-                let Some(channel) = self.channels.iter().find(|c|Some(c.id)==self.active_channel_id)else {
-                    return;
-                };
-                if let Some((_, w, _, _)) = self.account.channel.take() {
-                    w.close();
-                }
-                let token = Uuid::new_v4();
-                let id = channel.id;
-                let (w, body) = window(root, &format!("Notificações em #{}", channel.name));
-                let mode = dropdown(&body, "Notificar", &["Nunca", "Somente menções", "Todas as mensagens"], match channel.notification_settings {
-                    Some(NotificationSettings::Off) => 0, Some(NotificationSettings::All) => 2, _ => 1
-                });
-                let save = gtk::Button::with_label("Salvar notificações do canal");
-                let s = sender.clone();
-                save.connect_clicked(move |_|s.input(MainWindowMsg::Account(AccountMsg::SaveChannel {
-                    token, channel: id, value: match mode.selected() {
-                        0 => NotificationSettings::Off, 1 => NotificationSettings::OnlyMentions, _ => NotificationSettings::All
+                let channels:Vec<_>=self.channels.iter().filter(|c|c.supports_messages()).collect();
+                if channels.is_empty(){return;}
+                if let Some(v)=self.account.channel.take(){v.window.close();}
+                let token=Uuid::new_v4();
+                let selected=channels.iter().position(|c|Some(c.id)==self.active_channel_id).unwrap_or(0);
+                let (w,body)=window(root,"Notificações dos canais");
+                let names:Vec<_>=channels.iter().map(|c|format!("{}{}",if c.channel_type==Some(ChannelType::Voice){"Voz · "}else{"#"},c.name)).collect();
+                let selector=dropdown(&body,"Canal",&names.iter().map(String::as_str).collect::<Vec<_>>(),selected as u32);
+                selector.set_widget_name("notification-channel");
+                selector.set_enable_search(true);
+                let mode=dropdown(&body,"Notificar",&["Nunca","Somente menções","Todas as mensagens"],notification_index(channels[selected].notification_settings.as_ref()));
+                mode.set_widget_name("channel-notification-mode");
+                let ids:Vec<_>=channels.iter().map(|c|c.id).collect();
+                let input=sender.input_sender().clone();
+                selector.connect_selected_notify(move |_|{let _=input.send(MainWindowMsg::Account(AccountMsg::SelectNotificationChannel(token)));});
+                let save=gtk::Button::with_label("Salvar notificações do canal");
+                let s=sender.clone();let choice=selector.clone();let values=mode.clone();let choices=ids.clone();
+                save.connect_clicked(move |_|{
+                    if let Some(channel)=choices.get(choice.selected() as usize){
+                        s.input(MainWindowMsg::Account(AccountMsg::SaveChannel{token:Some(token),channel:*channel,value:match values.selected(){
+                            0=>NotificationSettings::Off,1=>NotificationSettings::OnlyMentions,_=>NotificationSettings::All
+                        }}));
                     }
-                })));
+                });
                 body.append(&save);
-                let error = gtk::Label::new(None);
-                error.set_wrap(true);
-                body.append(&error);
+                let error=gtk::Label::new(None);error.set_wrap(true);body.append(&error);
+                body.set_sensitive(!self.account.channel_pending.contains(&ids[selected]));
                 w.present();
-                self.account.channel = Some((token, w, body, error));
+                self.account.channel=Some(ChannelView{token,window:w,body,error,channels:ids,selector,mode});
             }
-            AccountMsg::SaveChannel {
-                token, channel, value
-            } => {
-                if self.account.channel_pending {
-                    return;
+            AccountMsg::SelectNotificationChannel(token)=>{
+                if let Some(v)=self.account.channel.as_ref().filter(|v|v.token==token){
+                    if let Some(channel)=v.selected().and_then(|id|self.channels.iter().find(|c|c.id==id)){
+                        v.mode.set_selected(notification_index(channel.notification_settings.as_ref()));
+                        v.error.set_text("");
+                        v.body.set_sensitive(!self.account.channel_pending.contains(&channel.id));
+                    }
                 }
-                let Some((_, w, body, error)) = self.account.channel.as_ref().filter(|(t, _, _, _)|*t==token)else {
-                    return;
-                };
-                if !w.is_visible()||!body.is_sensitive() {
-                    return;
+            }
+            AccountMsg::SaveChannel{token,channel,value}=>{
+                if self.account.channel_pending.contains(&channel)||!self.channels.iter().any(|c|c.id==channel&&c.supports_messages()){return;}
+                if let Some(token)=token{
+                    let Some(v)=self.account.channel.as_ref().filter(|v|v.token==token&&v.selected()==Some(channel))else{return;};
+                    if !v.window.is_visible()||!v.body.is_sensitive(){return;}
                 }
-                self.account.channel_pending = true;
-                body.set_sensitive(false);
-                error.set_text("Salvando…");
-                let api = self.api_client.clone();
-                let user = self.current_user.id;
-                let s = sender.clone();
-                self.account.jobs.push(tokio::spawn(async move {
-                    let result = api.channel_notifications(channel, user, value.clone()).await;
-                    s.input(MainWindowMsg::Account(AccountMsg::ChannelSaved {
-                        token, channel, value, result
-                    }));
+                // EN-US: Share confirmed writes between the selector and context menu; suppress duplicate requests per channel.
+                // PT-BR: Compartilha gravações confirmadas entre o seletor e o menu; evita requisições duplicadas por canal.
+                self.account.channel_pending.insert(channel);
+                if let Some(v)=self.account.channel.as_ref().filter(|v|v.selected()==Some(channel)){
+                    v.body.set_sensitive(false);v.error.set_text("Salvando…");
+                }
+                let api=self.api_client.clone();let user=self.current_user.id;let s=sender.clone();
+                self.account.jobs.push(tokio::spawn(async move{
+                    let result=api.channel_notifications(channel,user,value.clone()).await;
+                    s.input(MainWindowMsg::Account(AccountMsg::ChannelSaved{channel,value,result}));
                 }));
             }
-            AccountMsg::ChannelSaved {
-                token, channel, value, result
-            } => {
-                self.account.channel_pending = false;
-                match result {
-                    Ok(()) => {
-                        if let Some(c) = self.channels.iter_mut().find(|c|c.id==channel) {
-                            self.notifications.journal.preference(channel,value.clone());
-                            c.notification_settings = Some(value);
-                            if self.active_channel_id==Some(channel) {
-                                self.chat.emit(ChatMsg::UpdateChannel(c.clone()));
-                            }
+            AccountMsg::ChannelSaved{channel,value,result}=>{
+                self.account.channel_pending.remove(&channel);
+                // EN-US: A response may outlive its dialog. Update shared state, but never overwrite another channel's controls.
+                // PT-BR: A resposta pode sobreviver ao diálogo. Atualiza o estado, sem sobrescrever controles de outro canal.
+                let view=self.account.channel.as_ref().filter(|v|v.window.is_visible()&&v.selected()==Some(channel));
+                match result{
+                    Ok(())=>{
+                        self.notifications.journal.preference(channel,value.clone());
+                        if let Some(c)=self.channels.iter_mut().find(|c|c.id==channel){
+                            c.notification_settings=Some(value.clone());
+                            if self.active_channel_id==Some(channel){self.chat.emit(ChatMsg::UpdateChannel(c.clone()));}
                         }
+                        if let Some(c)=self.managed_channels.iter_mut().find(|c|c.id==channel){c.notification_settings=Some(value.clone());}
+                        if let Some(v)=view{v.body.set_sensitive(true);v.mode.set_selected(notification_index(Some(&value)));v.error.set_text("Salvo.");}
                         self.publish_voice_channels();
-                        if let Some((_, _, body, error)) = self.account.channel.as_ref().filter(|(t, _, _, _)|*t==token) {
-                            body.set_sensitive(true);
-                            error.set_text("Salvo.");
-                        }
-                    }, Err(e) => {
-                        if let Some((_, _, body, error)) = self.account.channel.as_ref().filter(|(t, _, _, _)|*t==token) {
-                            body.set_sensitive(true);
-                            error.set_text(&e.to_string());
-                        }
+                    }
+                    Err(e)=>{
+                        if let Some(v)=view{v.body.set_sensitive(true);v.error.set_text(&e.to_string());}
+                        else{self.chat.emit(ChatMsg::OperationError(format!("Falha ao salvar notificações do canal: {e}")));}
                         sender.input(MainWindowMsg::ActionError(e));
                     }
                 }
@@ -947,8 +960,8 @@ pub(crate) fn exercise_preferences_and_profiles(main: &Controller<MainWindowMode
     w.close();
     find_button(main.widget().upcast_ref(), "Preferências do canal").emit_clicked();
     pump(context);
-    let w = main.model().account.channel.as_ref().unwrap().1.clone();
-    let mode = descendants(w.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::DropDown>().ok()).unwrap();
+    let w = main.model().account.channel.as_ref().unwrap().window.clone();
+    let mode = main.model().account.channel.as_ref().unwrap().mode.clone();
     mode.set_selected(0);
     let read = main.model().channels[0].last_read_message;
     find_button(w.upcast_ref(), "Salvar notificações do canal").emit_clicked();

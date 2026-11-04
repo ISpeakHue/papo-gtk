@@ -1,13 +1,12 @@
 # Windows signing, qualification and publication — step 14
 
-Updated 2026-10-28. Source version **1.1.0** has an unsigned
-[Windows preview](windows-preview.md) with a matching installer, portable ZIP,
-checksums and corresponding source. Its committed revision passed the full
-Windows/Linux/macOS candidate workflow and fresh-runner package checks.
+Updated 2026-11-04. Source version **1.1.1** provides stable Linux packages and
+an unsigned [Windows preview](windows-preview.md) with a matching installer,
+portable ZIP, checksums and corresponding source. Release notes and the
+checksum-bound verification asset record the actual package and CI results.
 **No supported Windows release has been qualified.** No signing certificate is
 available, and native Windows 11 desktop/device/beta acceptance remains pending.
-Step 14 stays unchecked. Linux 1.0.2 remains the latest stable release; macOS
-remains compile/link groundwork without a supported bundle.
+Step 14 stays unchecked; macOS remains compile/link groundwork without a bundle.
 
 ## Required inputs and trust boundaries
 

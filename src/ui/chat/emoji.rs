@@ -66,6 +66,13 @@ pub(super) struct Picker {
 impl Picker {
     pub fn new(root:&gtk::Box,builtin:&[Choice],choose:impl Fn(Choice)+'static)->Self {
         let search=gtk::SearchEntry::new();search.set_placeholder_text(Some("Buscar emoji"));root.append(&search);
+        // EN-US: SearchEntry consumes Escape itself; close its dialog through the native stop-search action.
+        // PT-BR: SearchEntry consome Escape; fecha seu diálogo pela ação nativa stop-search.
+        search.connect_stop_search(|entry|{
+            if let Some(window)=entry.root().and_downcast::<gtk::Window>().filter(|w|w.transient_for().is_some()){
+                window.close();
+            }
+        });
         let tabs=gtk::Stack::new();tabs.set_widget_name("emoji-tabs");tabs.set_transition_type(gtk::StackTransitionType::None);tabs.set_vexpand(true);
         let switcher=gtk::StackSwitcher::builder().stack(&tabs).halign(gtk::Align::Center).build();root.append(&switcher);let status=gtk::Label::new(None);status.set_wrap(true);status.set_visible(false);root.append(&status);root.append(&tabs);
         let catalog=std::rc::Rc::new(std::cell::RefCell::new(Catalog{builtin:builtin.to_vec(),..Default::default()}));
@@ -145,6 +152,7 @@ impl Picker {
 }
 
 #[cfg(test)]pub(crate) fn exercise(context:&gtk::glib::MainContext){
+    super::header::exercise(context);
     use actions::tests::{mock,pump,until};use base64::Engine;
     let (api,backend,server)=tokio::runtime::Handle::current().block_on(mock());let id=Uuid::new_v4();
     backend.lock().unwrap().emojis=vec![serde_json::json!({"id":id,"name":"dance","format":"GIF","image_blob":base64::engine::general_purpose::STANDARD.encode(crate::media::animation::fixture()),"created_at":"2026-10-03T00:00:00Z"})];
@@ -211,4 +219,34 @@ pub(crate) fn exercise_resize(context:&gtk::glib::MainContext){
     let cell=server.first_child().unwrap();assert!(cell.height()<64,"one filtered emoji must not stretch to fill the window");assert!(server.height()<80,"unused height belongs below the grid");
     cell.downcast::<gtk::FlowBoxChild>().unwrap().child().and_downcast::<gtk::Button>().unwrap().emit_clicked();assert_eq!(*chosen.borrow(),vec![Some(custom[1].id)]);
     window.set_content(None::<&gtk::Widget>);window.close();drop(picker);pump(context);
+
+    // EN-US: Deliver Escape to the focused search field; a window-controller signal bypasses GTK's native consumption.
+    // PT-BR: Envia Escape ao campo de busca focado; um sinal no controlador da janela ignora o consumo nativo do GTK.
+    let parent_body=gtk::Box::new(gtk::Orientation::Vertical,0);
+    let parent=adw::Window::builder().title("Papo emoji parent test").content(&parent_body).build();parent.present();
+    for (tab,query,grid_focus) in [("unicode","",false),("unicode","unicode_0001",false),("server","server_0000",false),("unicode","",true)]{
+        let (window,body)=actions::window(&parent_body,"Papo emoji Escape test");
+        let picker=Picker::new(&body,&builtin[..32],|_|{});picker.update("Server",&custom[..1],&HashMap::new(),&HashMap::new());
+        let children=descendants(body.upcast_ref());
+        let search=children.iter().find_map(|w|w.downcast_ref::<gtk::SearchEntry>()).unwrap();
+        let tabs=children.iter().find_map(|w|w.downcast_ref::<gtk::Stack>()).unwrap();tabs.set_visible_child_name(tab);
+        let closed=std::rc::Rc::new(std::cell::Cell::new(0));let count=closed.clone();
+        window.connect_close_request(move |_|{count.set(count.get()+1);gtk::glib::Propagation::Proceed});
+        window.present();performance::settle(context);search.set_text(query);performance::settle(context);
+        if grid_focus{
+            let grid=descendants(&tabs.visible_child().unwrap()).into_iter().find_map(|w|w.downcast::<gtk::FlowBox>().ok()).unwrap();
+            assert!(grid.first_child().and_downcast::<gtk::FlowBoxChild>().unwrap().child().unwrap().grab_focus());
+        }else{assert!(search.grab_focus());}
+        performance::settle(context);
+        if std::env::var_os("PAPO_NATIVE_INPUT_TEST").is_some(){multiline::keys_for("Papo emoji Escape test",&["Escape"]);}
+        else if grid_focus{
+            let keys=window.observe_controllers();assert!((0..keys.n_items()).filter_map(|i|keys.item(i).and_downcast::<gtk::EventControllerKey>()).any(|key|key.emit_by_name::<bool>("key-pressed",&[&gtk::gdk::Key::Escape,&0u32,&gtk::gdk::ModifierType::empty()])));
+        }
+        else{search.emit_by_name::<()>("stop-search",&[]);}
+        performance::settle(context);
+        assert!(!window.is_visible(),"Escape must close the emoji picker with tab={tab}, query={query:?}");
+        assert_eq!(closed.get(),1,"Escape must use the normal close-request path exactly once");
+        assert!(parent.is_visible(),"Escape must leave the parent window open");drop(picker);
+    }
+    parent.close();pump(context);
 }

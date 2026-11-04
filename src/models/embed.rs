@@ -151,6 +151,11 @@ impl EmbedInput {
 
 #[cfg(test)]mod tests{
     use super::*;
+    #[test]fn fxtwitter_animated_webp_has_a_bare_animation_surface(){
+        let mut embed:Embed=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"source_type":"link","fetch_method":"opengraph","url":"https://gif.fxtwitter.com/tweet_video/HT-DVvMWoAASeEm.webp","thumbnail":{"mime_type":"image/webp"}})).unwrap();
+        assert!(embed.animated_link());embed.url=Some("https://example.test/photo.webp".into());assert!(!embed.animated_link());
+        embed.source_type="custom".into();embed.thumbnail.as_mut().unwrap().url=Some("https://gif.fxtwitter.com/tweet_video/HT-DVvMWoAASeEm.webp".into());assert!(embed.animated_link());
+    }
     #[test]fn backend_gif_marker_is_authoritative_without_a_public_media_url(){
         let embed:Embed=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"fetch_method":"gif","url":"https://example.test/canonical","thumbnail":{"mime_type":"image/gif","width":240,"height":180}})).unwrap();
         assert!(embed.animated_link());assert!(!embed.has_video());assert!(embed.thumbnail.as_ref().unwrap().url.is_none());

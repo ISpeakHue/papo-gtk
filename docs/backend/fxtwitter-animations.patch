@@ -1,0 +1,129 @@
+diff --git a/backend/internal/services/embeds_gif.go b/backend/internal/services/embeds_gif.go
+--- a/backend/internal/services/embeds_gif.go
++++ b/backend/internal/services/embeds_gif.go
+@@ -43,9 +43,10 @@
+ // Nomes de provedor GIF (valores internos de roteamento; o label exposto no
+ // embed vem de gifProviderLabel).
+ const (
+-	gifProviderTenor = "tenor"
+-	gifProviderGiphy = "giphy"
+-	gifProviderKlipy = "klipy"
++	gifProviderTenor     = "tenor"
++	gifProviderGiphy     = "giphy"
++	gifProviderKlipy     = "klipy"
++	gifProviderFxTwitter = "fxtwitter"
+ )
+ 
+ // maxKlipyJSONBytes é o teto do corpo da API JSON do klipy (o payload de um
+@@ -82,6 +83,9 @@
+ // www.tenor.com ...), ou "" quando o host não é de provedor GIF.
+ func gifProviderHost(host string) string {
+ 	host = normalizeHost(host)
++	if host == "gif.fxtwitter.com" {
++		return gifProviderFxTwitter
++	}
+ 	for _, entry := range []struct {
+ 		provider string
+ 		domains  []string
+@@ -101,6 +105,8 @@
+ 
+ func gifProviderLabel(provider string) string {
+ 	switch provider {
++	case gifProviderFxTwitter:
++		return "FxTwitter"
+ 	case gifProviderTenor:
+ 		return "Tenor"
+ 	case gifProviderGiphy:
+@@ -129,6 +135,8 @@
+ 		item, err = resolveTenorItem(ctx, original)
+ 	case gifProviderGiphy:
+ 		item, err = resolveGiphyItem(ctx, original)
++	case gifProviderFxTwitter:
++		item, err = resolveFxTwitterItem(original)
+ 	case gifProviderKlipy:
+ 		item, err = resolveKlipyItem(ctx, original)
+ 	default:
+diff --git a/backend/internal/services/embeds_fxtwitter.go b/backend/internal/services/embeds_fxtwitter.go
+new file mode 100644
+--- /dev/null
++++ b/backend/internal/services/embeds_fxtwitter.go
+@@ -0,0 +1,36 @@
++package services
++
++import (
++	"errors"
++	"net/url"
++	"strings"
++)
++
++// EN-US: This CDN offers the same animation as .gif; use the existing authorized GIF relay and cache.
++// PT-BR: Este CDN oferece a mesma animação em .gif; reutiliza o relay autorizado de GIFs e seu cache.
++func resolveFxTwitterItem(original *url.URL) (gifItem, error) {
++	if original == nil || original.Scheme != "https" || original.Host != "gif.fxtwitter.com" || original.User != nil {
++		return gifItem{}, errors.New("URL de GIF FxTwitter inválida")
++	}
++	parts := strings.Split(strings.TrimPrefix(original.EscapedPath(), "/"), "/")
++	if len(parts) != 2 || parts[0] != "tweet_video" {
++		return gifItem{}, errors.New("caminho de GIF FxTwitter inválido")
++	}
++	id := strings.TrimSuffix(parts[1], ".webp")
++	if id == parts[1] {
++		id = strings.TrimSuffix(parts[1], ".gif")
++	}
++	if id == "" || id == parts[1] {
++		return gifItem{}, errors.New("formato de GIF FxTwitter inválido")
++	}
++	for _, c := range id {
++		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '-') {
++			return gifItem{}, errors.New("identificador de GIF FxTwitter inválido")
++		}
++	}
++	rendition := *original
++	rendition.Path = "/tweet_video/" + id + ".gif"
++	rendition.RawPath = ""
++	rendition.Fragment = ""
++	return gifItem{Provider: gifProviderFxTwitter, ID: id, PageURL: original.String(), Renditions: []gifRendition{{URL: rendition.String(), Format: "gif", Kind: "original", Tier: "md"}}}, nil
++}
+diff --git a/backend/internal/services/embeds_fxtwitter_test.go b/backend/internal/services/embeds_fxtwitter_test.go
+new file mode 100644
+--- /dev/null
++++ b/backend/internal/services/embeds_fxtwitter_test.go
+@@ -0,0 +1,38 @@
++package services
++
++import (
++	"net/url"
++	"testing"
++)
++
++func TestFxTwitterDirectAnimationUsesGIFRendition(t *testing.T) {
++	for _, extension := range []string{"webp", "gif"} {
++		source, _ := url.Parse("https://gif.fxtwitter.com/tweet_video/HT-DVvMWoAASeEm." + extension)
++		item, err := resolveFxTwitterItem(source)
++		if err != nil {
++			t.Fatal(err)
++		}
++		if gifProviderHost(source.Hostname()) != gifProviderFxTwitter || gifProviderLabel(item.Provider) != "FxTwitter" {
++			t.Fatal("provider routing failed")
++		}
++		rendition, err := pickGIFRendition(item, 5<<20)
++		if err != nil {
++			t.Fatal(err)
++		}
++		if rendition.URL != "https://gif.fxtwitter.com/tweet_video/HT-DVvMWoAASeEm.gif" || item.PageURL != source.String() {
++			t.Fatalf("unexpected rendition: %+v", item)
++		}
++	}
++}
++
++func TestFxTwitterDirectAnimationRejectsSpoofedHostsAndPaths(t *testing.T) {
++	for _, raw := range []string{"https://gif.fxtwitter.com.evil.test/tweet_video/a.webp", "https://alice@gif.fxtwitter.com/tweet_video/a.webp", "https://gif.fxtwitter.com:8443/tweet_video/a.webp", "http://gif.fxtwitter.com/tweet_video/a.webp", "https://gif.fxtwitter.com/elsewhere/a.webp", "https://gif.fxtwitter.com/tweet_video/a.webp/extra", "https://gif.fxtwitter.com/tweet_video/%2e%2e.webp"} {
++		source, _ := url.Parse(raw)
++		if _, err := resolveFxTwitterItem(source); err == nil {
++			t.Fatalf("accepted %s", raw)
++		}
++	}
++	if gifProviderHost("gif.fxtwitter.com.evil.test") != "" {
++		t.Fatal("lookalike provider accepted")
++	}
++}

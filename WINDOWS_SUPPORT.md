@@ -6,7 +6,7 @@ Policy date: 2026-10-21. Scope: step 1 of [the port plan](MULTIPLATFORM_PLAN.md)
 release.** This document defines the targets and evidence required for the first
 supported release. Completing this policy does not complete desktop validation.
 Linux releases retain their existing support policy; macOS remains groundwork.
-Source version 1.1.0 is available as an unsigned
+Source version 1.1.1 is available as an unsigned
 [Windows preview](docs/testing/windows-preview.md) with a verified installer and
 portable ZIP. The owner confirmed that a signing certificate is unavailable, and
 native Windows 11 desktop/device/beta acceptance remains pending.
@@ -19,6 +19,9 @@ download is represented as a supported or signed release.
 The [2026-10-30 scrolling and text record](docs/testing/windows-scroll-2026-10-30.md)
 documents a fix for read-only message views updating native IME positions during
 scrolling, plus Windows font rasterization and size defaults.
+
+The [2026-11-04 compatibility review](docs/testing/windows-recent-2026-11-04.md)
+records native checks for the recent frontend changes and wheel/zoom fixes.
 
 ## Release targets
 

@@ -2,6 +2,7 @@
 import importlib.util
 from pathlib import Path
 import unittest
+import time
 from unittest.mock import Mock, patch
 
 spec = importlib.util.spec_from_file_location("voice_worker", Path(__file__).resolve().parents[1] / "src/voice/engine.py")
@@ -254,6 +255,65 @@ class DeviceTests(unittest.TestCase):
                     failed.assert_not_called()
                 finally:
                     pipeline.set_state(Gst.State.NULL)
+
+
+class LocalScreenPreviewTests(unittest.TestCase):
+    def test_hidden_preview_does_not_hold_capture_in_preroll(self):
+        pipeline = worker.Gst.parse_launch(
+            "videotestsrc is-live=true ! videoconvert ! tee name=preview_raw "
+            "preview_raw. ! queue ! fakesink sync=false async=false preview_raw. ! " + worker.Engine.local_preview_branch())
+        try:
+            pipeline.set_state(worker.Gst.State.PLAYING)
+            result, state, pending = pipeline.get_state(2 * worker.Gst.SECOND)
+            self.assertEqual(state, worker.Gst.State.PLAYING, "a hidden preview must not block the publishing pipeline")
+            self.assertNotEqual(result, worker.Gst.StateChangeReturn.ASYNC)
+        finally:
+            pipeline.set_state(worker.Gst.State.NULL)
+
+    def test_preview_reuses_frames_and_has_independent_backpressure(self):
+        engine = worker.Engine()
+        events, outgoing = [], []
+        pipeline = worker.Gst.parse_launch(
+            "videotestsrc is-live=true ! video/x-raw,width=640,height=360,framerate=15/1 ! videoconvert ! "
+            "tee name=preview_raw preview_raw. ! queue max-size-buffers=2 leaky=downstream ! "
+            "fakesink name=outgoing sync=false async=false signal-handoffs=true preview_raw. ! " + engine.local_preview_branch())
+        pipeline.get_by_name("outgoing").connect("handoff", lambda *_: outgoing.append(True))
+        engine.pipeline = pipeline
+        engine.video["screen"] = {"bin": pipeline, "codec": pipeline}
+        def wait(condition, timeout=3):
+            deadline = time.monotonic() + timeout
+            while not condition():
+                while worker.GLib.MainContext.default().pending():
+                    worker.GLib.MainContext.default().iteration(False)
+                self.assertLess(time.monotonic(), deadline, "synthetic preview timed out")
+                time.sleep(0.01)
+        try:
+            with patch.object(worker, "emit", side_effect=events.append):
+                engine.reset_local_preview()
+                engine.connect_local_preview(pipeline)
+                engine.dispatch({"type": "local_preview", "enabled": True})
+                pipeline.set_state(worker.Gst.State.PLAYING)
+                frames = lambda: [e for e in events if e["type"] == "local_preview_frame"]
+                wait(lambda: len(frames()) == 1)
+                self.assertLessEqual(len(frames()[0]["jpeg"]), 120000)
+                wait(lambda: len(outgoing) >= 10)
+                self.assertEqual(len(frames()), 1, "one outstanding local frame; RTP keeps flowing")
+                engine.dispatch({"type": "local_preview_ack", "epoch": engine.local_preview_epoch - 1})
+                self.assertTrue(engine.local_preview_pending, "stale acknowledgements cannot release a new frame")
+                engine.dispatch({"type": "local_preview_ack", "epoch": engine.local_preview_epoch})
+                wait(lambda: len(frames()) == 2)
+                engine.dispatch({"type": "local_preview", "enabled": False})
+                self.assertTrue(pipeline.get_by_name("preview_gate").get_property("drop"))
+                before = len(frames())
+                engine.reset_local_preview()
+                engine.dispatch({"type": "local_preview", "enabled": True})
+                count = len(outgoing)
+                wait(lambda: len(outgoing) >= count + 8)
+                self.assertEqual(len(frames()), before, "frames from an old capture generation are ignored")
+        finally:
+            pipeline.set_state(worker.Gst.State.NULL)
+            engine.video.clear()
+            engine.close()
 
 
 if __name__ == "__main__":

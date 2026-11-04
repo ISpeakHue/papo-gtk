@@ -71,6 +71,18 @@ devices still need desktop acceptance testing.
 and [sandbox permissions](https://docs.flatpak.org/en/latest/sandbox-permissions.html)
 describe the distribution format and permission model.
 
+## Version 1.1.1 validation (2026-11-04)
+
+The published bundle matches clean source
+`ca79cc4475d48e27becb4870343ac4368e641b17`. It was installed in a separate scratch
+installation and reports 1.1.1. Its runtime check passed with 38 media elements,
+three MP4/MOV/WebM posters and three animations. Decoder isolation denied input
+writes and private-file access and made no network requests. Existing account
+settings and the normal Flatpak installation were not used. Both Linux CI runs
+passed 318 regular Rust tests and all 41 GUI cases. The release's
+[verification report](https://github.com/ISpeakHue/papo-gtk/releases/download/v1.1.1/RELEASE-VERIFICATION.json)
+records the bundle checksum and actual results.
+
 ## Version 1.0.2 validation (2026-10-20)
 
 The installed versioned bundle reports 1.0.2 and passed its runtime check with

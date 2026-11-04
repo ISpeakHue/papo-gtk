@@ -123,6 +123,15 @@ checks; desktop configuration and graphics drivers can still affect rendering.
 
 ## Validation
 
+Version 1.1.1 (2026-11-04): the published package reports 1.1.1 and matches clean
+source `ca79cc4475d48e27becb4870343ac4368e641b17`. Its runtime check passed with
+37 media elements, software H.264 decoding, hardware plugin discovery, PNG/SVG
+decoding and both input-method clients. Font diagnostics used native Wayland,
+Adwaita Sans and Vulkan at 1x without forced backend, renderer or scale. Both
+Linux CI runs passed 318 regular Rust tests and all 41 GUI cases. The release's
+[verification report](https://github.com/ISpeakHue/papo-gtk/releases/download/v1.1.1/RELEASE-VERIFICATION.json)
+records the actual package checks and SHA-256 identity.
+
 Version 1.0.2 (2026-10-20): the versioned package passed the bundled runtime
 check, isolated media decoding, font diagnostics and private Wayland startup.
 Its actual executable's 47 control icons resolved and decoded with Adwaita,

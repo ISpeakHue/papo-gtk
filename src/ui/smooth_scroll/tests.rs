@@ -26,7 +26,7 @@ fn native_input(window:&gtk::Window)->bool{
 }
 
 fn input(widget:&impl IsA<gtk::Widget>,action:&str){
-    let widget=widget.as_ref();let native=widget.native().unwrap();
+    fn send(widget:&gtk::Widget,action:&str){let native=widget.native().unwrap();
     let point=widget.compute_point(&native.clone().upcast::<gtk::Widget>(),&gtk::graphene::Point::new(widget.width() as f32/2.0,widget.height() as f32/2.0)).unwrap();
     let (tx,ty)=native.surface_transform();
     let directory=std::env::var_os("PAPO_TEST_HELPERS_DIR").map(std::path::PathBuf::from).unwrap_or_else(||std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/helpers"));
@@ -38,6 +38,14 @@ fn input(widget:&impl IsA<gtk::Widget>,action:&str){
     #[cfg(not(windows))]command.arg(directory.join("scroll_input.py")).arg("Papo smooth scrolling test");
     let status=command.arg(((point.x() as f64-tx).round() as i32).to_string()).arg(((point.y() as f64-ty).round() as i32).to_string()).arg(action).status().unwrap();
     assert!(status.success(),"native wheel helper failed");
+    }
+    let widget=widget.as_ref();
+    #[cfg(windows)]{
+        // EN-US: Let Win32 process activation, frame resizing and pointer motion before queuing a wheel event.
+        // PT-BR: Deixa o Win32 processar ativação, ajuste da moldura e movimento antes de enfileirar a roda.
+        send(widget,"move");spin(&gtk::glib::MainContext::default(),200);
+    }
+    send(widget,action);
 }
 
 pub(crate) fn exercise(context:&gtk::glib::MainContext){
@@ -77,6 +85,9 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
         assert!(values.borrow().iter().any(|value|*value>0.0&&*value<step-0.5),"a real wheel event must traverse intermediate animation frames: {:?}, step={step}",values.borrow());
         assert_eq!(outer.vadjustment().value(),0.0,"nested scrolling must not move the outer dialog");
         spin(context,200);
+        #[cfg(windows)]{
+            adj.set_value(0.0);input(&inner,"quarter-down");until(context,||(adj.value()-step/4.0).abs()<0.75);spin(context,200);
+        }
         adj.set_value(adj.upper()-adj.page_size());input(&inner,"down");
         until(context,||outer.vadjustment().value()>1.0);spin(context,200);
         assert!((adj.value()-(adj.upper()-adj.page_size())).abs()<0.5,"the nested boundary remains bounded while its parent scrolls: value={}, max={}",adj.value(),adj.upper()-adj.page_size());
@@ -89,8 +100,9 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
         let before=h.value();input(&horizontal,"Shift_L+down");until(context,||h.value()>before+1.0);spin(context,200);
         let zooms=Rc::new(Cell::new(0));let count=zooms.clone();
         let zoom=gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
+        zoom.set_propagation_phase(gtk::PropagationPhase::Capture);
         zoom.connect_scroll(move |c,_,_|{if crate::platform::shortcuts::primary_pressed(c.current_event_state()){count.set(count.get()+1);gtk::glib::Propagation::Stop}else{gtk::glib::Propagation::Proceed}});horizontal.add_controller(zoom);
-        let before=h.value();input(&horizontal,"Control_L+down");until(context,||zooms.get()==1);assert!((h.value()-before).abs()<0.5,"primary-wheel zoom must not pan the viewer");
+        let before=h.value();input(&horizontal,"Control_L+down");until(context,||zooms.get()>0);assert_eq!(zooms.get(),1);assert!((h.value()-before).abs()<0.5,"primary-wheel zoom must not pan the viewer");
 
         outer.vadjustment().set_value(0.0);spin(context,50);input(&button,"click");until(context,||clicks.get()==1);
         settings.set_gtk_enable_animations(false);
@@ -105,6 +117,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
 
 pub(crate) fn exercise_pane(window:&gtk::Window,scroll:&gtk::ScrolledWindow,context:&gtk::glib::MainContext){
     if !native_input(window){return;}
+    assert!(window.observe_controllers().iter::<gtk::glib::Object>().filter_map(Result::ok).filter_map(|c|c.downcast::<gtk::EventControllerLegacy>().ok()).any(|c|c.name().as_deref()==Some(WINDOW_CONTROLLER)),"notification dialogs must have the shared wheel dispatcher");
     let title=window.title();window.set_title(Some("Papo smooth scrolling test"));
     let settings=gtk::Settings::default().unwrap();let enabled=settings.is_gtk_enable_animations();settings.set_gtk_enable_animations(true);
     until(context,||scroll.is_mapped()&&scroll.vadjustment().upper()>scroll.vadjustment().page_size()+10.0);

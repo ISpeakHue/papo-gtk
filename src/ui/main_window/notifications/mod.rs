@@ -504,6 +504,12 @@ pub(crate) fn exercise_denied(main:&Controller<MainWindowModel>,context:&gtk::gl
     if gtk::prelude::WidgetExt::display(&host).type_().name()=="GdkX11Display"{
         assert!(std::process::Command::new("python3").arg(concat!(env!("CARGO_MANIFEST_DIR"),"/tests/helpers/input_keys.py")).arg("Papo backend update test").status().unwrap().success());until(context,||host.is_active());
     }
+    #[cfg(windows)]{
+        // EN-US: Native read acknowledgements require the fixture's host to regain focus after its modal dialogs.
+        // PT-BR: A confirmação nativa de leitura exige que a janela de teste recupere o foco após os diálogos modais.
+        if std::env::var("PAPO_NATIVE_INPUT_TEST").as_deref()==Ok("1"){crate::ui::chat::multiline::keys_for("Papo backend update test",&[]);}else{host.present();}
+        until(context,||host.is_active());
+    }
     main.emit(MainWindowMsg::TickCleanup);until(context,||main.model().direct.items.iter().any(|d|d.id==dm&&d.unread_count==0));
     let writes:Vec<_>=backend.lock().unwrap().requests.iter().filter(|(m,p,_)|m=="PUT"&&p==&format!("/channels/{dm}/read")).cloned().collect();
     assert_eq!(writes.len(),1);assert_eq!(writes[0].2["message_id"],dm_message.to_string(),"DMs use the same explicit message cursor acknowledgement");

@@ -167,11 +167,9 @@ fn observe_window(window:&gtk::Window){
     controller.connect_event(move |_,event|{
         let Some(wheel)=event.downcast_ref::<gtk::gdk::ScrollEvent>()else{return gtk::glib::Propagation::Proceed;};
         #[cfg(test)]if std::env::var_os("PAPO_SCROLL_DIAGNOSTICS").is_some(){eprintln!("Wheel metadata: direction={:?}, unit={:?}, delta={:?}, position={:?}, modifiers={:?}",wheel.direction(),wheel.unit(),wheel.deltas(),event.position(),event.modifier_state());}
-        let (dx,dy)=match wheel.direction(){
-            gtk::gdk::ScrollDirection::Up=>(0.0,-1.0),gtk::gdk::ScrollDirection::Down=>(0.0,1.0),
-            gtk::gdk::ScrollDirection::Left=>(-1.0,0.0),gtk::gdk::ScrollDirection::Right=>(1.0,0.0),
-            gtk::gdk::ScrollDirection::Smooth=>wheel.deltas(),_=>return gtk::glib::Propagation::Proceed,
-        };
+        // EN-US: Win32 high-resolution wheels carry fractional deltas even with a discrete direction.
+        // PT-BR: Rodas Win32 de alta resolução trazem deltas fracionários mesmo com direção discreta.
+        let (dx,dy)=wheel.deltas();
         let Some((axis,delta))=wheel_delta(wheel.unit(),event.modifier_state(),dx,dy)else{
             stop_window(&wheels);return gtk::glib::Propagation::Proceed;
         };

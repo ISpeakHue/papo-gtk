@@ -40,6 +40,8 @@ class DesktopInput(unittest.TestCase):
         self.assertEqual([batch[0].payload.keyboard.flags, batch[-1].payload.keyboard.flags], [0, 2])
         self.assertEqual(batch[1].payload.mouse.data, (-120) & 0xffffffff)
         self.assertEqual(batch[1].payload.mouse.flags, 0x800)
+        self.assertEqual(keys.pointer_events('quarter-down')[0].payload.mouse.data, (-30) & 0xffffffff)
+        self.assertEqual(keys.pointer_events('move'), [])
         self.assertEqual(keys.pointer_events('right')[0].payload.mouse.flags, 0x1000)
         self.assertEqual([event.payload.mouse.flags for event in keys.pointer_events('click')], [2, 4])
         for invalid in ('Alt_L+down', 'unknown', 'Shift_L+'):

@@ -18,6 +18,7 @@ jobs:
       GSK_RENDERER: cairo
       GTK_A11Y: test
       PYTHONUTF8: '1'
+      GST_PLUGIN_FEATURE_RANK: 'fakeaudiosink:512'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -111,10 +112,11 @@ jobs:
         run: |
           export PAPO_RUNTIME_DIR="$(cygpath -w "$MINGW_PREFIX")"
           cargo test --locked --no-run
+          git rev-parse HEAD
           papo_failed=0
-          for papo_case in window-scrolling notification-filters emoji-grid report8 report10 mentions mention-suggestions embeds backend-update retention recent-media; do
+          for papo_case in window-scrolling notification-filters backend-update recent-media status-viewer backend-gifs; do
             printf '\nCASE %s\n' "$papo_case"
-            if [[ "$papo_case" == window-scrolling || "$papo_case" == notification-filters || "$papo_case" == emoji-grid ]]; then
+            if [[ "$papo_case" == window-scrolling || "$papo_case" == notification-filters || "$papo_case" == backend-update ]]; then
               papo_env=(env PAPO_NATIVE_INPUT_TEST=1 PAPO_SCROLL_DIAGNOSTICS=1)
             else
               papo_env=(env -u PAPO_NATIVE_INPUT_TEST)

@@ -44,10 +44,12 @@ def events(chord):
 
 def pointer_events(action):
     modifier, _, action = action.rpartition('+')
-    if modifier not in ('', 'Shift_L', 'Control_L') or action not in ('up', 'down', 'left', 'right', 'click'):
+    if action == 'move' and not modifier:
+        return []
+    if modifier not in ('', 'Shift_L', 'Control_L') or action not in ('up', 'down', 'quarter-down', 'left', 'right', 'click'):
         raise ValueError('Unsupported native test pointer action')
     keys = events(modifier) if modifier else []
-    flags, data = {'up': (0x800, 120), 'down': (0x800, -120),
+    flags, data = {'up': (0x800, 120), 'down': (0x800, -120), 'quarter-down': (0x800, -30),
                    'left': (0x1000, -120), 'right': (0x1000, 120), 'click': (2, 0)}[action]
     mouse = [Input(0, Payload(mouse=Mouse(0, 0, data & 0xffffffff, flags, 0, 0)))]
     if action == 'click':
@@ -58,7 +60,7 @@ def pointer_events(action):
 def run(pid, title, chords, pointer=None):
     if os.name != 'nt' or pid != os.getppid() or os.environ.get('PAPO_NATIVE_INPUT_TEST') != '1':
         raise RuntimeError('Native input requires explicit opt-in and the invoking test process')
-    expected = ('Papo smooth scrolling test',) if pointer is not None else ('Papo desktop input test', 'Papo emoji Escape test')
+    expected = ('Papo smooth scrolling test',) if pointer is not None else ('Papo desktop input test', 'Papo emoji Escape test', 'Papo backend update test')
     if title not in expected:
         raise RuntimeError('Unexpected native test window title')
     if pointer is not None and (len(chords) != 1 or not all(0 <= value <= 4096 for value in pointer)):
@@ -126,6 +128,8 @@ def run(pid, title, chords, pointer=None):
             batch = pointer_events(chord)
         else:
             batch = events(chord)
+        if not batch:
+            continue
         inputs = (Input * len(batch))(*batch)
         if api.SendInput(len(inputs), inputs, c.sizeof(Input)) != len(inputs):
             # EN-US: Release the test's keys after a partial batch; never leave a synthetic modifier held.

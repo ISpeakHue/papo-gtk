@@ -484,7 +484,7 @@ pub(crate) fn exercise_denied(main:&Controller<MainWindowModel>,context:&gtk::gl
     crate::ui::chat::performance::settle(context);
     if gtk::prelude::WidgetExt::display(&host).type_().name()=="GdkX11Display"{
         // Bare virtual displays have no window manager to grant keyboard focus.
-        assert!(std::process::Command::new("python3").arg(concat!(env!("CARGO_MANIFEST_DIR"),"/tests/helpers/input_keys.py")).arg("Papo backend update test").status().unwrap().success());
+        crate::ui::chat::multiline::keys_for("Papo backend update test",&[]);
         until(context,||host.is_active());
     }
     assert!(host.is_active(),"the private test host must have desktop focus");
@@ -518,7 +518,7 @@ pub(crate) fn exercise_denied(main:&Controller<MainWindowModel>,context:&gtk::gl
     main.emit(MainWindowMsg::Direct(super::direct::DirectMsg::Open(peer)));
     until(context,||main.model().active_channel_id==Some(dm)&&main.model().chat.model().read_candidate().is_some());
     if gtk::prelude::WidgetExt::display(&host).type_().name()=="GdkX11Display"{
-        assert!(std::process::Command::new("python3").arg(concat!(env!("CARGO_MANIFEST_DIR"),"/tests/helpers/input_keys.py")).arg("Papo backend update test").status().unwrap().success());until(context,||host.is_active());
+        crate::ui::chat::multiline::keys_for("Papo backend update test",&[]);until(context,||host.is_active());
     }
     #[cfg(windows)]{
         // EN-US: Native read acknowledgements require the fixture's host to regain focus after its modal dialogs.

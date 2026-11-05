@@ -161,7 +161,10 @@ pub enum MainWindowMsg {
 
 #[derive(Debug)]
 pub enum MainWindowOutput {
-    Workspace(workspace::Summary), Activate, DeviceMedia(crate::media::policy::Preferences),
+    Workspace(workspace::Summary),
+    #[cfg(any(target_os="linux",windows,test))]
+    Activate,
+    DeviceMedia(crate::media::policy::Preferences),
     Logout,
     SessionExpired,
 }

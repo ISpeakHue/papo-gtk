@@ -39,6 +39,7 @@ impl Transfers {
         let body=gtk::Box::new(gtk::Orientation::Vertical,6);body.set_halign(gtk::Align::Center);body.set_valign(gtk::Align::Center);body.set_widget_name(&format!("media-status-{key}"));
         let phase=self.phases.get(&key);let failed=self.failed.contains_key(&key)||phase==Some(&Phase::Failed);
         let text=if failed{crate::i18n::tr("Não foi possível carregar a mídia.")}else if !self.allows(key){crate::i18n::tr("Carregar mídia")}else if phase==Some(&Phase::Processing){crate::i18n::tr("Processando mídia…")}else{crate::i18n::tr("Baixando mídia…")};
+        if failed{body.append(&gtk::Image::from_icon_name("papo-image-missing-symbolic"));}
         if !failed&&self.allows(key){body.append(&gtk::Spinner::builder().spinning(true).build());}
         let label=gtk::Label::new(Some(text));label.set_wrap(true);label.set_justify(gtk::Justification::Center);label.update_property(&[gtk::accessible::Property::Label(text)]);body.append(&label);
         if failed||!self.allows(key){let button=gtk::Button::with_label(if failed{crate::i18n::tr("Tentar novamente")}else{crate::i18n::tr("Carregar mídia")});button.set_widget_name(&format!("load-media-{key}"));let input=sender.input_sender().clone();button.connect_clicked(move |_|{let _=input.send(ChatMsg::Transfer(TransferMsg::RetryImage(key)));});body.append(&button);}

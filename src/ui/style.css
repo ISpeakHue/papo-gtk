@@ -138,3 +138,4 @@
 .papo-account-button.papo-account-call { box-shadow: inset 3px 0 @success_color; }
 /* The shared rail replaces the embedded 64px rail; keep its side padding out of the chat budget. */
 #account-rail { padding-left: 0; padding-right: 0; }
+#account-rail .papo-account-button { min-width: 36px; margin-left: 0; margin-right: 0; }

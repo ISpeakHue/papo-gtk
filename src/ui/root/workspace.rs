@@ -85,7 +85,7 @@ impl RootModel{
         if !activate{adw::StyleManager::default().set_color_scheme(previous_scheme);}
         controller.emit(MainWindowMsg::Workspace{active:activate,restore});self.workspace.pages.add_named(controller.widget(),Some(&id.namespace()));
         #[cfg(windows)]if let Some(ticket)=self.native_activation{controller.emit(MainWindowMsg::Notification(crate::ui::main_window::notifications::NoticeMsg::NativeTicket(ticket)));}
-        self.workspace.inactive.insert(id.clone(),controller);self.workspace.error=None;
+        self.workspace.inactive.insert(id.clone(),controller);if self.workspace.writer.is_some(){self.workspace.error=None;}
         if activate{self.activate_account(&id);}self.workspace.save();self.rail(sender);
     }
     fn resume_account(&mut self,id:AccountId,sender:&ComponentSender<Self>){

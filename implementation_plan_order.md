@@ -16,6 +16,9 @@ Implementation status (2026-11-05):
 - [x] Step 13: device/account-local timed channel/DM mutes, account snooze, independent message/call sounds and explicit Busy/mention/DM precedence, preserving grouped inbox/server modes.
 - [x] Step 14 implementation: shortcut reference, focus restoration, named controls, keyboard message actions, high-contrast text/role colors and reduced-motion wheel scrolling. Native Windows reader acceptance and real Orca/NVDA/Narrator speech checks remain pending.
 - [x] Step 15: installed version, explicit anonymous bounded GitHub checks, stable/experimental selection, release notes, exact package/CPU matching and Flatpak guidance; [feature guide](docs/notifications-accessibility-and-updates.md).
+- [x] Step 16: shared saved-account rail, independent live sessions and unread/call indicators, automatic remembered-session resume, restored conversation/drafts/viewport, and scoped disconnect/removal; [account guide](docs/multi-server.md).
+- [x] Step 17 automation: source-bound baseline comparisons, structural/cache/request budgets, integrated account/reconnect/outbox/permission workflows, and artifact-bound acceptance tooling; [regression guide](docs/testing/release-acceptance.md).
+- [ ] Step 17 physical Linux device, native screen-reader and installed AppImage/Flatpak upgrade acceptance: receipts/checklists are ready; synthetic tests do not establish these results. The user waived manual Windows acceptance in favor of native Windows CI for this implementation. Windows remains experimental.
 
 Initial steps 1–3 validation: 322 regular Rust tests and six Python tool checks passed; focused GTK
 checks passed, including the notification rerun with a private window manager.

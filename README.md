@@ -112,9 +112,13 @@ Real SFU integration can be enabled through the workflow's manual inputs.
 See [TESTING.md](TESTING.md) for dependencies, commands and manual checks,
 [DESIGN.md](DESIGN.md) for interface decisions, and
 [follow-ups](docs/FOLLOW_UPS.md) for unresolved investigations and deferred work.
-The [UX implementation plan](implementation_plan_order.md) tracks the next steps;
+The [UX implementation plan](implementation_plan_order.md) tracks implementation and acceptance;
 [account ownership](docs/account-state.md), [performance baselines](PERFORMANCE.md)
 and [backend contracts](docs/backend/ux-contracts.md) document its initial groundwork.
+Use the left rail to [switch servers and accounts](docs/multi-server.md), keeping
+independent sessions, drafts, unread indicators and conversations. The
+[regression and acceptance guide](docs/testing/release-acceptance.md) describes
+automated budgets and the remaining physical-device checks.
 See [EMBEDS.md](EMBEDS.md) for the updated embed API, custom-card controls and
 current backend media limitations.
 

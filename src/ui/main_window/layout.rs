@@ -114,7 +114,7 @@ pub(crate) mod tests {
             assert!((bar.x()+bar.width()-pane.x()-pane.width()).abs()<=1.0,"header spans the member pane to the window controls");
             for tooltip in ["Fixadas","Buscar mensagens (Ctrl+F)","Notificações","Lista de Membros"]{
                 let button=find_button(header.upcast_ref(),tooltip);
-                let limit=720.0+if !model.layout.members.is_collapsed()&&model.layout.members.shows_sidebar(){224.0}else{0.0};
+                let limit=ChatModel::COMPACT_HEADER_WIDTH+if !model.layout.members.is_collapsed()&&model.layout.members.shows_sidebar(){224.0}else{0.0};
                 assert_eq!(button.is_mapped(),header.width() as f64>limit||tooltip=="Notificações");
                 if !button.is_mapped(){continue;}
                 let button=bounds(button.upcast_ref());assert!(button.x()>=bar.x()&&button.x()+button.width()<=bar.x()+bar.width()+1.0);

@@ -112,3 +112,17 @@ the named fixture process. Other accessibility cases use GTK's test backend.
 The update GUI fixture injects synthetic release results; private loopback Rust
 tests cover successful and failed HTTP responses without contacting GitHub.
 See [behavior and remaining native reader acceptance](docs/notifications-accessibility-and-updates.md).
+
+Steps 16–17 add `multi-server` and `multi-account-restart` on Linux and Windows.
+They use colliding IDs across two loopback backends and two users on one backend
+to verify separate credentials, restored conversations/drafts/scroll, unread
+indicators, scoped disconnection/removal, pending sends and stale callbacks.
+The [account guide](docs/multi-server.md) documents bounded saved/live accounts.
+
+CI checks structural performance budgets on both platforms. Linux additionally
+compares three fresh-process release runs with the original measurements.
+See [regression budgets and acceptance](docs/testing/release-acceptance.md) for
+commands, tolerances and artifact-bound receipts. The user accepted native
+Windows CI for this implementation; real device/screen-reader checks are not
+inferred from automated results. Linux physical-device and installed-upgrade
+acceptance remains separate from the synthetic suite.

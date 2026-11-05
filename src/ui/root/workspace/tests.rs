@@ -6,6 +6,13 @@ use crate::ui::chat::actions::tests::{mock,pump,until,descendants,USER,CHANNEL};
 use crate::ui::main_window::MainWindowMsg;
 use uuid::Uuid;
 fn chat(root:&Controller<RootModel>,id:&AccountId)->(relm4::Sender<MainWindowMsg>,relm4::Sender<ChatMsg>,gtk::Box){let model=root.model();let controller=model.account_controller(id).unwrap();let value=(controller.sender().clone(),controller.model().test_chat().sender().clone(),controller.model().test_chat().widget().clone());value}
+// EN-US: Native window borders must not leave the full header wider than its available allocation.
+// PT-BR: Bordas nativas não devem deixar o cabeçalho completo maior que a área disponível.
+fn assert_layout_fits(window:&adw::ApplicationWindow){
+    for bin in descendants(window.upcast_ref()).into_iter().filter_map(|w|w.downcast::<adw::BreakpointBin>().ok()).filter(|b|b.is_mapped()){
+        if let Some(toolbar)=bin.child().and_downcast::<adw::ToolbarView>(){let minimum=toolbar.measure(gtk::Orientation::Horizontal,-1).0;assert!(minimum<=bin.width(),"header needs {minimum}px with only {}px available",bin.width());}
+    }
+}
 pub(in crate::ui::root) fn exercise(context:&gtk::glib::MainContext){
     let (a,ba,sa)=tokio::runtime::Handle::current().block_on(mock());let(b,bb,sb)=tokio::runtime::Handle::current().block_on(mock());
     a.restore_auth_cookie("synthetic-account-a").unwrap();b.restore_auth_cookie("synthetic-account-b").unwrap();
@@ -23,6 +30,7 @@ pub(in crate::ui::root) fn exercise(context:&gtk::glib::MainContext){
     let field_b=composer::field(wb.upcast_ref());field_b.set_text("Beta independent draft");pump(context);
     root.emit(RootMsg::DirectNavigation);until(context,||root.model().workspace.direct.is_active());assert_eq!(field_b.text(),"Beta independent draft");root.emit(RootMsg::DirectNavigation);until(context,||!root.model().workspace.direct.is_active());
     for id in [&aid,&bid,&aid]{root.emit(RootMsg::SelectAccount(id.clone()));until(context,||root.model().active_id().as_ref()==Some(id));crate::ui::chat::performance::settle(context);}
+    assert_layout_fits(&window);
     assert_eq!(field_a.text(),"Alpha unsent á é ç");assert_eq!(field_b.text(),"Beta independent draft");assert!((scroll.vadjustment().value()-before).abs()<4.0,"server switch must preserve the scroll anchor: before {before}, now {}",scroll.vadjustment().value());
     {let model=root.model();assert_eq!(model.account_controller(&aid).unwrap().model().connection.api.auth_cookie().as_deref(),Some("synthetic-account-a"));assert_eq!(model.account_controller(&bid).unwrap().model().connection.api.auth_cookie().as_deref(),Some("synthetic-account-b"));assert_eq!(model.workspace.directory.accounts.len(),2);}
     // A delayed send remains on Alpha while Beta's composer and connection work.
@@ -61,6 +69,7 @@ pub(in crate::ui::root) fn accounts_restart(context:&gtk::glib::MainContext){
     window.close();drop(root);pump(context);
     let reopened=RootModel::builder().launch(()).detach();let window=reopened.widget().clone();window.present();until(context,||reopened.model().account_controller(&aid).is_some()&&reopened.model().account_controller(&bid).is_some());
     let(ma,_ca,wa)=chat(&reopened,&aid);let(mb,_cb,wb)=chat(&reopened,&bid);ma.send(MainWindowMsg::StartLoading).unwrap();mb.send(MainWindowMsg::StartLoading).unwrap();
+    crate::ui::chat::performance::settle(context);assert_layout_fits(&window);
     let fa=composer::field(wa.upcast_ref());let fb=composer::field(wb.upcast_ref());until(context,||reopened.model().active_id().as_ref()==Some(&bid)&&reopened.model().account_controller(&bid).unwrap().model().active_channel_id==Some(other)&&fa.text()=="Alice saved draft"&&fb.text()=="Bob saved other-channel draft");
     assert_eq!(reopened.model().account_controller(&aid).unwrap().model().connection.api.auth_cookie().as_deref(),Some("synthetic-alice"));assert_eq!(reopened.model().account_controller(&bid).unwrap().model().connection.api.auth_cookie().as_deref(),Some("synthetic-bob"));assert_eq!(reopened.model().account_controller(&bid).unwrap().model().connection.api.session_owner(),b.session_owner());
     reopened.emit(RootMsg::RemoveAccount(aid.clone()));until(context,||reopened.model().workspace.removal.is_some());reopened.model().workspace.removal.as_ref().unwrap().force_close();pump(context);assert_eq!(reopened.model().workspace.directory.accounts.len(),2);reopened.emit(RootMsg::RemoveAccountConfirmed(aid.clone()));until(context,||reopened.model().account_controller(&aid).is_none()&&reopened.model().workspace.directory.accounts.len()==1);assert_eq!(reopened.model().active_id().as_ref(),Some(&bid));assert_eq!(fb.text(),"Bob saved other-channel draft");

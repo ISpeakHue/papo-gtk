@@ -43,11 +43,16 @@ misleading zero. These scenarios establish a repeatable synthetic baseline,
 not real-server latency or a claim that allocated memory immediately returns to
 the operating system. Compare the same OS, build profile, renderer, fonts,
 display geometry and machine. Three runs provide median/range diagnostics;
-there are no performance thresholds until plan step 17 establishes tolerances.
+step 17 adds explicit synthetic regression tolerances as described below.
 
-Linux and Windows CI record one debug sample and retain the JSON/logs in their
-diagnostic artifacts. Functional assertions (cache reuse, bounded ownership and
-completed scenarios) still fail normally. Later dated measurements below are
+Linux and Windows CI record one debug sample and enforce structural budgets.
+Linux also compares three optimized runs with the original Linux samples using
+[declared timing tolerances](docs/testing/performance-budgets.json). The
+[budget checker](scripts/check-performance-budgets.py) rejects missing scenarios,
+failed reports and invalid measurements. See the
+[regression guide](docs/testing/release-acceptance.md) for commands and limits.
+Functional assertions (cache reuse, bounded ownership and completed scenarios)
+still fail normally. Later dated measurements below are
 historical evidence; their hardware/profile may differ from the new baseline.
 
 ## Earlier measurement record

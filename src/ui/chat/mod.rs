@@ -1859,13 +1859,16 @@ fn find_media_box(widget:&gtk::Widget)->Option<gtk::Box>{
 }
 
 impl ChatModel {
+    // EN-US: Include native controls and border padding in the full-header width budget.
+    // PT-BR: Inclui controles nativos e margens das bordas no limite do cabeçalho completo.
+    pub(crate) const COMPACT_HEADER_WIDTH: f64=752.0;
     pub(crate) fn adapt_header(controller:&Controller<Self>,bin:&adw::BreakpointBin,members:&adw::OverlaySplitView)->(gtk::Settings,gtk::glib::SignalHandlerId){
         use adw::prelude::BreakpointBinExt;
         let widgets=controller.widgets();
         widgets.conversation_header.set_centering_policy(adw::CenteringPolicy::Strict);
         widgets.header_title_area.set_hexpand(true);
         widgets.conversation_title.set_hexpand(true);
-        let compact=adw::Breakpoint::new(adw::BreakpointCondition::new_length(adw::BreakpointConditionLengthType::MaxWidth,720.0,adw::LengthUnit::Sp));
+        let compact=adw::Breakpoint::new(adw::BreakpointCondition::new_length(adw::BreakpointConditionLengthType::MaxWidth,Self::COMPACT_HEADER_WIDTH,adw::LengthUnit::Sp));
         compact.add_setters(&[(&widgets.header_pins,"visible",false),(&widgets.header_search,"visible",false),(&widgets.header_members,"visible",false)]);
         compact.add_setters(&[(&widgets.compact_header_actions,"visible",true)]);
         // Balance the compact action group against native window controls
@@ -1883,7 +1886,7 @@ impl ChatModel {
                 let docked=!pane.is_collapsed()&&pane.shows_sidebar();
                 let width=if docked{pane.sidebar_width_unit().to_px(pane.max_sidebar_width(),Some(&offset.settings())).round() as i32+1}else{0};
                 offset.set_width_request(width);
-                let limit=720.0+if docked{pane.max_sidebar_width()}else{0.0};
+                let limit=Self::COMPACT_HEADER_WIDTH+if docked{pane.max_sidebar_width()}else{0.0};
                 condition.set_condition(Some(&adw::BreakpointCondition::new_length(adw::BreakpointConditionLengthType::MaxWidth,limit,adw::LengthUnit::Sp)));
             }
         });

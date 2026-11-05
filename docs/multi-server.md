@@ -84,4 +84,8 @@ connection and permission loss, stale controller generations and login scopes.
 `multi-account-restart` uses two identities on the **same** backend, separate
 cookie/keyring slots, last-conversation/draft restart recovery and account removal.
 Both use synthetic credentials, memory keyring storage and private test config.
-Native Windows execution remains a separate acceptance check.
+Both cases are included in the native Windows release workflow. For this
+implementation the user accepted successful source-matched Windows automation
+instead of manual Windows device/upgrade qualification; see the
+[acceptance guide](testing/release-acceptance.md). This keeps the existing
+experimental Windows support policy.

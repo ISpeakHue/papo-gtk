@@ -72,8 +72,10 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     assert!(descendants(&message).iter().filter_map(|w|w.downcast_ref::<gtk::Button>()).filter(|b|b.tooltip_text().as_deref()==Some("Responder")).all(|b|!b.has_css_class("dim-label")));
     find_button(chat.widget().upcast_ref(),"Cancelar resposta").emit_clicked();pump(context);assert!(chat.model().draft.reply.is_none());
     find_button(chat.widget().upcast_ref(),"Avançar para mensagens recentes").emit_clicked();settle(context);assert!(chat.model().viewport.following());assert!(!chat.model().viewing_old);
-    chat.emit(ChatMsg::SetAccess{user_id:Uuid::new_v4(),access:crate::models::Access{read:true,..Default::default()}});settle(context);chat.emit(ChatMsg::ContextMenu(ids[36]));settle(context);let message=row(&chat,ids[36]);assert!(!find_button(&message,"Responder").is_sensitive());assert!(!descendants(&message).iter().filter_map(|w|w.downcast_ref::<gtk::Button>()).any(|b|matches!(b.tooltip_text().as_deref(),Some("Excluir"|"Editar"|"Fixar"))));
-    chat.emit(ChatMsg::SetAccess{user_id:user,access:crate::models::Access::resolve(user,Some(user),&[],&[],&[])});settle(context);
+    // Keep this a permission change within one account: changing the account correctly clears history.
+    let original=chat.model().history.messages.iter().find(|m|m.id==ids[36]).unwrap().clone();let mut peer_message=original.clone();peer_message.author_id=Some(mentioned);chat.emit(ChatMsg::ApplyChange(Change::Upsert(peer_message)));
+    chat.emit(ChatMsg::SetAccess{user_id:user,access:crate::models::Access{read:true,..Default::default()}});settle(context);chat.emit(ChatMsg::ContextMenu(ids[36]));settle(context);let message=row(&chat,ids[36]);assert!(!find_button(&message,"Responder").is_sensitive());assert!(!descendants(&message).iter().filter_map(|w|w.downcast_ref::<gtk::Button>()).any(|b|matches!(b.tooltip_text().as_deref(),Some("Excluir"|"Editar"|"Fixar"))));
+    chat.emit(ChatMsg::SetAccess{user_id:user,access:crate::models::Access::resolve(user,Some(user),&[],&[],&[])});chat.emit(ChatMsg::ApplyChange(Change::Upsert(original)));settle(context);
     let blank:UserSummary=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"username":"Aaron","nickname":" ","created_at":start})).unwrap();
     let members:Vec<_>=chat.model().users_map.values().cloned().chain([blank]).collect();chat.emit(ChatMsg::SetUsers(members));settle(context);
     let entry=composer::field(chat.widget().upcast_ref());entry.grab_focus();entry.set_text("");entry.set_position(-1);settle(context);

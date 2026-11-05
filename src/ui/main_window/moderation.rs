@@ -27,8 +27,8 @@ impl MainWindowModel {
     fn load_audit(&mut self,append:bool,s:ComponentSender<Self>){
         if !self.server_access.manage_server||self.moderation.request.is_some(){return;}
         let Some(v)=self.moderation.view.as_ref().filter(|v|v.window.is_visible())else{return;};
-        let view=v.token;let request=Uuid::new_v4();self.moderation.request=Some(request);v.more.set_sensitive(false);v.status.set_text("Carregando auditoria…");
-        let filter=self.moderation.filter.clone();let cursor=if append{self.moderation.cursor}else{None};let api=self.api_client.clone();
+        let view=v.token;let request=Uuid::new_v4();self.moderation.request=Some(request);v.more.set_sensitive(false);v.status.set_text(crate::i18n::tr("Carregando auditoria…"));
+        let filter=self.moderation.filter.clone();let cursor=if append{self.moderation.cursor}else{None};let api=self.connection.api.clone();
         self.moderation.jobs.push(tokio::spawn(async move{let result=api.audit_logs(&filter,cursor).await;s.input(MainWindowMsg::Moderation(ModerationMsg::Logs{view,request,append,result}));}));
     }
     pub(super) fn moderation_event(&mut self,msg:ModerationMsg,s:ComponentSender<Self>,root:&gtk::Box){
@@ -36,55 +36,55 @@ impl MainWindowModel {
         if let ModerationMsg::Close=msg{self.moderation.clear();return;}
         if !self.server_access.manage_server{self.moderation.clear();return;}
         if !self.recovery_owner() && matches!(&msg,ModerationMsg::Confirm(Operation::Recovery)|ModerationMsg::Apply{operation:Operation::Recovery,..}|ModerationMsg::Copy){
-            if let Some(v)=&self.moderation.view{v.status.set_text("Somente o dono do servidor pode gerar recuperações de outros membros.");}
+            if let Some(v)=&self.moderation.view{v.status.set_text(crate::i18n::tr("Somente o dono do servidor pode gerar recuperações de outros membros."));}
             return;
         }
         match msg {
             ModerationMsg::Open=>{
                 if let Some(v)=&self.moderation.view{if v.window.is_visible(){v.window.present();return;}}
-                self.moderation.clear();let token=Uuid::new_v4();let(w,body)=window(root,"Moderação e auditoria");w.set_default_size(650,750);
+                self.moderation.clear();let token=Uuid::new_v4();let(w,body)=window(root,crate::i18n::tr("Moderação e auditoria"));w.set_default_size(650,750);
                 let choices:Vec<_>=self.users.iter().map(|u|format!("{}{} · {}",u.display_name(),if u.banned{" (banido)"}else{""},u.id)).collect();
                 let select=gtk::DropDown::from_strings(&choices.iter().map(String::as_str).collect::<Vec<_>>());body.append(&select);
-                let user=entry(&body,"UUID do membro (também permite desbanir um membro ausente)");
+                let user=entry(&body,crate::i18n::tr("UUID do membro (também permite desbanir um membro ausente)"));
                 let ids:Vec<_>=self.users.iter().map(|u|u.id).collect();if let Some(id)=ids.first(){user.set_text(&id.to_string());}let e=user.clone();select.connect_selected_notify(move|d|{if let Some(id)=ids.get(d.selected() as usize){e.set_text(&id.to_string());}});
                 let controls=gtk::Box::new(gtk::Orientation::Horizontal,6);body.append(&controls);
-                button(&controls,"Banir membro",&s,||ModerationMsg::Confirm(Operation::Ban(true)));button(&controls,"Desbanir membro",&s,||ModerationMsg::Confirm(Operation::Ban(false)));let recovery_button=button(&controls,"Gerar recuperação",&s,||ModerationMsg::Confirm(Operation::Recovery));recovery_button.set_visible(self.recovery_owner());
-                let link=entry(&body,"Link de recuperação");link.set_editable(false);let expiry=gtk::Label::new(None);body.append(&expiry);let copy=button(&body,"Copiar link",&s,||ModerationMsg::Copy);copy.set_sensitive(false);link.set_visible(self.recovery_owner());expiry.set_visible(self.recovery_owner());copy.set_visible(self.recovery_owner());
-                body.append(&gtk::Separator::new(gtk::Orientation::Horizontal));body.append(&gtk::Label::new(Some("Auditoria · somente leitura")));
-                let filters:Vec<_>=["Ação (ex.: user.ban)","UUID do ator","Tipo de entidade (ex.: user)","Desde (RFC3339, ex.: 2026-10-01T00:00:00Z)","Até (RFC3339)"].iter().map(|l|entry(&body,l)).collect();
-                let ascending=gtk::CheckButton::with_label("Mais antigos primeiro");body.append(&ascending);button(&body,"Aplicar filtros",&s,||ModerationMsg::Filter);
+                button(&controls,crate::i18n::tr("Banir membro"),&s,||ModerationMsg::Confirm(Operation::Ban(true)));button(&controls,crate::i18n::tr("Desbanir membro"),&s,||ModerationMsg::Confirm(Operation::Ban(false)));let recovery_button=button(&controls,crate::i18n::tr("Gerar recuperação"),&s,||ModerationMsg::Confirm(Operation::Recovery));recovery_button.set_visible(self.recovery_owner());
+                let link=entry(&body,crate::i18n::tr("Link de recuperação"));link.set_editable(false);let expiry=gtk::Label::new(None);body.append(&expiry);let copy=button(&body,crate::i18n::tr("Copiar link"),&s,||ModerationMsg::Copy);copy.set_sensitive(false);link.set_visible(self.recovery_owner());expiry.set_visible(self.recovery_owner());copy.set_visible(self.recovery_owner());
+                body.append(&gtk::Separator::new(gtk::Orientation::Horizontal));body.append(&gtk::Label::new(Some(crate::i18n::tr("Auditoria · somente leitura"))));
+                let filters:Vec<_>=[crate::i18n::tr("Ação (ex.: user.ban)"),crate::i18n::tr("UUID do ator"),"Tipo de entidade (ex.: user)","Desde (RFC3339, ex.: 2026-10-01T00:00:00Z)",crate::i18n::tr("Até (RFC3339)")].iter().map(|l|entry(&body,l)).collect();
+                let ascending=gtk::CheckButton::with_label(crate::i18n::tr("Mais antigos primeiro"));body.append(&ascending);button(&body,crate::i18n::tr("Aplicar filtros"),&s,||ModerationMsg::Filter);
                 let logs=gtk::Box::new(gtk::Orientation::Vertical,8);let scroll=gtk::ScrolledWindow::builder().vexpand(true).min_content_height(180).child(&logs).build();body.append(&scroll);
-                let more=button(&body,"Mais registros",&s,||ModerationMsg::More);more.set_sensitive(false);let status=gtk::Label::new(None);status.set_wrap(true);body.append(&status);
+                let more=button(&body,crate::i18n::tr("Mais registros"),&s,||ModerationMsg::More);more.set_sensitive(false);let status=gtk::Label::new(None);status.set_wrap(true);body.append(&status);
                 let l=link.clone();let s2=s.clone();w.connect_close_request(move |_|{l.set_text("");s2.input(MainWindowMsg::Moderation(ModerationMsg::Close));gtk::glib::Propagation::Proceed});
                 let s2=s.clone();user.connect_changed(move |_|s2.input(MainWindowMsg::Moderation(ModerationMsg::TargetChanged)));
                 self.moderation.view=Some(View{token,window:w.clone(),body,user,status,link,expiry,copy,recovery_button,recovery:None,recovery_user:None,filters,ascending,logs,more});self.moderation.filter=AuditFilter::default();w.present();self.load_audit(false,s);
             }
             ModerationMsg::Confirm(operation)=>{
                 if self.moderation.busy{return;}let Some(v)=self.moderation.view.as_ref().filter(|v|v.window.is_visible())else{return;};
-                let user=match v.user.text().trim().parse::<Uuid>(){Ok(id)=>id,Err(_)=>{v.status.set_text("Informe um UUID de membro válido.");return;}};
-                if matches!(operation,Operation::Recovery)&&user==self.current_user.id{v.status.set_text("Use Segurança para alterar sua própria senha.");return;}
-                if matches!(operation,Operation::Ban(true))&&self.server.as_ref().and_then(|s|s.owner_id)==Some(user){v.status.set_text("O dono do servidor não pode ser banido.");return;}
-                let view=v.token;let(w,body)=window(root,"Confirmar moderação");
-                let verb=match operation{Operation::Ban(true)=>"Banir encerra todas as sessões do membro.",Operation::Ban(false)=>"Desbanir permite ao membro entrar novamente.",Operation::Recovery=>"O novo link substitui a recuperação anterior. Compartilhe-o apenas com o membro escolhido."};
-                let label=gtk::Label::new(Some(&format!("{verb}\nMembro: {user}")));label.set_wrap(true);body.append(&label);
-                let cancel=gtk::Button::with_label("Cancelar");let c=w.clone();cancel.connect_clicked(move |_|c.close());body.append(&cancel);
-                let c=w.clone();button(&body,"Confirmar moderação",&s,move||{c.close();ModerationMsg::Apply{view,user,operation}});if let Some(old)=self.moderation.confirmation.replace(w.clone()){old.close();}w.present();
+                let user=match v.user.text().trim().parse::<Uuid>(){Ok(id)=>id,Err(_)=>{v.status.set_text(crate::i18n::tr("Informe um UUID de membro válido."));return;}};
+                if matches!(operation,Operation::Recovery)&&user==self.current_user.id{v.status.set_text(crate::i18n::tr("Use Segurança para alterar sua própria senha."));return;}
+                if matches!(operation,Operation::Ban(true))&&self.server.as_ref().and_then(|s|s.owner_id)==Some(user){v.status.set_text(crate::i18n::tr("O dono do servidor não pode ser banido."));return;}
+                let view=v.token;let(w,body)=window(root,crate::i18n::tr("Confirmar moderação"));
+                let verb=match operation{Operation::Ban(true)=>crate::i18n::tr("Banir encerra todas as sessões do membro."),Operation::Ban(false)=>crate::i18n::tr("Desbanir permite ao membro entrar novamente."),Operation::Recovery=>crate::i18n::tr("O novo link substitui a recuperação anterior. Compartilhe-o apenas com o membro escolhido.")};
+                let label=gtk::Label::new(Some(&crate::i18n::fmt("{verb}\nMembro: {user}", &[("verb", format!("{}", verb)), ("user", format!("{}", user))])));label.set_wrap(true);body.append(&label);
+                let cancel=gtk::Button::with_label(crate::i18n::tr("Cancelar"));let c=w.clone();cancel.connect_clicked(move |_|c.close());body.append(&cancel);
+                let c=w.clone();button(&body,crate::i18n::tr("Confirmar moderação"),&s,move||{c.close();ModerationMsg::Apply{view,user,operation}});if let Some(old)=self.moderation.confirmation.replace(w.clone()){old.close();}w.present();
             }
             ModerationMsg::Apply{view,user,operation}=>{
                 if self.moderation.busy{return;}let Some(v)=self.moderation.view.as_mut().filter(|v|v.token==view&&v.window.is_visible())else{return;};
                 if matches!(operation,Operation::Recovery){v.recovery=None;v.recovery_user=None;v.link.set_text("");v.copy.set_sensitive(false);v.expiry.set_text("");}
-                self.moderation.busy=true;v.body.set_sensitive(false);v.status.set_text("Aplicando moderação…");let api=self.api_client.clone();let own=self.current_user.id;
+                self.moderation.busy=true;v.body.set_sensitive(false);v.status.set_text(crate::i18n::tr("Aplicando moderação…"));let api=self.connection.api.clone();let own=self.current_user.id;
                 self.moderation.jobs.push(tokio::spawn(async move{let result=match operation{Operation::Ban(state)=>api.set_user_banned(user,state).await.map(|_|None),Operation::Recovery=>api.create_recovery_link(own,user).await.map(Some)};s.input(MainWindowMsg::Moderation(ModerationMsg::Saved{view,user,result}));}));
             }
             ModerationMsg::Saved{view,user,result}=>{
                 self.moderation.busy=false;let Some(v)=self.moderation.view.as_mut().filter(|v|v.token==view&&v.window.is_visible())else{return;};v.body.set_sensitive(true);
-                match result{Ok(link)=>{v.status.set_text("Operação concluída.");if let Some(link)=link{v.link.set_text(&link.reset_url);v.expiry.set_text(&format!("Recuperação de {user} · expira em {}",link.expires_at.to_rfc3339()));v.copy.set_sensitive(link.expires_at>chrono::Utc::now()&&v.user.text().trim().parse::<Uuid>().ok()==Some(user));v.recovery_user=Some(user);v.recovery=Some(link);}self.refresh_users(s.clone(),Some(user));if self.moderation.request.is_none(){self.load_audit(false,s);}},Err(e)=>{v.status.set_text(&e.to_string());s.input(MainWindowMsg::ActionError(e));}}
+                match result{Ok(link)=>{v.status.set_text(crate::i18n::tr("Operação concluída."));if let Some(link)=link{v.link.set_text(&link.reset_url);v.expiry.set_text(&crate::i18n::fmt("Recuperação de {user} · expira em {}", &[("user", format!("{}", user)), ("0", format!("{}", link.expires_at.to_rfc3339()))]));v.copy.set_sensitive(link.expires_at>chrono::Utc::now()&&v.user.text().trim().parse::<Uuid>().ok()==Some(user));v.recovery_user=Some(user);v.recovery=Some(link);}self.refresh_users(s.clone(),Some(user));if self.moderation.request.is_none(){self.load_audit(false,s);}},Err(e)=>{v.status.set_text(&e.to_string());s.input(MainWindowMsg::ActionError(e));}}
             }
-            ModerationMsg::Copy=>{if let Some(v)=&self.moderation.view{if v.window.is_visible(){if let Some(link)=v.recovery.as_ref().filter(|l|l.expires_at>chrono::Utc::now()&&v.recovery_user==v.user.text().trim().parse::<Uuid>().ok()){v.window.clipboard().set_text(&link.reset_url);v.status.set_text("Link copiado. Compartilhe-o apenas com o membro correto.");}else{v.copy.set_sensitive(false);v.link.set_text("");v.status.set_text("O link expirou. Gere outro.");}}}}
+            ModerationMsg::Copy=>{if let Some(v)=&self.moderation.view{if v.window.is_visible(){if let Some(link)=v.recovery.as_ref().filter(|l|l.expires_at>chrono::Utc::now()&&v.recovery_user==v.user.text().trim().parse::<Uuid>().ok()){v.window.clipboard().set_text(&link.reset_url);v.status.set_text(crate::i18n::tr("Link copiado. Compartilhe-o apenas com o membro correto."));}else{v.copy.set_sensitive(false);v.link.set_text("");v.status.set_text(crate::i18n::tr("O link expirou. Gere outro."));}}}}
             ModerationMsg::TargetChanged=>{if let Some(v)=self.moderation.view.as_mut(){if v.recovery.is_some()&&v.recovery_user!=v.user.text().trim().parse::<Uuid>().ok(){v.recovery=None;v.recovery_user=None;v.link.set_text("");v.expiry.set_text("");v.copy.set_sensitive(false);}}}
             ModerationMsg::Filter=>{
                 let Some(v)=&self.moderation.view else{return;};
-                let parse=||->anyhow::Result<AuditFilter>{let text:Vec<_>=v.filters.iter().map(|e|e.text().trim().to_owned()).collect();let f=AuditFilter{action:text[0].clone(),actor_id:if text[1].is_empty(){None}else{Some(text[1].parse().map_err(|_|anyhow::anyhow!("UUID do ator inválido."))?)},entity_type:text[2].clone(),since:if text[3].is_empty(){None}else{Some(text[3].parse().map_err(|_|anyhow::anyhow!("Data inicial inválida; use RFC3339."))?)},until:if text[4].is_empty(){None}else{Some(text[4].parse().map_err(|_|anyhow::anyhow!("Data final inválida; use RFC3339."))?)},ascending:v.ascending.is_active()};f.validate()?;Ok(f)};
+                let parse=||->anyhow::Result<AuditFilter>{let text:Vec<_>=v.filters.iter().map(|e|e.text().trim().to_owned()).collect();let f=AuditFilter{action:text[0].clone(),actor_id:if text[1].is_empty(){None}else{Some(text[1].parse().map_err(|_|anyhow::anyhow!(crate::i18n::fmt("UUID do ator inválido.", &[])))?)},entity_type:text[2].clone(),since:if text[3].is_empty(){None}else{Some(text[3].parse().map_err(|_|anyhow::anyhow!(crate::i18n::fmt("Data inicial inválida; use RFC3339.", &[])))?)},until:if text[4].is_empty(){None}else{Some(text[4].parse().map_err(|_|anyhow::anyhow!(crate::i18n::fmt("Data final inválida; use RFC3339.", &[])))?)},ascending:v.ascending.is_active()};f.validate()?;Ok(f)};
                 match parse(){Ok(f)=>{self.moderation.request=None;self.moderation.cursor=None;self.moderation.filter=f;self.load_audit(false,s);},Err(e)=>v.status.set_text(&e.to_string())}
             }
             ModerationMsg::More=>{if self.moderation.cursor.is_some()&&self.moderation.view.as_ref().is_some_and(|v|v.more.is_sensitive()){self.load_audit(true,s);}}
@@ -92,7 +92,7 @@ impl MainWindowModel {
                 if self.moderation.request!=Some(request){return;}self.moderation.request=None;let Some(v)=self.moderation.view.as_ref().filter(|v|v.token==view&&v.window.is_visible())else{return;};
                 match result{Ok(page)=>{if !append{while let Some(c)=v.logs.first_child(){v.logs.remove(&c);}}
                     self.moderation.cursor=page.logs.last().map(|e|e.id).or(if append{self.moderation.cursor}else{None});
-                    for e in page.logs{let label=gtk::Label::new(Some(&format!("{} · {} · {} · {}\nAlvo: {}",e.created_at.to_rfc3339(),e.actor_label(),e.action,e.entity_type,e.target_user_id.map(|id|id.to_string()).unwrap_or_else(||"—".into()))));label.set_wrap(true);label.set_xalign(0.0);label.set_selectable(true);v.logs.append(&label);}v.more.set_sensitive(page.has_more);v.status.set_text(if page.has_more{"Há mais registros."}else{"Todos os registros carregados."});},Err(e)=>{v.more.set_sensitive(append&&self.moderation.cursor.is_some());v.status.set_text(&e.to_string());s.input(MainWindowMsg::ActionError(e));}}
+                    for e in page.logs{let label=gtk::Label::new(Some(&crate::i18n::fmt("{} · {} · {} · {}\nAlvo: {}", &[("0", format!("{}", e.created_at.to_rfc3339())), ("1", format!("{}", e.actor_label())), ("2", format!("{}", e.action)), ("3", format!("{}", e.entity_type)), ("4", format!("{}", e.target_user_id.map(|id|id.to_string()).unwrap_or_else(||"—".into())))])));label.set_wrap(true);label.set_xalign(0.0);label.set_selectable(true);v.logs.append(&label);}v.more.set_sensitive(page.has_more);v.status.set_text(if page.has_more{crate::i18n::tr("Há mais registros.")}else{crate::i18n::tr("Todos os registros carregados.")});},Err(e)=>{v.more.set_sensitive(append&&self.moderation.cursor.is_some());v.status.set_text(&e.to_string());s.input(MainWindowMsg::ActionError(e));}}
             }
             ModerationMsg::Close=>{}
         }
@@ -120,7 +120,7 @@ pub(crate) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::Mai
     find_button(w.upcast_ref(),"Gerar recuperação").emit_clicked();pump(context);find_button(main.model().moderation.confirmation.as_ref().unwrap().upcast_ref(),"Confirmar moderação").emit_clicked();until(context,||!main.model().moderation.busy&&main.model().moderation.view.as_ref().unwrap().recovery.is_some());
     let m=main.model();let v=m.moderation.view.as_ref().unwrap();assert!(v.copy.is_sensitive());assert!(v.expiry.text().contains("2099"));let link=v.recovery.as_ref().unwrap().reset_url.clone();drop(m);
     // Issued links use the already implemented unauthenticated recovery contract.
-    let api=main.model().api_client.clone();context.block_on(api.recover_password(&link,"Password!9")).unwrap();
+    let api=main.model().connection.api.clone();context.block_on(api.recover_password(&link,"Password!9")).unwrap();
     assert!(backend.lock().unwrap().requests.iter().any(|(m,p,b)|m=="POST"&&p=="/auth/password_reset"&&b["token"]=="issued-token"));
     find_button(w.upcast_ref(),"Copiar link").emit_clicked();pump(context);assert!(main.model().moderation.view.as_ref().unwrap().status.text().contains("copiado"));
     main.model().moderation.view.as_ref().unwrap().user.set_text(&main.model().current_user.id.to_string());pump(context);assert!(main.model().moderation.view.as_ref().unwrap().link.text().is_empty());assert!(!main.model().moderation.view.as_ref().unwrap().copy.is_sensitive());

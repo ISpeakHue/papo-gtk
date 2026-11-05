@@ -21,6 +21,7 @@ pub enum AuthMode {
 }
 
 pub struct LoginModel {
+    request:uuid::Uuid,scope:uuid::Uuid,
     login_root: gtk::ScrolledWindow,
     recovery: Option<recovery::Recovery>,
     pub server_url: String,
@@ -35,10 +36,12 @@ pub struct LoginModel {
 }
 
 pub enum LoginMsg {
+    Prepare{scope:uuid::Uuid,server:Option<String>,user:Option<String>,remember:bool},
+    Finished{request:uuid::Uuid,result:Result<(WhoamiResponse,ApiClient),String>},
     #[cfg_attr(test, expect(dead_code, reason = "Automatic session resume is disabled in UI fixtures to avoid saved sessions."))]
     Resume, SetRememberSession(bool),
-    Resumed{server:String,user:String,result:Result<Option<(WhoamiResponse,ApiClient)>,String>},
-    ClearCredentials,
+    Resumed{request:uuid::Uuid,server:String,user:String,result:Result<Option<(WhoamiResponse,ApiClient)>,String>},
+    #[cfg(test)] ClearCredentials,
     OpenRecovery, Recover(uuid::Uuid), Recovered { token: uuid::Uuid, result: anyhow::Result<()> },
     SetServerUrl(String),
     SetUsername(String),
@@ -53,6 +56,7 @@ pub enum LoginMsg {
 #[derive(Debug)]
 pub enum LoginOutput {
     Authenticated {
+        scope:uuid::Uuid,
         whoami: WhoamiResponse,
         client: ApiClient,
     },
@@ -102,8 +106,8 @@ impl SimpleComponent for LoginModel {
                     gtk::Label {
                         #[watch]
                         set_text: match model.mode {
-                            AuthMode::Login => "Faça login para conversar",
-                            AuthMode::Register => "Crie sua nova conta",
+                            AuthMode::Login => crate::i18n::tr("Faça login para conversar"),
+                            AuthMode::Register => crate::i18n::tr("Crie sua nova conta"),
                         },
                         add_css_class: "dim-label",
                     },
@@ -122,12 +126,12 @@ impl SimpleComponent for LoginModel {
 
                 // Server Preferences Group
                 adw::PreferencesGroup {
-                    set_title: "Servidor",
+                    set_title: crate::i18n::tr("Servidor"),
                     #[watch]
                     set_sensitive: !model.is_loading,
 
                     add: server_entry = &adw::EntryRow {
-                        set_title: "Endereço do Servidor",
+                        set_title: crate::i18n::tr("Endereço do Servidor"),
                         set_text: &model.server_url,
                         connect_changed[sender] => move |entry| {
                             sender.input(LoginMsg::SetServerUrl(entry.text().to_string()));
@@ -135,13 +139,13 @@ impl SimpleComponent for LoginModel {
                     },
 
                     add: server_password_entry = &adw::PasswordEntryRow {
-                        set_title: "Senha do servidor (se necessário)",
+                        set_title: crate::i18n::tr("Senha do servidor (se necessário)"),
                         // Only explicit resets write into editable fields. Queued
                         // typing events must not rewrite newer text or move the caret.
                         #[track(model.clear_credential_fields)]
                         #[block_signal(server_password_changed)]
                         set_text: "",
-                        set_tooltip_text: Some("Deixe em branco para servidores públicos."),
+                        set_tooltip_text: Some(crate::i18n::tr("Deixe em branco para servidores públicos.")),
                         connect_changed[sender] => move |entry| {
                             sender.input(LoginMsg::SetServerPassword(entry.text().to_string()));
                         } @server_password_changed,
@@ -157,12 +161,12 @@ impl SimpleComponent for LoginModel {
                     set_sensitive: !model.is_loading,
                     #[watch]
                     set_title: match model.mode {
-                        AuthMode::Login => "Credenciais",
-                        AuthMode::Register => "Nova Conta",
+                        AuthMode::Login => crate::i18n::tr("Credenciais"),
+                        AuthMode::Register => crate::i18n::tr("Nova Conta"),
                     },
 
                     add: user_entry = &adw::EntryRow {
-                        set_title: "Usuário",
+                        set_title: crate::i18n::tr("Usuário"),
                         set_text: &model.username,
                         connect_changed[sender] => move |entry| {
                             sender.input(LoginMsg::SetUsername(entry.text().to_string()));
@@ -170,7 +174,7 @@ impl SimpleComponent for LoginModel {
                     },
 
                     add: pass_entry = &adw::PasswordEntryRow {
-                        set_title: "Senha",
+                        set_title: crate::i18n::tr("Senha"),
                         #[track(model.clear_credential_fields)]
                         #[block_signal(password_changed)]
                         set_text: "",
@@ -184,12 +188,12 @@ impl SimpleComponent for LoginModel {
                 },
 
                 gtk::Button {
-                    set_label: "Tenho um link de recuperação",
+                    set_label: crate::i18n::tr("Tenho um link de recuperação"),
                     connect_clicked => LoginMsg::OpenRecovery,
                 },
                 // Submit Button / Loading
                 gtk::CheckButton {
-                    set_label:Some("Manter sessão neste dispositivo"),set_tooltip_text:Some("A sessão é guardada no chaveiro do desktop. Sem um chaveiro disponível, entre novamente ao reabrir."),
+                    set_label:Some(crate::i18n::tr("Manter sessão neste dispositivo")),set_tooltip_text:Some(crate::i18n::tr("A sessão é guardada no chaveiro do desktop. Sem um chaveiro disponível, entre novamente ao reabrir.")),
                     #[watch] set_active:model.remember_session,
                     #[watch] set_sensitive:!model.is_loading,
                     connect_toggled[sender] => move |button|sender.input(LoginMsg::SetRememberSession(button.is_active())),
@@ -220,11 +224,11 @@ impl SimpleComponent for LoginModel {
                             gtk::Label {
                                 #[watch]
                                 set_text: if model.is_loading {
-                                    "Conectando..."
+                                    crate::i18n::tr("Conectando...")
                                 } else {
                                     match model.mode {
-                                        AuthMode::Login => "Entrar",
-                                        AuthMode::Register => "Criar Conta",
+                                        AuthMode::Login => crate::i18n::tr("Entrar"),
+                                        AuthMode::Register => crate::i18n::tr("Criar Conta"),
                                     }
                                 },
                             },
@@ -242,8 +246,8 @@ impl SimpleComponent for LoginModel {
                         set_sensitive: !model.is_loading,
                         #[watch]
                         set_label: match model.mode {
-                            AuthMode::Login => "Não tem uma conta? Cadastre-se",
-                            AuthMode::Register => "Já possui conta? Faça login",
+                            AuthMode::Login => crate::i18n::tr("Não tem uma conta? Cadastre-se"),
+                            AuthMode::Register => crate::i18n::tr("Já possui conta? Faça login"),
                         },
                         connect_clicked[sender] => move |_| {
                             sender.input(LoginMsg::ToggleMode);
@@ -259,7 +263,7 @@ impl SimpleComponent for LoginModel {
         let username = config.last_username.unwrap_or_default();
 
         let model = LoginModel {
-            login_root: root.clone(), recovery: None,
+            request:uuid::Uuid::new_v4(),scope:uuid::Uuid::nil(),login_root: root.clone(), recovery: None,
             server_url,
             username,
             password: String::new(),
@@ -280,20 +284,22 @@ impl SimpleComponent for LoginModel {
     fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
         self.clear_credential_fields = false;
         match message {
+            LoginMsg::Prepare{scope,server,user,remember}=>{self.scope=scope;self.request=uuid::Uuid::new_v4();self.is_loading=false;self.mode=AuthMode::Login;self.password.clear();self.server_password.clear();self.recovery=None;self.clear_credential_fields=true;self.error_message=None;self.remember_session=remember;self.server_url=server.unwrap_or_default();self.username=user.unwrap_or_default();},
+            LoginMsg::Finished{request,result}=>{if request!=self.request{return;}match result{Ok((user,api))=>relm4::SimpleComponent::update(self,LoginMsg::AuthSuccess(user,api),sender),Err(e)=>relm4::SimpleComponent::update(self,LoginMsg::AuthFailed(e),sender)}},
             LoginMsg::SetRememberSession(value)=>self.remember_session=value,
             LoginMsg::Resume=>{
                 if self.is_loading||!self.remember_session||self.mode!=AuthMode::Login||self.server_url.trim().is_empty()||self.username.trim().is_empty(){return;}
-                self.is_loading=true;let server=self.server_url.clone();let user=self.username.trim().to_owned();let s=sender.clone();tokio::spawn(async move{
+                self.request=uuid::Uuid::new_v4();let request=self.request;self.is_loading=true;let server=self.server_url.clone();let user=self.username.trim().to_owned();let s=sender.clone();tokio::spawn(async move{
                     let result=match ApiClient::new(&server){Ok(client)=>crate::session::resume(&client,&user).await.map(|profile|profile.map(|profile|(profile,client))).map_err(|e|e.to_string()),Err(_)=>Ok(None)};
-                    s.input(LoginMsg::Resumed{server,user,result});
+                    s.input(LoginMsg::Resumed{request,server,user,result});
                 });
             },
-            LoginMsg::Resumed{server,user,result}=>{
-                self.is_loading=false;
+            LoginMsg::Resumed{request,server,user,result}=>{
+                if request!=self.request{return;}self.is_loading=false;
                 if self.server_url!=server||self.username.trim()!=user||self.mode!=AuthMode::Login||!self.password.is_empty(){return;}
-                match result{Ok(Some((profile,client)))=>sender.input(LoginMsg::AuthSuccess(profile,client)),Ok(None)=>{},Err(error)=>self.error_message=Some(format!("{error} Entre com a senha para continuar."))}
+                match result{Ok(Some((profile,client)))=>relm4::SimpleComponent::update(self,LoginMsg::AuthSuccess(profile,client),sender),Ok(None)=>{},Err(error)=>self.error_message=Some(format!("{error} Entre com a senha para continuar."))}
             },
-            LoginMsg::ClearCredentials => {
+            #[cfg(test)] LoginMsg::ClearCredentials => {
                 self.password.clear();
                 self.server_password.clear();
                 self.clear_credential_fields = true;
@@ -336,6 +342,7 @@ impl SimpleComponent for LoginModel {
                 let mode = self.mode.clone();
                 let remember=self.remember_session;
 
+                self.request=uuid::Uuid::new_v4();let request=self.request;
                 let sender_clone = sender.clone();
 
                 // Spawn async task to authenticate
@@ -354,11 +361,12 @@ impl SimpleComponent for LoginModel {
                         }
                         Err(e) => {
                             error!("Invalid server URL: {e}");
-                            LoginMsg::AuthFailed(format!("URL do servidor inválida: {e}"))
+                            LoginMsg::AuthFailed(crate::i18n::fmt("URL do servidor inválida: {e}", &[("e", format!("{}", e))]))
                         }
                     };
 
-                    sender_clone.input(res_msg);
+                    let result=match res_msg{LoginMsg::AuthSuccess(user,api)=>Ok((user,api)),LoginMsg::AuthFailed(e)=>Err(e),_=>unreachable!()};
+                    sender_clone.input(LoginMsg::Finished{request,result});
                 });
             }
             LoginMsg::AuthSuccess(whoami, client) => {
@@ -368,16 +376,10 @@ impl SimpleComponent for LoginModel {
                 self.error_message = None;
 
                 // Save last server URL and username in config
-                let mut cfg = AppConfig::load();
-                cfg.server_url = Some(client.base_url().to_owned());
-                cfg.last_username = Some(whoami.username.clone());
-                cfg.remember_session=Some(self.remember_session);
-                if let Err(e) = cfg.save() {
-                    tracing::warn!("Failed to save config: {e}");
-                }
+                if let Err(e)=AppConfig::update(|cfg|{cfg.server_url=Some(client.base_url().into());cfg.last_username=Some(whoami.username.clone());cfg.remember_session=Some(self.remember_session);}){tracing::warn!("Failed to save config: {e}");}
 
                 let _ = sender.output(LoginOutput::Authenticated {
-                    whoami,
+                    scope:self.scope,whoami,
                     client,
                 });
             }

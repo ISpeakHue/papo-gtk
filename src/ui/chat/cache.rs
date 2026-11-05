@@ -4,6 +4,21 @@ use std::collections::VecDeque;
 use uuid::Uuid;
 use super::state::{Change, History};
 
+#[derive(Default)]
+pub(super) struct AccountConversations {
+    pub owner: Option<crate::account::AccountId>,
+    pub drafts: std::collections::HashMap<Uuid, super::state::Draft>,
+    pub conversations: Conversations,
+    pub surfaces: super::surface_cache::Surfaces,
+}
+impl AccountConversations {
+    pub fn bind(&mut self, owner: Option<crate::account::AccountId>) -> bool {
+        if self.owner == owner { return false; }
+        *self = Self { owner, ..Default::default() };
+        true
+    }
+}
+
 const CHANNEL_LIMIT: usize = 8;
 pub(super) const MESSAGE_LIMIT: usize = 200;
 const BYTE_LIMIT: usize = 16 << 20;
@@ -17,6 +32,23 @@ pub(super) struct Conversations {
 mod tests {
     use super::*;
     use crate::models::Message;
+    #[test]
+    fn ownership_separates_identical_channel_ids_and_preserves_relogin_drafts() {
+        let channel=Uuid::new_v4();let user=Uuid::new_v4();
+        let api=crate::api::ApiClient::new("https://one.test/api").unwrap();
+        let owner=crate::account::AccountId::new(&api,user);
+        let mut state=AccountConversations::default();assert!(state.bind(Some(owner.clone())));
+        let mut draft=super::super::state::Draft::default();draft.text="unfinished".into();state.drafts.insert(channel,draft);
+        state.conversations.store(channel,history(channel,1),false);
+        let relogin=crate::api::ApiClient::new("https://one.test/api/").unwrap();
+        assert!(!state.bind(Some(crate::account::AccountId::new(&relogin,user))));
+        assert_eq!(state.drafts[&channel].text,"unfinished");
+        assert!(state.conversations.take(channel).is_some());
+        let other=crate::account::AccountId::new(&crate::api::ApiClient::new("https://two.test/api/").unwrap(),user);
+        assert!(state.bind(Some(other)));assert!(state.drafts.is_empty());assert!(state.conversations.take(channel).is_none());
+        state.drafts.insert(channel,Default::default());assert!(state.bind(Some(owner)));assert!(state.drafts.is_empty());
+        assert!(state.bind(None));assert!(state.drafts.is_empty());
+    }
     fn history(channel: Uuid, count: usize) -> History {
         let mut history=History::default(); history.select(channel);
         for i in 0..count {
@@ -77,6 +109,7 @@ mod tests {
 }
 
 impl Conversations {
+    #[cfg(test)]pub(super) fn entries_empty(&self)->bool{self.entries.is_empty()}
     pub fn store(&mut self, channel: Uuid, mut history: History, has_more: bool) {
         self.entries.retain(|(id, ..)| *id != channel);
         let trimmed = history.prepare_cache(MESSAGE_LIMIT);

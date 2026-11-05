@@ -19,6 +19,9 @@ relm4 = { version = "0.9", features = ["macros"] }
 # Async runtime
 tokio = { version = "1", features = ["full"] }
 
+# Semantic version ordering for public release discovery
+semver = "1.0"
+
 # HTTP client (cookie-jar for session cookies)
 reqwest = { version = "0.12", features = ["json", "cookies", "stream", "multipart"] }
 
@@ -70,7 +73,7 @@ libc = "0.2"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }
-windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Security_Cryptography", "Win32_System_Threading", "Win32_System_JobObjects", "Win32_System_Memory", "Win32_System_Console", "Win32_System_Pipes", "Win32_System_RemoteDesktop", "Win32_Storage_FileSystem", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_Globalization", "Win32_Security", "Win32_Security_Authorization", "Win32_Security_Cryptography", "Win32_System_Threading", "Win32_System_JobObjects", "Win32_System_Memory", "Win32_System_ProcessStatus", "Win32_System_Console", "Win32_System_Pipes", "Win32_System_RemoteDesktop", "Win32_Storage_FileSystem", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "3", features = ["apple-native"] }

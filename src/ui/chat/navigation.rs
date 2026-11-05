@@ -34,7 +34,7 @@ impl ChatModel {
         if start==0&&end==self.history.messages.len(){return false;}
         if end<self.history.messages.len(){
             if !self.history_detached{if let Some(channel)=&self.active_channel{
-                self.conversations.store(channel.id(),self.history.recent_copy(cache::MESSAGE_LIMIT),self.has_more||self.history.messages.len()>cache::MESSAGE_LIMIT);
+                self.session.conversations.store(channel.id(),self.history.recent_copy(cache::MESSAGE_LIMIT),self.has_more||self.history.messages.len()>cache::MESSAGE_LIMIT);
             }}
             self.history_detached=true;self.newer.has_more=true;self.viewing_old=true;
         }

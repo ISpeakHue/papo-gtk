@@ -117,25 +117,25 @@ pub struct EmbedFieldInput {pub name:String,pub value:String,#[serde(default)] p
 
 pub fn validate_embeds(embeds:&[EmbedInput])->anyhow::Result<()> {
     use anyhow::ensure;
-    fn length(s:&str,max:usize)->anyhow::Result<()>{ensure!(s.chars().count()<=max,"Campo do embed excede {max} caracteres.");Ok(())}
+    fn length(s:&str,max:usize)->anyhow::Result<()>{ensure!(s.chars().count()<=max,crate::i18n::fmt("Campo do embed excede {max} caracteres.", &[("max", format!("{}", max))]));Ok(())}
     fn url(s:&str,https:bool)->anyhow::Result<()>{
         length(s,2048)?;let u=reqwest::Url::parse(s.trim())?;
-        ensure!(matches!(u.scheme(),"http"|"https")&&(!https||u.scheme()=="https")&&u.host_str().is_some()&&u.username().is_empty()&&u.password().is_none()&&u.port().is_none(),"Use uma URL {} sem credenciais ou porta alternativa.",if https{"HTTPS"}else{"HTTP/HTTPS"});Ok(())
+        ensure!(matches!(u.scheme(),"http"|"https")&&(!https||u.scheme()=="https")&&u.host_str().is_some()&&u.username().is_empty()&&u.password().is_none()&&u.port().is_none(),crate::i18n::fmt("Use uma URL {} sem credenciais ou porta alternativa.", &[("0", format!("{}", if https{"HTTPS"}else{"HTTP/HTTPS"}))]));Ok(())
     }
-    ensure!(embeds.len()<=10,"Use até 10 embeds por mensagem.");let mut total=0;
+    ensure!(embeds.len()<=10,crate::i18n::fmt("Use até 10 embeds por mensagem.", &[]));let mut total=0;
     for e in embeds{
         length(&e.title,256)?;length(&e.description,4192)?;length(&e.site_name,256)?;
         total+=e.title.chars().count()+e.description.chars().count();
-        ensure!(e.color.is_empty()||(e.color.len()==7&&e.color.starts_with('#')&&e.color.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit)),"A cor deve usar #RRGGBB.");
+        ensure!(e.color.is_empty()||(e.color.len()==7&&e.color.starts_with('#')&&e.color.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit)),crate::i18n::fmt("A cor deve usar #RRGGBB.", &[]));
         if !e.url.is_empty(){url(&e.url,false)?;}
         if let Some(a)=&e.author{length(&a.name,256)?;total+=a.name.chars().count();if !a.url.is_empty(){url(&a.url,false)?;}}
         if let Some(f)=&e.footer{length(&f.text,2048)?;total+=f.text.chars().count();}
-        ensure!(e.fields.len()<=25,"Use até 25 campos por embed.");
+        ensure!(e.fields.len()<=25,crate::i18n::fmt("Use até 25 campos por embed.", &[]));
         for f in &e.fields{length(&f.name,256)?;length(&f.value,1024)?;total+=f.name.chars().count()+f.value.chars().count();}
-        for m in [&e.thumbnail,&e.image].into_iter().flatten(){url(&m.url,true)?;ensure!(m.mime_type.is_empty()||["image/png","image/jpeg","image/webp","image/gif"].contains(&m.mime_type.to_lowercase().as_str()),"Formato de imagem não suportado.");}
-        if let Some(v)=&e.video{url(&v.url,true)?;let mime=v.mime_type.split(';').next().unwrap_or("").trim().to_lowercase();ensure!(["video/mp4","video/webm","video/ogg"].contains(&mime.as_str()),"Informe o formato do vídeo: video/mp4, video/webm ou video/ogg.");}
+        for m in [&e.thumbnail,&e.image].into_iter().flatten(){url(&m.url,true)?;ensure!(m.mime_type.is_empty()||["image/png","image/jpeg","image/webp","image/gif"].contains(&m.mime_type.to_lowercase().as_str()),crate::i18n::fmt("Formato de imagem não suportado.", &[]));}
+        if let Some(v)=&e.video{url(&v.url,true)?;let mime=v.mime_type.split(';').next().unwrap_or("").trim().to_lowercase();ensure!(["video/mp4","video/webm","video/ogg"].contains(&mime.as_str()),crate::i18n::fmt("Informe o formato do vídeo: video/mp4, video/webm ou video/ogg.", &[]));}
     }
-    ensure!(total<=6000,"O texto total dos embeds deve ter até 6000 caracteres.");Ok(())
+    ensure!(total<=6000,crate::i18n::fmt("O texto total dos embeds deve ter até 6000 caracteres.", &[]));Ok(())
 }
 
 #[cfg(test)]

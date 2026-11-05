@@ -4,19 +4,24 @@ use serde_json::{json, Value};
 use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-pub(super) const USER: &str = "12345678-1234-4234-8234-123456789abc";
-pub(super) const CHANNEL: &str = "12345678-1234-4234-8234-123456789abd";
+pub(crate) const USER: &str = "12345678-1234-4234-8234-123456789abc";
+pub(crate) const CHANNEL: &str = "12345678-1234-4234-8234-123456789abd";
 pub(super) const MESSAGE: &str = "12345678-1234-4234-8234-123456789abe";
 const OLDER: &str = "12345678-1234-4234-8234-123456789abf";
 const EMOJI: &str = "12345678-1234-4234-8234-123456789ac0";
-pub(super) const DATE: &str = "2026-10-03T12:00:00Z";
+pub(crate) const DATE: &str = "2026-10-03T12:00:00Z";
 pub(crate) struct Backend {
+    pub(crate) identities:std::collections::HashMap<String,Value>,
+    pub(crate) upload_delay:std::time::Duration,
+    pub(crate) media_delay:std::time::Duration,
     pub(crate) discovery_notifications:Option<Vec<Value>>,pub(crate) search_results:Option<Vec<Value>>,
+    pub(crate) media_search:bool,
     pub(crate) webhooks:Vec<Value>,pub(crate) fail_webhooks:bool,
     pub(crate) range_media:bool,
     pub(crate) media_ranges:Vec<(String,String)>,
     pub(crate) fail_status:bool,
     pub(crate) attachment_thumbnails:std::collections::HashMap<String,Vec<u8>>,
+    pub(crate) failed_media:std::collections::HashSet<String>,
     pub(crate) fail_channel_read:bool, pub(crate) fail_channel_settings:bool,
     pub(crate) paged_messages:Vec<Value>,pub(crate) fail_newer:bool,
     pub(crate) channel_messages:std::collections::HashMap<String,Vec<Value>>,
@@ -62,7 +67,9 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let api = ApiClient::new(&format!("http://{}", listener.local_addr().unwrap())).unwrap();
     let state = Arc::new(Mutex::new(Backend {
-        discovery_notifications:None,search_results:None,webhooks:vec![],fail_webhooks:false,range_media:false,media_ranges:vec![],attachment_thumbnails:Default::default(),
+        identities:Default::default(),upload_delay:std::time::Duration::ZERO,
+        media_delay:std::time::Duration::ZERO,
+        discovery_notifications:None,search_results:None,media_search:false,webhooks:vec![],fail_webhooks:false,range_media:false,media_ranges:vec![],attachment_thumbnails:Default::default(),failed_media:Default::default(),
         paged_messages:vec![],fail_newer:false,fail_status:false,fail_channel_read:false,fail_channel_settings:false,channel_messages:Default::default(),
         embed_values:Default::default(),
         peer_banned:false,fail_moderation:true,fail_audit:false,
@@ -78,7 +85,7 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
             let Ok((mut stream,_)) = listener.accept().await else { break; };
             let shared = shared.clone(); tokio::spawn(async move {
                 let mut bytes = Vec::new(); let mut chunk = [0;4096];
-                let (method,path,body,range) = loop {
+                let (method,path,body,range,identity) = loop {
                     let Ok(size) = stream.read(&mut chunk).await else { return; }; if size == 0 { return; } bytes.extend_from_slice(&chunk[..size]);
                     if let Some(end) = bytes.windows(4).position(|v| v == b"\r\n\r\n") {
                         let headers = String::from_utf8_lossy(&bytes[..end]);
@@ -88,16 +95,21 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
                             let mut line = headers.lines().next().unwrap().split_whitespace();
                             let method = line.next().unwrap().to_owned(); let path = line.next().unwrap().to_owned();
                             let range=headers.lines().filter_map(|l|l.split_once(':')).find(|(k,_)|k.eq_ignore_ascii_case("range")).map(|(_,v)|v.trim().to_string());
-                            let body = serde_json::from_slice(&bytes[end+4..end+4+length]).unwrap_or_else(|_|json!(String::from_utf8_lossy(&bytes[end+4..end+4+length]))); break (method,path,body,range);
+                            let body = serde_json::from_slice(&bytes[end+4..end+4+length]).unwrap_or_else(|_|json!(String::from_utf8_lossy(&bytes[end+4..end+4+length]))); let identity=headers.lines().filter_map(|l|l.split_once(':')).find(|(k,_)|k.eq_ignore_ascii_case("cookie")).map(|(_,v)|v.trim().to_string()).unwrap_or_default();break (method,path,body,range,identity);
                         }
                     }
                 };
+                let delay=shared.lock().unwrap().upload_delay;
+                if method=="POST"&&path=="/messages"&&!delay.is_zero(){tokio::time::sleep(delay).await;}
+                let delay=shared.lock().unwrap().media_delay;
+                if path.starts_with("/attachments/")&&!delay.is_zero(){tokio::time::sleep(delay).await;}
                 let (mut status,response) = {
                     let mut b = shared.lock().unwrap(); b.requests.push((method.clone(),path.clone(),body.clone()));
                     if let Some(range)=&range{b.media_ranges.push((path.clone(),range.clone()));}
                     let route = path.split('?').next().unwrap();
                     let mut peer=json!({"id":EMOJI,"username":"bob","nickname":"Bob","avatar_blob":tiny_png_base64(),"created_at":DATE});peer["banned"]=json!(b.peer_banned);
-                    if route=="/voice/ice-servers"{(200,json!({"ice_servers":[]}))}
+                    if b.failed_media.contains(route){(404,json!({"detail":"Synthetic missing media"}))}
+                    else if route=="/voice/ice-servers"{(200,json!({"ice_servers":[]}))}
                     else if route=="/admin/audit-logs"{
                         if b.fail_audit{b.fail_audit=false;(500,json!({"detail":"Audit retry"}))}else{let more=!path.contains("last_id");(200,json!({"logs":[{"id":if more{MESSAGE}else{OLDER},"actor_username":"alice","action":"user.ban","entity_type":"user","target_user_id":EMOJI,"metadata":{"password":"never-display"},"created_at":DATE}],"has_more":more}))}
                     } else if route==format!("/users/{EMOJI}/ban"){
@@ -130,6 +142,12 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
                         if b.fail_password{b.fail_password=false;(400,json!({"type":"https://test/invalid-param","detail":"password rejected"}))}else{(200,json!({"response":"saved"}))}
                     } else if route == "/auth/connected_devices" {(200,json!({"connections":([USER,EMOJI].into_iter().filter(|id|!b.dropped.iter().any(|d|d==id)).map(|id|json!({"id":id,"created_at":DATE,"expires_at":"2027-01-01T00:00:00Z"})).collect::<Vec<_>>())}))}
                     else if route == "/auth/drop_connection" {let id=body["connection_id"].as_str().unwrap().to_owned();b.revoked=id==USER||id=="ALL";b.dropped.push(id);(200,json!({"dropped":1}))}
+                    else if route=="/search"&&b.media_search{
+                        let url=reqwest::Url::parse(&format!("http://local{path}")).unwrap();let q:std::collections::HashMap<_,_>=url.query_pairs().collect();let cursor=q.get("since").map(|at|(chrono::DateTime::parse_from_rfc3339(at).unwrap().with_timezone(&chrono::Utc),Uuid::parse_str(q.get("last_id").unwrap()).unwrap()));
+                        let key=|m:&Value|(chrono::DateTime::parse_from_rfc3339(m["created_at"].as_str().unwrap()).unwrap().with_timezone(&chrono::Utc),Uuid::parse_str(m["id"].as_str().unwrap()).unwrap());
+                        let mut matches:Vec<_>=b.paged_messages.iter().filter(|m|m["channel_id"]==body["channel_id"]&&m["attachments"].as_array().is_some_and(|a|!a.is_empty())==body["contains_attachment"].as_bool().unwrap_or(false)&&(body["has"]!="link"||m["content"].as_str().is_some_and(|t|t.contains("https://")))&&cursor.is_none_or(|at|key(m)<at)).collect();matches.sort_by_key(|m|std::cmp::Reverse(key(m)));let more=matches.len()>10;matches.truncate(10);
+                        let results:Vec<_>=matches.iter().map(|m|json!({"type":"message","id":m["id"],"channel_id":m["channel_id"],"channel_name":"Media","content":m["content"],"author_id":USER,"author_username":"alice","created_at":m["created_at"]})).collect();(200,json!({"results":results,"has_more":more}))
+                    }
                     else if route == "/search"&&b.search_results.is_some(){(200,json!({"results":b.search_results,"has_more":false}))}
                     else if route == format!("/users/{USER}/notifications")&&b.discovery_notifications.is_some(){(200,json!({"notifications":b.discovery_notifications,"has_more":false}))}
                     else if route == "/search" {
@@ -218,7 +236,8 @@ pub(crate) async fn mock() -> (ApiClient, Arc<Mutex<Backend>>, tokio::task::Join
                     else if route.ends_with("/messages") {
                         (200,json!({"channel_id":CHANNEL,"messages":if path.contains("last_id") {vec![b.old.clone()]} else {vec![b.message.clone()]},"has_more":!path.contains("last_id")}))
                     } else if route == "/auth/whoami" && b.revoked {(401,json!({"type":"https://test/unauthorized","detail":"session ended"}))}
-                    else if route == "/auth/whoami" {let mut profile=b.profile.clone();profile["settings"]=json!({"version":1,"config":b.config});(200,profile)}
+                    else if route == "/auth/refresh" {(200,json!({"connection":{"id":USER,"created_at":DATE,"expires_at":"2099-01-01T00:00:00Z"}}))}
+                    else if route == "/auth/whoami" {let mut profile=b.identities.iter().find(|(token,_)|identity.contains(token.as_str())).map(|(_,p)|p.clone()).unwrap_or_else(||b.profile.clone());profile["settings"]=json!({"version":1,"config":b.config});(200,profile)}
                     else if route == "/server" {if b.server_missing{(404,json!({"detail":"No server"}))}else{let mut server=b.server_value.clone();if b.restricted{server["owner_id"]=Value::Null;}(200,server)}}
                     else if route == "/webhooks" && b.fail_webhooks {(403,json!({"detail":"Permission denied"}))}
                     else if route == "/webhooks" && method=="GET" {(200,json!({"webhooks":b.webhooks}))}
@@ -443,7 +462,7 @@ pub(crate) fn exercise(context: &gtk::glib::MainContext) {
     let inactive_history_baseline=backend.lock().unwrap().requests.iter().filter(|(_,path,_)|path.starts_with("/channels/12345678-1234-4234-8234-123456789ac2/messages")).count();
     crate::ui::main_window::account::exercise_preferences_and_profiles(&main,context);
     super::super::transfers::exercise(&api,context);
-    crate::ui::main_window::security::exercise(&main,context);assert!(outputs.lock().unwrap().is_empty());
+    crate::ui::main_window::security::exercise(&main,context);assert!(!outputs.lock().unwrap().iter().any(|o|matches!(o,crate::ui::main_window::MainWindowOutput::Logout|crate::ui::main_window::MainWindowOutput::SessionExpired)));
     crate::ui::login::recovery::exercise(&api,context);
     crate::ui::main_window::search::exercise(&main,context);
     crate::ui::main_window::notifications::exercise(&main,context,&backend);
@@ -451,7 +470,7 @@ pub(crate) fn exercise(context: &gtk::glib::MainContext) {
     crate::ui::main_window::administration::exercise(&main,context);
     crate::ui::main_window::moderation::exercise(&main,context,&backend);
     crate::ui::main_window::voice::tests::exercise(&main,context,&backend);
-    assert!(outputs.lock().unwrap().is_empty(),"DM and administration failures must retain login");
+    assert!(!outputs.lock().unwrap().iter().any(|o|matches!(o,crate::ui::main_window::MainWindowOutput::Logout|crate::ui::main_window::MainWindowOutput::SessionExpired)),"DM and administration failures must retain login");
     backend.lock().unwrap().restricted = true;
     main.emit(MainWindowMsg::WsReceived(crate::ws::WsEvent::RoleRemove { user_id:user,role_id:EMOJI.parse().unwrap() }));
     until(context,|| main.model().channels.is_empty() && main.model().active_channel_id.is_none());

@@ -3,7 +3,7 @@
 use super::*;
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub(crate) enum AvatarFailure {Missing,Invalid,Transient,RateLimited(std::time::Duration)}
-impl std::fmt::Display for AvatarFailure{fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result{f.write_str("Avatar indisponível")}}
+impl std::fmt::Display for AvatarFailure{fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result{f.write_str(crate::i18n::tr("Avatar indisponível"))}}
 impl std::error::Error for AvatarFailure{}
 impl ApiClient {
     pub async fn list_webhooks(&self) -> Result<Vec<Webhook>> {
@@ -16,7 +16,7 @@ impl ApiClient {
         Self::decode(self.inner.post(self.url("/webhooks")).json(&serde_json::json!({"channel_id":channel,"name":name})).send_paced(&self.requests).await?, "criar webhook").await
     }
     pub async fn update_webhook(&self, id: Uuid, identity: &WebhookIdentity) -> Result<Webhook> {
-        anyhow::ensure!(identity.display_name.as_ref().is_none_or(|n| n.chars().count() <= 100), "Use um apelido de até 100 caracteres.");
+        anyhow::ensure!(identity.display_name.as_ref().is_none_or(|n| n.chars().count() <= 100), crate::i18n::fmt("Use um apelido de até 100 caracteres.", &[]));
         Self::decode(self.inner.patch(self.url(&format!("/webhooks/{id}"))).json(identity).send_paced(&self.requests).await?, "editar webhook").await
     }
     pub async fn revoke_webhook(&self, id: Uuid) -> Result<()> {

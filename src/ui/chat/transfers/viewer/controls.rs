@@ -55,15 +55,15 @@ pub(in crate::ui::chat::transfers) fn install(window:&gtk::Window,picture:&gtk::
     picture.set_widget_name("image-viewer-picture");picture.set_can_shrink(true);picture.set_content_fit(gtk::ContentFit::Contain);picture.set_halign(gtk::Align::Center);picture.set_valign(gtk::Align::Center);
     let scroll=gtk::ScrolledWindow::new();scroll.set_widget_name("image-viewer-scroll");scroll.set_hexpand(true);scroll.set_vexpand(true);scroll.set_child(Some(picture));
     let controls=gtk::Box::new(gtk::Orientation::Horizontal,6);controls.set_halign(gtk::Align::Center);
-    let minus=button("papo-zoom-out-symbolic","Diminuir zoom");let plus=button("papo-zoom-in-symbolic","Aumentar zoom");let fit=button("papo-zoom-fit-best-symbolic","Ajustar à janela");let original=button("papo-zoom-original-symbolic","Tamanho original (100%)");let full=button("papo-view-fullscreen-symbolic","Tela cheia");
+    let minus=button("papo-zoom-out-symbolic",crate::i18n::tr("Diminuir zoom"));let plus=button("papo-zoom-in-symbolic",crate::i18n::tr("Aumentar zoom"));let fit=button("papo-zoom-fit-best-symbolic",crate::i18n::tr("Ajustar à janela"));let original=button("papo-zoom-original-symbolic","Tamanho original (100%)");let full=button("papo-view-fullscreen-symbolic",crate::i18n::tr("Tela cheia"));
     let percentage=gtk::Label::new(None);percentage.set_width_chars(5);percentage.add_css_class("numeric");percentage.set_widget_name("image-viewer-zoom");
     let zoom_controls=gtk::Box::new(gtk::Orientation::Horizontal,6);zoom_controls.set_widget_name("image-viewer-zoom-controls");zoom_controls.set_visible(false);controls.append(&zoom_controls);
     for item in [minus.clone().upcast::<gtk::Widget>(),percentage.clone().upcast(),plus.clone().upcast(),fit.clone().upcast(),original.clone().upcast()]{zoom_controls.append(&item);}controls.append(&full);
     let header=adw::HeaderBar::new();header.set_centering_policy(adw::CenteringPolicy::Strict);
-    let title=adw::WindowTitle::new(window.title().as_deref().unwrap_or("Imagem"),"");
+    let title=adw::WindowTitle::new(window.title().as_deref().unwrap_or(crate::i18n::tr("Imagem")),"");
     window.bind_property("title",&title,"title").sync_create().build();
     header.set_title_widget(Some(&title));header.pack_end(&controls);
-    let root=gtk::Box::new(gtk::Orientation::Vertical,0);root.append(&header);root.append(&scroll);window.set_titlebar(Some(&gtk::Box::new(gtk::Orientation::Vertical,0)));window.set_child(Some(&root));window.set_destroy_with_parent(true);
+    let root=gtk::Box::new(gtk::Orientation::Vertical,0);root.append(&header);root.append(&scroll);if !window.is_realized(){window.set_titlebar(Some(&gtk::Box::new(gtk::Orientation::Vertical,0)));}window.set_child(Some(&root));window.set_destroy_with_parent(true);
     let state=Rc::new(State{picture:picture.downgrade(),scroll:scroll.downgrade(),percentage:percentage.downgrade(),fullscreen:Cell::new(false),fit:Cell::new(true),scale:Cell::new(1.0),dimensions:Cell::new((0,0)),generation:Cell::new(0)});
     // The root owns state; all widget callbacks use weak refs, so closing the
     // viewer releases its texture even if somebody still holds the window.
@@ -75,7 +75,7 @@ pub(in crate::ui::chat::transfers) fn install(window:&gtk::Window,picture:&gtk::
     let weak=full.downgrade();let group=zoom_controls.downgrade();let zoom=Rc::downgrade(&state);window.connect_fullscreened_notify(move |window|{
         let fullscreen=window.is_fullscreen();if let Some(group)=group.upgrade(){group.set_visible(fullscreen);}
         if let Some(state)=zoom.upgrade(){state.fullscreen.set(fullscreen);if !fullscreen{state.fit();}}
-        if let Some(button)=weak.upgrade(){let label=if fullscreen{"Sair da tela cheia"}else{"Tela cheia"};button.set_icon_name(if fullscreen{"papo-view-restore-symbolic"}else{"papo-view-fullscreen-symbolic"});button.set_tooltip_text(Some(label));button.update_property(&[gtk::accessible::Property::Label(label)]);}
+        if let Some(button)=weak.upgrade(){let label=if fullscreen{crate::i18n::tr("Sair da tela cheia")}else{crate::i18n::tr("Tela cheia")};button.set_icon_name(if fullscreen{"papo-view-restore-symbolic"}else{"papo-view-fullscreen-symbolic"});button.set_tooltip_text(Some(label));button.update_property(&[gtk::accessible::Property::Label(label)]);}
     });
     let weak=Rc::downgrade(&state);picture.connect_paintable_notify(move |_|{if let Some(state)=weak.upgrade(){state.refresh();}});
     let observer=gtk::WidgetPaintable::new(Some(&scroll));let weak=Rc::downgrade(&state);observer.connect_invalidate_size(move |_|{if let Some(state)=weak.upgrade(){state.refresh();}});scroll.connect_map(move |scroll|observer.set_widget(Some(scroll)));

@@ -47,7 +47,7 @@ impl DisplayText {
             if let Some(end)=lower[start+11..].find(">)") {
                 let end=start+11+end;
                 if let Ok(id)=Uuid::parse_str(&text[start+11..end]) {
-                    let start=value.text.len();value.text.push('@');value.text.push_str(users.get(&id).map(|u|u.display_name()).unwrap_or("Usuário removido"));
+                    let start=value.text.len();value.text.push('@');value.text.push_str(users.get(&id).map(|u|u.display_name()).unwrap_or(crate::i18n::tr("Usuário removido")));
                     value.spans.push(Span{start,end:value.text.len(),id:Some(id)});offset=end+2;continue;
                 }
             }

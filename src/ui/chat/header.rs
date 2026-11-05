@@ -5,9 +5,9 @@ use super::*;
 pub(super) fn render(container:&gtk::Box,target:Option<&ConversationTarget>,actions:&Actions,refresh_emojis:bool){
     let name=match target{
         Some(c) if c.is_direct()=>c.name().to_owned(),
-        Some(c) if c.is_voice()=>format!("Voz · {}",c.name()),
+        Some(c) if c.is_voice()=>crate::i18n::fmt("Voz · {}", &[("0", format!("{}", c.name()))]),
         Some(c)=>format!("# {}",c.name()),
-        None=>"Selecione um canal".into(),
+        None=>crate::i18n::tr("Selecione um canal").into(),
     };
     let topic=target.and_then(|c|c.topic()).unwrap_or("");
     let unchanged=container.first_child().is_some_and(|c|c.tooltip_text().as_deref()==Some(name.as_str()))

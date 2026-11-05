@@ -45,11 +45,11 @@ impl Reads {
 
 impl MainWindowModel {
     pub(in crate::ui::main_window) fn tick_channel_read(&mut self,root:&gtk::Box,sender:&ComponentSender<Self>){
-        if !root.root().and_downcast::<gtk::Window>().is_some_and(|w|w.is_active()){return;}
+        if !root.is_mapped()||!root.root().and_downcast::<gtk::Window>().is_some_and(|w|w.is_active()){return;}
         let Some(message)=self.chat.model().read_candidate()else{return;};
         if self.active_channel_id!=Some(message.channel_id)||!self.can_read_target(message.channel_id)||self.notifications.manual_reads.contains_key(&message.channel_id){return;}
         let Some(request)=self.notifications.reads.begin(&message)else{return;};
-        let api=self.api_client.clone();let sender=sender.clone();
+        let api=self.connection.api.clone();let sender=sender.clone();
         self.notifications.jobs.push(tokio::spawn(async move{
             let result=api.mark_channel_read(message.channel_id,message.id).await;
             sender.input(MainWindowMsg::ChannelRead{request,message,result});
@@ -73,7 +73,7 @@ impl MainWindowModel {
     }
     pub(in crate::ui::main_window) fn mark_channel_read_action(&mut self,channel:Uuid,sender:&ComponentSender<Self>){
         if !self.can_read_target(channel)||self.notifications.manual_reads.contains_key(&channel){return;}
-        let request=Uuid::new_v4();self.notifications.manual_reads.insert(channel,request);let api=self.api_client.clone();let sender=sender.clone();
+        let request=Uuid::new_v4();self.notifications.manual_reads.insert(channel,request);let api=self.connection.api.clone();let sender=sender.clone();
         self.notifications.jobs.push(tokio::spawn(async move{let result=api.mark_latest_read(channel).await;sender.input(MainWindowMsg::ManualRead{request,channel,result});}));
     }
     pub(in crate::ui::main_window) fn manual_read_finished(&mut self,request:Uuid,channel:Uuid,result:anyhow::Result<Option<Message>>,sender:&ComponentSender<Self>){

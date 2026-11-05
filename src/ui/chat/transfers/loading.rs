@@ -36,6 +36,7 @@ pub(super) fn queue_image(
     key: Uuid,
     input: ImageInput,
 ) {
+    transfers.processing(key);
     let gif_video = transfers.gif_requested.contains(&key);
     let animate = transfers.scope.contains(&message);
     let has_preview = transfers.textures.contains_key(&key);

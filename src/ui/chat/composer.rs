@@ -85,8 +85,9 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext) {
     chat.emit(ChatMsg::EmojiSelected("😄".into()));pump(context);assert_eq!(entry.text(),"@ISpeakHue 😄 ");assert_eq!(chat.model().draft.text,format!("@mention(<@{peer}>) 😄 "));
     chat.emit(ChatMsg::SetChannel(channel(b)));pump(context);assert!(entry.text().is_empty());chat.emit(ChatMsg::SetChannel(channel(a)));pump(context);
     assert_eq!(entry.text(),"@ISpeakHue 😄 ");assert_eq!(chat.model().draft.text,format!("@mention(<@{peer}>) 😄 "));
-    chat.emit(ChatMsg::SendClicked);until(context,||!chat.model().draft.is_sending()&&chat.model().draft.error.is_some());assert_eq!(entry.text(),"@ISpeakHue 😄 ");
-    chat.emit(ChatMsg::SendClicked);until(context,||chat.model().draft.text.is_empty());assert!(entry.text().is_empty());
+    chat.emit(ChatMsg::SendClicked);until(context,||chat.model().outbox.active.is_none()&&chat.model().outbox.entries.iter().any(|p|matches!(p.status,outbox::Status::Failed{..})));assert!(entry.text().is_empty());
+    let failed=chat.model().outbox.entries[0].id;chat.emit(ChatMsg::EditPending(failed));until(context,||entry.text()=="@ISpeakHue 😄 ");
+    chat.emit(ChatMsg::SendClicked);until(context,||chat.model().draft.text.is_empty()&&chat.model().outbox.entries.is_empty());assert!(entry.text().is_empty());
     let posts:Vec<_>=backend.lock().unwrap().requests.iter().filter(|(m,p,_)|m=="POST"&&p=="/messages").cloned().collect();assert_eq!(posts.len(),2);
     for(_,_,body) in posts{let body=body.as_str().unwrap();assert!(body.contains(&format!("@mention(<@{peer}>) 😄")));assert!(!body.contains("@ISpeakHue"));}
     chat.emit(ChatMsg::MentionSelected(None));pump(context);assert_eq!(entry.text(),"@everyone ");assert_eq!(chat.model().draft.text,"@everyone ");
@@ -131,6 +132,7 @@ impl Composer {
         self.connect_changed(entry,move |text|{let _=input.send(ChatMsg::InputChanged(text));});
     }
     pub fn connect_changed(&self,entry:&gtk::TextView,changed:impl Fn(String)+'static) {
+        entry.update_property(&[gtk::accessible::Property::Label(crate::i18n::tr("Caixa de mensagem")),gtk::accessible::Property::Description(crate::i18n::tr("Enter envia. Shift+Enter insere uma quebra de linha.")),gtk::accessible::Property::MultiLine(true)]);
         self.connect_history(entry);
         let buffer=entry.buffer();
         let composer=self.clone();let weak=entry.downgrade();buffer.connect_insert_text(move |_,at,text|{

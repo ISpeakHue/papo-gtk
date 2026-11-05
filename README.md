@@ -10,6 +10,10 @@ uses an adaptive server/channel sidebar and native GNOME controls.
 
 Webhook integration and permissions are described in [WEBHOOKS.md](WEBHOOKS.md).
 
+Timed mutes, device-local notification sounds, keyboard shortcuts and manual
+release checks are described in the
+[notification, accessibility and update guide](docs/notifications-accessibility-and-updates.md).
+
 ## Diagnostics
 
 Terminal logging defaults to warnings and errors, written to stderr. Enable
@@ -108,9 +112,23 @@ Real SFU integration can be enabled through the workflow's manual inputs.
 See [TESTING.md](TESTING.md) for dependencies, commands and manual checks,
 [DESIGN.md](DESIGN.md) for interface decisions, and
 [follow-ups](docs/FOLLOW_UPS.md) for unresolved investigations and deferred work.
+The [UX implementation plan](implementation_plan_order.md) tracks implementation and acceptance;
+[account ownership](docs/account-state.md), [performance baselines](PERFORMANCE.md)
+and [backend contracts](docs/backend/ux-contracts.md) document its initial groundwork.
+Use the left rail to [switch servers and accounts](docs/multi-server.md), keeping
+independent sessions, drafts, unread indicators and conversations. The
+[regression and acceptance guide](docs/testing/release-acceptance.md) describes
+automated budgets and the remaining physical-device checks.
 See [EMBEDS.md](EMBEDS.md) for the updated embed API, custom-card controls and
 current backend media limitations.
 
 ## License
 
 GNU General Public License version 3. See [LICENSE](LICENSE).
+
+Interface language and draft recovery: [translations](docs/translations.md),
+[drafts and outgoing queue](docs/drafts-and-outbox.md).
+See [conversation navigation and media controls](docs/navigation-and-media.md)
+for the quick switcher, per-item retries and device-local cache preferences.
+The [media browser and call setup guide](docs/media-browser-and-call-setup.md)
+describes restart thumbnail reuse, media navigation and local audio-device tests.

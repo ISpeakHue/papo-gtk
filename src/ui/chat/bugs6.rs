@@ -8,21 +8,24 @@ pub(crate) fn exercise_send_feedback(context:&gtk::glib::MainContext){
     let channel=Uuid::new_v4();let user=Uuid::new_v4();
     let target:Channel=serde_json::from_value(serde_json::json!({"id":channel,"name":"send feedback","created_at":chrono::Utc::now()})).unwrap();
     let chat=ChatModel::builder().launch(ChatInit{active_channel:Some(target),user_id:Some(user),..Default::default()}).detach();
-    chat.emit(ChatMsg::SetAccess{user_id:user,access:crate::models::Access::resolve(user,Some(user),&[],&[],&[])});
+    chat.emit(ChatMsg::SetAccess{user_id:user,access:crate::models::Access::direct()});
     let window=adw::Window::builder().default_width(850).default_height(680).content(chat.widget()).build();window.present();settle(context);
-    let entry=composer::field(chat.widget().upcast_ref());
-    let progress=descendants(chat.widget().upcast_ref()).into_iter().find(|w|w.widget_name()=="send-progress").unwrap();let cancel=find_button(chat.widget().upcast_ref(),"Cancelar envio");
-    entry.set_text("No flashing feedback");settle(context);let before=entry.compute_bounds(chat.widget()).unwrap();
-    let request=chat.state().get_mut().model.draft.begin().unwrap();chat.emit(ChatMsg::Transfer(TransferMsg::Progress{id:request,bytes:0}));settle(context);
-    assert!(chat.model().draft.is_sending());assert!(!progress.is_visible()&&!cancel.is_visible(),"a pending text send must not flash upload widgets");
-    assert_eq!(entry.compute_bounds(chat.widget()).unwrap(),before,"pending text sends must not shift the composer");
-    chat.emit(ChatMsg::SendFinished{request_id:request,channel_id:channel,result:Err("fixture failure".into())});pump(context);assert_eq!(entry.text(),"No flashing feedback");assert!(chat.model().draft.error.is_some());
-    let request={let mut state=chat.state().get_mut();state.model.draft.text.clear();state.model.draft.embeds=vec![serde_json::from_value(serde_json::json!({"title":"custom card"})).unwrap()];state.model.draft.begin().unwrap()};
-    chat.emit(ChatMsg::Transfer(TransferMsg::Progress{id:request,bytes:0}));settle(context);assert!(!progress.is_visible()&&!cancel.is_visible(),"embed-only sends must not flash upload widgets");
-    chat.state().get_mut().model.draft.finish(request,Ok(()));
-    let request={let mut state=chat.state().get_mut();state.model.draft.files.push(crate::api::features::UploadFile{path:"/tmp/feedback-fixture.webm".into(),name:"fixture.webm".into(),size:100,_temporary:None});state.model.draft.begin().unwrap()};
-    chat.emit(ChatMsg::Transfer(TransferMsg::Progress{id:request,bytes:50}));settle(context);assert!(progress.is_mapped()&&cancel.is_mapped(),"uploads retain progress and cancellation");
-    cancel.emit_clicked();settle(context);assert!(!chat.model().draft.is_sending());assert!(!progress.is_visible()&&!cancel.is_visible());assert_eq!(chat.model().draft.files.len(),1,"cancel keeps the draft available");
+    let entry=composer::field(chat.widget().upcast_ref());entry.set_text("Pending first message");pump(context);
+    let request=chat.state().get_mut().model.begin_test_send();
+    entry.set_text("Independent next draft");pump(context);
+    chat.emit(ChatMsg::Transfer(TransferMsg::Progress{id:request,bytes:0}));settle(context);
+    assert!(entry.is_editable());assert_eq!(entry.text(),"Independent next draft");
+    assert!(!descendants(chat.widget().upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::ProgressBar>()).any(|p|p.is_visible()),"text sends have no upload progress");
+    chat.emit(ChatMsg::SendFinished{request_id:request,channel_id:channel,result:Err("fixture failure".into())});pump(context);
+    assert_eq!(entry.text(),"Independent next draft");assert!(chat.model().outbox.entries.iter().any(|e|e.draft.text=="Pending first message"&&matches!(e.status,outbox::Status::Failed{..})));
+    let request={let mut state=chat.state().get_mut();state.model.draft.files.push(crate::api::features::UploadFile{path:"/tmp/feedback-fixture.webm".into(),name:"fixture.webm".into(),size:100,_temporary:None});state.model.begin_test_send()};
+    entry.set_text("Keep typing during upload");pump(context);
+    chat.emit(ChatMsg::Transfer(TransferMsg::Progress{id:request,bytes:50}));settle(context);
+    let progress=descendants(chat.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::ProgressBar>().ok().filter(|w|w.is_visible())).unwrap();
+    assert!((progress.fraction()-0.5).abs()<0.01);
+    find_button(chat.widget().upcast_ref(),"Cancelar envio").emit_clicked();settle(context);
+    assert!(chat.model().outbox.active.is_none());assert!(!progress.is_visible());assert_eq!(entry.text(),"Keep typing during upload");
+    assert!(chat.model().outbox.entries.iter().any(|e|e.draft.files.len()==1&&matches!(e.status,outbox::Status::Failed{uncertain:true,..})));
     window.set_content(None::<&gtk::Widget>);window.close();
 }
 
@@ -34,7 +37,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let chat=ChatModel::builder().launch(ChatInit{active_channel:Some(target.clone()),messages:messages.clone(),user_id:Some(user),..Default::default()}).detach();
     chat.emit(ChatMsg::SetAccess{user_id:user,access:crate::models::Access::resolve(user,Some(user),&[],&[],&[])});
     let window=adw::Window::builder().default_width(850).default_height(680).content(chat.widget()).build();window.present();settle(context);
-    assert!(find_button(chat.widget().upcast_ref(),"Buscar mensagens (Ctrl+K)").is_mapped());
+    assert!(find_button(chat.widget().upcast_ref(),"Buscar mensagens (Ctrl+F)").is_mapped());
     let custom:crate::models::Emoji=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"name":"SERVER_CAT","format":"PNG","created_at":created})).unwrap();
     chat.state().get_mut().model.actions.emojis=vec![custom.clone()];
     // Composer and reaction use the exact same search behavior and square cells.
@@ -78,7 +81,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     // Independent sends must paint without another message, pointer or scroll event.
     for i in 0..3{
         let mut message=messages[0].clone();message.id=Uuid::new_v4();message.created_at=created+chrono::Duration::seconds(100+i);message.content=Some(format!("Visible immediately {i}: a long line that wraps to exercise text allocation. ").repeat(3));
-        let request={let mut state=chat.state().get_mut();state.model.draft.text=message.content.clone().unwrap();state.model.draft.begin().unwrap()};
+        let request={let mut state=chat.state().get_mut();state.model.draft.text=message.content.clone().unwrap();state.model.begin_test_send()};
         if i==1{chat.emit(ChatMsg::AddMessage(message.clone()));pump(context);}
         chat.emit(ChatMsg::SendFinished{request_id:request,channel_id:channel,result:Ok(message.clone())});settle(context);
         let row=chat.model().rendered[&format!("message-{}",message.id)].1.clone();let bounds=row.compute_bounds(list).unwrap();let adj=scroll.vadjustment();assert!(f64::from(bounds.y()+bounds.height())<=adj.value()+adj.page_size()+2.0);

@@ -23,7 +23,7 @@ pub(crate) struct Command;
 impl Command{pub async fn output(&mut self)->std::io::Result<std::process::Output>{Err(std::io::Error::new(std::io::ErrorKind::Unsupported,"Isolated media helpers are unavailable on this platform"))}}
 #[cfg(not(any(target_os="linux",windows)))]
 pub(crate) fn command(_path:&std::path::Path,_script:&str)->anyhow::Result<Command>{
-    anyhow::bail!("Conversão isolada de mídia ainda indisponível nesta plataforma.")
+    anyhow::bail!(crate::i18n::fmt("Conversão isolada de mídia ainda indisponível nesta plataforma.", &[]))
 }
 
 #[cfg(all(test,not(any(target_os="linux",windows))))]mod tests{

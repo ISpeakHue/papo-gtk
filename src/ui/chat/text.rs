@@ -65,6 +65,13 @@ fn build(text:&str,users:&HashMap<Uuid,UserSummary>,actions:&Actions,open:Option
     let buffer=view.buffer();let mut iter=buffer.start_iter();let mut targets=vec![];
     let tag=gtk::TextTag::builder().foreground("#3584e4").underline(pango::Underline::Single).build();buffer.tag_table().add(&tag);
     let mention=gtk::TextTag::builder().name("papo-mention").background("#3584e4").foreground("#ffffff").build();buffer.tag_table().add(&mention);
+    // EN-US: High contrast inherits system text colors and keeps underline/bold semantics.
+    // PT-BR: Alto contraste herda as cores do sistema e mantém sublinhado/negrito.
+    let manager=adw::StyleManager::default();
+    let apply=|high:bool,link:&gtk::TextTag,mention:&gtk::TextTag|{if high{link.set_property("foreground-set",false);mention.set_property("foreground-set",false);mention.set_property("background-set",false);}else{link.set_foreground(Some("#3584e4"));mention.set_foreground(Some("#ffffff"));mention.set_background(Some("#3584e4"));}mention.set_weight(700);};
+    apply(manager.is_high_contrast(),&tag,&mention);let link_color=tag.clone();let mentions=mention.clone();
+    let handler=manager.connect_high_contrast_notify(move |manager|apply(manager.is_high_contrast(),&link_color,&mentions));
+    view.add_weak_ref_notify_local(move||manager.disconnect(handler));
     let mut spoilers=HashMap::<usize,Target>::new();
     let mut tags=HashMap::<markdown::Style,gtk::TextTag>::new();let mut baselines=HashMap::new();let mut registered=std::collections::HashSet::new();let mut code_blocks=Vec::new();
     let shade=if adw::StyleManager::default().is_dark(){"#29292d"}else{"#dddde1"};

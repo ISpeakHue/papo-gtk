@@ -6,6 +6,8 @@ use gtk::gdk::Texture;
 use gtk::glib::Bytes;
 use gtk::prelude::*;
 
+pub mod policy;
+pub mod disk;
 pub mod avatars;
 pub mod sound;
 pub mod runtime;

@@ -31,7 +31,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     until(context,||animation.current_image()!=first);
     let card=|id|descendants(chat.widget().upcast_ref()).into_iter().find(|w|w.widget_name().starts_with(&format!("attachment-{id}-"))).unwrap();
     for key in [png,video,gif]{
-        assert!(!descendants(&card(key)).iter().any(|w|w.is::<gtk::Label>()),"visual attachments must have no filename/size header");
+        assert!(!descendants(&card(key)).iter().filter_map(|w|w.downcast_ref::<gtk::Label>()).any(|label|["image.png","clip.webm","cat.gif"].iter().any(|name|label.text().contains(name))||label.text()==format_file_size(128)),"visual attachments may show loading/error feedback but must have no filename/size header");
         assert!(!descendants(&card(key)).iter().any(|w|w.downcast_ref::<gtk::Button>().is_some_and(|b|b.icon_name().as_deref()==Some("papo-folder-download-symbolic"))),"no inline download button");
     }
     assert!(find_button(&card(file),"notes.pdf").is_mapped(),"files without a media preview retain a clickable name");
@@ -51,12 +51,12 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let controllers=row.observe_controllers();let right=(0..controllers.n_items()).find_map(|i|controllers.item(i).and_downcast::<gtk::GestureClick>().filter(|g|g.button()==3)).unwrap();
     right.emit_by_name::<()>("pressed",&[&1i32,&f64::from(bounds.x()+bounds.width()/2.0),&f64::from(bounds.y()+bounds.height()/2.0)]);
     let popup=||descendants(row.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Popover>().ok().filter(|p|p.widget_name()=="attachment-context-menu"&&p.is_visible()));
-    until(context,||popup().is_some());let popup=popup().unwrap();assert!(find_button(popup.upcast_ref(),"Baixar arquivo").is_mapped());
+    until(context,||popup().is_some());let popup=popup().unwrap();assert!(find_button(popup.upcast_ref(),crate::i18n::tr("Baixar arquivo")).is_mapped());
     popup.popdown();
-    find_button(&card(gif),"Abrir imagem").emit_clicked();
+    find_button(&card(gif),crate::i18n::tr("Abrir imagem")).emit_clicked();
     until(context,||!chat.model().transfers.images.is_empty());
     let viewer=chat.model().transfers.images.last().unwrap().2.clone();until(context,||viewer.is_mapped());
-    assert!(find_button(viewer.upcast_ref(),"Baixar arquivo").is_mapped());
+    assert!(find_button(viewer.upcast_ref(),crate::i18n::tr("Baixar arquivo")).is_mapped());
     let picture=viewer::picture(&viewer).unwrap();assert!(picture.paintable().unwrap().is::<crate::media::animation::Animation>());
     crate::ui::main_window::layout::tests::preview(&window,"attachment-media",context);
     let path=std::env::temp_dir().join(format!("papo-saved-{gif}.gif"));
@@ -67,7 +67,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     chat.emit(ChatMsg::ApplyChange(Change::Moderation(message,gif,"sensitive".into())));performance::settle(context);
     assert!(!chat.model().transfers.revealed.contains(&gif));
     chat.emit(ChatMsg::Transfer(TransferMsg::Save{epoch:chat.model().transfers.epoch,message,attachment:gif,path:path.clone()}));pump(context);assert!(!path.exists());
-    find_button(&card(gif),"Conteúdo sensível — revelar").emit_clicked();
+    find_button(&card(gif),crate::i18n::tr("Conteúdo sensível — revelar")).emit_clicked();
     until(context,||chat.model().transfers.revealed.contains(&gif));
     let row=chat.model().rendered[&format!("message-{message}")].1.clone();let bounds=card(gif).compute_bounds(&row).unwrap();
     chat.emit(ChatMsg::ContextAt{id:message,x:f64::from(bounds.x()+bounds.width()/2.0),y:f64::from(bounds.y()+bounds.height()/2.0)});

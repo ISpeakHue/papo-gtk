@@ -71,21 +71,21 @@ impl PreparedAnimation{
         super::sandbox::prepare().await?;
         let mut command=super::sandbox::command(path,include_str!("gif_video.py"))?;
         let output=tokio::time::timeout(super::sandbox::timeout(Duration::from_secs(20)),command.output()).await??;
-        anyhow::ensure!(output.status.success(),"Não foi possível decodificar o vídeo do GIF: {}",String::from_utf8_lossy(&output.stderr).trim());
+        anyhow::ensure!(output.status.success(),crate::i18n::fmt("Não foi possível decodificar o vídeo do GIF: {}", &[("0", format!("{}", String::from_utf8_lossy(&output.stderr).trim()))]));
         Self::video_frames(&output.stdout)
     }
     fn video_frames(data:&[u8])->anyhow::Result<Self>{
-        anyhow::ensure!(data.len()>=16&&data.len()<=((48<<20)+4096)&&&data[..8]==b"PAPOGIF1","Quadros de GIF inválidos");
+        anyhow::ensure!(data.len()>=16&&data.len()<=((48<<20)+4096)&&&data[..8]==b"PAPOGIF1",crate::i18n::fmt("Quadros de GIF inválidos", &[]));
         let width=u32::from_le_bytes(data[8..12].try_into()?);let height=u32::from_le_bytes(data[12..16].try_into()?);
-        anyhow::ensure!(width>0&&width<=420&&height>0&&height<=300,"Geometria do GIF inválida");
+        anyhow::ensure!(width>0&&width<=420&&height>0&&height<=300,crate::i18n::fmt("Geometria do GIF inválida", &[]));
         let size=width as usize*height as usize*4;let mut remaining=&data[16..];let mut frames=vec![];let mut total=0;
         while !remaining.is_empty(){
-            anyhow::ensure!(frames.len()<602&&remaining.len()>=size+4,"Quadro de GIF incompleto");
-            let delay=u32::from_le_bytes(remaining[..4].try_into()?);anyhow::ensure!((20..=10000).contains(&delay),"Intervalo do GIF inválido");
-            total+=size;anyhow::ensure!(total<=48<<20,"GIF maior que o limite de memória");
+            anyhow::ensure!(frames.len()<602&&remaining.len()>=size+4,crate::i18n::fmt("Quadro de GIF incompleto", &[]));
+            let delay=u32::from_le_bytes(remaining[..4].try_into()?);anyhow::ensure!((20..=10000).contains(&delay),crate::i18n::fmt("Intervalo do GIF inválido", &[]));
+            total+=size;anyhow::ensure!(total<=48<<20,crate::i18n::fmt("GIF maior que o limite de memória", &[]));
             frames.push((PreparedImage{width,height,pixels:remaining[4..4+size].to_vec()},Duration::from_millis(u64::from(delay))));remaining=&remaining[size+4..];
         }
-        anyhow::ensure!(!frames.is_empty(),"Nenhum quadro de GIF disponível");Ok(Self{frames})
+        anyhow::ensure!(!frames.is_empty(),crate::i18n::fmt("Nenhum quadro de GIF disponível", &[]));Ok(Self{frames})
     }
     pub fn bytes(&self)->usize{self.frames.iter().map(|(f,_)|f.pixels.len()).sum()}
     pub fn paintable(self)->Animation{

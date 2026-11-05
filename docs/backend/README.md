@@ -1,5 +1,10 @@
 # Backend integration patches
 
+The [UX contract review](ux-contracts.md) records existing message, media-history
+and notification contracts, missing additions for the implementation plan and
+a local source-change checker. It is a specification/review, not an applied
+backend patch or a deployed-server capability probe.
+
 ## Reddit previews
 
 ### Image and original-language follow-up

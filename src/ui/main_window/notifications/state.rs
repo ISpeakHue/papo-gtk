@@ -8,7 +8,7 @@ pub struct Notice {
     pub id:Uuid,pub message_id:Uuid,pub channel_id:Option<Uuid>,pub author_id:Option<Uuid>,
     pub webhook_id:Option<Uuid>,pub external_author:Option<ExternalAuthor>,
     pub content:String,pub read:bool,pub persisted:bool,pub created_at:chrono::DateTime<chrono::Utc>,
-    pub pending_desktop:bool, pub seen_event:bool,
+    pub pending_desktop:bool, pub seen_event:bool, pub event_at:Option<chrono::DateTime<chrono::Utc>>,
 }
 impl Notice {
     pub fn external(&self)->Option<&ExternalAuthor>{if self.author_id.is_none()&&self.webhook_id.is_some(){self.external_author.as_ref()}else{None}}
@@ -24,9 +24,9 @@ impl Inbox {
     pub fn reset_pages(&mut self){self.rows.retain(|_,n|!n.persisted);}
     pub fn event(&mut self,event:NotificationEvent){
         if self.deleted.contains(&event.message_id){return;}
-        if let Some(row)=self.rows.get_mut(&event.id){if !row.seen_event{row.seen_event=true;row.pending_desktop=!row.read;}return;}
+        if let Some(row)=self.rows.get_mut(&event.id){if !row.seen_event{row.seen_event=true;row.event_at=Some(chrono::Utc::now());row.pending_desktop=!row.read;}return;}
         let channel_id=self.messages.get(&event.message_id).map(|m|m.channel_id);
-        self.rows.insert(event.id,Notice{id:event.id,message_id:event.message_id,channel_id,webhook_id:self.messages.get(&event.message_id).and_then(|m|m.webhook_id),external_author:self.messages.get(&event.message_id).and_then(|m|m.external()).cloned(),author_id:event.user_id,content:event.message_content,read:false,persisted:false,created_at:chrono::Utc::now(),pending_desktop:true,seen_event:true});
+        self.rows.insert(event.id,Notice{id:event.id,message_id:event.message_id,channel_id,webhook_id:self.messages.get(&event.message_id).and_then(|m|m.webhook_id),external_author:self.messages.get(&event.message_id).and_then(|m|m.external()).cloned(),author_id:event.user_id,content:event.message_content,read:false,persisted:false,created_at:chrono::Utc::now(),pending_desktop:true,seen_event:true,event_at:Some(chrono::Utc::now())});
         // Ephemeral events cannot be paged later; keep session memory bounded.
         let mut ephemeral:Vec<_>=self.rows.values().filter(|n|!n.persisted).map(|n|(n.created_at,n.id)).collect();ephemeral.sort();
         let excess=ephemeral.len().saturating_sub(500);for (_,id) in ephemeral.into_iter().take(excess){self.rows.remove(&id);}
@@ -41,8 +41,9 @@ impl Inbox {
             if self.deleted.contains(&n.message_id){continue;}
             let pending=self.rows.get(&n.id).is_some_and(|r|r.pending_desktop);
             let seen_event=self.rows.get(&n.id).is_some_and(|r|r.seen_event);
+            let event_at=self.rows.get(&n.id).and_then(|r|r.event_at);
             let read=n.read||self.read.contains(&n.id)||self.rows.get(&n.id).is_some_and(|r|r.read);
-            self.rows.insert(n.id,Notice{id:n.id,message_id:n.message_id,channel_id:Some(n.channel_id),webhook_id:n.webhook_id,external_author:n.external_author,author_id:n.author_id,content:n.message_content,read,persisted:true,created_at:n.created_at,pending_desktop:pending,seen_event});
+            self.rows.insert(n.id,Notice{id:n.id,message_id:n.message_id,channel_id:Some(n.channel_id),webhook_id:n.webhook_id,external_author:n.external_author,author_id:n.author_id,content:n.message_content,read,persisted:true,created_at:n.created_at,pending_desktop:pending,seen_event,event_at});
         }
     }
     pub fn observe(&mut self,m:impl Into<MessageObservation>){
@@ -78,7 +79,7 @@ pub fn delivery(n:&Notice,config:&UserConfig,channels:&[NoticeChannel],user:Uuid
     let reply=messages.get(&n.message_id).and_then(|m|m.reply_to).and_then(|id|messages.get(&id)).is_some_and(|m|m.author_id==Some(user));
     if !prefs.mentions.unwrap_or(true) && (mentioned||n.persisted&&!reply&&!messages.contains_key(&n.message_id)){return None;}
     if channel.notification_settings!=Some(NotificationSettings::All)&&!n.persisted&&!mentioned&&!reply{return None;}
-    let body=if prefs.message_preview.unwrap_or(true){n.content.clone()}else{"Nova mensagem no Papo".into()};
+    let body=if prefs.message_preview.unwrap_or(true){n.content.clone()}else{crate::i18n::tr("Nova mensagem no Papo").into()};
     Some((body,prefs.sound.unwrap_or(true)))
 }
 /// Reapply only observations newer than a channel snapshot's request.

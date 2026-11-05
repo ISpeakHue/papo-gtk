@@ -55,8 +55,7 @@ pub(super) fn exercise(
     settings.set_gtk_enable_animations(false);
     adj.set_value(adj.upper()-adj.page_size()-10.0);
     let _:bool=wheel.emit_by_name("scroll",&[&0.0f64,&1.0f64]);
-    let animation=list.model().wheel.borrow().as_ref().unwrap().clone();
-    until(context,||animation.state()==adw::AnimationState::Finished);
+    assert!(list.model().wheel.borrow().is_none(),"reduced motion must not create a wheel animation");
     assert!((adj.value()-(adj.upper()-adj.page_size())).abs()<1.0,"reduced motion jumps directly to the bounded destination");
     adj.set_value(0.0);
     let _:bool=wheel.emit_by_name("scroll",&[&0.0f64,&-1.0f64]);

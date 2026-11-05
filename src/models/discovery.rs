@@ -22,11 +22,11 @@ impl SearchRequest {
     pub fn validate(&self) -> anyhow::Result<()> {
         anyhow::ensure!(!self.text.trim().is_empty() || !self.author.is_empty() || !self.channel_id.is_empty()
             || !self.mention.is_empty() || !self.has.is_empty() || !self.date_start.is_empty()
-            || !self.date_end.is_empty() || self.contains_attachment.is_some(), "Escolha pelo menos um filtro.");
+            || !self.date_end.is_empty() || self.contains_attachment.is_some(), crate::i18n::fmt("Escolha pelo menos um filtro.", &[]));
         for id in [&self.author, &self.channel_id, &self.mention] {
-            if !id.is_empty() { Uuid::parse_str(id).map_err(|_| anyhow::anyhow!("Autor, canal e menção devem ser IDs válidos."))?; }
+            if !id.is_empty() { Uuid::parse_str(id).map_err(|_| anyhow::anyhow!(crate::i18n::fmt("Autor, canal e menção devem ser IDs válidos.", &[])))?; }
         }
-        anyhow::ensure!(matches!(self.has.as_str(), "" | "link") && matches!(self.order.as_str(), "" | "asc" | "desc"), "Filtro ou ordem inválida.");
+        anyhow::ensure!(matches!(self.has.as_str(), "" | "link") && matches!(self.order.as_str(), "" | "asc" | "desc"), crate::i18n::fmt("Filtro ou ordem inválida.", &[]));
         let parse = |date: &str| -> anyhow::Result<Option<NaiveDate>> {
             if date.is_empty() { return Ok(None); }
             let parsed = NaiveDate::parse_from_str(date, "%Y-%m-%d").map_err(|_| anyhow::anyhow!("Use datas no formato AAAA-MM-DD."))?;
@@ -34,7 +34,7 @@ impl SearchRequest {
             Ok(Some(parsed))
         };
         if let (Some(start), Some(end)) = (parse(&self.date_start)?, parse(&self.date_end)?) {
-            anyhow::ensure!(start <= end, "A data inicial deve preceder a final.");
+            anyhow::ensure!(start <= end, crate::i18n::fmt("A data inicial deve preceder a final.", &[]));
         }
         Ok(())
     }

@@ -3,6 +3,7 @@
 Build tests/voice-sfu into target/voice-sfu[.exe], or pass --sfu PATH.
 """
 import asyncio
+import uuid
 import argparse
 import json
 from pathlib import Path
@@ -55,6 +56,10 @@ async def run(relay, device=None, allow_quiet=False):
     started = False
     captured = {}
     decoded = {}
+    switch_requests = {}
+    switch_acks = set()
+    switch_counts = {}
+    switch_audible = set()
     deadline = asyncio.get_running_loop().time() + 40
     try:
         while asyncio.get_running_loop().time() < deadline:
@@ -106,12 +111,17 @@ async def run(relay, device=None, allow_quiet=False):
                         local_muted = True
                 elif kind == "captured":
                     captured[label] = event['buffers']
+                elif kind == "audio_device":
+                    assert event["request"] == switch_requests.get(label) and event["success"], "live microphone change must be confirmed"
+                    switch_acks.add(label)
                 elif kind == "audio":
                     if event['energy'] > 0.0001 or (allow_quiet and not started):
                         assert any(r["track_id"] == event["track_id"] for r in routes.get(label, [])), "audio must have a current SFU route"
                     decoded[label] = event['buffers']
                     if event["energy"] > 0.0001:
                         audible.add(label)
+                        if label in switch_acks:
+                            switch_audible.add(label)
                 elif kind == "error":
                     raise AssertionError("Native worker: " + event["message"])
                 elif kind == "eof":
@@ -122,6 +132,15 @@ async def run(relay, device=None, allow_quiet=False):
                 assert not relay or candidates == {"a", "b"}, "relay-only peers must use TURN"
                 if not allow_quiet:
                     assert speakers == {"a", "b"}, "real RFC6464 active speaker detection"
+                if "--switch-audio" in sys.argv:
+                    if not switch_requests:
+                        switch_counts = decoded.copy()
+                        for peer in clients:
+                            request = str(uuid.uuid4())
+                            switch_requests[peer] = request
+                            await send(clients[peer], {"type": "audio_device", "kind": "microphone", "device": None, "request": request})
+                    if switch_acks != {"a", "b"} or switch_audible != {"a", "b"} or not all(decoded.get(p, 0) >= switch_counts.get(p, 0) + 25 for p in clients):
+                        continue
                 started = True
                 await send(clients["a"], {"type": "mute", "muted": True})
                 await send(sfu, {"peer": "a", "event": {"type": "voice_mute", "muted": True}})
@@ -187,12 +206,15 @@ async def virtual_capture():
 
 async def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--switch-audio', action='store_true', help='Change synthetic microphones inside an established call and verify decoded audio resumes')
     parser.add_argument('--microphone', help='Explicitly capture this endpoint ID or unique name locally; speak during the test')
     parser.add_argument('--transport', choices=('both', 'direct', 'relay'), default='both')
     parser.add_argument('--allow-quiet-microphone', action='store_true', help='Verify physical buffer transport without claiming speech/active-speaker acceptance')
     args, _ = parser.parse_known_args()
     if "--capture" in sys.argv and not sys.platform.startswith("linux"):
         raise SystemExit("--capture requires Linux; the default probe uses synthetic audio on every OS")
+    if args.switch_audio and (args.microphone or "--capture" in sys.argv):
+        raise SystemExit("--switch-audio is synthetic only")
     if args.microphone and '--capture' in sys.argv:
         raise SystemExit('Choose --microphone or --capture')
     if args.allow_quiet_microphone and not args.microphone:

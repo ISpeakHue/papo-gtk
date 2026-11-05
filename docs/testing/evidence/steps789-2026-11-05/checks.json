@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "date": "2026-11-05",
+  "scope": "Local Linux validation of implementation steps 7–9; native Windows not run",
+  "source_fingerprint": "69fca9edfec6bc10ecc46d209b05a7c4c12f9d1f8e1012995167e6259f391630",
+  "test_binary_sha256": "32cc45c21aa6a08a40ac0a0a62f05c74c2e94b8c46d98c3b4dcac4ae18210958",
+  "rust": {
+    "passed": 333,
+    "failed": 0,
+    "ignored": 6
+  },
+  "python_tool_checks_passed": 9,
+  "matching_translation_entries": 882,
+  "all_targets_check": "passed_without_warnings",
+  "actionlint": "passed",
+  "focused_gtk": {
+    "conversation-switcher": "passed",
+    "media-policies": "passed",
+    "media-preferences": "passed",
+    "attachment-media": "passed",
+    "status-viewer": "passed",
+    "backend-gifs": "passed",
+    "media-loading": "passed",
+    "media-cache": "passed",
+    "channel-cache": "passed",
+    "pins-media": "passed",
+    "account-settings": "passed",
+    "translations": "passed",
+    "outgoing-queue": "passed"
+  },
+  "compatibility_run_note": "Compatibility cases used the same production code, before the final media-policies fixture-only allocation wait correction; media-policies and conversation-switcher passed again on the final binary.",
+  "native_playback_stress": {
+    "case": "recent-media",
+    "passed": false,
+    "exit_code": 139,
+    "native_cycles_completed": 2,
+    "native_thread": "gst_play_main -> g_object_unref -> g_type_check_instance_is_fundamentally_a",
+    "gstreamer": "1.28.8",
+    "root_cause": "not established by this metadata"
+  },
+  "aggregate_gtk_run": false,
+  "native_windows_run": false,
+  "remote_ci_run": false,
+  "backend_modified": false,
+  "backend_source_comparison": "matches_reviewed_source"
+}

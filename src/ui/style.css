@@ -130,3 +130,12 @@
 .papo-draft-thumbnail button { min-width: 24px; min-height: 24px; padding: 0; }
 
 .papo-search-result { padding: 14px 16px; min-height: 64px; }
+/* EN-US: Account rail badges use semantic colors and preserve focus outlines.
+   PT-BR: Indicadores de contas usam cores semânticas e preservam contornos de foco. */
+.papo-account-button { padding: 4px 2px; margin: 0 4px; border-radius: 12px; }
+.papo-account-button.papo-account-unread { box-shadow: inset 3px 0 @accent_color; }
+.papo-account-button.papo-account-offline:not(:checked) { border: 1px solid alpha(@warning_color, .65); }
+.papo-account-button.papo-account-call { box-shadow: inset 3px 0 @success_color; }
+/* The shared rail replaces the embedded 64px rail; keep its side padding out of the chat budget. */
+#account-rail { padding-left: 0; padding-right: 0; }
+#account-rail .papo-account-button { min-width: 36px; margin-left: 0; margin-right: 0; }

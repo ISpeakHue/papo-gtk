@@ -13,7 +13,7 @@ impl std::fmt::Debug for AuditEntry {fn fmt(&self,f:&mut std::fmt::Formatter<'_>
 pub struct AuditPage {pub logs:Vec<AuditEntry>,pub has_more:bool}
 #[derive(Debug,Clone,Default)]
 pub struct AuditFilter {pub action:String,pub actor_id:Option<Uuid>,pub entity_type:String,pub since:Option<DateTime<Utc>>,pub until:Option<DateTime<Utc>>,pub ascending:bool}
-impl AuditFilter {pub fn validate(&self)->anyhow::Result<()>{anyhow::ensure!(!matches!((self.since,self.until),(Some(s),Some(u)) if s>u),"A data inicial deve preceder a data final.");Ok(())}}
+impl AuditFilter {pub fn validate(&self)->anyhow::Result<()>{anyhow::ensure!(!matches!((self.since,self.until),(Some(s),Some(u)) if s>u),crate::i18n::fmt("A data inicial deve preceder a data final.", &[]));Ok(())}}
 
 impl AuditEntry {
     /// The backend records machine operations as system actors plus webhook_id.

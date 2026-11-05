@@ -237,6 +237,6 @@ impl Message {
     pub fn sender_name<'a>(&'a self, users: &'a std::collections::HashMap<Uuid, super::UserSummary>) -> &'a str {
         self.author_id.and_then(|id| users.get(&id)).map(|u| u.display_name())
             .or_else(|| self.external().map(|a| a.name.as_str())).filter(|n| !n.trim().is_empty())
-            .unwrap_or(if self.webhook_id.is_some() { "Webhook" } else if self.author_id.is_some() { "Usuário" } else { "Usuário removido" })
+            .unwrap_or(if self.webhook_id.is_some() { "Webhook" } else if self.author_id.is_some() { crate::i18n::tr("Usuário") } else { crate::i18n::tr("Usuário removido") })
     }
 }

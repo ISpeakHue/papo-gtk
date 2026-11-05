@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "reference": "docs/testing/evidence/performance-2026-11-04/baseline.json",
+  "mounted_rows": 202,
+  "resident_cache_bytes": 100663296,
+  "encoded_cache_bytes": 67108864,
+  "rss_checkpoint_bytes": 1073741824,
+  "cpu_paint_p95_us": 16667,
+  "timing": {
+    "startup_ui_ready": {"ratio": 2.0, "slack_us": 300000},
+    "cold_channel_text": {"ratio": 2.0, "slack_us": 300000},
+    "cold_channel_media": {"ratio": 2.0, "slack_us": 300000},
+    "warm_channel": {"ratio": 2.0, "slack_us": 100000},
+    "scrolling": {"ratio": 1.5, "slack_us": 1000000},
+    "long_history": {"ratio": 1.75, "slack_us": 2000000},
+    "media_residency": {"ratio": 2.0, "slack_us": 300000}
+  }
+}

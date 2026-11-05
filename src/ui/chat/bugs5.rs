@@ -24,7 +24,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let all=descendants(chat.widget().upcast_ref());let list=all.iter().find_map(|w|w.downcast_ref::<gtk::ListBox>().filter(|w|w.has_css_class("papo-chat-history"))).unwrap();let scroll=all.iter().find_map(|w|w.downcast_ref::<gtk::ScrolledWindow>()).unwrap();let adj=scroll.vadjustment();
     let unread=all.iter().find(|w|w.widget_name()==format!("message-{}",messages[20].id)).unwrap().compute_bounds(list).unwrap();assert!((adj.value()-f64::from(unread.y())+24.0).abs()<2.0,"switching opens at the first unread message");assert!(entry.state_flags().contains(gtk::StateFlags::FOCUS_WITHIN));
     let view=all.iter().find_map(|w|w.downcast_ref::<gtk::TextView>()).unwrap();let buffer=view.buffer();let text=buffer.text(&buffer.start_iter(),&buffer.end_iter(),true);let offset=text.find("https:").unwrap();assert!(!buffer.iter_at_offset(text[..offset].chars().count() as i32).tags().is_empty(),"URLs have native blue/underlined tags");
-    let pending={let mut state=chat.state().get_mut();state.model.draft.text=messages[49].content.clone().unwrap();state.model.draft.begin().unwrap()};
+    let pending={let mut state=chat.state().get_mut();state.model.draft.text=messages[49].content.clone().unwrap();state.model.begin_test_send()};
     chat.emit(ChatMsg::AddMessage(messages[49].clone()));settle(context);assert!(chat.model().viewport.following(),"a matching live confirmation should reveal the pending send immediately");
     adj.set_value(200.0);settle(context);
     // The WebSocket already inserted the exact message before the POST returned.

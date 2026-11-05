@@ -16,15 +16,15 @@ pub struct UploadFile {
 impl UploadFile {
     pub async fn inspect(path: PathBuf) -> Result<Self> {
         let meta = tokio::fs::metadata(&path).await?;
-        anyhow::ensure!(meta.is_file() && meta.len() <= MAX_FILE, "Escolha arquivos de até 100 MiB.");
-        let name = path.file_name().context("Nome de arquivo inválido")?.to_string_lossy().into_owned();
+        anyhow::ensure!(meta.is_file() && meta.len() <= MAX_FILE, crate::i18n::fmt("Escolha arquivos de até 100 MiB.", &[]));
+        let name = path.file_name().context(crate::i18n::tr("Nome de arquivo inválido"))?.to_string_lossy().into_owned();
         Ok(Self {
             path, name, size: meta.len(), _temporary: None
         })
     }
     /// Keep clipboard data alive through draft switches, retries and active uploads.
     pub async fn clipboard_png(bytes: &[u8]) -> Result<Self> {
-        anyhow::ensure!(!bytes.is_empty() && bytes.len() as u64 <= MAX_FILE, "Imagem muito grande (máximo 100 MiB).");
+        anyhow::ensure!(!bytes.is_empty() && bytes.len() as u64 <= MAX_FILE, crate::i18n::fmt("Imagem muito grande (máximo 100 MiB).", &[]));
         let path=std::env::temp_dir().join(format!("papo-clipboard-{}.png",Uuid::new_v4()));
         let (temporary,mut file)=create_temporary(path.clone()).await?;
         let temporary=Arc::new(temporary);
@@ -38,12 +38,12 @@ pub fn validate_upload(content: Option<&str>, files: &[UploadFile]) -> Result<()
 }
 pub fn validate_message(content:Option<&str>,files:&[UploadFile],embeds:&[EmbedInput])->Result<()>{
     crate::models::validate_embeds(embeds)?;
-    anyhow::ensure!(content.unwrap_or("").chars().count() <= 8192, "Use até 8192 caracteres.");
-    anyhow::ensure!(files.len() <= 10, "Escolha até 10 arquivos.");
-    anyhow::ensure!(files.iter().all(|f| f.size <= MAX_FILE), "Cada arquivo deve ter até 100 MiB.");
+    anyhow::ensure!(content.unwrap_or("").chars().count() <= 8192, crate::i18n::fmt("Use até 8192 caracteres.", &[]));
+    anyhow::ensure!(files.len() <= 10, crate::i18n::fmt("Escolha até 10 arquivos.", &[]));
+    anyhow::ensure!(files.iter().all(|f| f.size <= MAX_FILE), crate::i18n::fmt("Cada arquivo deve ter até 100 MiB.", &[]));
     // Reserve room for Unicode text, multipart boundaries and filenames.
-    let bytes = files.iter().try_fold(0u64, |sum, f| sum.checked_add(f.size)).context("Arquivos muito grandes")?;
-    anyhow::ensure!(bytes + content.unwrap_or("").len() as u64 + serde_json::to_vec(embeds)?.len() as u64 + 65536 <= MAX_BODY, "O envio deve ter até 110 MiB, incluindo o formulário.");
+    let bytes = files.iter().try_fold(0u64, |sum, f| sum.checked_add(f.size)).context(crate::i18n::tr("Arquivos muito grandes"))?;
+    anyhow::ensure!(bytes + content.unwrap_or("").len() as u64 + serde_json::to_vec(embeds)?.len() as u64 + 65536 <= MAX_BODY, crate::i18n::fmt("O envio deve ter até 110 MiB, incluindo o formulário.", &[]));
     anyhow::ensure!(!content.unwrap_or("").trim().is_empty() || !files.is_empty()||!embeds.is_empty(), "Escreva uma mensagem, escolha um arquivo ou adicione um embed.");
     Ok(())
 }
@@ -68,7 +68,7 @@ pub(crate) async fn create_temporary(path:PathBuf)->Result<(TemporaryFile,tokio:
 /// Stage in the destination directory so a cancelled save never truncates an existing file.
 pub async fn save_download(source: TemporaryFile, destination: PathBuf) -> Result<()> {
     crate::platform::files::validate_destination(&destination)?;
-    let stage = destination.parent().context("Pasta de destino inválida")?.join(format!(".papo-download-{}", Uuid::new_v4()));
+    let stage = destination.parent().context(crate::i18n::tr("Pasta de destino inválida"))?.join(format!(".papo-download-{}", Uuid::new_v4()));
     let (stage,mut output)=create_temporary(stage).await?;
     let mut input = tokio::fs::File::open(&source.0).await?;
     let mut buffer = vec![0;
@@ -115,7 +115,7 @@ impl ApiClient {
                     remaining.min(65536) as usize];
                     let read = file.read(&mut bytes).await?;
                     if read == 0 {
-                        return Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "O arquivo mudou durante o envio"));
+                        return Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, crate::i18n::tr("O arquivo mudou durante o envio")));
                     }
                     bytes.truncate(read);
                     progress(count.fetch_add(read as u64, std::sync::atomic::Ordering::Relaxed) + read as u64);
@@ -128,20 +128,20 @@ impl ApiClient {
         .multipart(form).send_paced(&self.requests).await?, "enviar arquivos").await
     }
     pub async fn media_bytes(&self, path: &str, maximum: usize) -> Result<Vec<u8>> {
-        let response = Self::check_response(self.inner.get(self.url(path)).send_paced(&self.requests).await?, "carregar mídia").await?;
-        anyhow::ensure!(response.content_length().unwrap_or(0) <= maximum as u64, "Imagem muito grande.");
+        let response = Self::check_response(self.inner.get(self.url(path)).send_paced(&self.requests).await?, crate::i18n::tr("carregar mídia")).await?;
+        anyhow::ensure!(response.content_length().unwrap_or(0) <= maximum as u64, crate::i18n::fmt("Imagem muito grande.", &[]));
         let mut stream = response.bytes_stream();
         let mut bytes = Vec::new();
         while let Some(chunk) = stream.next().await {
             let chunk = chunk?;
-            anyhow::ensure!(bytes.len() + chunk.len() <= maximum, "Imagem muito grande.");
+            anyhow::ensure!(bytes.len() + chunk.len() <= maximum, crate::i18n::fmt("Imagem muito grande.", &[]));
             bytes.extend_from_slice(&chunk);
         }
         Ok(bytes)
     }
     pub async fn download_temporary(&self, endpoint: &str, maximum: u64) -> Result<TemporaryFile> {
-        let response = Self::check_response(self.inner.get(self.url(endpoint)).timeout(Duration::from_secs(600)).send_paced(&self.requests).await?, "baixar mídia").await?;
-        anyhow::ensure!(response.content_length().unwrap_or(0) <= maximum, "Arquivo muito grande.");
+        let response = Self::check_response(self.inner.get(self.url(endpoint)).timeout(Duration::from_secs(600)).send_paced(&self.requests).await?, crate::i18n::tr("baixar mídia")).await?;
+        anyhow::ensure!(response.content_length().unwrap_or(0) <= maximum, crate::i18n::fmt("Arquivo muito grande.", &[]));
         let path = std::env::temp_dir().join(format!("papo-media-{}", Uuid::new_v4()));
         let (temporary,mut file)=create_temporary(path).await?;
         let mut stream = response.bytes_stream();
@@ -149,7 +149,7 @@ impl ApiClient {
         while let Some(chunk) = stream.next().await {
             let chunk = chunk?;
             total += chunk.len() as u64;
-            anyhow::ensure!(total <= maximum, "Arquivo muito grande.");
+            anyhow::ensure!(total <= maximum, crate::i18n::fmt("Arquivo muito grande.", &[]));
             file.write_all(&chunk).await?;
         }
         file.flush().await?;
@@ -157,14 +157,14 @@ impl ApiClient {
     }
     pub async fn update_profile(&self, id: Uuid, request: &UpdateUserRequest) -> Result<()> {
         anyhow::ensure!(request.nickname.chars().count() <= 32 && request.status.chars().count() <= 64
-        && request.description.chars().count() <= 512 && request.typing.as_deref().unwrap_or("").chars().count() <= 64, "Perfil excede os limites de caracteres.");
+        && request.description.chars().count() <= 512 && request.typing.as_deref().unwrap_or("").chars().count() <= 64, crate::i18n::fmt("Perfil excede os limites de caracteres.", &[]));
         Self::check_response(self.inner.put(self.url(&format!("/users/{id}"))).json(request).send_paced(&self.requests).await?, "salvar perfil").await?;
         Ok(())
     }
     pub async fn update_status(&self, id: Uuid, status: Option<UserStatus>) -> Result<()> {
         Self::check_response(self.inner.put(self.url(&format!("/users/{id}/status"))).json(&UpdateStatusRequest {
             status
-        }).send_paced(&self.requests).await?, "salvar presença").await?;
+        }).send_paced(&self.requests).await?, crate::i18n::tr("salvar presença")).await?;
         Ok(())
     }
     pub async fn update_image(&self, id: Uuid, banner: bool, bytes: &[u8]) -> Result<()> {
@@ -191,18 +191,18 @@ impl ApiClient {
     pub async fn save_settings(&self, config: &UserConfig) -> Result<UserSettings> {
         Self::decode(self.inner.put(self.url("/users/settings")).json(&serde_json::json!( {
             "config": config.complete()
-        })).send_paced(&self.requests).await?, "salvar preferências").await
+        })).send_paced(&self.requests).await?, crate::i18n::tr("salvar preferências")).await
     }
     pub async fn channel_notifications(&self, channel: Uuid, user: Uuid, notification_settings: NotificationSettings) -> Result<()> {
         Self::check_response(self.inner.post(self.url(&format!("/channels/{channel}/user/{user}/settings")))
         .json(&UpdateChannelUserSettingRequest {
             notification_settings
-        }).send_paced(&self.requests).await?, "preferências do canal").await?;
+        }).send_paced(&self.requests).await?, crate::i18n::tr("preferências do canal")).await?;
         Ok(())
     }
 }
 pub fn validate_profile_image(bytes: &[u8], banner: bool) -> Result<&'static str> {
-    anyhow::ensure!(bytes.len() <= 2 << 20, "A imagem deve ter até 2 MiB.");
+    anyhow::ensure!(bytes.len() <= 2 << 20, crate::i18n::fmt("A imagem deve ter até 2 MiB.", &[]));
     let format = image::guess_format(bytes)?;
     let name = match format {
         image::ImageFormat::Png => "PNG", image::ImageFormat::Jpeg => "JPEG", image::ImageFormat::Gif => "GIF", image::ImageFormat::WebP => "WEBP", _ => anyhow::bail!("Use PNG, JPEG, GIF ou WebP.")
@@ -213,7 +213,7 @@ pub fn validate_profile_image(bytes: &[u8], banner: bool) -> Result<&'static str
     } else {
         512
     };
-    anyhow::ensure!(w > 0 && h > 0 && w <= max && h <= max, "A imagem deve ter dimensões de até {max} pixels.");
+    anyhow::ensure!(w > 0 && h > 0 && w <= max && h <= max, crate::i18n::fmt("A imagem deve ter dimensões de até {max} pixels.", &[("max", format!("{}", max))]));
     image::load_from_memory_with_format(bytes, format)?;
     Ok(name)
 }

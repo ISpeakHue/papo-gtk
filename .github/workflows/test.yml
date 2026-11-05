@@ -59,7 +59,10 @@ jobs:
           python3 -m unittest discover -s tests -p 'windows_release_gate_test.py' -v
           python3 -m unittest discover -s tests -p 'windows_release_test.py' -v
       - name: Check AppImage media plugin and host driver boundaries
-        run: python3 -m unittest discover -s tests -p 'appimage_packaging_test.py'
+        run: |
+          python3 -m unittest discover -s tests -p 'appimage_packaging_test.py'
+          python3 -m unittest discover -s tests -p implementation_tools_test.py -v
+          python3 scripts/check-translations.py
       - name: Check call sound decoding and application audio identity
         run: python3 -m unittest discover -s tests -p 'call_sound_test.py'
       - name: Check call devices and portable probe launchers without hardware
@@ -73,6 +76,14 @@ jobs:
         run: python3 -m unittest discover -s tests -p 'icon_assets_test.py'
       - name: Compile application and run unit and integration tests
         run: cargo test --locked -- --test-threads=1 2>&1 | tee target/ci/unit.log
+      - name: Record synthetic performance baseline and enforce structural budgets
+        run: |
+          python3 scripts/performance-baseline.py --profile debug --runs 1 --output target/ci/performance/baseline.json
+          python3 scripts/check-performance-budgets.py target/ci/performance/baseline.json --structural-only --output target/ci/performance/budgets.json
+      - name: Compare three optimized runs with the original Linux regression budgets
+        run: |
+          python3 scripts/performance-baseline.py --profile release --runs 3 --output target/ci/performance/release.json
+          python3 scripts/check-performance-budgets.py target/ci/performance/release.json --output target/ci/performance/release-budgets.json
       - name: Reject local media playlists before decoder discovery
         run: python3 tests/security/media_network_probe.py
       - name: Run all focused GTK cases and retain individual failures
@@ -96,6 +107,7 @@ jobs:
             target/ci/runtime.log
             target/ci/unit.log
             target/ci/gui/
+            target/ci/performance/
           if-no-files-found: warn
 
   voice-sfu:
@@ -123,7 +135,7 @@ jobs:
         run: go build -mod=readonly -o ../../target/voice-sfu .
       - name: Exchange real decoded audio using direct ICE and forced TURN relay
         working-directory: papo-gtk
-        run: python3 tests/voice_probe.py
+        run: python3 tests/voice_probe.py --switch-audio
       - name: Exchange decoded camera and screen video, switch publishers and repeat capture
         working-directory: papo-gtk
         run: |

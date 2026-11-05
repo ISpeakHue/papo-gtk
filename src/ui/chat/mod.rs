@@ -1722,7 +1722,7 @@ fn rebuild_messages_view(
         reactions_box.set_widget_name("message-reactions");render_reactions(&reactions_box,msg,actions,access,sender);
 
         let toolbar=gtk::Box::new(gtk::Orientation::Horizontal,2);toolbar.add_css_class("papo-message-actions");
-        let menu=gtk::MenuButton::new();menu.set_icon_name("papo-view-more-symbolic");menu.add_css_class("flat");menu.set_tooltip_text(Some(crate::i18n::tr("Mais ações da mensagem")));
+        let menu=gtk::MenuButton::new();menu.set_widget_name("papo-message-menu");menu.set_icon_name("papo-view-more-symbolic");menu.add_css_class("flat");menu.set_tooltip_text(Some(crate::i18n::tr("Mais ações da mensagem")));
         let popover=gtk::Popover::new();popover.add_css_class("papo-menu");
         let message_actions=gtk::Box::new(gtk::Orientation::Vertical,2);popover.set_child(Some(&message_actions));menu.set_popover(Some(&popover));
         let msg_id = msg.id;
@@ -1801,19 +1801,38 @@ fn rebuild_messages_view(
 }
 
 fn show_context_menu(row:&gtk::Widget,point:Option<(f64,f64)>){
-    fn visit(widget:&gtk::Widget,row:&gtk::Widget,point:Option<(f64,f64)>){
-        if let Some(reveal)=widget.downcast_ref::<gtk::Revealer>(){reveal.set_opacity(1.0);reveal.set_reveal_child(true);}
-        if let Some(menu)=widget.downcast_ref::<gtk::MenuButton>(){
-            let weak=menu.downgrade();let row=row.downgrade();let frames=std::cell::Cell::new(0);
-            widget.add_tick_callback(move |_,_|{frames.set(frames.get()+1);if frames.get()<2{return gtk::glib::ControlFlow::Continue;}
-                if let Some(menu)=weak.upgrade(){if let Some(popover)=menu.popover(){
-                    let anchor=point.and_then(|(x,y)|row.upgrade().and_then(|row|row.compute_point(&menu,&gtk::graphene::Point::new(x as f32,y as f32))));
-                    popover.set_pointing_to(anchor.as_ref().map(|p|gtk::gdk::Rectangle::new(p.x().round() as i32,p.y().round() as i32,1,1)).as_ref());popover.set_position(gtk::PositionType::Bottom);
-                }menu.popup();}gtk::glib::ControlFlow::Break});return;
-        }
-        let mut child=widget.first_child();while let Some(w)=child{visit(&w,row,point);child=w.next_sibling();}
+    fn menu_in(widget:&gtk::Widget)->Option<gtk::MenuButton>{
+        if let Some(menu)=widget.downcast_ref::<gtk::MenuButton>().filter(|m|m.widget_name()=="papo-message-menu"){return Some(menu.clone());}
+        if widget.is::<gtk::Popover>(){return None;}
+        let mut child=widget.first_child();while let Some(w)=child{if let Some(menu)=menu_in(&w){return Some(menu);}child=w.next_sibling();}None
     }
-    row.grab_focus();visit(row,row,point);
+    fn reveal(menu:&gtk::MenuButton,row:&gtk::Widget){
+        let mut parent=menu.parent();while let Some(widget)=parent{
+            if widget==*row{break;}
+            if let Some(reveal)=widget.downcast_ref::<gtk::Revealer>(){reveal.set_opacity(1.0);reveal.set_reveal_child(true);break;}
+            parent=widget.parent();
+        }
+    }
+    let Some(list)=row.parent().and_downcast::<gtk::ListBox>()else{return;};let name=row.widget_name();
+    row.grab_focus();if let Some(menu)=menu_in(row){reveal(&menu,row);}
+    // EN-US: Resolve the current row after layout; message/avatar updates can replace it before the popup opens.
+    // PT-BR: Localiza a linha atual após o layout; mudanças na mensagem/avatar podem substituí-la antes de abrir o menu.
+    let frames=std::cell::Cell::new(0);
+    list.add_tick_callback(move |list,_|{
+        frames.set(frames.get()+1);if frames.get()<2{return gtk::glib::ControlFlow::Continue;}
+        let mut child=list.first_child();let mut current=None;while let Some(row)=child{child=row.next_sibling();if row.widget_name()==name{current=Some(row);break;}}
+        let Some(row)=current else{return gtk::glib::ControlFlow::Break;};
+        if let Some(menu)=menu_in(&row){
+            reveal(&menu,&row);
+            if !menu.is_mapped()||menu.width()==0{return if frames.get()<12{gtk::glib::ControlFlow::Continue}else{gtk::glib::ControlFlow::Break};}
+            if let Some(popover)=menu.popover(){
+                let anchor=point.and_then(|(x,y)|row.compute_point(&menu,&gtk::graphene::Point::new(x as f32,y as f32)));
+                popover.set_pointing_to(anchor.as_ref().map(|p|gtk::gdk::Rectangle::new(p.x().round() as i32,p.y().round() as i32,1,1)).as_ref());popover.set_position(gtk::PositionType::Bottom);
+            }
+            menu.popup();
+        }
+        gtk::glib::ControlFlow::Break
+    });
 }
 
 impl ChatModel {

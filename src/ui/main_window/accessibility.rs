@@ -4,6 +4,7 @@ use super::*;
 use adw::prelude::*;
 pub(crate) fn exercise(context:&gtk::glib::MainContext){
     use crate::ui::chat::actions::tests::{mock,pump,until,descendants,find_button};
+    crate::ui::chat::actions::tests::exercise_context_replacement(context);
     let (api,_backend,server)=tokio::runtime::Handle::current().block_on(mock());let own=tokio::runtime::Handle::current().block_on(api.whoami()).unwrap();
     let main=MainWindowModel::builder().launch(MainWindowInit{current_user:own,api_client:api}).detach();
     let window=adw::Window::builder().title("Papo accessibility fixture").default_width(1000).default_height(760).content(main.widget()).build();window.present();main.emit(MainWindowMsg::StartLoading);
@@ -20,7 +21,8 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let row=descendants(main.model().chat.widget().upcast_ref()).into_iter().find(|w|w.widget_name().starts_with("message-")&&w.has_focus()).unwrap();
     assert!(gtk::test_accessible_has_property(&row,gtk::AccessibleProperty::Label));assert!(gtk::test_accessible_has_property(&row,gtk::AccessibleProperty::Description));
     let keys=row.observe_controllers();let mut triggered=false;for i in 0..keys.n_items(){if let Some(controller)=keys.item(i).and_downcast::<gtk::ShortcutController>(){for j in 0..controller.n_items(){let shortcut=controller.item(j).and_downcast::<gtk::Shortcut>().unwrap();if shortcut.trigger().is_some_and(|t|t.to_string()=="<Shift>F10"){assert!(shortcut.action().unwrap().activate(gtk::ShortcutActionFlags::empty(),&row,None));triggered=true;}}}}
-    assert!(triggered);until(context,||descendants(&row).iter().filter_map(|w|w.downcast_ref::<gtk::Popover>()).any(|p|p.is_mapped()));
+    let name=row.widget_name();assert!(triggered);until(context,||descendants(main.model().chat.widget().upcast_ref()).iter().filter(|w|w.widget_name()==name).any(|row|descendants(row).iter().filter_map(|w|w.downcast_ref::<gtk::Popover>()).any(|p|p.is_mapped())));
+    let row=descendants(main.model().chat.widget().upcast_ref()).into_iter().find(|w|w.widget_name()==name).unwrap();
     let reply=find_button(&row,"Responder");assert!(reply.is_sensitive());assert!(gtk::test_accessible_has_property(&reply,gtk::AccessibleProperty::Label));
     if std::env::var_os("PAPO_ACCESSIBILITY_TEST").is_some(){
         let result=std::sync::Arc::new(std::sync::Mutex::new(None));let output=result.clone();let pid=std::process::id();

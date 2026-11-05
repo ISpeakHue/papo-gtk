@@ -493,3 +493,24 @@ pub(crate) fn exercise(context: &gtk::glib::MainContext) {
 }
 
 pub(crate) fn tiny_png_base64()->String{use base64::Engine;let mut bytes=std::io::Cursor::new(Vec::new());image::DynamicImage::new_rgba8(1,1).write_to(&mut bytes,image::ImageFormat::Png).unwrap();base64::engine::general_purpose::STANDARD.encode(bytes.into_inner())}
+
+// EN-US: A pending keyboard popup must survive an avatar/message toolbar refresh.
+// PT-BR: Um menu solicitado pelo teclado deve sobreviver à atualização da barra da mensagem.
+pub(crate) fn exercise_context_replacement(context:&gtk::glib::MainContext){
+    use adw::prelude::AdwWindowExt;
+    let make_menu=||{
+        let menu=gtk::MenuButton::new();menu.set_widget_name("papo-message-menu");
+        let popup=gtk::Popover::new();popup.set_child(Some(&gtk::Button::with_label("Context action")));menu.set_popover(Some(&popup));menu
+    };
+    for replace_row in [false,true]{
+        let row=gtk::ListBoxRow::new();row.set_widget_name("message-context-replacement");row.set_focusable(true);let menu=make_menu();row.set_child(Some(&menu));
+        let list=gtk::ListBox::new();list.append(&row);
+        let window=adw::Window::builder().title("Pending message context fixture").default_width(400).default_height(240).content(&list).build();window.present();
+        until(context,||row.is_mapped()&&menu.width()>0);
+        super::super::show_context_menu(row.upcast_ref(),None);
+        let replacement=make_menu();let popup=replacement.popover().unwrap();
+        if replace_row{list.remove(&row);let current=gtk::ListBoxRow::new();current.set_widget_name("message-context-replacement");current.set_child(Some(&replacement));list.append(&current);}else{row.set_child(Some(&replacement));}
+        until(context,||popup.is_mapped());assert!(!menu.is_mapped());
+        popup.popdown();window.set_content(None::<&gtk::Widget>);window.close();pump(context);
+    }
+}

@@ -18,6 +18,7 @@ Implementation status (2026-11-05):
 - [x] Step 15: installed version, explicit anonymous bounded GitHub checks, stable/experimental selection, release notes, exact package/CPU matching and Flatpak guidance; [feature guide](docs/notifications-accessibility-and-updates.md).
 - [x] Step 16: shared saved-account rail, independent live sessions and unread/call indicators, automatic remembered-session resume, restored conversation/drafts/viewport, and scoped disconnect/removal; [account guide](docs/multi-server.md).
 - [x] Step 17 automation: source-bound baseline comparisons, structural/cache/request budgets, integrated account/reconnect/outbox/permission workflows, and artifact-bound acceptance tooling; [regression guide](docs/testing/release-acceptance.md).
+- [ ] Step 17 full automated acceptance: the continuation passes 347 Rust tests, 181 Python tests (seven skips), 56/58 GTK cases and all three-run performance budgets. The aggregate/recent-media native playback SIGSEGV remains unresolved; the final evidence records the actual cross-platform CI result.
 - [ ] Step 17 physical Linux device, native screen-reader and installed AppImage/Flatpak upgrade acceptance: receipts/checklists are ready; synthetic tests do not establish these results. The user waived manual Windows acceptance in favor of native Windows CI for this implementation. Windows remains experimental.
 
 Initial steps 1–3 validation: 322 regular Rust tests and six Python tool checks passed; focused GTK
@@ -57,8 +58,11 @@ acceptance remain pending. These changes are local.
 Steps 16–17 validation is recorded in the [final evidence](docs/testing/evidence/steps1617-2026-11-05/README.md):
 347 regular Rust tests, 181 Python tests (seven platform-dependent skips), 27
 synthetic audio tests, three native worker cleanup checks, direct ICE/TURN calls
-and three optimized performance runs. The source-matched Windows/macOS CI run is
-linked there; physical Linux acceptance remains explicitly separate.
+and three optimized performance runs. The interrupted remote run failed; the continuation recovered the empty evidence
+bundle, repaired the identified GTK/test regressions, and triggered a fresh
+source-matched Windows/Linux/macOS run. Its actual result and remaining native
+playback/physical acceptance limitations are recorded there. These results do not
+certify a stable release.
 
 ---
 

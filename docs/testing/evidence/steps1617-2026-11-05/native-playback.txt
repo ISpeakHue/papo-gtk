@@ -1,0 +1,24 @@
+Native playback remains unresolved.
+
+Source fingerprint: a011e214574114944cc4221dbead3e0b81e6350a54dbb64c9016fa59e03af908
+Test binary SHA-256: 870219e47089bef2bd94948c729b774e0530e51dd450d7cdf3af48a2c8ae2a08
+
+default: SIGSEGV (exit 139)
+Papo GUI stage: crate::ui::style::exercise_accents
+Papo GUI stage: crate::ui::chat::actions::tests::exercise
+/usr/bin/xvfb-run: line 181:    17 Segmentation fault         (core dumped) DISPLAY=:$SERVERNUM XAUTHORITY=$AUTHFILE "$@" 2>&1
+
+recent-media: SIGSEGV (exit 139)
+/usr/bin/xvfb-run: line 181:    17 Segmentation fault         (core dumped) DISPLAY=:$SERVERNUM XAUTHORITY=$AUTHFILE "$@" 2>&1
+
+Native stack from synthetic aggregate crash:
+#0  0x00007feefe41d5f1 in g_type_check_instance_is_fundamentally_a () from /lib64/libgobject-2.0.so.0
+#0  0x00007feefe41d5f1 in g_type_check_instance_is_fundamentally_a () at /lib64/libgobject-2.0.so.0
+#1  0x00007feefe40537a in g_object_unref () at /lib64/libgobject-2.0.so.0
+#2  0x00007feefd267dc9 in gst_play_main () at /lib64/libgstplay-1.0.so.0
+#3  0x00007feefe309d52 in g_thread_proxy () at /lib64/libglib-2.0.so.0
+#4  0x00007feefd95bc42 in start_thread () at /lib64/libc.so.6
+#5  0x00007feefd9df5ac in __clone3 () at /lib64/libc.so.6
+#2  0x00007feefd267dc9 in gst_play_main () from /lib64/libgstplay-1.0.so.0
+
+The stack matches earlier recorded failures; it does not establish a full root cause.

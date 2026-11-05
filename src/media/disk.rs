@@ -104,7 +104,10 @@ impl Ticket{
     }
     #[tokio::test]async fn byte_budget_evicts_old_files_and_keeps_recent_hits(){
         let root=std::env::temp_dir().join(format!("papo-thumbnails-{}",Uuid::new_v4()));let cache=Cache::at(root.join("account"));let channel=Uuid::new_v4();cache.permit(channel,true);let mut keys=Vec::new();
-        for _ in 0..33{let key=Key{channel,message:Uuid::new_v4(),resource:Uuid::new_v4(),revision:"v1".into()};cache.ticket(key.clone()).unwrap().put(&vec![1;1<<20]);keys.push(key);if keys.len()==16{assert!(cache.ticket(keys[0].clone()).unwrap().get().await.is_some());}}
+        // EN-US: Seed distinct recency values; Windows clock ticks can tie rapid writes.
+        // PT-BR: Define acessos distintos; o relógio do Windows pode empatar gravações rápidas.
+        let written=SystemTime::now()-std::time::Duration::from_secs(3600);
+        for _ in 0..33{let key=Key{channel,message:Uuid::new_v4(),resource:Uuid::new_v4(),revision:"v1".into()};cache.ticket(key.clone()).unwrap().put(&vec![1;1<<20]);{let file=std::fs::File::options().write(true).open(cache.root.join(key.name())).unwrap();file.set_times(std::fs::FileTimes::new().set_modified(written+std::time::Duration::from_secs(keys.len() as u64))).unwrap();}keys.push(key);if keys.len()==16{assert!(cache.ticket(keys[0].clone()).unwrap().get().await.is_some());}}
         assert!(cache.usage().await<=BUDGET);assert!(cache.ticket(keys[0].clone()).unwrap().get().await.is_some());assert!(cache.ticket(keys[1].clone()).unwrap().get().await.is_none());
         #[cfg(unix)]{use std::os::unix::fs::PermissionsExt;assert_eq!(std::fs::metadata(&cache.root).unwrap().permissions().mode()&0o777,0o700);assert_eq!(std::fs::metadata(cache.root.join(keys.last().unwrap().name())).unwrap().permissions().mode()&0o777,0o600);}
         cache.clear().await.unwrap();let _=std::fs::remove_dir_all(root);

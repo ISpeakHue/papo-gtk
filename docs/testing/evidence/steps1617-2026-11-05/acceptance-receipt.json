@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "source_fingerprint": "a011e214574114944cc4221dbead3e0b81e6350a54dbb64c9016fa59e03af908",
+  "platforms": {
+    "linux-appimage": {
+      "tested_by": "",
+      "tested_at": "",
+      "environment": "",
+      "artifact_sha256": "",
+      "checks": {
+        "multi_server": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "reconnect_pending_permissions": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "keyboard_reader_scaling": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "microphone_output": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "direct_turn_call": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "capture_permission_cleanup": {
+          "status": "pending",
+          "evidence": ""
+        },
+        "upgrade_and_rollback": {
+          "status": "pending",
+          "evidence": ""
+        }
+      }
+    },
+    "linux-flatpak": {},
+    "windows-installer": {},
+    "windows-portable": {}
+  },
+  "source_commit": "2ccba799cccede012ce00454f057c8f85e9f3da4"
+}

@@ -6,6 +6,12 @@
 mod api;
 mod app;
 mod config;
+mod releases;
+mod i18n;
+mod drafts;
+mod account;
+mod workspace;
+mod connection;
 mod session;
 mod media;
 mod models;
@@ -92,6 +98,7 @@ fn main() {
     // EN-US: Start the Relm4 UI loop and present the application window.
     // PT-BR: Inicia o loop de interface gráfica Relm4 e exibe a janela da aplicação.
     app::run();
+    rt.block_on(drafts::flush_pending());
 
     // EN-US: Gracefully shut down async background tasks upon application exit with a 2-second timeout.
     // PT-BR: Encerramento gracioso das tarefas assíncronas em segundo plano ao sair da aplicação com timeout de 2 segundos.

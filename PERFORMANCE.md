@@ -1,5 +1,57 @@
 # Performance measurements and diagnostics
 
+## Repeatable implementation-plan baseline
+
+The [initial three-run record](docs/testing/evidence/performance-2026-11-04/README.md)
+retains the measured release samples and validation limits for plan steps 1–3.
+
+Run the isolated synthetic scenarios with:
+
+```sh
+python3 scripts/performance-baseline.py --runs 3 --output target/performance/baseline.json
+```
+
+The runner builds the locked release test executable once, then starts a fresh
+process for each run. Linux uses a private D-Bus session and Xvfb (or Xvnc with
+network listeners disabled); Windows uses the native desktop. Cairo is selected
+explicitly for comparison. No real login, saved account or private message is
+used. Temporary test configuration is isolated on both platforms. Pass
+`--profile debug` for a faster development build, or `--binary PATH` for an
+existing instrumented test executable; externally supplied binary profiles are
+reported as unverified. `--native-display` opts into the current Linux desktop.
+
+JSON and separate logs retain:
+
+- Test entry to a painted login window, explicitly excluding process-loader and
+  authentication time. Full process wall time is recorded separately.
+- Cold loading of 30 messages and eight 320×180 images through a private HTTP
+  backend, plus three warm returns. Warm returns must make zero additional media
+  requests; elapsed times include the application's request pacing.
+- Sustained synthetic wheel input through 1,000 messages, with intermediate
+  frames and GTK CPU paint p50/p95/max. These are not native input latency,
+  compositor presentation or GPU missed-frame measurements.
+- History/reconciliation scenarios at 100/1,000/5,000 messages, mounted row
+  counts and process-resident memory checkpoints.
+- Eight channel heads with 30 synthetic previews each; per-channel compressed
+  and resident cache bytes and process-resident memory are recorded separately.
+- Aggregate HTTP timing, queueing, cache and rendering counters, source commit,
+  dirty status, binary SHA-256, OS, actual renderer and GTK version.
+
+Linux current RSS and Windows working-set bytes come from their native process
+interfaces. Unsupported platforms report unavailable memory rather than a
+misleading zero. These scenarios establish a repeatable synthetic baseline,
+not real-server latency or a claim that allocated memory immediately returns to
+the operating system. Compare the same OS, build profile, renderer, fonts,
+display geometry and machine. Three runs provide median/range diagnostics;
+there are no performance thresholds until plan step 17 establishes tolerances.
+
+Linux and Windows CI record one debug sample and retain the JSON/logs in their
+diagnostic artifacts. Functional assertions (cache reuse, bounded ownership and
+completed scenarios) still fail normally. Later dated measurements below are
+historical evidence; their hardware/profile may differ from the new baseline.
+
+## Earlier measurement record
+
 Date: 2026-10-15. Source baseline: commit `79e2502` plus the existing account and
 webhook changes, copied before the suggestions implementation. Measurements use
 synthetic accounts and private loopback servers; no real session was read.
@@ -76,6 +128,11 @@ request reuse and memory bounds independently of elapsed timings.
 
 ## Retention and refresh policy
 
+Current device-local normal/low-memory limits and the scope of the cache usage
+display are documented in [navigation and media controls](docs/navigation-and-media.md).
+The later sections below retain the measurements and limits at the time of each
+earlier change.
+
 - Observation cache: 512 compact records, additionally limited to 4 MiB.
 - Inbox paging: after at least 1,000 loaded rows (the final page can cross the
   threshold), the older-pages action explicitly releases the current persisted
@@ -93,19 +150,21 @@ request reuse and memory bounds independently of elapsed timings.
 - Access/DM fallback: 30–35 seconds while active/disconnected; 90–95 seconds when
   inactive with a healthy socket. Per-session jitter avoids identical retry phases.
   Permission events and reconnect still request authoritative snapshots.
-- Media: the active 64-texture/64 MiB and 48 MiB animation limits remain.
-  The follow-up recent-preview policy below adds a 192 MiB/256-entry resident
-  cache and raises compressed retention to 192 MiB/512 entries. No blanket
-  loading delay was added.
+- Media: normal mode retains active 64-texture/64 MiB and 48 MiB animation
+  limits, with 96 MiB resident previews and 64 MiB compressed bytes. Low-memory
+  mode lowers those four limits to 16 entries/16 MiB, 8 MiB, 16 MiB and 8 MiB,
+  respectively. On-click loading is independent of animation preferences;
+  clearing the chat cache pauses automatic refilling in the current view.
 
 ## Conditional work
 
-A disk thumbnail cache remains deferred. Repeated launches necessarily lose
-session-only bytes, but there is no representative measurement showing enough
-saved requests/time to justify persisting private media. Gather repeated-launch
-cache-miss/traffic data first. If worthwhile, implement account/server namespaces,
-resource revisions, asynchronous I/O, expiry, clear/logout controls and deletion,
-moderation and permission-loss invalidation together.
+A bounded disk thumbnail cache is now implemented by plan step 10: 32 MiB/512
+files per account, with a 128 MiB/2,048-file shared ceiling and seven-day expiry.
+Account namespaces, resource revisions, asynchronous I/O, clear/logout controls
+and permission/deletion/moderation gates accompany it. A fresh-client comparison
+records thumbnail requests separately from the earlier in-process warm-revisit
+baseline. See [media and call setup](docs/media-browser-and-call-setup.md) and its
+validation evidence for the measurements and limits of those comparisons.
 
 External author colors, conditional backend snapshots and exact notification
 counts require backend contract changes. The frontend does not infer them.

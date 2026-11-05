@@ -58,7 +58,7 @@ impl MainWindowModel {
     pub(crate) fn can_read_target(&self,id:Uuid)->bool{
         self.direct.items.iter().any(|d|d.id==id)||self.access.get(&id).is_some_and(|a|a.read)&&self.channels.iter().any(|c|c.id==id)
     }
-    pub(super) fn publish_direct(&self){self.sidebar.emit(SidebarMsg::SetDirect(self.direct.items.clone()));}
+    pub(super) fn publish_direct(&self){self.publish_outbox_access();self.sidebar.emit(SidebarMsg::SetDirect(self.direct.items.clone()));}
     pub(super) fn direct_snapshot(&mut self,mut dm:DirectConversation,sender:&ComponentSender<Self>){
         if self.direct.busy.contains(&dm.id)||self.direct.hidden.contains(&dm.id)||self.direct.blocked_peers.contains(&dm.user.id){return;}
         reconcile_read(&mut dm,&self.direct.read);
@@ -86,7 +86,7 @@ impl MainWindowModel {
     pub(super) fn refresh_direct(&mut self,sender:ComponentSender<Self>){
         if self.direct.request.is_some(){self.direct.refresh_again=true;return;}
         let token=Uuid::new_v4();self.direct.request=Some(token);self.direct.last_refresh=Some(Instant::now());
-        let version=self.direct.version;let api=self.api_client.clone();
+        let version=self.direct.version;let api=self.connection.api.clone();
         self.direct.jobs.retain(|j|!j.is_finished());
         self.direct.jobs.push(tokio::spawn(async move{let result=api.list_direct().await;let _=sender.input_sender().send(MainWindowMsg::Direct(DirectMsg::Listed{token,version,result}));}));
     }
@@ -101,25 +101,26 @@ impl MainWindowModel {
         if let Some(id)=self.active_channel_id.filter(|id|self.direct.items.iter().any(|d|d.id==*id)){self.clear_direct(id);}
         self.direct.selection=None;self.refresh_direct(sender.clone());self.deliver_notices(sender.clone());self.render_inbox(&sender);self.render_search(&sender);
     }
-    fn refresh_blocks(&mut self,sender:ComponentSender<Self>){let token=Uuid::new_v4();self.direct.blocks_request=Some(token);let api=self.api_client.clone();self.direct.jobs.push(tokio::spawn(async move{let result=api.list_blocks().await;let _=sender.input_sender().send(MainWindowMsg::Direct(DirectMsg::BlocksLoaded{token,result}));}));}
+    fn refresh_blocks(&mut self,sender:ComponentSender<Self>){let token=Uuid::new_v4();self.direct.blocks_request=Some(token);let api=self.connection.api.clone();self.direct.jobs.push(tokio::spawn(async move{let result=api.list_blocks().await;let _=sender.input_sender().send(MainWindowMsg::Direct(DirectMsg::BlocksLoaded{token,result}));}));}
     pub(super) fn direct_event(&mut self,msg:DirectMsg,sender:ComponentSender<Self>,root:&gtk::Box){
         match msg {
             #[cfg(test)]
             DirectMsg::Refresh=>self.refresh_direct(sender),
             DirectMsg::Open(user)=>{
                 if user==self.current_user.id{self.chat.emit(ChatMsg::OperationError("Não é possível abrir uma DM consigo mesmo.".into()));return;}
-                let token=Uuid::new_v4();self.direct.selection=Some(token);let api=self.api_client.clone();let own=self.current_user.id;
+                let token=Uuid::new_v4();self.direct.selection=Some(token);let api=self.connection.api.clone();let own=self.current_user.id;
                 self.direct.jobs.push(tokio::spawn(async move{let result=api.open_direct(own,user).await;let _=sender.input_sender().send(MainWindowMsg::Direct(DirectMsg::Selected{token,message:None,result}));}));
             }
             DirectMsg::Select(id,message)=>{
-                let token=Uuid::new_v4();self.direct.selection=Some(token);let api=self.api_client.clone();
+                let token=Uuid::new_v4();self.direct.selection=Some(token);let api=self.connection.api.clone();
                 self.direct.jobs.push(tokio::spawn(async move{let result=api.get_direct(id).await;let _=sender.input_sender().send(MainWindowMsg::Direct(DirectMsg::Selected{token,message,result}));}));
             }
             DirectMsg::Selected{token,message,result}=>{
                 if self.direct.selection!=Some(token){return;}self.direct.selection=None;
                 match result {
                     Ok(dm)=>{
-                        let id=dm.id;self.close_profile_for_direct(dm.user.id);self.direct.hidden.remove(&id);self.direct.hidden_since.remove(&id);self.direct_snapshot(dm.clone(),&sender);
+                        self.workspace.direct=true;
+                        let id=dm.id;self.remember_conversation(id);self.chat.emit(ChatMsg::FocusComposer);self.close_profile_for_direct(dm.user.id);self.direct.hidden.remove(&id);self.direct.hidden_since.remove(&id);self.direct_snapshot(dm.clone(),&sender);
                         if self.active_channel_id!=Some(id){self.active_channel_id=Some(id);self.preview_requests.clear();self.chat.emit(ChatMsg::SelectTarget{target:crate::models::ConversationTarget::Direct(dm),user_id:self.current_user.id,access:self.direct_access()});self.load_history(id,None,sender.clone());}
                         else{self.chat.emit(ChatMsg::SetAccess{user_id:self.current_user.id,access:self.direct_access()});}
                         self.sidebar.emit(SidebarMsg::SetSelection(id));
@@ -145,34 +146,34 @@ impl MainWindowModel {
                 }
             }
             DirectMsg::Hide(id)=>{
-                if !self.direct.busy.insert(id){return;}self.direct.selection=None;let api=self.api_client.clone();
+                if !self.direct.busy.insert(id){return;}self.direct.selection=None;let api=self.connection.api.clone();
                 self.direct.jobs.push(tokio::spawn(async move{let result=api.hide_direct(id).await;let _=sender.input_sender().send(MainWindowMsg::Direct(DirectMsg::Hidden{id,result}));}));
             }
             DirectMsg::Hidden{id,result}=>{self.direct.busy.remove(&id);match result{Ok(())=>{self.direct.version+=1;self.direct.hidden_since.insert(id,self.direct.version);self.direct.hidden.insert(id);self.clear_direct(id);self.refresh_direct(sender.clone());},Err(e)=>sender.input(MainWindowMsg::OperationFailed(e))}self.deliver_notices(sender.clone());self.render_inbox(&sender);self.render_search(&sender);}
             DirectMsg::Blocks=>{
                 if let Some(v)=self.direct.blocks.take(){v.window.close();}
-                let (window,body)=crate::ui::chat::actions::window(root,"Usuários bloqueados");
-                let info=gtk::Label::new(Some("Bloquear impede acesso e envio de DMs entre os dois usuários. O histórico do servidor permanece visível."));info.set_wrap(true);body.append(&info);
-                let refresh=gtk::Button::with_label("Atualizar bloqueios");let s=sender.clone();refresh.connect_clicked(move |_|s.input(MainWindowMsg::Direct(DirectMsg::Blocks)));body.append(&refresh);
-                let status=gtk::Label::new(Some("Carregando…"));status.set_wrap(true);body.append(&status);let rows=gtk::Box::new(gtk::Orientation::Vertical,4);body.append(&rows);window.present();self.direct.blocks=Some(BlockView{window,rows,status});self.refresh_blocks(sender);
+                let (window,body)=crate::ui::chat::actions::window(root,crate::i18n::tr("Usuários bloqueados"));
+                let info=gtk::Label::new(Some(crate::i18n::tr("Bloquear impede acesso e envio de DMs entre os dois usuários. O histórico do servidor permanece visível.")));info.set_wrap(true);body.append(&info);
+                let refresh=gtk::Button::with_label(crate::i18n::tr("Atualizar bloqueios"));let s=sender.clone();refresh.connect_clicked(move |_|s.input(MainWindowMsg::Direct(DirectMsg::Blocks)));body.append(&refresh);
+                let status=gtk::Label::new(Some(crate::i18n::tr("Carregando…")));status.set_wrap(true);body.append(&status);let rows=gtk::Box::new(gtk::Orientation::Vertical,4);body.append(&rows);window.present();self.direct.blocks=Some(BlockView{window,rows,status});self.refresh_blocks(sender);
             }
             DirectMsg::BlocksLoaded{token,result}=>{
                 if self.direct.blocks_request!=Some(token){return;}self.direct.blocks_request=None;
                 if let Some(v)=&self.direct.blocks{while let Some(c)=v.rows.first_child(){v.rows.remove(&c);}
-                    match result{Ok(users)=>{self.direct.blocked_peers=users.iter().map(|u|u.id).collect();v.status.set_text(if users.is_empty(){"Nenhum usuário bloqueado."}else{""});for user in users{let b=gtk::Button::with_label(&format!("Desbloquear {}",user.display_name()));let id=user.id;let s=sender.clone();b.connect_clicked(move |_|s.input(MainWindowMsg::Direct(DirectMsg::Block(id,false))));v.rows.append(&b);}},Err(e)=>{v.status.set_text(&e.to_string());sender.input(MainWindowMsg::ActionError(e));}}
+                    match result{Ok(users)=>{self.direct.blocked_peers=users.iter().map(|u|u.id).collect();v.status.set_text(if users.is_empty(){crate::i18n::tr("Nenhum usuário bloqueado.")}else{""});for user in users{let b=gtk::Button::with_label(&crate::i18n::fmt("Desbloquear {}", &[("0", format!("{}", user.display_name()))]));let id=user.id;let s=sender.clone();b.connect_clicked(move |_|s.input(MainWindowMsg::Direct(DirectMsg::Block(id,false))));v.rows.append(&b);}},Err(e)=>{v.status.set_text(&e.to_string());sender.input(MainWindowMsg::ActionError(e));}}
                 }
             }
             DirectMsg::Block(id,block)=>{
                 if id==self.current_user.id||!self.direct.busy.insert(id){return;}
-                let api=self.api_client.clone();let own=self.current_user.id;self.direct.selection=None;
+                let api=self.connection.api.clone();let own=self.current_user.id;self.direct.selection=None;
                 self.direct.jobs.push(tokio::spawn(async move{let result=api.block_user(own,id,block).await;let _=sender.input_sender().send(MainWindowMsg::Direct(DirectMsg::Blocked{id,block,result}));}));
             }
             DirectMsg::Blocked{id,block,result}=>{
                 self.direct.busy.remove(&id);
                 match result{Ok(())=>{if block{self.direct.blocked_peers.insert(id);let ids:Vec<_>=self.direct.items.iter().filter(|d|d.user.id==id).map(|d|d.id).collect();for id in ids{self.clear_direct(id);}}else{self.direct.blocked_peers.remove(&id);}
-                    self.refresh_direct(sender.clone());self.refresh_blocks(sender.clone());if let Some(v)=&self.direct.blocks{v.status.set_text("Bloqueio atualizado.");}
-                    self.profile_action_status(if block{"Usuário bloqueado. DMs indisponíveis."}else{"Usuário desbloqueado."});
-                    self.chat.emit(ChatMsg::OperationError(if block{"Usuário bloqueado. DMs indisponíveis."}else{"Usuário desbloqueado. Abra o perfil para reabrir a DM."}.into()));
+                    self.refresh_direct(sender.clone());self.refresh_blocks(sender.clone());if let Some(v)=&self.direct.blocks{v.status.set_text(crate::i18n::tr("Bloqueio atualizado."));}
+                    self.profile_action_status(if block{crate::i18n::tr("Usuário bloqueado. DMs indisponíveis.")}else{crate::i18n::tr("Usuário desbloqueado.")});
+                    self.chat.emit(ChatMsg::OperationError(if block{crate::i18n::tr("Usuário bloqueado. DMs indisponíveis.")}else{crate::i18n::tr("Usuário desbloqueado. Abra o perfil para reabrir a DM.")}.into()));
                 },Err(e)=>{self.profile_action_status(&e.to_string());if let Some(v)=&self.direct.blocks{v.status.set_text(&e.to_string());}sender.input(MainWindowMsg::OperationFailed(e));}}
                 self.deliver_notices(sender.clone());self.render_inbox(&sender);self.render_search(&sender);
             }
@@ -262,4 +263,11 @@ mod tests{
     let dm:DirectConversation=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"user":{"id":peer,"username":"fixture-peer","created_at":"2026-10-15T00:00:00Z"},"created_at":"2026-10-15T00:00:00Z","unread_count":0})).unwrap();let id=dm.id;
     {let mut state=main.state().get_mut();state.model.direct.items=vec![dm];state.model.direct.request=Some(token);}
     main.emit(MainWindowMsg::Direct(DirectMsg::Listed{token,version:0,result:Err(anyhow::anyhow!("temporary offline"))}));crate::ui::chat::actions::tests::pump(context);assert!(main.model().direct.items.iter().any(|d|d.id==id),"a transient DM refresh failure cannot erase the cached conversation");
+}
+
+impl MainWindowModel {
+    pub(super) fn publish_outbox_access(&self){
+        let mut access=self.access.clone();for dm in &self.direct.items{if !self.direct.blocked_peers.contains(&dm.user.id){access.insert(dm.id,self.direct_access());}}
+        self.chat.emit(ChatMsg::SendAccess(access));
+    }
 }

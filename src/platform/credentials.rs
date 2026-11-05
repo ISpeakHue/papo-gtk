@@ -6,11 +6,11 @@
 
 #[cfg(not(windows))]
 pub fn read(service:&str,key:&str)->Result<Option<String>>{
-    let entry=keyring::Entry::new(service,key).map_err(|_|anyhow!("Chaveiro indisponível."))?;
-    match entry.get_password(){Ok(value)=>Ok(Some(value)),Err(keyring::Error::NoEntry)=>Ok(None),Err(_)=>Err(anyhow!("Não foi possível abrir a sessão no chaveiro."))}
+    let entry=keyring::Entry::new(service,key).map_err(|_|anyhow!(crate::i18n::fmt("Chaveiro indisponível.", &[])))?;
+    match entry.get_password(){Ok(value)=>Ok(Some(value)),Err(keyring::Error::NoEntry)=>Ok(None),Err(_)=>Err(anyhow!(crate::i18n::fmt("Não foi possível abrir a sessão no chaveiro.", &[])))}
 }
 #[cfg(not(windows))]
 pub fn write(service:&str,key:&str,value:Option<&str>)->Result<()>{
-    let entry=keyring::Entry::new(service,key).map_err(|_|anyhow!("Chaveiro indisponível."))?;
-    match value{Some(value)=>entry.set_password(value).map_err(|_|anyhow!("Não foi possível salvar a sessão no chaveiro.")),None=>match entry.delete_credential(){Ok(())|Err(keyring::Error::NoEntry)=>Ok(()),Err(_)=>Err(anyhow!("Não foi possível remover a sessão do chaveiro."))}}
+    let entry=keyring::Entry::new(service,key).map_err(|_|anyhow!(crate::i18n::fmt("Chaveiro indisponível.", &[])))?;
+    match value{Some(value)=>entry.set_password(value).map_err(|_|anyhow!(crate::i18n::fmt("Não foi possível salvar a sessão no chaveiro.", &[]))),None=>match entry.delete_credential(){Ok(())|Err(keyring::Error::NoEntry)=>Ok(()),Err(_)=>Err(anyhow!(crate::i18n::fmt("Não foi possível remover a sessão do chaveiro.", &[])))}}
 }

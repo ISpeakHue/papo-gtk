@@ -22,13 +22,13 @@ pub async fn run(api:ApiClient,user:String,mut report:impl FnMut(anyhow::Error)-
         let mut ambiguous_since=None;
         loop {
             if Utc::now()>=expiry {
-                report(crate::api::ApiError{status:reqwest::StatusCode::UNAUTHORIZED,code:None,message:"A sessão expirou durante a reconexão. Entre novamente.".into()}.into());return;
+                report(crate::api::ApiError{status:reqwest::StatusCode::UNAUTHORIZED,code:None,message:crate::i18n::tr("A sessão expirou durante a reconexão. Entre novamente.").into()}.into());return;
             }
             let previous=api.auth_cookie();
             let started=tokio::time::Instant::now();
             let result=if let Some(since)=ambiguous_since{
                 match tokio::time::timeout_at(since+Duration::from_secs(55),api.refresh()).await{
-                    Ok(result)=>result,Err(_)=>Err(anyhow::anyhow!("Tempo esgotado ao confirmar a renovação da sessão.")),
+                    Ok(result)=>result,Err(_)=>Err(anyhow::anyhow!(crate::i18n::fmt("Tempo esgotado ao confirmar a renovação da sessão.", &[]))),
                 }
             }else{api.refresh().await};
             match result {
@@ -56,7 +56,7 @@ pub async fn run(api:ApiClient,user:String,mut report:impl FnMut(anyhow::Error)-
                     // reutilizar o token antigo depois disso pode acionar a detecção de reuso e invalidar a sessão.
                     if ambiguous {ambiguous_since.get_or_insert(started);}
                     if ambiguous_since.is_some_and(|since|since.elapsed()>=Duration::from_secs(45)) {
-                        report(anyhow::anyhow!("Não foi possível confirmar a renovação da sessão. Entre novamente para continuar com segurança."));return;
+                        report(anyhow::anyhow!(crate::i18n::fmt("Não foi possível confirmar a renovação da sessão. Entre novamente para continuar com segurança.", &[])));return;
                     }
                     if attempt==0&&!report(error){return;}
                     let jitter=u64::from_le_bytes(uuid::Uuid::new_v4().as_bytes()[..8].try_into().unwrap());

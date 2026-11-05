@@ -7,13 +7,13 @@ pub async fn extract(path:&Path)->anyhow::Result<Vec<u8>> {
     super::sandbox::prepare().await?;
     let mut command=super::sandbox::command(path,include_str!("poster.py"))?;
     let output=tokio::time::timeout(super::sandbox::timeout(Duration::from_secs(9)),command.output()).await??;
-    anyhow::ensure!(output.status.success(),"Não foi possível gerar a prévia do vídeo");
+    anyhow::ensure!(output.status.success(),crate::i18n::fmt("Não foi possível gerar a prévia do vídeo", &[]));
     tokio::task::spawn_blocking(move ||encode(&output.stdout)).await?
 }
 fn encode(data:&[u8])->anyhow::Result<Vec<u8>> {
-    anyhow::ensure!(data.len()>=16&&&data[..8]==b"PAPOPOS1","Quadro de vídeo inválido");
+    anyhow::ensure!(data.len()>=16&&&data[..8]==b"PAPOPOS1",crate::i18n::fmt("Quadro de vídeo inválido", &[]));
     let width=u32::from_le_bytes(data[8..12].try_into()?);let height=u32::from_le_bytes(data[12..16].try_into()?);
-    anyhow::ensure!((1..=320).contains(&width)&&(1..=180).contains(&height)&&data.len()==16+width as usize*height as usize*4,"Geometria da prévia inválida");
+    anyhow::ensure!((1..=320).contains(&width)&&(1..=180).contains(&height)&&data.len()==16+width as usize*height as usize*4,crate::i18n::fmt("Geometria da prévia inválida", &[]));
     let pixels=image::RgbaImage::from_raw(width,height,data[16..].to_vec()).unwrap();
     let mut encoded=std::io::Cursor::new(Vec::new());image::DynamicImage::ImageRgba8(pixels).write_to(&mut encoded,image::ImageFormat::Png)?;Ok(encoded.into_inner())
 }

@@ -2,6 +2,7 @@
 import importlib.util
 from pathlib import Path
 import unittest
+import tempfile
 import time
 from unittest.mock import Mock, patch
 
@@ -314,6 +315,135 @@ class LocalScreenPreviewTests(unittest.TestCase):
             pipeline.set_state(worker.Gst.State.NULL)
             engine.video.clear()
             engine.close()
+
+
+
+
+class AudioSetupTests(unittest.TestCase):
+    """EN-US: Synthetic native audio only. PT-BR: Apenas áudio nativo sintético."""
+    def pump_until(self, condition, timeout=9):
+        context = worker.GLib.MainContext.default()
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            for _ in range(500):
+                if not context.pending():
+                    break
+                context.iteration(False)
+            if condition():
+                return
+            time.sleep(0.005)
+        self.fail("native audio workflow timed out")
+
+    def test_local_record_replay_is_bounded_and_never_creates_webrtc(self):
+        engine = worker.Engine()
+        events = []
+        try:
+            with patch.object(worker, "emit", side_effect=events.append):
+                engine.dispatch({"type": "test_start", "mode": "microphone", "test_source": True, "test_sink": True})
+                self.pump_until(lambda: engine.closed)
+            self.assertEqual([e["state"] for e in events if e["type"] == "test_state"], ["recording", "playback", "completed"])
+            self.assertTrue(any(e["type"] == "audio_level" and 0 < e["level"] <= 1 for e in events))
+            self.assertFalse(hasattr(engine, "webrtc"))
+            self.assertEqual(engine.recording, bytearray())
+            self.assertEqual(engine.audio_timers, [])
+        finally:
+            engine.close()
+
+    def test_output_test_never_opens_a_microphone_and_stop_releases_capture(self):
+        engine = worker.Engine()
+        engine.audio_source = Mock(side_effect=AssertionError("must not open a microphone"))
+        try:
+            with patch.object(worker, "emit"):
+                engine.dispatch({"type": "test_start", "mode": "playback", "test_source": True, "test_sink": True})
+                self.pump_until(lambda: engine.closed)
+            engine.audio_source.assert_not_called()
+        finally:
+            engine.close()
+        engine = worker.Engine()
+        with patch.object(worker, "emit"):
+            engine.dispatch({"type": "test_start", "mode": "microphone", "test_source": True, "test_sink": True})
+            engine.close()
+        self.assertEqual(engine.pipeline.get_state(0)[1], worker.Gst.State.NULL)
+        self.assertEqual(engine.recording, bytearray())
+        self.assertEqual(engine.audio_timers, [])
+
+    def call(self):
+        engine = worker.Engine()
+        engine.start({"test_source": True, "test_sink": True, "muted": True, "audio_slots": 0, "video_slots": 0})
+        self.pump_until(lambda: engine.pipeline.get_state(0)[1] == worker.Gst.State.PLAYING)
+        return engine
+
+    def test_microphone_switch_preserves_transport_ssrc_and_mute(self):
+        events = []
+        with patch.object(worker, "emit", side_effect=events.append):
+            engine = self.call()
+            try:
+                old = engine.source
+                transport = engine.webrtc
+                ssrc = engine.capture.get_by_name("pay").get_property("ssrc")
+                engine.switch_audio({"request": "mic-switch", "kind": "microphone", "device": None})
+                self.pump_until(lambda: any(e["type"] == "audio_device" for e in events))
+                self.assertTrue(next(e for e in events if e["type"] == "audio_device")["success"])
+                self.assertIsNot(engine.source, old)
+                self.assertIs(engine.webrtc, transport)
+                self.assertEqual(engine.capture.get_by_name("pay").get_property("ssrc"), ssrc)
+                self.assertTrue(engine.microphone.get_property("mute"))
+            finally:
+                engine.close()
+
+    def test_failed_source_rolls_back_and_denied_output_keeps_the_call(self):
+        events = []
+        with patch.object(worker, "emit", side_effect=events.append):
+            engine = self.call()
+            try:
+                old = engine.source
+                broken = worker.Gst.ElementFactory.make("filesrc", None)
+                temporary = tempfile.TemporaryDirectory(prefix="papo-audio-denial-")
+                self.addCleanup(temporary.cleanup)
+                broken.set_property("location", str(Path(temporary.name) / "missing.raw"))
+                engine.audio_source = Mock(return_value=(broken, None, False))
+                engine.switch_audio({"request": "bad-mic", "kind": "microphone", "device": None})
+                self.pump_until(lambda: any(e["type"] == "audio_device" for e in events))
+                self.assertFalse(next(e for e in events if e["type"] == "audio_device")["success"])
+                self.assertFalse(engine.closed)
+                self.assertIs(engine.source, old)
+                self.assertTrue(engine.microphone.get_property("mute"))
+                self.assertEqual(engine.pipeline.get_state(worker.Gst.SECOND)[1], worker.Gst.State.PLAYING)
+                engine.output_branches = {"speaker": engine.make_output(None, worker.Gst.Caps.from_string("audio/x-raw,format=F32LE,rate=48000,channels=2,layout=interleaved"))}
+                engine.audio_sink = Mock(side_effect=PermissionError("synthetic output denial"))
+                engine.switch_audio({"request": "bad-output", "kind": "output", "device": None})
+                self.assertFalse(events[-1]["success"])
+                self.assertFalse(engine.closed)
+            finally:
+                engine.close()
+
+    def test_live_output_switch_replaces_only_the_sink(self):
+        events = []
+        with patch.object(worker, "emit", side_effect=events.append):
+            engine = self.call()
+            try:
+                old = engine.make_output(None, worker.Gst.Caps.from_string("audio/x-raw,format=F32LE,rate=48000,channels=2,layout=interleaved"))
+                engine.output_branches = {"speaker": old}
+                old["pipeline"].set_state(worker.Gst.State.PLAYING)
+                source = engine.source
+                engine.switch_audio({"request": "output-switch", "kind": "output", "device": None})
+                self.pump_until(lambda: any(e["type"] == "audio_device" for e in events))
+                self.assertTrue(next(e for e in events if e["type"] == "audio_device")["success"])
+                self.assertIs(engine.source, source)
+                self.assertIsNot(engine.output_branches["speaker"], old)
+                self.assertTrue(engine.microphone.get_property("mute"))
+            finally:
+                engine.close()
+
+    def test_device_permission_denial_never_starts_recording(self):
+        engine = worker.Engine()
+        engine.audio_source = Mock(side_effect=PermissionError("synthetic microphone denial"))
+        with patch.object(worker, "emit") as emit:
+            engine.dispatch({"type": "test_start", "mode": "microphone", "test_source": True, "test_sink": True})
+            self.assertTrue(engine.closed)
+            self.assertTrue(any(call.args[0]["type"] == "error" for call in emit.call_args_list))
+            self.assertFalse(hasattr(engine, "webrtc"))
+            self.assertFalse(engine.recording)
 
 
 if __name__ == "__main__":

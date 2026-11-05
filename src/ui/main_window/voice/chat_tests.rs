@@ -21,9 +21,9 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let own=serde_json::from_value(backend.lock().unwrap().profile.clone()).unwrap();
     let main=MainWindowModel::builder().launch(MainWindowInit{current_user:own,api_client:api}).detach();
     let host=adw::Window::builder().default_width(1100).default_height(740).content(main.widget()).build();host.present();
-    until(context,||main.model().background_started&&main.model().access_request.is_none()&&main.model().voice_allowed(connect_only));
-    if let Some(listener)=main.state().get_mut().model.ws_listener.take(){listener.abort();}
-    let(commands,mut receiver)=tokio::sync::mpsc::channel(128);main.state().get_mut().model.ws_tx=commands;
+    until(context,||main.model().connection.state.background_started&&main.model().access_request.is_none()&&main.model().voice_allowed(connect_only));
+    if let Some(listener)=main.state().get_mut().model.connection.ws_listener.take(){listener.abort();}
+    let(commands,mut receiver)=tokio::sync::mpsc::channel(128);main.state().get_mut().model.connection.ws_tx=commands;
     main.emit(MainWindowMsg::Voice(VoiceMsg::TestEngine));main.emit(MainWindowMsg::WsReceived(WsEvent::ConnectionReady(Uuid::new_v4())));pump(context);
     let text=main.model().channels.iter().find(|c|c.channel_type==Some(ChannelType::Text)).unwrap().clone();
     let chat_button=|id|descendants(main.model().sidebar.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Button>().ok().filter(|b|b.widget_name()==format!("voice-chat-{id}")));

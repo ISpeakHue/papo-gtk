@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "scope": "Local Linux validation of implementation steps 4\u20136; native Windows not run",
+  "source_fingerprint": "7d8dbcccb08961fa6ad55bd3c52ade41eddd54c9a30a7c449dd1e33e9ecbea40",
+  "test_binary_sha256": "a2ac4d756000f8234d85183365c540af9f8eef98ffefe8c7dc82ed35f989838d",
+  "rust": {
+    "passed": 328,
+    "ignored": 6,
+    "failed": 0
+  },
+  "python_tool_checks_passed": 9,
+  "matching_translation_entries": 855,
+  "all_targets_check": "passed_without_warnings",
+  "actionlint": "passed",
+  "final_focused_gtk": {
+    "translations": "passed",
+    "draft-recovery": "passed",
+    "outgoing-queue": "passed",
+    "timeline-controls": "passed"
+  },
+  "aggregate_gtk": {
+    "passed": false,
+    "attempts_with_native_sigsegv": 2,
+    "native_thread": "gst_play_main -> g_object_unref -> g_type_check_instance_is_fundamentally_a",
+    "root_cause": "not established by this metadata"
+  },
+  "backend_modified": false,
+  "remote_ci_run": false
+}

@@ -10,12 +10,15 @@ const OLD_BYTES:usize=16<<20;
 const OLD_ENTRIES:usize=192;
 struct Entry {channel:Uuid,message:Uuid,bytes:Arc<[u8]>,video:bool,touched:std::time::Instant}
 #[derive(Default)]
-pub(in crate::ui::chat) struct Cache {entries:HashMap<Uuid,Entry>,order:VecDeque<Uuid>,bytes:usize,recent:HashMap<Uuid,HashSet<Uuid>>,channels:VecDeque<Uuid>}
+pub(in crate::ui::chat) struct Cache {entries:HashMap<Uuid,Entry>,order:VecDeque<Uuid>,bytes:usize,recent:HashMap<Uuid,HashSet<Uuid>>,channels:VecDeque<Uuid>,low_memory:bool}
 impl Cache {
-    #[cfg(test)]pub(super) fn memory_bytes(&self)->usize{self.bytes}
+    fn byte_limit(&self)->usize{if self.low_memory{8<<20}else{BYTE_LIMIT}}
+    pub fn set_low_memory(&mut self,low:bool){self.low_memory=low;while self.bytes>self.byte_limit(){if let Some(id)=self.order.front().copied(){self.remove(id);}else{break;}}while self.channels.len()>if low{2}else{8}{if let Some(id)=self.channels.pop_front(){self.invalidate_channel(id);}}self.maintain();}
+
+    pub(super) fn memory_bytes(&self)->usize{self.bytes}
     pub fn set_recent(&mut self,channel:Uuid,keys:HashSet<Uuid>){
         self.channels.retain(|id|*id!=channel);self.channels.push_back(channel);self.recent.insert(channel,keys);
-        while self.channels.len()>8{if let Some(old)=self.channels.pop_front(){self.invalidate_channel(old);}}
+        while self.channels.len()>if self.low_memory{2}else{8}{if let Some(old)=self.channels.pop_front(){self.invalidate_channel(old);}}
         self.maintain();
     }
     pub fn contains(&self,key:Uuid)->bool{self.entries.contains_key(&key)}
@@ -36,11 +39,11 @@ impl Cache {
         self.insert_kind(key,channel,message,bytes,true);
     }
     fn insert_kind(&mut self,key:Uuid,channel:Uuid,message:Uuid,bytes:Arc<[u8]>,video:bool) {
-        self.remove(key);if bytes.is_empty()||bytes.len()>25<<20{return;}
+        self.remove(key);if bytes.is_empty()||bytes.len()>self.byte_limit().min(25<<20){return;}
         self.bytes+=bytes.len();self.entries.insert(key,Entry{channel,message,bytes,video,touched:std::time::Instant::now()});self.order.push_back(key);crate::performance::record("encoded_cache_bytes",self.bytes as u64);
         // EN-US: Retain recent compressed bytes for re-decoding, with eviction independent of the texture cache.
         // PT-BR: Retém bytes comprimidos recentes para nova decodificação, com descarte independente do cache de texturas.
-        while self.bytes>BYTE_LIMIT||self.entries.len()>ENTRY_LIMIT {
+        while self.bytes>self.byte_limit()||self.entries.len()>ENTRY_LIMIT {
             let Some(old)=self.order.iter().find(|id|!self.recent.values().any(|keys|keys.contains(id))).or_else(||self.order.front()).copied()else{break;};self.remove(old);
         }
         self.maintain();
@@ -50,7 +53,7 @@ impl Cache {
         let mut bytes:usize=old.iter().filter_map(|id|self.entries.get(id)).map(|e|e.bytes.len()).sum();let mut count=old.len();
         for id in old{
             let Some(entry)=self.entries.get(&id)else{continue;};
-            if bytes>OLD_BYTES||count>OLD_ENTRIES||entry.touched.elapsed().as_secs()>=300{
+            if bytes>if self.low_memory{2<<20}else{OLD_BYTES}||count>OLD_ENTRIES||entry.touched.elapsed().as_secs()>=300{
                 bytes-=entry.bytes.len();count-=1;self.remove(id);
             }
         }
@@ -65,7 +68,7 @@ impl Cache {
     }
     pub fn retain_channels(&mut self,allowed:&[Uuid]){self.recent.retain(|id,_|allowed.contains(id));self.channels.retain(|id|allowed.contains(id));self.retain(|entry|allowed.contains(&entry.channel));}
     pub fn invalidate_channel(&mut self,id:Uuid){self.recent.remove(&id);self.channels.retain(|channel|*channel!=id);self.retain(|entry|entry.channel!=id);}
-    pub fn clear(&mut self){*self=Self::default();}
+    pub fn clear(&mut self){let low=self.low_memory;*self=Self::default();self.low_memory=low;}
     pub fn apply(&mut self,change:&Change) {
         match change {
             Change::Delete(message)=>self.retain(|entry|entry.message!=*message),

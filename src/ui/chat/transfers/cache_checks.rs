@@ -79,8 +79,8 @@ fn exercise_failure(context:&gtk::glib::MainContext){
     let chat=ChatModel::builder().launch(ChatInit{api:Some(api),active_channel:Some(target),messages:vec![message],user_id:Some(user),..Default::default()}).detach();
     chat.emit(ChatMsg::SetAccess{user_id:user,access:crate::models::Access::direct()});
     let window=adw::Window::builder().default_width(800).default_height(650).content(chat.widget()).build();window.present();
-    until(context,||descendants(chat.widget().upcast_ref()).iter().any(|w|w.downcast_ref::<gtk::Label>().is_some_and(|l|l.text()=="Prévia indisponível")));
-    assert!(actions::tests::find_button(chat.widget().upcast_ref(),"Reproduzir vídeo").is_sensitive());
+    until(context,||descendants(chat.widget().upcast_ref()).iter().any(|w|w.downcast_ref::<gtk::Label>().is_some_and(|l|l.text()==crate::i18n::tr("Prévia indisponível"))));
+    assert!(actions::tests::find_button(chat.widget().upcast_ref(),crate::i18n::tr("Reproduzir vídeo")).is_sensitive());
     let count=||backend.lock().unwrap().requests.iter().filter(|(_,p,_)|p==&format!("/attachments/{key}")).count();let baseline=count();
     for _ in 0..12{chat.emit(ChatMsg::MediaViewport);}performance::settle(context);assert_eq!(count(),baseline,"an unsupported preview must not repeatedly download the video");
     assert!(!chat.model().transfers.encoded.contains(key));

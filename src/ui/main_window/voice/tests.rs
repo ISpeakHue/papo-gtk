@@ -18,9 +18,9 @@ pub(crate) fn exercise_controls(context:&gtk::glib::MainContext){
     let window=adw::Window::builder().default_width(1100).default_height(740).content(main.widget()).build();window.present();
     until(context,||main.model().voice_allowed(second)&&main.model().active_channel_id.is_some()&&main.model().access_request.is_none());
     // Drive socket transitions explicitly; no live server or audio capture is used.
-    if let Some(listener)=main.state().get_mut().model.ws_listener.take(){listener.abort();}
+    if let Some(listener)=main.state().get_mut().model.connection.ws_listener.take(){listener.abort();}
     let (commands,_receiver)=tokio::sync::mpsc::channel(64);
-    main.state().get_mut().model.ws_tx=commands;
+    main.state().get_mut().model.connection.ws_tx=commands;
     let text=main.model().active_channel_id;
     let row=|id|descendants(main.model().sidebar.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::ListBoxRow>().ok().filter(|r|r.widget_name()==format!("channel-{id}"))).unwrap();
     let select=|id|{let row=row(id);row.parent().and_downcast::<gtk::ListBox>().unwrap().emit_by_name::<()>("row-activated",&[&row]);};
@@ -91,7 +91,7 @@ pub(crate) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::Mai
     assert_eq!(descendants(main.model().sidebar.widget().upcast_ref()).into_iter().find(|w|w.widget_name()==state_row.widget_name()).unwrap(),state_row,"speaking events preserve participant buttons");
     assert_eq!(descendants(main.model().sidebar.widget().upcast_ref()).into_iter().find(|w|w.widget_name()==channel_row.widget_name()).unwrap(),channel_row,"speaking events preserve channel clicks");
     let sidebar=main.model().sidebar.widget().clone();
-    let mut config=main.model().account.config.clone();config.display.as_mut().unwrap().show_avatars=Some(true);main.model().sidebar.emit(SidebarMsg::SetConfig(config));pump(context);
+    let mut config=main.model().connection.config.clone();config.display.as_mut().unwrap().show_avatars=Some(true);main.model().sidebar.emit(SidebarMsg::SetConfig(config));pump(context);
     assert!(descendants(sidebar.upcast_ref()).iter().any(|w|w.widget_name()=="voice-speaking-fallback"&&w.is_visible()),"the name-side speaking indicator is visible with avatars too");
     main.emit(MainWindowMsg::WsReceived(WsEvent::Voice(VoiceEvent::State{channel_id:room,member:VoiceMember{user_id:peer,muted:true,camera_on:false,screen_sharing:false}})));pump(context);
     let row=descendants(sidebar.upcast_ref()).into_iter().find(|w|w.widget_name()==state_row.widget_name()).unwrap();assert!(!descendants(&row).iter().any(|w|w.has_css_class("papo-voice-speaking")&&w.is_visible()));
@@ -109,7 +109,7 @@ pub(crate) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::Mai
     main.emit(MainWindowMsg::Account(super::super::account::AccountMsg::Preferences));pump(context);
     let prefs=gtk::Window::list_toplevels().into_iter().filter_map(|w|w.downcast::<gtk::Window>().ok()).find(|w|w.title().as_deref()==Some("Configurações da conta")).unwrap();
     let sound=descendants(prefs.upcast_ref()).into_iter().find_map(|w|w.downcast::<adw::SwitchRow>().ok().filter(|c|c.title().to_lowercase().contains("som"))).unwrap();sound.set_active(true);
-    find_button(prefs.upcast_ref(),"Salvar preferências").emit_clicked();until(context,||main.model().account.config.notifications.as_ref().and_then(|n|n.sound)==Some(true));prefs.close();pump(context);
+    find_button(prefs.upcast_ref(),"Salvar preferências").emit_clicked();until(context,||main.model().connection.config.notifications.as_ref().and_then(|n|n.sound)==Some(true));prefs.close();pump(context);
     let cues=main.model().voice.cue.played;
     let next=join(main,context);assert_eq!(main.model().voice.cue.played,cues+1,"room entry plays the enabled cue before ICE connects");
     main.emit(MainWindowMsg::WsReceived(WsEvent::Voice(VoiceEvent::Joined{channel_id:room,members:vec![],active_speakers:vec![]})));main.emit(MainWindowMsg::Voice(VoiceMsg::Engine{call:next,event:EngineEvent::Connection{state:"connected".into()}}));pump(context);assert_eq!(main.model().voice.cue.played,cues+1,"duplicate join/connection notifications must not replay the cue");

@@ -21,17 +21,17 @@ impl ChatModel {
                     let file=api.download_temporary(&format!("/attachments/{key}"),MAX_FILE).await?;
                     tokio::task::spawn_blocking(move ||{
                         let _permit=permit;let file=file;
-                        crate::media::PreparedImage::decode_viewer(&file.0).ok_or_else(||anyhow::anyhow!("Não foi possível exibir a imagem original"))
+                        crate::media::PreparedImage::decode_viewer(&file.0).ok_or_else(||anyhow::anyhow!(crate::i18n::fmt("Não foi possível exibir a imagem original", &[])))
                     }).await?
                 } else {
                     // The backend currently exposes only its cached embed image.
                     // Decode at its available resolution, without the chat cap.
-                    let data=api.get_embed(key).await?.image_data.ok_or_else(||anyhow::anyhow!("Imagem do embed indisponível"))?;
+                    let data=api.get_embed(key).await?.image_data.ok_or_else(||anyhow::anyhow!(crate::i18n::fmt("Imagem do embed indisponível", &[])))?;
                     tokio::task::spawn_blocking(move ||{
                         let _permit=permit;use base64::Engine;
-                        anyhow::ensure!(data.len()<=6<<20,"Imagem do embed muito grande");
+                        anyhow::ensure!(data.len()<=6<<20,crate::i18n::fmt("Imagem do embed muito grande", &[]));
                         let bytes=base64::engine::general_purpose::STANDARD.decode(data.split_once(',').map_or(data.as_str(),|(_,data)|data))?;
-                        crate::media::PreparedImage::decode_thumbnail(&bytes,4096,4096).ok_or_else(||anyhow::anyhow!("Não foi possível exibir a imagem do embed"))
+                        crate::media::PreparedImage::decode_thumbnail(&bytes,4096,4096).ok_or_else(||anyhow::anyhow!(crate::i18n::fmt("Não foi possível exibir a imagem do embed", &[])))
                     }).await?
                 }
             }.await;
@@ -45,12 +45,14 @@ impl ChatModel {
         self.transfers.viewer_jobs.remove(&token);
         if !self.access.read||!self.history.messages.iter().any(|m|m.id==message&&(m.attachments.iter().flatten().any(|a|a.id==key&&self.transfers.visible(a))||m.embeds.iter().flatten().any(|e|e.id==key))){return;}
         let Some((_,_,window))=self.transfers.images.iter().find(|(m,k,w)|*m==message&&*k==key&&w.is_visible()&&w.widget_name()==format!("viewer-{token}"))else{return;};
+        let body=window.child().and_downcast::<gtk::Box>();if let Some(body)=&body{let mut child=body.first_child();while let Some(w)=child{child=w.next_sibling();if w.widget_name()=="original-retry"{body.remove(&w);}}}
         match result {
-            Ok(image)=>{if let Some(picture)=picture(window){picture.set_paintable(Some(&image.texture()));}},
+            Ok(image)=>{let attachment=self.history.messages.iter().find(|m|m.id==message).and_then(|m|m.attachments.iter().flatten().find(|a|a.id==key));let gif=self.history.messages.iter().any(|m|m.id==message&&m.embeds.iter().flatten().any(|e|e.id==key&&e.animated_link()));window.set_title(Some(attachment.map(|a|a.original_file_name.as_str()).filter(|s|!s.trim().is_empty()).unwrap_or(if gif{"GIF"}else{crate::i18n::tr("Imagem")})));if let Some(picture)=picture(window){picture.set_paintable(Some(&image.texture()));picture.set_tooltip_text(None::<&str>);}},
             Err(error)=>{
-                let title=window.title().unwrap_or_else(||"Imagem".into());
-                window.set_title(Some(&format!("{title} · não foi possível carregar o original")));
-                if let Some(picture)=picture(window){picture.set_tooltip_text(Some(&format!("Exibindo prévia. {error}")));}
+                let title=window.title().unwrap_or_else(||crate::i18n::tr("Imagem").into());
+                window.set_title(Some(&crate::i18n::fmt("{title} · não foi possível carregar o original", &[("title", format!("{}", title))])));
+                if let Some(picture)=picture(window){picture.set_tooltip_text(Some(&crate::i18n::fmt("Exibindo prévia. {error}", &[("error", format!("{}", error))])));}
+                if let Some(body)=body{let retry=gtk::Button::with_label(crate::i18n::tr("Tentar carregar a imagem original novamente"));retry.set_widget_name("original-retry");let input=sender.input_sender().clone();retry.connect_clicked(move |button|{button.set_sensitive(false);let _=input.send(ChatMsg::Transfer(TransferMsg::RetryViewer{epoch,message,key,token}));});body.append(&retry);}
                 if crate::api::is_session_error(&error){let _=sender.output(ChatOutput::ActionError(error));}
             },
         }
@@ -103,7 +105,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     chat.emit(ChatMsg::Transfer(TransferMsg::ViewerReady{epoch,message,key,token:old_token,result:Ok(crate::media::PreparedImage{width:1,height:1,pixels:vec![255;4]})}));pump(context);assert_eq!(controls::picture(&reopened).unwrap().paintable().unwrap().intrinsic_width(),640,"an earlier viewer result cannot replace a reopened image");
     reopened.close();until(context,||chat.model().transfers.viewer_jobs.is_empty()&&chat.model().transfers.images.is_empty());drop(reopened);drop(permit);pump(context);assert_eq!(originals(),1,"closing cancels queued original work");
     fail.store(true,Ordering::SeqCst);chat.emit(ChatMsg::Transfer(TransferMsg::OpenImage{message,key}));until(context,||!chat.model().transfers.images.is_empty());let viewer=chat.model().transfers.images[0].2.clone();
-    until(context,||viewer.title().is_some_and(|t|t.contains("não foi possível")));assert!(viewer.is_visible());assert_eq!(controls::picture(&viewer).unwrap().paintable().unwrap().intrinsic_width(),640,"failed original requests retain the usable preview");viewer.close();until(context,||chat.model().transfers.images.is_empty());drop(viewer);
+    until(context,||viewer.title().is_some_and(|t|t.contains("não foi possível")));assert!(viewer.is_visible());assert_eq!(controls::picture(&viewer).unwrap().paintable().unwrap().intrinsic_width(),640,"failed original requests retain the usable preview");fail.store(false,Ordering::SeqCst);actions::tests::find_button(viewer.upcast_ref(),crate::i18n::tr("Tentar carregar a imagem original novamente")).emit_clicked();until(context,||controls::picture(&viewer).unwrap().paintable().unwrap().intrinsic_width()==1800);assert_eq!(viewer.title().as_deref(),Some("photo.png"));viewer.close();until(context,||chat.model().transfers.images.is_empty());drop(viewer);
     let permit=tokio::runtime::Handle::current().block_on(chat.model().transfers.viewer_limiter.clone().acquire_owned()).unwrap();
     chat.emit(ChatMsg::Transfer(TransferMsg::OpenImage{message,key}));until(context,||!chat.model().transfers.viewer_jobs.is_empty());let viewer=chat.model().transfers.images[0].2.clone();let token=viewer.widget_name().strip_prefix("viewer-").unwrap().parse().unwrap();
     chat.emit(ChatMsg::ApplyChange(Change::Moderation(message,key,"blocked".into())));until(context,||chat.model().transfers.images.is_empty()&&chat.model().transfers.viewer_jobs.is_empty());assert!(!viewer.is_visible());

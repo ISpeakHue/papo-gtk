@@ -52,7 +52,7 @@ impl Desktop {
         let Some(proxy)=self.proxy.clone()else{return;};let targets=self.targets.clone();let allowed=self.allowed.clone();let alive=self.alive.clone();
         let mut hints=HashMap::new();hints.insert("desktop-entry".to_owned(),crate::app::APP_ID.to_variant());hints.insert("suppress-sound".to_owned(),(!sound).to_variant());if sound{hints.insert("sound-name".to_owned(),"message-new-instant".to_variant());}
         let escaped=glib::markup_escape_text(&body).to_string();
-        let params=("Papo",0u32,crate::app::APP_ID,"Nova mensagem no Papo",escaped,vec!["default","Abrir"],hints,-1i32).to_variant();
+        let params=("Papo",0u32,crate::app::APP_ID,crate::i18n::tr("Nova mensagem no Papo"),escaped,vec!["default",crate::i18n::tr("Abrir")],hints,-1i32).to_variant();
         self.jobs.push((false,glib::spawn_future_local(async move{
             if !alive.get()||!allowed.borrow().contains(&id){return;}
             if let Ok(result)=proxy.call_future("Notify",Some(&params),gio::DBusCallFlags::NONE,5000).await{

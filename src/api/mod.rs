@@ -14,6 +14,7 @@ use crate::models::*;
 pub mod features;
 pub mod security;
 mod discovery;
+pub mod media_history;
 mod administration;
 mod webhooks;
 mod public_dns;
@@ -79,6 +80,7 @@ pub struct ApiClient {
     cookies: Arc<SessionCookies>,
     requests: Arc<RequestScheduler>,
     session_owner: Arc<std::sync::Mutex<Uuid>>,
+    thumbnails: Arc<std::sync::Mutex<Option<(crate::account::AccountId,crate::media::disk::Cache)>>>,
 }
 impl std::fmt::Debug for ApiClient{fn fmt(&self,f:&mut std::fmt::Formatter)->std::fmt::Result{f.debug_struct("ApiClient").field("base",&self.base).finish_non_exhaustive()}}
 
@@ -91,7 +93,7 @@ impl ApiClient {
         let mut builder = Client::builder()
             .cookie_provider(cookies.clone())
             .redirect({let origin=base.clone();reqwest::redirect::Policy::custom(move |attempt|{
-                if attempt.previous().len()>=5||!Self::redirect_allowed(&origin,attempt.url()){attempt.error("Redirecionamento da API para outro endereço bloqueado.")}
+                if attempt.previous().len()>=5||!Self::redirect_allowed(&origin,attempt.url()){attempt.error(crate::i18n::tr("Redirecionamento da API para outro endereço bloqueado."))}
                 else{attempt.follow()}
             })})
             .connect_timeout(Duration::from_secs(5))
@@ -105,7 +107,7 @@ impl ApiClient {
         }
         let inner = builder.build()
             .context("building reqwest client")?;
-        Ok(Self { inner, base, cookies, requests: Arc::new(RequestScheduler::default()), session_owner: Arc::new(std::sync::Mutex::new(Uuid::new_v4())) })
+        Ok(Self { inner, base, cookies, requests: Arc::new(RequestScheduler::default()), session_owner: Arc::new(std::sync::Mutex::new(Uuid::new_v4())),thumbnails:Default::default() })
     }
 
     fn is_loopback(url: &Url) -> bool {
@@ -117,9 +119,9 @@ impl ApiClient {
 
     fn redirect_allowed(origin:&Url,target:&Url)->bool {target.origin()==origin.origin()}
 
-    fn parse_base_url(input: &str) -> Result<Url> {
+    pub(crate) fn parse_base_url(input: &str) -> Result<Url> {
         let input = input.trim();
-        anyhow::ensure!(!input.is_empty(), "Informe o endereço do servidor.");
+        anyhow::ensure!(!input.is_empty(), crate::i18n::fmt("Informe o endereço do servidor.", &[]));
         let candidate = if input.contains("://") {
             input.to_owned()
         } else {
@@ -128,14 +130,14 @@ impl ApiClient {
             let scheme = if Self::is_loopback(&local) { "http" } else { "https" };
             format!("{scheme}://{input}")
         };
-        let mut base = Url::parse(&candidate).context("Endereço do servidor inválido")?;
+        let mut base = Url::parse(&candidate).context(crate::i18n::tr("Endereço do servidor inválido"))?;
         anyhow::ensure!(matches!(base.scheme(), "http" | "https") && base.host().is_some(),
-            "Use um endereço HTTP ou HTTPS válido.");
-        anyhow::ensure!(base.scheme()=="https"||Self::is_loopback(&base),"Use HTTPS para servidores remotos. HTTP é permitido apenas no localhost.");
+            crate::i18n::fmt("Use um endereço HTTP ou HTTPS válido.", &[]));
+        anyhow::ensure!(base.scheme()=="https"||Self::is_loopback(&base),crate::i18n::fmt("Use HTTPS para servidores remotos. HTTP é permitido apenas no localhost.", &[]));
         anyhow::ensure!(base.username().is_empty() && base.password().is_none(),
-            "Informe as credenciais nos campos de usuário e senha.");
+            crate::i18n::fmt("Informe as credenciais nos campos de usuário e senha.", &[]));
         anyhow::ensure!(base.query().is_none() && base.fragment().is_none(),
-            "Informe o endereço base do servidor, sem parâmetros ou fragmentos.");
+            crate::i18n::fmt("Informe o endereço base do servidor, sem parâmetros ou fragmentos.", &[]));
         if !base.path().ends_with('/') {
             base.set_path(&format!("{}/", base.path()));
         }
@@ -149,8 +151,8 @@ impl ApiClient {
         self.cookies.cookies(&self.url("/auth/whoami"))?.to_str().ok()?.split(';').find_map(|item|item.trim().strip_prefix("Auth=").filter(|token|!token.is_empty()).map(str::to_owned))
     }
     pub(crate) fn restore_auth_cookie(&self,token:&str)->Result<()>{
-        anyhow::ensure!(self.base.scheme()=="https"||Self::is_loopback(&self.base),"Uma sessão salva exige HTTPS, exceto no localhost.");
-        anyhow::ensure!(!token.is_empty()&&token.len()<=16_384&&token.bytes().all(|c|c.is_ascii_alphanumeric()||b"._-".contains(&c)),"Sessão salva inválida.");
+        anyhow::ensure!(self.base.scheme()=="https"||Self::is_loopback(&self.base),crate::i18n::fmt("Uma sessão salva exige HTTPS, exceto no localhost.", &[]));
+        anyhow::ensure!(!token.is_empty()&&token.len()<=16_384&&token.bytes().all(|c|c.is_ascii_alphanumeric()||b"._-".contains(&c)),crate::i18n::fmt("Sessão salva inválida.", &[]));
         self.cookies.add_cookie_str(&format!("Auth={token}; HttpOnly; Secure; Path=/; SameSite=Strict"),&self.base);Ok(())
     }
 
@@ -181,7 +183,7 @@ impl ApiClient {
             return Ok(res);
         }
         let bytes=match body::read(res,body::ERROR_LIMIT).await{
-            Ok(bytes)=>bytes,Err(_)=>return Err(ApiError{status,code:None,message:format!("Erro HTTP {status}: resposta inválida ou grande demais.")}.into()),
+            Ok(bytes)=>bytes,Err(_)=>return Err(ApiError{status,code:None,message:crate::i18n::fmt("Erro HTTP {status}: resposta inválida ou grande demais.", &[("status", format!("{}", status))])}.into()),
         };
         let body=String::from_utf8_lossy(&bytes);
         let json = serde_json::from_str::<serde_json::Value>(&body).ok();
@@ -192,7 +194,7 @@ impl ApiClient {
             .unwrap_or_else(|| {
                 let text = body.trim();
                 if text.starts_with('<') {
-                    format!("Erro HTTP {status} ({op}): o servidor retornou uma página HTML. Verifique o endereço da API.")
+                    crate::i18n::fmt("Erro HTTP {status} ({op}): o servidor retornou uma página HTML. Verifique o endereço da API.", &[("status", format!("{}", status)), ("op", format!("{}", op))])
                 } else if !text.is_empty() && text.len() < 300 {
                     text.to_owned()
                 } else {
@@ -209,7 +211,7 @@ impl ApiClient {
     fn check_auth_cookie_transport(res: &reqwest::Response) -> Result<()> {
         if res.url().scheme() == "http" && !Self::is_loopback(res.url())
             && res.cookies().any(|cookie| cookie.name() == "Auth" && cookie.secure()) {
-            anyhow::bail!("O servidor em {} exige cookies seguros para autenticar. Use o endereço HTTPS do servidor.", res.url());
+            anyhow::bail!(crate::i18n::fmt("O servidor em {} exige cookies seguros para autenticar. Use o endereço HTTPS do servidor.", &[("0", format!("{}", res.url()))]));
         }
         Ok(())
     }
@@ -217,7 +219,7 @@ impl ApiClient {
     fn check_api_body(body: &[u8], url: &Url, status: StatusCode, content_type: &str) -> Result<()> {
         let text = String::from_utf8_lossy(body);
         if content_type.to_ascii_lowercase().contains("text/html") || text.trim_start().starts_with('<') {
-            anyhow::bail!("O endereço {url} retornou uma página HTML (HTTP {}, Content-Type: {content_type}) em vez de uma resposta da API. Verifique o endereço da API e a configuração do proxy do servidor.", status.as_u16());
+            anyhow::bail!(crate::i18n::fmt("O endereço {url} retornou uma página HTML (HTTP {}, Content-Type: {content_type}) em vez de uma resposta da API. Verifique o endereço da API e a configuração do proxy do servidor.", &[("url", format!("{}", url)), ("0", format!("{}", status.as_u16())), ("content_type", format!("{}", content_type))]));
         }
         Ok(())
     }
@@ -226,22 +228,20 @@ impl ApiClient {
         let url = res.url().clone();
         let status = res.status();
         let content_type = res.headers().get(reqwest::header::CONTENT_TYPE)
-            .and_then(|value| value.to_str().ok()).unwrap_or("não informado").to_owned();
-        let body = body::json_bytes(res).await.context("Erro ao ler a resposta da API")?;
+            .and_then(|value| value.to_str().ok()).unwrap_or(crate::i18n::tr("não informado")).to_owned();
+        let body = body::json_bytes(res).await.context(crate::i18n::tr("Erro ao ler a resposta da API"))?;
         Self::check_api_body(&body, &url, status, &content_type)?;
         anyhow::ensure!(!body.iter().all(u8::is_ascii_whitespace),
             "Resposta vazia de {url} (HTTP {}). Era esperado JSON.", status.as_u16());
-        body::decode(&body).with_context(|| format!(
-            "Resposta JSON inválida de {url} (HTTP {}, Content-Type: {content_type})", status.as_u16()
-        ))
+        body::decode(&body).with_context(|| crate::i18n::fmt("Resposta JSON inválida de {url} (HTTP {}, Content-Type: {content_type})", &[("url", format!("{}", url)), ("0", format!("{}", status.as_u16())), ("content_type", format!("{}", content_type))]))
     }
 
     async fn check_non_json_response(res: reqwest::Response) -> Result<()> {
         let url = res.url().clone();
         let status = res.status();
         let content_type = res.headers().get(reqwest::header::CONTENT_TYPE)
-            .and_then(|value| value.to_str().ok()).unwrap_or("não informado").to_owned();
-        let body = body::read(res,body::ERROR_LIMIT).await.context("Erro ao ler a resposta da API")?;
+            .and_then(|value| value.to_str().ok()).unwrap_or(crate::i18n::tr("não informado")).to_owned();
+        let body = body::read(res,body::ERROR_LIMIT).await.context(crate::i18n::tr("Erro ao ler a resposta da API"))?;
         Self::check_api_body(&body, &url, status, &content_type)
     }
 
@@ -343,6 +343,7 @@ impl ApiClient {
     }
 
     pub async fn logout(&self) -> Result<()> {
+        if let Some((_,cache))=self.thumbnails.lock().unwrap().take(){let _=cache.clear();}
         let resp = self
             .inner
             .post(self.url("/auth/logout"))
@@ -354,6 +355,12 @@ impl ApiClient {
     }
 
     pub(crate) fn session_owner(&self) -> Uuid { *self.session_owner.lock().unwrap() }
+    pub(crate) fn thumbnail_cache(&self,user:Uuid)->Option<crate::media::disk::Cache>{
+        let owner=crate::account::AccountId::new(self,user);let mut cache=self.thumbnails.lock().unwrap();
+        if cache.as_ref().is_some_and(|(old,_)|*old==owner){return cache.as_ref().map(|(_,c)|c.clone());}
+        if let Some((_,old))=cache.take(){let _=old.clear();}
+        let value=crate::media::disk::Cache::for_account(&owner)?;*cache=Some((owner,value.clone()));Some(value)
+    }
     pub(crate) fn adopt_session_owner(&self, owner: Uuid) { *self.session_owner.lock().unwrap()=owner; }
     /// JWT claims are scheduling hints only; authorization remains server-side.
     pub(crate) fn session_expiry(&self) -> Option<chrono::DateTime<chrono::Utc>> {
@@ -400,7 +407,7 @@ impl ApiClient {
     pub async fn channel_permissions(&self, id: Uuid) -> Result<Vec<ChannelPermissionEntry>> {
         #[derive(serde::Deserialize)] struct Response { channel_id: Uuid, permissions: Vec<ChannelPermissionEntry> }
         let response: Response = Self::decode(self.inner.get(self.url(&format!("/channels/{id}/permissions"))).send_paced(&self.requests).await?, "channel permissions").await?;
-        anyhow::ensure!(response.channel_id == id, "Permissões retornadas para outro canal.");
+        anyhow::ensure!(response.channel_id == id, crate::i18n::fmt("Permissões retornadas para outro canal.", &[]));
         Ok(response.permissions)
     }
 
@@ -414,7 +421,7 @@ impl ApiClient {
             let covered=oldest.is_none_or(|old|next.is_some_and(|next|(next.created_at,next.id)<=(old.created_at,old.id)));
             messages.extend(page.messages);
             if !page.has_more||covered{return Ok(MessageListResponse{channel_id,messages,has_more:page.has_more});}
-            anyhow::ensure!(next.is_some()&&next!=cursor,"O servidor retornou uma página sem avanço no histórico.");
+            anyhow::ensure!(next.is_some()&&next!=cursor,crate::i18n::fmt("O servidor retornou uma página sem avanço no histórico.", &[]));
             cursor=next;
         }
     }
@@ -431,7 +438,7 @@ impl ApiClient {
                 .append_pair("last_id", &cursor.id.to_string());
         }
         let response: MessageListResponse = Self::decode(self.inner.get(url).send_paced(&self.requests).await?, "messages").await?;
-        anyhow::ensure!(response.channel_id == channel_id, "A API retornou mensagens de outro canal.");
+        anyhow::ensure!(response.channel_id == channel_id, crate::i18n::fmt("A API retornou mensagens de outro canal.", &[]));
         Ok(response)
     }
 
@@ -460,10 +467,10 @@ impl ApiClient {
     }
     async fn edit_message_request(&self,message_id:Uuid,content:&str,embeds:Option<&[EmbedInput]>)->Result<Message>{
         if let Some(embeds)=embeds{crate::models::validate_embeds(embeds)?;}
-        anyhow::ensure!(content.chars().count() <= 8192, "Use até 8192 caracteres.");
+        anyhow::ensure!(content.chars().count() <= 8192, crate::i18n::fmt("Use até 8192 caracteres.", &[]));
         let message: Message = Self::decode(self.inner.put(self.url(&format!("/messages/{message_id}")))
             .json(&UpdateMessageRequest { content: content.into(),embeds:embeds.map(<[EmbedInput]>::to_vec) }).send_paced(&self.requests).await?, "edit message").await?;
-        anyhow::ensure!(message.id == message_id, "Edição retornada para outra mensagem.");
+        anyhow::ensure!(message.id == message_id, crate::i18n::fmt("Edição retornada para outra mensagem.", &[]));
         Ok(message)
     }
 
@@ -491,7 +498,7 @@ impl ApiClient {
     pub async fn pinned_messages(&self, channel: Uuid) -> Result<Vec<Message>> {
         let response: PinnedList = Self::decode(self.inner.get(self.url(&format!("/channels/{channel}/pinned")))
             .send_paced(&self.requests).await?, "pinned messages").await?;
-        anyhow::ensure!(response.channel_id == channel && response.pinned.iter().all(|m| m.channel_id == channel), "Mensagens fixadas retornadas para outro canal.");
+        anyhow::ensure!(response.channel_id == channel && response.pinned.iter().all(|m| m.channel_id == channel), crate::i18n::fmt("Mensagens fixadas retornadas para outro canal.", &[]));
         Ok(response.pinned)
     }
 
@@ -506,7 +513,7 @@ impl ApiClient {
         url.query_pairs_mut().append_pair("order", "desc");
         if let Some(c) = cursor { url.query_pairs_mut().append_pair("since", &c.created_at.to_rfc3339()).append_pair("last_id", &c.id.to_string()); }
         let page: ReactionList = Self::decode(self.inner.get(url).send_paced(&self.requests).await?, "reaction participants").await?;
-        anyhow::ensure!(page.message_id == message, "Reações retornadas para outra mensagem.");
+        anyhow::ensure!(page.message_id == message, crate::i18n::fmt("Reações retornadas para outra mensagem.", &[]));
         Ok(page)
     }
 
@@ -525,7 +532,7 @@ impl ApiClient {
                 } else { group.count = group.users.len() as i32; groups.push(group); }
             }
             if !page.has_more { return Ok(groups); }
-            anyhow::ensure!(next.is_some() && cursor.map_or(true, |c| next.is_some_and(|n| (n.created_at, n.id) < (c.created_at, c.id))), "Paginação de reações não avançou.");
+            anyhow::ensure!(next.is_some() && cursor.map_or(true, |c| next.is_some_and(|n| (n.created_at, n.id) < (c.created_at, c.id))), crate::i18n::fmt("Paginação de reações não avançou.", &[]));
             cursor = next;
         }
     }
@@ -563,8 +570,8 @@ impl ApiClient {
 
     pub async fn get_embed(&self, id: Uuid) -> Result<Embed> {
         let bytes = self.media_bytes(&format!("/embeds/{id}"), 8 << 20).await?;
-        let preview: Embed = body::decode(&bytes).context("Prévia inválida")?;
-        anyhow::ensure!(preview.id == id, "Prévia retornada para outro link.");
+        let preview: Embed = body::decode(&bytes).context(crate::i18n::tr("Prévia inválida"))?;
+        anyhow::ensure!(preview.id == id, crate::i18n::fmt("Prévia retornada para outro link.", &[]));
         Ok(preview)
     }
 
@@ -586,7 +593,7 @@ impl ApiClient {
             let has_more = page.has_more;
             users.extend(page.users);
             if !has_more { return Ok(users); }
-            anyhow::ensure!(next.is_some() && next != cursor, "Paginação de usuários não avançou.");
+            anyhow::ensure!(next.is_some() && next != cursor, crate::i18n::fmt("Paginação de usuários não avançou.", &[]));
             cursor = next;
         }
     }

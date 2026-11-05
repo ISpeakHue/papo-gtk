@@ -59,10 +59,10 @@ pub(in crate::ui::chat) struct View {
 }
 impl View {
     pub fn new(parent: &ChatModel, root: &gtk::Box, sender: &ComponentSender<ChatModel>) -> Self {
-        let (window, outer) = window(root, "Mensagens fixadas");
+        let (window, outer) = window(root, crate::i18n::tr("Mensagens fixadas"));
         window.set_default_size(680, 600);
         window.set_widget_name(&format!("pins-{}", Uuid::new_v4()));
-        let status = label("Carregando mensagens fixadas…");
+        let status = label(crate::i18n::tr("Carregando mensagens fixadas…"));
         outer.append(&status);
         let channel = parent.active_channel.as_ref().and_then(|target| if let crate::models::ConversationTarget::Channel(c) = target { Some(c.clone()) } else { None });
         let output = sender.clone();

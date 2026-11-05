@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "source_fingerprint": "REPLACE_WITH_TESTED_SOURCE_FINGERPRINT",
+  "platforms": {
+    "linux-appimage": {
+      "tested_by": "", "tested_at": "", "environment": "", "artifact_sha256": "",
+      "checks": {
+        "multi_server": {"status": "pending", "evidence": ""},
+        "reconnect_pending_permissions": {"status": "pending", "evidence": ""},
+        "keyboard_reader_scaling": {"status": "pending", "evidence": ""},
+        "microphone_output": {"status": "pending", "evidence": ""},
+        "direct_turn_call": {"status": "pending", "evidence": ""},
+        "capture_permission_cleanup": {"status": "pending", "evidence": ""},
+        "upgrade_and_rollback": {"status": "pending", "evidence": ""}
+      }
+    },
+    "linux-flatpak": {},
+    "windows-installer": {},
+    "windows-portable": {}
+  }
+}

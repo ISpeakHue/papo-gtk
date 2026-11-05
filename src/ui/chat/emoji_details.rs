@@ -33,7 +33,7 @@ pub(super) fn show(view:&gtk::TextView,offset:i32,details:&Details,state:&Popup)
             let image=gtk::Image::from_paintable(paintable.as_ref());if paintable.is_none(){image.set_icon_name(Some("papo-face-smile-symbolic"));}
             image.set_widget_name("emoji-details-preview");image.set_pixel_size(48);image.set_valign(gtk::Align::Center);image.update_property(&[gtk::accessible::Property::Label(&format!(":{}:",details.name))]);
             if let Some(animation)=animation{animation.watch(&image,None);}body.append(&image);
-            let source=source.borrow();if source.trim().is_empty(){"Emoji personalizado deste servidor".into()}else{format!("Este emoji é do servidor {source}")}
+            let source=source.borrow();if source.trim().is_empty(){crate::i18n::tr("Emoji personalizado deste servidor").into()}else{crate::i18n::fmt("Este emoji é do servidor {source}", &[("source", format!("{}", source))])}
         },
         Preview::Unicode(glyph)=>{
             let image=gtk::Label::new(Some(glyph));image.set_widget_name("emoji-details-preview");let attributes=pango::AttrList::new();attributes.insert(pango::AttrFloat::new_scale(2.2));image.set_attributes(Some(&attributes));image.set_valign(gtk::Align::Center);body.append(&image);

@@ -80,7 +80,7 @@ pub(super) fn heading(card:&gtk::Box,post:&Post){
     window.set_content(None::<&gtk::Widget>);window.close();drop(chat);server.abort();pump(context);
 }
 pub(super) fn action(card:&gtk::Box,post:&Post){
-    let link=gtk::LinkButton::with_label(post.url.as_str(),if post.comment{"Ver comentário no Reddit"}else{"Ver publicação no Reddit"});
+    let link=gtk::LinkButton::with_label(post.url.as_str(),if post.comment{crate::i18n::tr("Ver comentário no Reddit")}else{crate::i18n::tr("Ver publicação no Reddit")});
     link.set_halign(gtk::Align::Start);link.add_css_class("caption");link.set_widget_name("reddit-open");card.append(&link);
 }
 

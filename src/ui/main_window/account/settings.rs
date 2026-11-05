@@ -32,23 +32,23 @@ impl MainWindowModel {
     }
     pub(super) fn open_settings(&mut self,root:&gtk::Box,sender:&ComponentSender<Self>){
         if let Some(view)=self.account.settings.as_ref().filter(|v|v.window.is_visible()){view.window.present();return;}
-        let window:gtk::Window=adw::Window::builder().title("Configurações da conta").default_width(760).default_height(800).modal(true).build().upcast();
+        let window:gtk::Window=adw::Window::builder().title(crate::i18n::tr("Configurações da conta")).default_width(760).default_height(800).modal(true).build().upcast();
         window.set_widget_name("account-settings-window");
         window.add_css_class("papo-account-settings");
         window.set_size_request(320,400);
         if let Some(parent)=root.root().and_downcast::<gtk::Window>(){window.set_transient_for(Some(&parent));}
-        let toolbar=adw::ToolbarView::new();let header=adw::HeaderBar::new();header.set_title_widget(Some(&adw::WindowTitle::new("Configurações da conta","")));toolbar.add_top_bar(&header);
+        let toolbar=adw::ToolbarView::new();let header=adw::HeaderBar::new();header.set_title_widget(Some(&adw::WindowTitle::new(crate::i18n::tr("Configurações da conta"),"")));toolbar.add_top_bar(&header);
         let body=gtk::Box::new(gtk::Orientation::Vertical,0);
         let tabs=gtk::Stack::new();tabs.set_widget_name("account-settings-tabs");tabs.set_vexpand(true);tabs.set_hhomogeneous(false);tabs.set_vhomogeneous(false);tabs.set_transition_type(gtk::StackTransitionType::None);
         let mut pages=Vec::new();
-        for (tab,title) in [(Tab::Profile,"Meu perfil"),(Tab::Preferences,"Preferências"),(Tab::Security,"Segurança")]{
+        for (tab,title) in [(Tab::Profile,crate::i18n::tr("Meu perfil")),(Tab::Preferences,crate::i18n::tr("Preferências")),(Tab::Security,crate::i18n::tr("Segurança"))]{
             let page=gtk::Box::new(gtk::Orientation::Vertical,0);page.set_vexpand(true);tabs.add_titled(&page,Some(tab.name()),title);pages.push((tab,page));
         }
         let navigation=gtk::Box::new(gtk::Orientation::Horizontal,0);navigation.add_css_class("papo-settings-navigation");
         let switcher=gtk::Box::new(gtk::Orientation::Horizontal,8);switcher.set_halign(gtk::Align::Center);switcher.set_hexpand(true);navigation.append(&switcher);
         let compact=adw::Breakpoint::new(adw::BreakpointCondition::parse("max-width: 520sp").unwrap());
         let mut buttons:Vec<(Tab,gtk::ToggleButton)>=Vec::new();
-        for (tab,title,icon) in [(Tab::Profile,"Meu perfil","papo-avatar-default-symbolic"),(Tab::Preferences,"Preferências","papo-preferences-system-symbolic"),(Tab::Security,"Segurança","papo-security-high-symbolic")]{
+        for (tab,title,icon) in [(Tab::Profile,crate::i18n::tr("Meu perfil"),"papo-avatar-default-symbolic"),(Tab::Preferences,crate::i18n::tr("Preferências"),"papo-preferences-system-symbolic"),(Tab::Security,crate::i18n::tr("Segurança"),"papo-security-high-symbolic")]{
             let button=gtk::ToggleButton::new();button.add_css_class("flat");button.add_css_class("papo-settings-tab");button.set_widget_name(&format!("account-tab-{}",tab.name()));button.set_tooltip_text(Some(title));button.update_property(&[gtk::accessible::Property::Label(title)]);
             if let Some((_,first))=buttons.first(){button.set_group(Some(first));}
             let content=gtk::Box::new(gtk::Orientation::Horizontal,8);content.set_halign(gtk::Align::Center);let image=gtk::Image::from_icon_name(icon);image.set_pixel_size(18);content.append(&image);let label=gtk::Label::new(Some(title));content.append(&label);button.set_child(Some(&content));
@@ -101,7 +101,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let current_user=serde_json::from_value(backend.lock().unwrap().profile.clone()).unwrap();
     let main=MainWindowModel::builder().launch(MainWindowInit{current_user,api_client:api}).detach();
     let host=adw::Window::builder().default_width(1100).default_height(740).content(main.widget()).build();host.present();
-    until(context,||main.model().background_started&&main.model().access_request.is_none()&&main.model().active_channel_id.is_some());
+    until(context,||main.model().connection.state.background_started&&main.model().access_request.is_none()&&main.model().active_channel_id.is_some());
     let gear=find_button(main.widget().upcast_ref(),"Configurações da conta");gear.emit_clicked();
     until(context,||main.model().account.profile.as_ref().is_some_and(|v|v.embedded&&v.fields.is_some()));
     let(window,tabs)={let model=main.model();let view=model.account.settings.as_ref().unwrap();(view.window.clone(),view.tabs.clone())};
@@ -159,9 +159,9 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     assert!(window.is_visible());assert_eq!(main.model().account.profile.as_ref().unwrap().window,window);assert_eq!(tabs.visible_child_name().as_deref(),Some("preferences"));
     assert_eq!(main.model().current_user.nickname.as_deref(),Some("Tabbed nickname"));assert_eq!(main.model().account.preferences.as_ref().unwrap().theme.selected(),2);
     find_button(window.upcast_ref(),"Salvar preferências").emit_clicked();until(context,||main.model().account.preferences.as_ref().is_some_and(|v|!v.pending&&v.error.text().contains("Settings failed")));
-    assert_eq!(main.model().account.config.theme,Some(Theme::System));
-    find_button(window.upcast_ref(),"Salvar preferências").emit_clicked();until(context,||main.model().account.config.theme==Some(Theme::Dark));assert_eq!(crate::media::animation::motion(),crate::config::Motion::Reduced);
-    {let model=main.model();let config=&model.account.config;let d=config.display.as_ref().unwrap();let n=config.notifications.as_ref().unwrap();assert_eq!([d.show_timestamps,d.show_avatars,n.enabled,n.message_preview,n.sound,n.mentions],[Some(false),Some(true),Some(true),Some(false),Some(false),Some(true)],"each native switch saves its corresponding setting");}
+    assert_eq!(main.model().connection.config.theme,Some(Theme::System));
+    find_button(window.upcast_ref(),"Salvar preferências").emit_clicked();until(context,||main.model().connection.config.theme==Some(Theme::Dark));assert_eq!(crate::media::animation::motion(),crate::config::Motion::Reduced);
+    {let model=main.model();let config=&model.connection.config;let d=config.display.as_ref().unwrap();let n=config.notifications.as_ref().unwrap();assert_eq!([d.show_timestamps,d.show_avatars,n.enabled,n.message_preview,n.sound,n.mentions],[Some(false),Some(true),Some(true),Some(false),Some(false),Some(true)],"each native switch saves its corresponding setting");}
     let (token,draft)={let model=main.model();let v=model.account.profile.as_ref().unwrap();(v.token,profile_values(v.fields.as_ref().unwrap()))};
     let generation=Uuid::new_v4();main.state().get_mut().model.account.profile.as_mut().unwrap().reconcile=Some(generation);
     main.model().account.profile.as_ref().unwrap().fields.as_ref().unwrap().description.set_text("Draft entered during reconciliation");
@@ -226,14 +226,15 @@ fn find_passwords(window:&gtk::Window)->Vec<gtk::PasswordEntry>{
 }
 
 pub(super) fn profile_values(f:&ProfileFields)->Vec<String>{vec![f.nickname.text().into(),f.status.text().into(),f.description.text(&f.description.start_iter(),&f.description.end_iter(),false).into(),f.typing.text().into(),f.manual.selected().to_string()]}
-pub(super) fn preferences_values(v:&PreferencesView)->Vec<String>{std::iter::once(v.theme.selected().to_string()).chain([v.font.selected().to_string(),v.density.selected().to_string(),v.motion.selected().to_string()]).chain(v.toggles.iter().map(|c|c.is_active().to_string())).collect()}
+pub(super) fn preferences_values(v:&PreferencesView)->Vec<String>{std::iter::once(v.theme.selected().to_string()).chain([v.font.selected().to_string(),v.density.selected().to_string(),v.motion.selected().to_string(),v.language.selected().to_string(),v.media_loading.selected().to_string(),v.low_memory.is_active().to_string()]).chain(v.toggles.iter().map(|c|c.is_active().to_string())).collect()}
 pub(super) fn watch_profile(f:&ProfileFields,sender:&ComponentSender<MainWindowModel>){
     for entry in [&f.nickname,&f.status,&f.typing]{let s=sender.clone();entry.connect_changed(move |_|s.input(MainWindowMsg::Account(AccountMsg::Dirty)));}
     let s=sender.clone();f.description.connect_changed(move |_|s.input(MainWindowMsg::Account(AccountMsg::Dirty)));
     let s=sender.clone();f.manual.connect_selected_notify(move |_|s.input(MainWindowMsg::Account(AccountMsg::Dirty)));
 }
 pub(super) fn watch_preferences(v:&PreferencesView,sender:&ComponentSender<MainWindowModel>){
-    for dropdown in [&v.theme,&v.font,&v.density,&v.motion]{let s=sender.clone();dropdown.connect_selected_notify(move |_|s.input(MainWindowMsg::Account(AccountMsg::Dirty)));}
+    let s=sender.clone();v.low_memory.connect_active_notify(move |_|s.input(MainWindowMsg::Account(AccountMsg::Dirty)));
+    for dropdown in [&v.theme,&v.font,&v.density,&v.motion,&v.language,&v.media_loading]{let s=sender.clone();dropdown.connect_selected_notify(move |_|s.input(MainWindowMsg::Account(AccountMsg::Dirty)));}
     for toggle in &v.toggles{let s=sender.clone();toggle.connect_active_notify(move |_|s.input(MainWindowMsg::Account(AccountMsg::Dirty)));}
 }
 impl Account {
@@ -258,8 +259,8 @@ impl MainWindowModel {
         if self.account.pending(){return;}
         if !self.account.profile_dirty()&&!self.account.preferences_dirty(){v.allow_close.set(true);v.window.close();return;}
         if v.prompt.replace(true){return;}
-        let dialog=adw::AlertDialog::builder().heading("Salvar alterações?").body("Há alterações no perfil ou nas preferências que ainda não foram salvas.").build();
-        dialog.add_responses(&[("cancel","Cancelar"),("discard","Descartar"),("save","Salvar")]);dialog.set_close_response("cancel");dialog.set_default_response(Some("save"));dialog.set_response_appearance("discard",adw::ResponseAppearance::Destructive);dialog.set_response_appearance("save",adw::ResponseAppearance::Suggested);
+        let dialog=adw::AlertDialog::builder().heading(crate::i18n::tr("Salvar alterações?")).body(crate::i18n::tr("Há alterações no perfil ou nas preferências que ainda não foram salvas.")).build();
+        dialog.add_responses(&[("cancel",crate::i18n::tr("Cancelar")),("discard",crate::i18n::tr("Descartar")),("save",crate::i18n::tr("Salvar"))]);dialog.set_close_response("cancel");dialog.set_default_response(Some("save"));dialog.set_response_appearance("discard",adw::ResponseAppearance::Destructive);dialog.set_response_appearance("save",adw::ResponseAppearance::Suggested);
         let s=sender.clone();dialog.connect_response(None,move |_,response|s.input(MainWindowMsg::Account(AccountMsg::CloseChoice(response.into()))));dialog.present(Some(&v.window));
     }
     pub(super) fn settings_close_choice(&mut self,choice:&str,sender:&ComponentSender<Self>){

@@ -1,11 +1,11 @@
 //! EN-US: Capture sources are OS-specific; WebRTC signaling and decoding stay shared.
 //! PT-BR: Fontes de captura dependem do SO; sinalização WebRTC e decodificação continuam compartilhadas.
 #[cfg(target_os="linux")]
-pub const WORKER:&str=concat!(include_str!("../../voice/screen_portal.py"),"\n",include_str!("linux.py"),"\n",include_str!("../../voice/engine.py"));
+pub const WORKER:&str=concat!(include_str!("../../voice/screen_portal.py"),"\n",include_str!("linux.py"),"\n",include_str!("../../voice/audio.py"),"\n",include_str!("../../voice/engine.py"));
 #[cfg(target_os="windows")]
-pub const WORKER:&str=concat!(include_str!("windows.py"),"\n",include_str!("../../voice/engine.py"));
+pub const WORKER:&str=concat!(include_str!("windows.py"),"\n",include_str!("../../voice/audio.py"),"\n",include_str!("../../voice/engine.py"));
 #[cfg(not(any(target_os="linux",target_os="windows")))]
-pub const WORKER:&str=concat!(include_str!("unavailable.py"),"\n",include_str!("../../voice/engine.py"));
+pub const WORKER:&str=concat!(include_str!("unavailable.py"),"\n",include_str!("../../voice/audio.py"),"\n",include_str!("../../voice/engine.py"));
 
 // EN-US: Windows sharing needs its bundled bridge; the worker checks WGC support before selection.
 // PT-BR: Compartilhar no Windows exige a ponte incluída; o worker verifica WGC antes da seleção.

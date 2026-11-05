@@ -33,16 +33,13 @@ fn info(embed:Option<&Embed>,source:Option<&str>)->gtk::Box{
 pub(super) fn widget(embed:Option<&Embed>,source:Option<&str>,message:Uuid,key:Uuid,media:&Transfers,sender:&ComponentSender<ChatModel>)->gtk::Box{
     let container=gtk::Box::new(gtk::Orientation::Vertical,0);container.set_widget_name(&format!("gif-{key}"));container.set_halign(gtk::Align::Start);
     if let Some(picture)=media.picture(key){
-        let button=gtk::Button::new();button.set_has_frame(false);button.set_halign(gtk::Align::Start);button.add_css_class("papo-inline-image");button.set_tooltip_text(Some("Abrir GIF"));button.set_child(Some(&media.image_frame(key,&picture,true,None)));
+        let button=gtk::Button::new();button.set_has_frame(false);button.set_halign(gtk::Align::Start);button.add_css_class("papo-inline-image");button.set_tooltip_text(Some(crate::i18n::tr("Abrir GIF")));button.set_child(Some(&media.image_frame(key,&picture,true,None)));
         let input=sender.input_sender().clone();button.connect_clicked(move |_|{let _=input.send(ChatMsg::Transfer(TransferMsg::OpenImage{message,key}));});container.append(&button);
+        if media.failed.contains_key(&key){container.append(&media.status(key,sender));}
     }else{
-        let placeholder=gtk::Box::new(gtk::Orientation::Vertical,6);placeholder.set_halign(gtk::Align::Center);placeholder.set_valign(gtk::Align::Center);
-        let failed=media.failed.contains_key(&key)&&!media.requested.contains(&key);
-        if failed{let icon=gtk::Image::from_icon_name("papo-image-missing-symbolic");icon.set_pixel_size(24);placeholder.append(&icon);}else{placeholder.append(&gtk::Spinner::builder().spinning(true).build());}
-        let button=gtk::MenuButton::new();button.set_has_frame(false);button.add_css_class("papo-inline-image");button.set_tooltip_text(Some(if failed{"GIF indisponível — informações e tentar novamente"}else{"Carregando GIF — informações"}));button.set_child(Some(&media.placeholder(key,&placeholder,true)));
-        let popover=gtk::Popover::new();let body=info(embed,source);
-        if failed{let label=gtk::Label::new(Some("Não foi possível carregar o GIF."));label.add_css_class("dim-label");body.append(&label);}
-        let retry=gtk::Button::with_label("Tentar novamente");let input=sender.input_sender().clone();let weak=popover.downgrade();retry.connect_clicked(move |_|{if let Some(popover)=weak.upgrade(){popover.popdown();}let _=input.send(ChatMsg::Transfer(TransferMsg::RetryImage(key)));});body.append(&retry);popover.set_child(Some(&body));button.set_popover(Some(&popover));container.append(&button);
+        let overlay=gtk::Overlay::new();overlay.set_child(Some(&media.placeholder(key,&media.status(key,sender),true)));
+        let info_button=gtk::MenuButton::new();info_button.set_icon_name("papo-view-more-symbolic");info_button.add_css_class("flat");info_button.set_halign(gtk::Align::End);info_button.set_valign(gtk::Align::Start);info_button.set_tooltip_text(Some(if media.failed.contains_key(&key){crate::i18n::tr("GIF indisponível — informações e tentar novamente")}else{crate::i18n::tr("Informações da mídia")}));
+        let popover=gtk::Popover::new();let body=info(embed,source);let retry=gtk::Button::with_label(crate::i18n::tr("Tentar novamente"));let input=sender.input_sender().clone();let weak=popover.downgrade();retry.connect_clicked(move |_|{if let Some(p)=weak.upgrade(){p.popdown();}let _=input.send(ChatMsg::Transfer(TransferMsg::RetryImage(key)));});body.append(&retry);popover.set_child(Some(&body));info_button.set_popover(Some(&popover));overlay.add_overlay(&info_button);container.append(&overlay);
     }container
 }
 pub(super) fn viewer(window:&gtk::Window,embed:Option<&Embed>,source:Option<&str>){

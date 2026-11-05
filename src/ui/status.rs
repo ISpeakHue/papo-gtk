@@ -12,7 +12,7 @@ pub fn resource(status:PresenceStatus)->&'static str {
     }
 }
 pub fn label(status:PresenceStatus)->&'static str {
-    match status {PresenceStatus::Online=>"Disponível",PresenceStatus::Away=>"Ausente",PresenceStatus::Busy=>"Ocupado",PresenceStatus::Offline=>"Offline"}
+    match status {PresenceStatus::Online=>crate::i18n::tr("Disponível"),PresenceStatus::Away=>crate::i18n::tr("Ausente"),PresenceStatus::Busy=>crate::i18n::tr("Ocupado"),PresenceStatus::Offline=>"Offline"}
 }
 pub fn manual(status:Option<&crate::models::UserStatus>)->PresenceStatus {
     match status {Some(crate::models::UserStatus::Away)=>PresenceStatus::Away,Some(crate::models::UserStatus::Busy)=>PresenceStatus::Busy,None=>PresenceStatus::Online}

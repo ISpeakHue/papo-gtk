@@ -51,23 +51,23 @@ impl MainWindowModel {
                 if let Some(view) = &self.security.view { if view.embedded==embedded&&view.window.is_visible() { view.window.present(); return; } }
                 if let Some(old)=self.security.view.take(){old.password.set_text("");old.confirmation.set_text("");if old.embedded{self.clear_settings_tab(account::settings::Tab::Security,&old.window);}else{old.window.close();}}
                 let token = Uuid::new_v4();
-                let (w, body) = if embedded{self.settings_form(account::settings::Tab::Security).unwrap()}else{window(root, "Segurança da conta")};
+                let (w, body) = if embedded{self.settings_form(account::settings::Tab::Security).unwrap()}else{window(root, crate::i18n::tr("Segurança da conta"))};
                 if !embedded{w.set_default_height(-1);}
                 body.set_valign(gtk::Align::Start);
                 body.set_spacing(24);
                 let password_section=gtk::Box::new(gtk::Orientation::Vertical,12);
-                password_section.append(&design::heading("Alterar senha"));body.append(&password_section);
+                password_section.append(&design::heading(crate::i18n::tr("Alterar senha")));body.append(&password_section);
                 let (fields,password,confirmation)=design::password_fields();password_section.append(&fields);
-                let policy = gtk::Label::new(Some("A senha deve atender à política do servidor, incluindo maiúscula e caractere especial."));
+                let policy = gtk::Label::new(Some(crate::i18n::tr("A senha deve atender à política do servidor, incluindo maiúscula e caractere especial.")));
                 policy.set_wrap(true); policy.set_xalign(0.0);policy.add_css_class("dim-label");password_section.append(&policy);
-                let save = gtk::Button::with_label("Alterar senha"); let s = sender.clone();
+                let save = gtk::Button::with_label(crate::i18n::tr("Alterar senha")); let s = sender.clone();
                 save.add_css_class("suggested-action");save.add_css_class("papo-security-save");save.set_halign(gtk::Align::End);save.set_margin_top(4);
                 save.connect_clicked(move |_| s.input(MainWindowMsg::Security(SecurityMsg::SavePassword(token))));password_section.append(&save);
                 let sessions=gtk::Box::new(gtk::Orientation::Vertical,12);sessions.set_margin_top(12);body.append(&sessions);
-                let heading=gtk::Box::new(gtk::Orientation::Horizontal,12);let title=design::heading("Sessões");title.set_hexpand(true);heading.append(&title);sessions.append(&heading);
-                let reload = gtk::Button::from_icon_name("papo-view-refresh-symbolic");reload.set_tooltip_text(Some("Atualizar sessões"));reload.update_property(&[gtk::accessible::Property::Label("Atualizar sessões")]);let s = sender.clone();
+                let heading=gtk::Box::new(gtk::Orientation::Horizontal,12);let title=design::heading(crate::i18n::tr("Sessões"));title.set_hexpand(true);heading.append(&title);sessions.append(&heading);
+                let reload = gtk::Button::from_icon_name("papo-view-refresh-symbolic");reload.set_tooltip_text(Some(crate::i18n::tr("Atualizar sessões")));reload.update_property(&[gtk::accessible::Property::Label(crate::i18n::tr("Atualizar sessões"))]);let s = sender.clone();
                 reload.connect_clicked(move |_| s.input(MainWindowMsg::Security(SecurityMsg::Reload(token))));heading.append(&reload);
-                let all = gtk::Button::with_label("Encerrar todas as sessões"); let s = sender.clone();
+                let all = gtk::Button::with_label(crate::i18n::tr("Encerrar todas as sessões")); let s = sender.clone();
                 all.add_css_class("destructive-action");all.set_hexpand(true);
                 all.connect_clicked(move |_| s.input(MainWindowMsg::Security(SecurityMsg::ConfirmDrop { token, id: "ALL".into() })));
                 let devices = gtk::Box::new(gtk::Orientation::Vertical, 12);
@@ -83,8 +83,8 @@ impl MainWindowModel {
             }
             SecurityMsg::Reload(token) => {
                 let Some(view) = self.security.view.as_mut().filter(|v| v.token == token && v.window.is_visible() && !v.loading) else { return; };
-                view.loading = true; view.error.set_text("Carregando sessões…");
-                let api = self.api_client.clone(); let s = sender.clone();
+                view.loading = true; view.error.set_text(crate::i18n::tr("Carregando sessões…"));
+                let api = self.connection.api.clone(); let s = sender.clone();
                 self.security.jobs.push(tokio::spawn(async move { let result = api.connected_devices().await; s.input(MainWindowMsg::Security(SecurityMsg::Devices { token, result })); }));
             }
             SecurityMsg::Devices { token, result } => {
@@ -113,37 +113,37 @@ impl MainWindowModel {
                 if self.security.mutation { return; }
                 let Some(view) = self.security.view.as_ref().filter(|v| v.token == token && v.window.is_visible()) else { return; };
                 let password = view.password.text().to_string();
-                if password.is_empty() || password != view.confirmation.text() { view.error.set_text("Informe e confirme a mesma nova senha."); return; }
-                self.security.mutation = true; view.controls.set_sensitive(false); view.error.set_text("Alterando senha…");
-                let api = self.api_client.clone(); let user = self.current_user.id; let s = sender.clone();
+                if password.is_empty() || password != view.confirmation.text() { view.error.set_text(crate::i18n::tr("Informe e confirme a mesma nova senha.")); return; }
+                self.security.mutation = true; view.controls.set_sensitive(false); view.error.set_text(crate::i18n::tr("Alterando senha…"));
+                let api = self.connection.api.clone(); let user = self.current_user.id; let s = sender.clone();
                 self.security.jobs.push(tokio::spawn(async move { let result = api.change_own_password(user, &password).await; s.input(MainWindowMsg::Security(SecurityMsg::PasswordSaved { token, result })); }));
             }
             SecurityMsg::PasswordSaved { token, result } => {
                 self.security.mutation = false;
                 let Some(view) = self.security.view.as_ref().filter(|v| v.token == token) else { return; }; view.controls.set_sensitive(true);
                 match result {
-                    Ok(()) => { view.password.set_text(""); view.confirmation.set_text(""); view.error.set_text("Senha alterada. Use a nova senha no próximo login."); }
+                    Ok(()) => { view.password.set_text(""); view.confirmation.set_text(""); view.error.set_text(crate::i18n::tr("Senha alterada. Use a nova senha no próximo login.")); }
                     Err(error) => { view.error.set_text(&error.to_string()); sender.input(MainWindowMsg::ActionError(error)); }
                 }
             }
             SecurityMsg::ConfirmDrop { token, id } => {
                 if self.security.mutation || !self.security.view.as_ref().is_some_and(|v| v.token == token && v.window.is_visible()) { return; }
                 if let Some(w) = self.security.confirmation.take() { w.close(); }
-                let (w, body) = window(root, "Encerrar sessão?");
+                let (w, body) = window(root, crate::i18n::tr("Encerrar sessão?"));
                 if let Some(view)=&self.security.view{w.set_transient_for(Some(&view.window));}
                 w.set_default_height(-1);
-                let warning = gtk::Label::new(Some(if id == "ALL" { "Todas as sessões serão encerradas, incluindo esta." } else { "Se esta for sua sessão atual, será necessário entrar novamente." }));
+                let warning = gtk::Label::new(Some(if id == "ALL" { crate::i18n::tr("Todas as sessões serão encerradas, incluindo esta.") } else { crate::i18n::tr("Se esta for sua sessão atual, será necessário entrar novamente.") }));
                 warning.set_wrap(true); body.append(&warning);
-                let cancel = gtk::Button::with_label("Cancelar"); let close = w.clone(); cancel.connect_clicked(move |_| close.close()); body.append(&cancel);
-                let confirm = gtk::Button::with_label("Confirmar encerramento"); let s = sender.clone(); let close = w.clone();
+                let cancel = gtk::Button::with_label(crate::i18n::tr("Cancelar")); let close = w.clone(); cancel.connect_clicked(move |_| close.close()); body.append(&cancel);
+                let confirm = gtk::Button::with_label(crate::i18n::tr("Confirmar encerramento")); let s = sender.clone(); let close = w.clone();
                 confirm.connect_clicked(move |_| { close.close(); s.input(MainWindowMsg::Security(SecurityMsg::Drop { token, id: id.clone() })); }); body.append(&confirm);
                 w.present(); self.security.confirmation = Some(w);
             }
             SecurityMsg::Drop { token, id } => {
                 if self.security.mutation { return; }
                 let Some(view) = self.security.view.as_ref().filter(|v| v.token == token && v.window.is_visible()) else { return; };
-                self.security.mutation = true; view.controls.set_sensitive(false); view.error.set_text("Encerrando sessão…");
-                let api = self.api_client.clone(); let s = sender.clone();
+                self.security.mutation = true; view.controls.set_sensitive(false); view.error.set_text(crate::i18n::tr("Encerrando sessão…"));
+                let api = self.connection.api.clone(); let s = sender.clone();
                 self.security.jobs.push(tokio::spawn(async move {
                     let result = async { api.drop_connection(&id).await?; if id == "ALL" { return Ok(true); }
                         match api.whoami().await { Ok(_) => Ok(false), Err(error) if crate::api::is_session_error(&error) => Ok(true), Err(error) => Err(error) }
@@ -155,7 +155,7 @@ impl MainWindowModel {
                 self.security.mutation = false;
                 match result {
                     Ok(true) => { self.voice_disconnected();let _ = sender.output(MainWindowOutput::SessionExpired); }
-                    Ok(false) => { if let Some(v) = self.security.view.as_ref().filter(|v| v.token == token) { v.controls.set_sensitive(true); v.error.set_text("Sessão encerrada."); } sender.input(MainWindowMsg::Security(SecurityMsg::Reload(token))); }
+                    Ok(false) => { if let Some(v) = self.security.view.as_ref().filter(|v| v.token == token) { v.controls.set_sensitive(true); v.error.set_text(crate::i18n::tr("Sessão encerrada.")); } sender.input(MainWindowMsg::Security(SecurityMsg::Reload(token))); }
                     Err(error) => { if let Some(v) = self.security.view.as_ref().filter(|v| v.token == token) { v.controls.set_sensitive(true); v.error.set_text(&error.to_string()); } sender.input(MainWindowMsg::ActionError(error)); }
                 }
             }

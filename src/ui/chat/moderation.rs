@@ -26,6 +26,7 @@ const FALLBACK_DELAY:std::time::Duration=std::time::Duration::from_secs(3);
 impl ChatModel {
     pub(super) fn apply_moderation_change(&mut self,message:Uuid,key:Uuid,status:&str)->bool{
         if self.history.is_deleted(message){return false;}
+        self.transfers.disk_change(&Change::Moderation(message,key,status.into()));
         let previous=self.history.messages.iter().find(|m|m.id==message).and_then(|m|m.attachments.as_ref()).and_then(|a|a.iter().find(|a|a.id==key)).cloned();
         if status!="blocked"&&previous.as_ref().is_some_and(|a|a.moderation_status.as_deref()==Some(status)){return false;}
         let mut invalidate=false;
@@ -195,7 +196,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     // retaining pending metadata until the real completion event arrives.
     let own=message(user,2);let own_key=own.attachments.as_ref().unwrap()[0].id;backend.lock().unwrap().attachment_thumbnails.insert(format!("/attachments/{own_key}/thumbnail"),png.clone());
     let file=tokio::runtime::Handle::current().block_on(crate::api::features::UploadFile::clipboard_png(&png)).unwrap();
-    let request={let mut state=chat.state().get_mut();state.model.draft.files.push(file);state.model.draft.begin().unwrap()};
+    let request={let mut state=chat.state().get_mut();state.model.draft.files.push(file);state.model.begin_test_send()};
     chat.emit(ChatMsg::SendFinished{request_id:request,channel_id:channel,result:Ok(own.clone())});until(context,||chat.model().transfers.textures.contains_key(&own_key)&&chat.model().media_render_pending.is_none());
     assert_eq!(chat.model().history.messages.iter().find(|m|m.id==own.id).unwrap().attachments.as_ref().unwrap()[0].moderation_status.as_deref(),Some("pending"));assert!(chat.model().moderation.timer.is_none());assert_eq!(reads(),0);
     settle(context);assert_eq!(downloads(own_key),1);let own_texture=chat.model().transfers.textures[&own_key].clone();deliver("moderation_update",own.id,own_key,"clean");settle(context);assert_eq!(chat.model().transfers.textures[&own_key],own_texture);assert_eq!(downloads(own_key),1);

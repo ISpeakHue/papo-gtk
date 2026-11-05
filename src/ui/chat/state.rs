@@ -21,9 +21,9 @@ pub enum Change {
 
 #[derive(Default)]
 pub struct History {
+    pending:Option<Uuid>,
     pub messages: Vec<Message>,
     channel_id: Option<Uuid>,
-    pending: Option<Uuid>,
     changes: Vec<Change>,
     deleted: HashSet<Uuid>,
     snapshots: HashMap<Uuid, Vec<Change>>,
@@ -363,38 +363,15 @@ pub struct Draft {
     pub embeds:Vec<crate::models::EmbedInput>,
     pub files: Vec<crate::api::features::UploadFile>,
     pub reply: Option<Message>,
+    pub reply_unresolved:bool,
+    pub recovery_notice:Option<String>,
+    pub missing_attachments:usize,
+    pub reply_error:Option<String>,
     pub error: Option<String>,
-    pending: Option<Uuid>,
 }
 
 impl Draft {
-    pub fn is_sending(&self) -> bool {
-        self.pending.is_some()
-    }
-
-    pub fn begin(&mut self) -> Option<Uuid> {
-        if self.is_sending() || (self.text.trim().is_empty() && self.files.is_empty()&&self.embeds.is_empty()) {
-            return None;
-        }
-        let id = Uuid::new_v4();
-        self.pending = Some(id);
-        self.error = None;
-        Some(id)
-    }
-
-    pub fn finish(&mut self, id: Uuid, result: Result<(), String>) -> bool {
-        if self.pending != Some(id) {
-            return false;
-        }
-        self.pending = None;
-        match result {
-            Ok(()) => { self.text.clear(); self.files.clear();self.embeds.clear(); self.reply = None; self.error = None; }
-            Err(error) => self.error = Some(error),
-        }
-        true
-    }
-    pub fn pending_id(&self) -> Option<Uuid> { self.pending }
-    pub fn cancel(&mut self) { self.pending = None; self.error = Some("Envio cancelado. Confira o histórico antes de reenviar: o servidor pode ter recebido a mensagem.".into()); }
+    pub fn is_empty(&self)->bool{self.text.is_empty()&&self.embeds.is_empty()&&self.files.is_empty()&&self.reply.is_none()&&self.missing_attachments==0}
 }
 
 #[cfg(test)]
@@ -511,10 +488,6 @@ mod tests {
         let mut newer=embed;newer.id=Uuid::new_v4();history.apply(Change::Embeds(original.id,vec![newer.clone()]));assert_eq!(history.messages[0].embeds,Some(vec![newer]));
         history.apply(Change::Delete(original.id));history.apply(Change::Embeds(original.id,vec![]));assert!(history.messages.is_empty());
     }
-    #[test]fn embed_only_drafts_preserve_inputs_on_failure_and_clear_on_success(){
-        let mut draft=Draft{embeds:vec![crate::models::EmbedInput{title:"Rich".into(),..Default::default()}],..Default::default()};
-        let id=draft.begin().unwrap();assert!(draft.finish(id,Err("Try again".into())));assert_eq!(draft.embeds.len(),1);let id=draft.begin().unwrap();assert!(draft.finish(id,Ok(())));assert!(draft.embeds.is_empty());
-    }
 
     #[test]fn large_history_pages_merge_once_deduplicate_and_replay_events(){
         let channel=Uuid::new_v4();let mut history=History::default();history.select(channel);let page:Vec<_>=(0..10_000).map(|i|message(channel,i)).collect();let request=Uuid::new_v4();history.begin(request);assert!(history.finish(request,page[5000..].to_vec(),false));
@@ -526,14 +499,6 @@ mod tests {
         let channel=Uuid::new_v4();let mut history=History::default();history.select(channel);let m=message(channel,1);history.apply(Change::Upsert(m.clone()));
         let request=Uuid::new_v4();history.begin(request);history.apply(Change::Moderation(m.id,Uuid::new_v4(),"blocked".into()));assert!(history.messages.is_empty());
         history.finish(request,vec![m.clone()],false);history.apply(Change::Upsert(m));assert!(history.messages.is_empty());
-    }
-
-    #[test]
-    fn file_only_draft_retains_selection_on_failure_and_cancel() {
-        let mut draft=Draft::default();draft.files.push(crate::api::features::UploadFile{path:"file".into(),name:"file".into(),size:1,_temporary:None});
-        let first=draft.begin().unwrap();assert!(draft.finish(first,Err("offline".into())));assert_eq!(draft.files.len(),1);
-        let cancelled=draft.begin().unwrap();draft.cancel();assert!(!draft.finish(cancelled,Ok(())));assert_eq!(draft.files.len(),1);
-        let next=draft.begin().unwrap();assert!(draft.finish(next,Ok(())));assert!(draft.files.is_empty());
     }
 
     #[test]
@@ -617,44 +582,6 @@ mod tests {
         assert_eq!(history.messages.len(), 2);
         assert_eq!(history.messages[0].reactions.as_ref().unwrap()[0].count, 2);
         assert_eq!(history.messages[1].created_at.timestamp(), 3);
-    }
-
-    #[test]
-    fn failed_send_preserves_text_and_reply_and_allows_retry() {
-        let mut draft = Draft {
-            text: "my draft".into(), reply: Some(message(Uuid::new_v4(), 1)),
-            ..Draft::default()
-        };
-        let request = draft.begin().unwrap();
-        assert!(draft.begin().is_none());
-        assert!(draft.finish(request, Err("offline".into())));
-        assert_eq!(draft.text, "my draft");
-        assert!(draft.reply.is_some());
-        assert_eq!(draft.error.as_deref(), Some("offline"));
-        assert!(!draft.is_sending());
-        let retry = draft.begin().unwrap();
-        draft.finish(retry, Ok(()));
-        assert!(draft.text.is_empty());
-        assert!(draft.reply.is_none());
-        assert!(draft.error.is_none());
-    }
-
-    #[test]
-    fn old_completion_cannot_clear_new_channel_draft() {
-        let mut old = Draft { text: "old".into(), ..Draft::default() };
-        let old_request = old.begin().unwrap();
-        let mut new = Draft { text: "new".into(), ..Draft::default() };
-        let new_request = new.begin().unwrap();
-        assert!(!new.finish(old_request, Ok(())));
-        assert_eq!(new.text, "new");
-        assert!(new.is_sending());
-        assert!(new.finish(new_request, Ok(())));
-    }
-
-    #[test]
-    fn blank_draft_is_not_sent() {
-        let mut draft = Draft { text: " \n ".into(), ..Draft::default() };
-        assert!(draft.begin().is_none());
     }
     #[test]
     fn live_reactions_replay_during_fetch_preserve_order_and_remove_zero_counts() {

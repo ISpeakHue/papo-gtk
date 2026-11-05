@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "source_commit": "eab626662bc4bfeb4ce1cd3165b01eccb4c2c5a5",
+  "scope": "Reviewed source only; not deployed-server capability negotiation.",
+  "contracts": {
+    "human_message_idempotency": "missing",
+    "webhook_message_idempotency": "present",
+    "message_history": "present",
+    "media_history": "partial_search_summaries_only",
+    "account_notification_preferences": "present_v1",
+    "channel_notification_modes": "present",
+    "dm_notification_overrides": "partial_write_and_delivery_without_readback",
+    "notification_mute_expiration": "missing",
+    "separate_call_sound": "missing",
+    "feature_negotiation": "missing"
+  },
+  "files": {
+    "openapi.yml": "9db63d86becf4a75152d15aaa72e26e3494344a538aebf29c57a1dea118ee361",
+    "backend/internal/handlers/routes.go": "8823e3e224c299fd221002ff4233f8dbde29fbec6ddc0f6a226848a80554e24f",
+    "backend/internal/handlers/messages.go": "9626b22fa32b99f8a4bc1dea988d4c7e5a55be6bdd20731a7ea0811e647e7574",
+    "backend/internal/services/messages.go": "4b02921f3006ceaf9dce051d4c2de3385aa2e598e27acf04fd6edb40a96d66bb",
+    "backend/internal/storage/messages.go": "a8c5e7630f48fe465eeb005d259eb35168d2f0591687580403467216501f51d1",
+    "backend/internal/models/search.go": "e22eb3acb1c2bdd56fee883ac0fe064cfd14c6246e16e28d0150aa1eabb1fdb7",
+    "backend/internal/handlers/search.go": "72d6fb95c16602d85bc620d689dccb3fd4369af1b6fa5c173dc547b2394f69ee",
+    "backend/internal/services/search.go": "55d11f66701d663c41a5a364956870f556522a3120231582d2cdbe6eddc0109e",
+    "backend/internal/storage/search.go": "9a43ffc9fa22fff3e5f89d959d3e3277860e2d65b549985633c37904581a5766",
+    "backend/internal/models/user_settings.go": "998a843075a0466050f3bddfc5f741f975c22e61528f2e74475719fe3df1dc20",
+    "backend/internal/models/notification.go": "80a38c57ded2f55f711f80c1214e66f8cf451ddbb1033c43fc40901b4125e670",
+    "backend/internal/services/notifications.go": "9aaa2432d2eb376ec9b0a63cf8acfad782e0058f8ec47d8c0e1170f50f0408eb",
+    "backend/internal/handlers/notifications.go": "15b64ce390a43d2e51d534934a77ef9abdb08425b89337fd39e79e2f7f7dcf1c",
+    "backend/internal/storage/notifications.go": "a5145aa2942b6860662cb559942943fd1ebdb98f30abba9473167e01b04bbc87",
+    "backend/internal/storage/channels.go": "0cc2a75d6fe4ffd440b164d18c7b10a43a85fc30889a23fe6f683d2639709862",
+    "backend/internal/models/direct_message.go": "fafd07752d13e31bd22cf51c12691fec307d6fd1da12a8072482192ad5aab4f4"
+  }
+}

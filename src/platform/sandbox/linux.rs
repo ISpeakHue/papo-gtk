@@ -11,7 +11,7 @@ pub(crate) fn command(path:&Path,script:&str)->anyhow::Result<Command>{
         // not a host command; copy only this input to the portal exposure directory because /tmp is instance-private.
         // PT-BR: O Flatpak bloqueia namespaces de usuário aninhados. Seu portal inicia um sandbox mais restrito
         // do aplicativo, sem executar comandos no host; copia apenas esta entrada, pois /tmp é privado de cada instância.
-        let home=dirs::home_dir().ok_or_else(||anyhow::anyhow!("Diretório do aplicativo indisponível"))?;
+        let home=dirs::home_dir().ok_or_else(||anyhow::anyhow!(crate::i18n::fmt("Diretório do aplicativo indisponível", &[])))?;
         let directory=home.join(".var/app").join(crate::app::APP_ID).join("sandbox");std::fs::create_dir_all(&directory)?;
         let name=format!("papo-media-{}",uuid::Uuid::new_v4());let input=directory.join(&name);
         let mut wrapper=Command{process:tokio::process::Command::new("/usr/bin/flatpak-spawn"),input:Some(input.clone())};
@@ -28,7 +28,7 @@ pub(crate) fn command(path:&Path,script:&str)->anyhow::Result<Command>{
     }
     let app=std::env::var_os("PAPO_APPDIR").map(std::path::PathBuf::from);
     let binary=app.as_ref().map_or_else(||"/usr/bin/bwrap".into(),|p|p.join("usr/libexec/bwrap.real"));
-    anyhow::ensure!(binary.is_file(),"Instale bubblewrap para gerar prévias de vídeo com segurança.");
+    anyhow::ensure!(binary.is_file(),crate::i18n::fmt("Instale bubblewrap para gerar prévias de vídeo com segurança.", &[]));
     let mut cmd=tokio::process::Command::new(binary);
     cmd.env_remove("LD_LIBRARY_PATH").env_remove("LD_PRELOAD").env_remove("LD_AUDIT");
     cmd.args(["--unshare-all","--die-with-parent","--new-session","--clearenv","--ro-bind","/usr","/usr","--symlink","usr/lib","/lib","--symlink","usr/lib64","/lib64","--symlink","usr/bin","/bin","--proc","/proc","--dev","/dev","--tmpfs","/tmp","--dir","/input","--ro-bind"])

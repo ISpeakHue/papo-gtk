@@ -38,7 +38,7 @@ impl ChatModel {
                 let name=gtk::Label::new(Some(&format!(":{}:",choice.name)));name.set_xalign(0.0);name.set_hexpand(true);row.append(&name);button.set_child(Some(&row));
                 let token=edit.token;let value=choice.text.clone();let input=edit.mentions.input.clone();button.connect_clicked(move |_|{let _=input.send(ChatMsg::Action(ActionMsg::EditEmojiSelected(token,value.clone(),true)));});edit.emojis.choices.append(&button);
             }
-            if choices.is_empty(){edit.emojis.choices.append(&label("Nenhum emoji encontrado"));}
+            if choices.is_empty(){edit.emojis.choices.append(&label(crate::i18n::tr("Nenhum emoji encontrado")));}
         }
         edit.emojis.panel.set_vscrollbar_policy(if edit.emojis.choices.measure(gtk::Orientation::Vertical,-1).1>200{gtk::PolicyType::Automatic}else{gtk::PolicyType::External});
         edit.emojis.panel.set_visible(true);

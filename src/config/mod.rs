@@ -28,6 +28,12 @@ pub struct AppConfig {
     /// PT-BR: Política de reprodução de animações e movimento.
     #[serde(default)]
     pub motion:Motion,
+    #[serde(default)]
+    pub language:crate::i18n::Language,
+    #[serde(default)]
+    pub media:crate::media::policy::Preferences,
+    #[serde(default)]
+    pub release_channel:crate::releases::Channel,
 }
 
 /// EN-US: Animation and motion policy: System setting, Always play, or Reduced motion.
@@ -50,7 +56,7 @@ impl AppConfig {
         // EN-US: GUI tests must isolate settings on every OS, regardless of XDG support.
         // PT-BR: Testes da interface isolam as configurações em todos os sistemas, independentemente do suporte XDG.
         #[cfg(test)]if let Some(root)=std::env::var_os("PAPO_TEST_CONFIG_DIR"){return Ok(PathBuf::from(root).join("config.toml"));}
-        Ok(config_dir().context("Diretório de configuração indisponível.")?
+        Ok(config_dir().context(crate::i18n::tr("Diretório de configuração indisponível."))?
             .join("papo-gtk")
             .join("config.toml"))
     }
@@ -66,6 +72,14 @@ impl AppConfig {
             .ok()
             .and_then(|s| toml::from_str(&s).ok())
             .unwrap_or_default()
+    }
+
+    /// EN-US: Serialize local read/modify/write operations so independent settings panels keep each other's fields.
+    /// PT-BR: Serializa alterações locais para preservar campos de painéis independentes.
+    pub fn update(change:impl FnOnce(&mut Self))->Result<()> {
+        static WRITER:std::sync::Mutex<()>=std::sync::Mutex::new(());
+        let _guard=WRITER.lock().map_err(|_|anyhow::anyhow!("configuration lock"))?;
+        let mut config=Self::load();change(&mut config);config.save()
     }
 
     /// EN-US: Persist config to disk, automatically creating parent directories if needed.
@@ -96,7 +110,7 @@ mod tests {
             server_url: Some("http://localhost:8080".into()),
             last_username: Some("testuser".into()),
             theme: Some("dark".into()),
-            remember_session:Some(true),motion:Motion::System,
+            remember_session:Some(true),motion:Motion::System,language:Default::default(),media:Default::default(),release_channel:Default::default(),
         };
 
         let serialized = toml::to_string_pretty(&config).expect("serialization failed");

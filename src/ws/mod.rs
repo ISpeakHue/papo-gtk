@@ -301,7 +301,7 @@ pub(crate) fn parse_event(text: &str) -> Option<WsEvent> {
             message_id:parse_uuid(&raw.payload,"message_id")?,message_content:raw.payload["message_content"].as_str().unwrap_or_default().to_owned(),
         })),
         "error" => Some(WsEvent::Error {
-            message: raw.payload["message"].as_str().unwrap_or("Erro do servidor").to_owned(),
+            message: raw.payload["message"].as_str().unwrap_or(crate::i18n::tr("Erro do servidor")).to_owned(),
             code: raw.payload["code"].as_str().map(str::to_owned),
         }),
         "message_edit" => {

@@ -65,7 +65,7 @@ pub(super) struct Picker {
 }
 impl Picker {
     pub fn new(root:&gtk::Box,builtin:&[Choice],choose:impl Fn(Choice)+'static)->Self {
-        let search=gtk::SearchEntry::new();search.set_placeholder_text(Some("Buscar emoji"));root.append(&search);
+        let search=gtk::SearchEntry::new();search.set_placeholder_text(Some(crate::i18n::tr("Buscar emoji")));root.append(&search);
         // EN-US: SearchEntry consumes Escape itself; close its dialog through the native stop-search action.
         // PT-BR: SearchEntry consome Escape; fecha seu diálogo pela ação nativa stop-search.
         search.connect_stop_search(|entry|{
@@ -82,11 +82,11 @@ impl Picker {
             let category=std::rc::Rc::new(std::cell::Cell::new(None::<Category>));
             let navigation=(!custom).then(categories::navigation);
             if let Some((bar,_))=&navigation{body.append(bar);}
-            let heading=gtk::Label::new(Some("Todos os emojis"));heading.set_widget_name("emoji-category-title");heading.set_xalign(0.0);heading.add_css_class("heading");heading.set_visible(!custom);body.append(&heading);
+            let heading=gtk::Label::new(Some(crate::i18n::tr("Todos os emojis")));heading.set_widget_name("emoji-category-title");heading.set_xalign(0.0);heading.add_css_class("heading");heading.set_visible(!custom);body.append(&heading);
             let grid=gtk::FlowBox::new();grid.set_selection_mode(gtk::SelectionMode::None);grid.set_homogeneous(true);grid.set_min_children_per_line(1);grid.set_max_children_per_line(128);grid.set_valign(gtk::Align::Start);grid.set_row_spacing(4);grid.set_column_spacing(4);
             let scroll=gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).min_content_height(240).child(&grid).build();body.append(&scroll);
-            let empty=gtk::Label::new(Some("Nenhum emoji encontrado"));body.append(&empty);
-            let page=tabs.add_titled(&body,Some(if custom{"server"}else{"unicode"}),if custom{"Servidor"}else{"Unicode"});if custom{server_page=Some(page);}
+            let empty=gtk::Label::new(Some(crate::i18n::tr("Nenhum emoji encontrado")));body.append(&empty);
+            let page=tabs.add_titled(&body,Some(if custom{"server"}else{"unicode"}),if custom{crate::i18n::tr("Servidor")}else{"Unicode"});if custom{server_page=Some(page);}
             let limit=std::rc::Rc::new(std::cell::Cell::new(96usize));let rendered=std::rc::Rc::new(std::cell::RefCell::new(Vec::<String>::new()));let total=std::rc::Rc::new(std::cell::Cell::new(0usize));
             let (weak_search,weak_grid,weak_empty)=(search.downgrade(),grid.downgrade(),empty.downgrade());let data=catalog.clone();let count=limit.clone();let keys=rendered.clone();let size=total.clone();let select=choose.clone();let selected=category.clone();let weak_heading=heading.downgrade();
             let render:std::rc::Rc<dyn Fn()>=std::rc::Rc::new(move || {
@@ -94,7 +94,7 @@ impl Picker {
                 let query=search.text();let query=query.trim();
                 let mut found=if custom{choices(&[],&data.custom,query)}else{choices(&data.builtin,&[],query)};
                 if !custom&&query.is_empty(){if let Some(category)=selected.get(){found.retain(|c|c.category==Some(category));}}
-                if let Some(heading)=weak_heading.upgrade(){heading.set_text(if query.is_empty(){selected.get().map_or("Todos os emojis",Category::title)}else{"Resultados da busca"});}
+                if let Some(heading)=weak_heading.upgrade(){heading.set_text(if query.is_empty(){selected.get().map_or(crate::i18n::tr("Todos os emojis"),Category::title)}else{crate::i18n::tr("Resultados da busca")});}
                 size.set(found.len());empty.set_visible(found.is_empty());
                 let found:Vec<_>=found.into_iter().take(count.get()).collect();
                 let signatures:Vec<_>=found.iter().map(|c|format!("{}|{:?}|{}|{:?}|{:?}",c.name,c.id,c.text,c.id.and_then(|id|data.textures.get(&id)).map(|p|p.as_ptr()),c.id.and_then(|id|data.animations.get(&id)).map(|p|p.as_ptr()))).collect();

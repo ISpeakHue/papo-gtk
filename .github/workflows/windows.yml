@@ -217,10 +217,17 @@ jobs:
         run: |
           python -m unittest discover -s tests -p platform_capture_test.py
           python -m unittest discover -s tests -p icon_assets_test.py
+          python -m unittest discover -s tests -p implementation_tools_test.py -v
+          python scripts/check-translations.py
           PAPO_UI_CASE=symbolic-icons cargo test --locked ui_smoke -- --ignored --test-threads=1
           PAPO_UI_CASE=startup cargo test --locked ui_smoke -- --ignored --test-threads=1
           PAPO_UI_CASE=scroll-frames cargo test --locked ui_smoke -- --ignored --test-threads=1
           PAPO_UI_CASE=clipboard cargo test --locked ui_smoke -- --ignored --test-threads=1
+      - name: Record synthetic performance baseline and enforce structural budgets
+        if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only
+        run: |
+          python scripts/performance-baseline.py --profile debug --runs 1 --output target/windows-build/performance/baseline.json
+          python scripts/check-performance-budgets.py target/windows-build/performance/baseline.json --structural-only --output target/windows-build/performance/budgets.json
       - name: Test session persistence policies with memory storage
         if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only
         run: |
@@ -237,7 +244,7 @@ jobs:
           PAPO_UI_CASE=desktop-input PAPO_NATIVE_INPUT_TEST=1 GTK_A11Y=test cargo test --locked ui_smoke -- --ignored --test-threads=1
           PAPO_UI_CASE=login-input cargo test --locked ui_smoke -- --ignored --test-threads=1
           PAPO_UI_CASE=edit-mentions cargo test --locked ui_smoke -- --ignored --test-threads=1
-          for papo_case in search-recycling account-settings voice-controls; do
+          for papo_case in multi-server multi-account-restart recovery notification-controls release-discovery accessibility accessibility-contrast search-recycling account-settings account-scope conversation-switcher media-policies media-preferences disk-thumbnails media-browser audio-setup translations draft-recovery outgoing-queue voice-controls; do
             PAPO_UI_CASE="$papo_case" GTK_A11Y=test cargo test --locked ui_smoke -- --ignored --test-threads=1
           done
           for papo_case in window-scrolling notification-filters emoji-grid backend-update; do
@@ -321,6 +328,7 @@ jobs:
             target/windows-build/checkout-git.txt
             target/windows-build/storage/
             target/windows-build/media/
+            target/windows-build/performance/
           if-no-files-found: warn
       - name: Retain native rebuild inputs separately from the preview ZIP
         if: ${{ always() && hashFiles('target/windows-native-inputs/NATIVE-INPUTS.json') != '' }}

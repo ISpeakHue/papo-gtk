@@ -14,7 +14,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     }
     let user=serde_json::from_value(backend.lock().unwrap().profile.clone()).unwrap();let main=MainWindowModel::builder().launch(MainWindowInit{current_user:user,api_client:api}).detach();
     let host=adw::Window::builder().default_width(1100).default_height(740).content(main.widget()).build();host.present();
-    until(context,||main.model().active_channel_id.is_some()&&main.model().background_started&&main.model().access_request.is_none());let selected=main.model().active_channel_id.unwrap();
+    until(context,||main.model().active_channel_id.is_some()&&main.model().connection.state.background_started&&main.model().access_request.is_none());let selected=main.model().active_channel_id.unwrap();
     main.emit(MainWindowMsg::MarkChannelRead(selected));until(context,||main.model().notifications.manual_reads.is_empty()&&main.model().channels.iter().find(|c|c.id==selected).is_some_and(|c|!c.has_unread()));
     let count=||backend.lock().unwrap().requests.iter().filter(|(m,p,_)|m=="PUT"&&p==&format!("/channels/{other}/read")).count();
     let popup=||{

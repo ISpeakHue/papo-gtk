@@ -50,7 +50,7 @@ pub(super) fn body(p:&Embed,author_texture:Option<&gtk::gdk::Texture>,users:&Has
         if let Some(name)=author.name.as_deref(){let w=linked(name,author.url.as_deref());w.set_valign(gtk::Align::Center);w.add_css_class("heading");header.append(&w);}
         if header.first_child().is_some(){card.append(&header);}
     }
-    if let Some(title)=p.title.as_deref().filter(|s|!s.is_empty()).or(reddit.as_ref().map(|p|if p.comment{"Comentário no Reddit"}else{"Publicação no Reddit"})).or(p.url.as_deref()) {let w=linked(title,p.url.as_deref());w.add_css_class("heading");card.append(&w);}
+    if let Some(title)=p.title.as_deref().filter(|s|!s.is_empty()).or(reddit.as_ref().map(|p|if p.comment{crate::i18n::tr("Comentário no Reddit")}else{crate::i18n::tr("Publicação no Reddit")})).or(p.url.as_deref()) {let w=linked(title,p.url.as_deref());w.add_css_class("heading");card.append(&w);}
     if let Some(description)=p.description.as_deref(){card.append(&content(description,users,actions,sender));}
     let grid=gtk::Grid::new();grid.set_column_spacing(12);grid.set_row_spacing(8);grid.set_column_homogeneous(true);grid.set_hexpand(true);
     let mut fields:Vec<_>=p.fields.iter().collect();fields.sort_by_key(|f|f.position);let(mut row,mut col)=(0,0);
@@ -67,7 +67,7 @@ pub(super) fn footer(card:&gtk::Box,p:&Embed,image_available:bool,users:&HashMap
     // Full-image and footer-icon bytes are not exposed by the current API.
     // Keep their metadata; don't bypass channel authorization
     // by downloading their original URLs or content hashes.
-    if p.image.is_some()&&!image_available{let l=label("Imagem incorporada indisponível no servidor.");l.add_css_class("dim-label");card.append(&l);}
+    if p.image.is_some()&&!image_available{let l=label(crate::i18n::tr("Imagem incorporada indisponível no servidor."));l.add_css_class("dim-label");card.append(&l);}
     if let Some(text)=p.footer.as_ref().and_then(|f|f.text.as_deref()){let l=content(text,users,actions,sender);l.add_css_class("caption");l.add_css_class("dim-label");card.append(&l);}
     if let Some(post)=reddit::post(p){reddit::action(card,&post);}
 }
@@ -114,7 +114,7 @@ pub(super) fn footer(card:&gtk::Box,p:&Embed,image_available:bool,users:&HashMap
     // Use the actual composer form, not synthetic draft assignment.
     find_button(chat.widget().upcast_ref(),"Embeds personalizados").emit_clicked();pump(context);let editor=chat.model().actions.embed_editor.as_ref().unwrap().0.clone();until(context,||editor.is_mapped());find_button(editor.upcast_ref(),"Adicionar embed").emit_clicked();pump(context);
     let title=descendants(editor.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Entry>().ok()).unwrap();title.set_text("Draft embed");find_button(editor.upcast_ref(),"Aplicar embeds").emit_clicked();settle(context);assert_eq!(chat.model().draft.embeds[0].title,"Draft embed");assert!(find_button(chat.widget().upcast_ref(),"Enviar mensagem").is_sensitive());
-    let mut sent=message.clone();sent.id=Uuid::new_v4();sent.embeds=Some(vec![]);let request=chat.state().get_mut().model.draft.begin().unwrap();chat.emit(ChatMsg::AddMessage(sent.clone()));pump(context);chat.emit(ChatMsg::ApplyChange(Change::Embeds(sent.id,vec![embed.clone()])));pump(context);
+    let mut sent=message.clone();sent.id=Uuid::new_v4();sent.embeds=Some(vec![]);let request=chat.state().get_mut().model.begin_test_send();chat.emit(ChatMsg::AddMessage(sent.clone()));pump(context);chat.emit(ChatMsg::ApplyChange(Change::Embeds(sent.id,vec![embed.clone()])));pump(context);
     chat.emit(ChatMsg::SendFinished{request_id:request,channel_id:channel,result:Ok(sent.clone())});settle(context);assert_eq!(chat.model().history.messages.iter().find(|m|m.id==sent.id).unwrap().embeds.as_ref().unwrap().len(),1,"POST's custom-only list must not erase the complete WS list");assert!(chat.model().draft.embeds.is_empty());
     // Preserve session caches for another authorized message sharing this card.
     let mut shared=embed.clone();shared.thumbnail=Some(crate::models::EmbedMedia{mime_type:Some("image/png".into()),..Default::default()});chat.emit(ChatMsg::ApplyChange(Change::Embeds(message.id,vec![shared.clone()])));chat.emit(ChatMsg::ApplyChange(Change::Embeds(sent.id,vec![shared.clone()])));pump(context);

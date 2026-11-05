@@ -87,7 +87,12 @@ pub enum ActionMsg {
 
 pub(crate) fn window(root: &gtk::Box, title: &str) -> (gtk::Window, gtk::Box) {
     let window = gtk::Window::builder().title(title).default_width(460).default_height(360).modal(true).build();
-    if let Some(parent) = root.root().and_then(|r| r.downcast::<gtk::Window>().ok()) { window.set_transient_for(Some(&parent)); }
+    if let Some(mut parent) = root.root().and_then(|r| r.downcast::<gtk::Window>().ok()) {
+        // EN-US: A dialog opened from settings belongs to the active dialog, preserving its focus chain.
+        // PT-BR: Um diálogo aberto nas configurações pertence à janela ativa e preserva a cadeia de foco.
+        for _ in 0..8{let child=gtk::Window::list_toplevels().into_iter().filter_map(|w|w.downcast::<gtk::Window>().ok()).find(|w|w.is_visible()&&w.is_modal()&&w.transient_for().as_ref()==Some(&parent));if let Some(child)=child{parent=child;}else{break;}}
+        window.set_transient_for(Some(&parent));
+    }
     let outer = gtk::Box::new(gtk::Orientation::Vertical, 10);
     for (set, value) in [(0, 16), (1, 16), (2, 16), (3, 16)] {
         match set { 0 => outer.set_margin_start(value), 1 => outer.set_margin_end(value), 2 => outer.set_margin_top(value), _ => outer.set_margin_bottom(value) }
@@ -112,7 +117,7 @@ fn scroll_box(outer: &gtk::Box) -> gtk::Box {
 impl Actions {
     pub fn new(api: Option<ApiClient>) -> Self { let mut state = Self::default(); state.api = api; state }
     pub fn emoji_label(&self, id: Uuid) -> String {
-        self.emojis.iter().find(|e| e.id == id).map(|e| format!(":{}:", e.name)).unwrap_or_else(|| "Emoji personalizado".into())
+        self.emojis.iter().find(|e| e.id == id).map(|e| format!(":{}:", e.name)).unwrap_or_else(|| crate::i18n::tr("Emoji personalizado").into())
     }
     pub fn emoji_image(&self,id:Uuid,size:i32)->Option<gtk::Image>{
         let image=gtk::Image::from_paintable(Some(&self.emoji_paintable(id)?));image.set_pixel_size(size);
@@ -164,7 +169,7 @@ impl ChatModel {
         let epoch = self.actions.epoch; let token = Uuid::new_v4(); self.actions.pins_request = Some(token);
         let sender = sender.clone(); tokio::spawn(async move {
             let result = api.pinned_messages(channel).await;
-            sender.input(ChatMsg::Action(ActionMsg::PinsLoaded { epoch, token, result }));
+            let _=sender.input_sender().send(ChatMsg::Action(ActionMsg::PinsLoaded { epoch, token, result }));
         });
     }
     pub(super) fn request_emojis(&mut self, sender: &ComponentSender<Self>) {
@@ -193,7 +198,7 @@ impl ChatModel {
                     anyhow::ensure!(all.len()<=500,"A API excedeu o limite de 500 emojis.");
                     sender.input(ChatMsg::Action(ActionMsg::EmojiPage{token,emojis,images}));
                     if !page.has_more{return Ok(all);}
-                    anyhow::ensure!(next.is_some()&&cursor.is_none_or(|c|next.is_some_and(|n|(n.created_at,n.id)>(c.created_at,c.id))),"Paginação de emojis não avançou.");
+                    anyhow::ensure!(next.is_some()&&cursor.is_none_or(|c|next.is_some_and(|n|(n.created_at,n.id)>(c.created_at,c.id))),crate::i18n::fmt("Paginação de emojis não avançou.", &[]));
                     cursor=next;
                 }
             }.await;
@@ -228,9 +233,9 @@ impl ChatModel {
                 if !self.access.can_edit(user, message.author_id) || self.active_channel.as_ref().map(|c| c.id()) != Some(message.channel_id) { return; }
                 let _ = sender.output(ChatOutput::RefreshAccess);
                 if let Some(old) = self.actions.edit.take() { old.window.close(); }
-                let token = Uuid::new_v4(); let (w, outer) = window(root, "Editar mensagem");
+                let token = Uuid::new_v4(); let (w, outer) = window(root, crate::i18n::tr("Editar mensagem"));
                 let text = gtk::TextView::new(); text.set_wrap_mode(gtk::WrapMode::WordChar);
-                text.update_property(&[gtk::accessible::Property::Label("Editar mensagem")]);
+                text.update_property(&[gtk::accessible::Property::Label(crate::i18n::tr("Editar mensagem"))]);
                 w.set_default_size(440,-1);
                 text.set_top_margin(8);text.set_bottom_margin(8);text.set_left_margin(8);text.set_right_margin(8);
                 super::input::configure_im(&text);
@@ -242,13 +247,13 @@ impl ChatModel {
                 let error = label(""); error.add_css_class("error");error.set_visible(false);outer.append(&error);
                 error.connect_notify_local(Some("label"),move |label,_|label.set_visible(!label.text().is_empty()));
                 let controls=gtk::Box::new(gtk::Orientation::Horizontal,8);
-                let mention=gtk::Button::with_label("@");mention.set_visible(self.active_channel.as_ref().is_some_and(|c|!c.is_direct()));mention.set_tooltip_text(Some("Mencionar membro (digite @ para filtrar)"));
+                let mention=gtk::Button::with_label("@");mention.set_visible(self.active_channel.as_ref().is_some_and(|c|!c.is_direct()));mention.set_tooltip_text(Some(crate::i18n::tr("Mencionar membro (digite @ para filtrar)")));
                 let output=sender.input_sender().clone();mention.connect_clicked(move |_|{let _=output.send(ChatMsg::Action(ActionMsg::OpenEditMentions(token)));});controls.append(&mention);
-                let emoji=gtk::Button::from_icon_name("papo-face-smile-symbolic");emoji.set_tooltip_text(Some("Inserir emoji"));
+                let emoji=gtk::Button::from_icon_name("papo-face-smile-symbolic");emoji.set_tooltip_text(Some(crate::i18n::tr("Inserir emoji")));
                 let output=sender.input_sender().clone();emoji.connect_clicked(move |_|{let _=output.send(ChatMsg::Action(ActionMsg::OpenEditEmojis(token)));});controls.append(&emoji);
                 let spacer=gtk::Box::new(gtk::Orientation::Horizontal,0);spacer.set_hexpand(true);controls.append(&spacer);
-                controls.append(&button("Cancelar edição",sender,move ||ActionMsg::CancelEdit(token)));
-                let save=button("Salvar edição",sender,move ||ActionMsg::SaveEdit(token));save.add_css_class("suggested-action");controls.append(&save);outer.append(&controls);
+                controls.append(&button(crate::i18n::tr("Cancelar edição"),sender,move ||ActionMsg::CancelEdit(token)));
+                let save=button(crate::i18n::tr("Salvar edição"),sender,move ||ActionMsg::SaveEdit(token));save.add_css_class("suggested-action");controls.append(&save);outer.append(&controls);
                 let composing=mentions.composer.clone();let panel=mentions.panel.downgrade();let emoji_panel=emojis.panel.downgrade();
                 let keys=gtk::EventControllerKey::new();keys.set_propagation_phase(gtk::PropagationPhase::Capture);let weak=text.downgrade();let output=sender.input_sender().clone();
                 keys.connect_key_pressed(move |controller,key,_,mods|{
@@ -318,10 +323,10 @@ impl ChatModel {
             ActionMsg::SaveEdit(token) => {
                 let (Some(api), Some(user)) = (self.actions.api.clone(), self.user_id) else { return; };
                 let Some(edit) = self.actions.edit.as_mut().filter(|e| e.token == token && !e.pending) else { return; };
-                if !self.access.can_edit(user, edit.message.author_id) { edit.error.set_text("Sem permissão para editar esta mensagem."); return; }
+                if !self.access.can_edit(user, edit.message.author_id) { edit.error.set_text(crate::i18n::tr("Sem permissão para editar esta mensagem.")); return; }
                 let text = edit.mentions.composer.wire_text();
-                if text.chars().count() > 8192 { edit.error.set_text("Use até 8192 caracteres."); return; }
-                edit.mentions.dismiss(&edit.text);edit.emojis.dismiss(&edit.text,&edit.mentions.composer);edit.pending = true; edit.text.set_sensitive(false); edit.save.set_sensitive(false); edit.error.set_text("Salvando…");
+                if text.chars().count() > 8192 { edit.error.set_text(crate::i18n::tr("Use até 8192 caracteres.")); return; }
+                edit.mentions.dismiss(&edit.text);edit.emojis.dismiss(&edit.text,&edit.mentions.composer);edit.pending = true; edit.text.set_sensitive(false); edit.save.set_sensitive(false); edit.error.set_text(crate::i18n::tr("Salvando…"));
                 let id = edit.message.id; let epoch = self.actions.epoch; let sender = sender.clone();
                 tokio::spawn(async move { let result = api.edit_message(id, &text).await;
                     sender.input(ChatMsg::Action(ActionMsg::EditFinished { epoch, token, result })); });
@@ -352,13 +357,13 @@ impl ChatModel {
             ActionMsg::ConfirmDelete(message) => {
                 let Some(user) = self.user_id else { return; };
                 if !self.access.can_delete(user, message.author_id) { return; }
-                let (w, outer) = window(root, "Excluir mensagem?");w.set_default_size(360,-1);w.set_resizable(false);
-                let heading=label("Excluir esta mensagem?");heading.add_css_class("title-3");outer.append(&heading);
-                outer.append(&label("A mensagem será excluída para todos os membros."));
+                let (w, outer) = window(root, crate::i18n::tr("Excluir mensagem?"));w.set_default_size(360,-1);w.set_resizable(false);
+                let heading=label(crate::i18n::tr("Excluir esta mensagem?"));heading.add_css_class("title-3");outer.append(&heading);
+                outer.append(&label(crate::i18n::tr("A mensagem será excluída para todos os membros.")));
                 let buttons=gtk::Box::new(gtk::Orientation::Horizontal,8);buttons.set_halign(gtk::Align::End);buttons.set_margin_top(8);
                 let epoch = self.actions.epoch; let id = message.id;
-                let confirm = button("Excluir mensagem", sender, move || ActionMsg::DeleteConfirmed { epoch, id }); confirm.add_css_class("destructive-action");
-                let cancel = gtk::Button::with_label("Cancelar"); let weak = w.downgrade(); cancel.connect_clicked(move |_| { if let Some(w) = weak.upgrade() { w.close(); } });buttons.append(&cancel);buttons.append(&confirm);outer.append(&buttons);cancel.grab_focus();
+                let confirm = button(crate::i18n::tr("Excluir mensagem"), sender, move || ActionMsg::DeleteConfirmed { epoch, id }); confirm.add_css_class("destructive-action");
+                let cancel = gtk::Button::with_label(crate::i18n::tr("Cancelar")); let weak = w.downgrade(); cancel.connect_clicked(move |_| { if let Some(w) = weak.upgrade() { w.close(); } });buttons.append(&cancel);buttons.append(&confirm);outer.append(&buttons);cancel.grab_focus();
                 if let Some(old) = self.actions.confirmation.replace(w.clone()) { old.close(); } w.present();
             }
             ActionMsg::DeleteConfirmed { epoch, id } => {
@@ -414,7 +419,7 @@ impl ChatModel {
                         self.render_pins(sender);
                         if self.actions.pins_window.as_ref().is_some_and(|view|view.window.is_visible()){if let Some(channel)=self.active_channel.as_ref(){let _=sender.output(ChatOutput::AuthorMetadata{channel:channel.id(),ids:self.actions.pinned.iter().filter_map(|m|m.author_id).collect()});}}
                     }
-                    Err(error) => { if current { self.actions.pins_ready = false; if let Some(view) = &self.actions.pins_window { view.show_error(&format!("Não foi possível carregar: {error}")); } } self.action_error(error, sender, current); }
+                    Err(error) => { if current { self.actions.pins_ready = false; if let Some(view) = &self.actions.pins_window { view.show_error(&crate::i18n::fmt("Não foi possível carregar: {error}", &[("error", format!("{}", error))])); } } self.action_error(error, sender, current); }
                     _ => {}
                 }
                 if current && std::mem::take(&mut self.actions.pins_again) { self.request_pins(sender); }
@@ -423,7 +428,7 @@ impl ChatModel {
                 if self.history.messages.iter().any(|m|m.id==target.id){sender.input(ChatMsg::Action(ActionMsg::Navigate(target.id)));return;}
                 if !self.access.read{return;}
                 let(Some(api),Some(channel))=(self.actions.api.clone(),self.active_channel.as_ref().map(|c|c.id()))else{return;};
-                if !self.history_detached&&self.history_ready{self.conversations.store(channel,std::mem::take(&mut self.history),self.has_more);}
+                if !self.history_detached&&self.history_ready{self.session.conversations.store(channel,std::mem::take(&mut self.history),self.has_more);}
                 self.newer=Default::default();self.reconcile_request=None;self.initial_read=None;self.history_detached=true;self.history_ready=false;self.history.select(channel);
                 let request=Uuid::new_v4();self.history.begin(request);self.history_error=None;
                 self.actions.navigation=Some(target.id);self.actions.highlight=None;
@@ -440,7 +445,7 @@ impl ChatModel {
             ActionMsg::OpenPicker(id) => {
                 let _ = sender.output(ChatOutput::RefreshAccess);
                 if !self.access.send { return; }
-                let (w, list) = window(root, "Escolher reação");w.set_default_size(360,420);
+                let (w, list) = window(root, crate::i18n::tr("Escolher reação"));w.set_default_size(360,420);
                 let output=sender.input_sender().clone();let weak=w.downgrade();
                 let picker=emoji::Picker::new(&list,&self.unicode_emojis,move|choice|{let _=output.send(ChatMsg::Action(ActionMsg::ToggleReaction{id,emoji_id:choice.id,unicode:choice.id.is_none().then_some(choice.text)}));if let Some(window)=weak.upgrade(){window.close();}});
                 if let Some((old, _, _)) = self.actions.picker.replace((w.clone(), picker, id)) { old.close(); }
@@ -464,7 +469,7 @@ impl ChatModel {
                 let (Some(api), Some(user), Some(channel)) = (self.actions.api.clone(), self.user_id, self.active_channel.as_ref().map(|c| c.id())) else { return; };
                 if !self.history.messages.iter().any(|m| m.id == id) { return; }
                 if emoji_id.is_some() == unicode.is_some() || unicode.as_ref().is_some_and(|s| s.is_empty() || s.chars().count() > 16) {
-                    self.draft.error = Some("Escolha um emoji de até 16 caracteres.".into()); return;
+                    self.draft.error = Some(crate::i18n::tr("Escolha um emoji de até 16 caracteres.").into()); return;
                 }
                 // Refresh membership before toggling; count-only events cannot identify our own reaction.
                 let can_add = self.access.send; let epoch = self.actions.epoch; let token = Uuid::new_v4();
@@ -474,7 +479,7 @@ impl ChatModel {
                         let groups = api.all_reactions(channel, id).await?;
                         let own = groups.iter().any(|g| g.emoji_id == emoji_id && g.unicode == unicode && g.users.iter().any(|u| u.user_id == user));
                         if own { api.remove_reaction(channel, id, emoji_id, unicode.as_deref()).await?; }
-                        else { anyhow::ensure!(can_add, "Sem permissão para adicionar reações."); api.add_reaction(channel, id, emoji_id, unicode.as_deref()).await?; }
+                        else { anyhow::ensure!(can_add, crate::i18n::fmt("Sem permissão para adicionar reações.", &[])); api.add_reaction(channel, id, emoji_id, unicode.as_deref()).await?; }
                         api.all_reactions(channel, id).await
                     }.await;
                     sender.input(ChatMsg::Action(ActionMsg::ReactionsLoaded { epoch, token, id, mutation: true, result }));
@@ -491,7 +496,7 @@ impl ChatModel {
                         self.actions.reaction_groups.insert(id, groups);if let Some(view)=self.actions.participants.as_ref().filter(|v|v.id==id){view.loaded();}self.refresh_reaction_hints();root.trigger_tooltip_query(); self.render_participants(sender);
                         if self.actions.reaction_dirty.remove(&id) { self.request_reactions(id, sender); }
                     }
-                    Err(error) => { if current { if let Some(view)=self.actions.participants.as_ref().filter(|v|v.id==id){view.error(&format!("Não foi possível carregar: {error}"));} } self.action_error(error, sender, current);
+                    Err(error) => { if current { if let Some(view)=self.actions.participants.as_ref().filter(|v|v.id==id){view.error(&crate::i18n::fmt("Não foi possível carregar: {error}", &[("error", format!("{}", error))]));} } self.action_error(error, sender, current);
                         if current && self.actions.reaction_dirty.remove(&id) { self.request_reactions(id, sender); }
                     }
                     _ => {}
@@ -499,14 +504,14 @@ impl ChatModel {
             }
             ActionMsg::OpenEmojiManager => {
                 let _ = sender.output(ChatOutput::RefreshAccess);
-                let token = Uuid::new_v4(); let (w, outer) = window(root, "Emojis do servidor");
-                let list = scroll_box(&outer); let name = gtk::Entry::new(); name.set_placeholder_text(Some("Nome do emoji (até 32 caracteres)")); name.set_max_length(32);
+                let token = Uuid::new_v4(); let (w, outer) = window(root, crate::i18n::tr("Emojis do servidor"));
+                let list = scroll_box(&outer); let name = gtk::Entry::new(); name.set_placeholder_text(Some(crate::i18n::tr("Nome do emoji (até 32 caracteres)"))); name.set_max_length(32);
                 name.set_visible(self.access.manage_server); outer.append(&name);
-                let file = label("PNG, JPEG, GIF ou WebP; até 256 KB e 512 × 512 pixels."); file.set_visible(self.access.manage_server); outer.append(&file);
-                let choose = button("Escolher imagem do emoji", sender, move || ActionMsg::ChooseEmojiFile(token)); choose.set_visible(self.access.manage_server); outer.append(&choose);
+                let file = label(crate::i18n::tr("PNG, JPEG, GIF ou WebP; até 256 KB e 512 × 512 pixels.")); file.set_visible(self.access.manage_server); outer.append(&file);
+                let choose = button(crate::i18n::tr("Escolher imagem do emoji"), sender, move || ActionMsg::ChooseEmojiFile(token)); choose.set_visible(self.access.manage_server); outer.append(&choose);
                 let error = label(""); error.add_css_class("error"); outer.append(&error);
-                let upload = button("Criar emoji", sender, move || ActionMsg::UploadEmoji(token)); upload.set_sensitive(false); upload.set_visible(self.access.manage_server); outer.append(&upload);
-                outer.append(&button("Atualizar emojis", sender, || ActionMsg::ReloadEmojis));
+                let upload = button(crate::i18n::tr("Criar emoji"), sender, move || ActionMsg::UploadEmoji(token)); upload.set_sensitive(false); upload.set_visible(self.access.manage_server); outer.append(&upload);
+                outer.append(&button(crate::i18n::tr("Atualizar emojis"), sender, || ActionMsg::ReloadEmojis));
                 let manager = EmojiManager { token, window: w.clone(), list, name, file, error, choose, upload, bytes: None, pending: false };
                 if let Some(old) = self.actions.manager.replace(manager) { old.window.close(); }
                 self.render_manager(sender); self.request_emojis(sender); w.present();
@@ -533,7 +538,7 @@ impl ChatModel {
                         self.actions.emojis_loaded = Some(std::time::Instant::now());
                         self.actions.emojis = emojis; self.actions.emoji_names=self.actions.emojis.iter().map(|e|(e.name.clone(),e.id)).collect(); self.render_picker(sender); self.render_manager(sender); self.render_pins(sender);self.render_participants(sender);
                     }
-                    Err(error) => { if current { if let Some(m) = &self.actions.manager { m.error.set_text(&error.to_string()); } if let Some((_,picker,_))=&self.actions.picker{picker.show_error(&format!("Emojis personalizados indisponíveis: {error}"));}if let Some((_,picker))=&self.actions.composer_picker{picker.show_error(&format!("Emojis personalizados indisponíveis: {error}"));} } self.action_error(error, sender, current); }
+                    Err(error) => { if current { if let Some(m) = &self.actions.manager { m.error.set_text(&error.to_string()); } if let Some((_,picker,_))=&self.actions.picker{picker.show_error(&crate::i18n::fmt("Emojis personalizados indisponíveis: {error}", &[("error", format!("{}", error))]));}if let Some((_,picker))=&self.actions.composer_picker{picker.show_error(&crate::i18n::fmt("Emojis personalizados indisponíveis: {error}", &[("error", format!("{}", error))]));} } self.action_error(error, sender, current); }
                     _ => {}
                 }
                 if current && std::mem::take(&mut self.actions.emojis_again) { self.request_emojis(sender); }
@@ -541,11 +546,11 @@ impl ChatModel {
             ActionMsg::ChooseEmojiFile(token) => {
                 let Some(m) = self.actions.manager.as_ref().filter(|m| m.token == token) else { return; };
                 if !self.access.manage_server || m.pending { return; }
-                let dialog = gtk::FileDialog::builder().title("Imagem do emoji").build();
+                let dialog = gtk::FileDialog::builder().title(crate::i18n::tr("Imagem do emoji")).build();
                 let parent = m.window.clone(); let sender = sender.clone();
                 gtk::glib::spawn_future_local(async move {
                     if let Ok(file) = dialog.open_future(Some(&parent)).await {
-                        let result = match file.path() { Some(path) => read_emoji_file(path).await, None => Err(anyhow::anyhow!("Escolha um arquivo local.")) };
+                        let result = match file.path() { Some(path) => read_emoji_file(path).await, None => Err(anyhow::anyhow!(crate::i18n::fmt("Escolha um arquivo local.", &[]))) };
                         sender.input(ChatMsg::Action(ActionMsg::EmojiFileLoaded { token, result }));
                     }
                 });
@@ -553,7 +558,7 @@ impl ChatModel {
             ActionMsg::EmojiFileLoaded { token, result } => {
                 if let Some(m) = self.actions.manager.as_mut().filter(|m| m.token == token && !m.pending) {
                     match result {
-                        Ok(bytes) => { m.file.set_text(&format!("Imagem selecionada: {} bytes", bytes.len())); m.bytes = Some(bytes); m.upload.set_sensitive(self.access.manage_server); m.error.set_text(""); }
+                        Ok(bytes) => { m.file.set_text(&crate::i18n::fmt("Imagem selecionada: {} bytes", &[("0", format!("{}", bytes.len()))])); m.bytes = Some(bytes); m.upload.set_sensitive(self.access.manage_server); m.error.set_text(""); }
                         Err(error) => { m.error.set_text(&error.to_string()); }
                     }
                 }
@@ -561,10 +566,10 @@ impl ChatModel {
             ActionMsg::UploadEmoji(token) => {
                 let Some(api) = self.actions.api.clone() else { return; };
                 let Some(m) = self.actions.manager.as_mut().filter(|m| m.token == token && !m.pending) else { return; };
-                if !self.access.manage_server { m.error.set_text("Sem permissão para criar emojis."); return; }
-                let Some(bytes) = &m.bytes else { m.error.set_text("Escolha uma imagem."); return; };
+                if !self.access.manage_server { m.error.set_text(crate::i18n::tr("Sem permissão para criar emojis.")); return; }
+                let Some(bytes) = &m.bytes else { m.error.set_text(crate::i18n::tr("Escolha uma imagem.")); return; };
                 let request = match CreateEmojiRequest::from_image(&m.name.text(), bytes) { Ok(r) => r, Err(error) => { m.error.set_text(&error.to_string()); return; } };
-                m.pending = true; m.upload.set_sensitive(false); m.error.set_text("Enviando…");
+                m.pending = true; m.upload.set_sensitive(false); m.error.set_text(crate::i18n::tr("Enviando…"));
                 let sender = sender.clone(); tokio::spawn(async move {
                     let result = api.create_emoji(&request).await.map(|_| ());
                     sender.input(ChatMsg::Action(ActionMsg::EmojiSaved { token, result }));
@@ -575,9 +580,9 @@ impl ChatModel {
                 let Some(emoji) = self.actions.emojis.iter().find(|e| e.id == id) else { return; };
                 if !self.access.can_delete_emoji(user, emoji.created_by) { return; }
                 let Some(m) = &self.actions.manager else { return; }; let token = m.token;
-                let (w, outer) = window(root, "Excluir emoji?"); outer.append(&label(&format!("Excluir :{}: do servidor?", emoji.name)));
-                let confirm = button("Excluir emoji", sender, move || ActionMsg::DeleteEmoji { token, id }); confirm.add_css_class("destructive-action"); outer.append(&confirm);
-                let cancel = gtk::Button::with_label("Cancelar"); let weak = w.downgrade(); cancel.connect_clicked(move |_| { if let Some(w) = weak.upgrade() { w.close(); } }); outer.append(&cancel);
+                let (w, outer) = window(root, crate::i18n::tr("Excluir emoji?")); outer.append(&label(&format!("Excluir :{}: do servidor?", emoji.name)));
+                let confirm = button(crate::i18n::tr("Excluir emoji"), sender, move || ActionMsg::DeleteEmoji { token, id }); confirm.add_css_class("destructive-action"); outer.append(&confirm);
+                let cancel = gtk::Button::with_label(crate::i18n::tr("Cancelar")); let weak = w.downgrade(); cancel.connect_clicked(move |_| { if let Some(w) = weak.upgrade() { w.close(); } }); outer.append(&cancel);
                 if let Some(old) = self.actions.confirmation.replace(w.clone()) { old.close(); } w.present();
             }
             ActionMsg::DeleteEmoji { token, id } => {
@@ -585,14 +590,14 @@ impl ChatModel {
                 let Some(emoji) = self.actions.emojis.iter().find(|e| e.id == id) else { return; };
                 if !self.access.can_delete_emoji(user, emoji.created_by) { return; }
                 let Some(m) = self.actions.manager.as_mut().filter(|m| m.token == token && !m.pending) else { return; };
-                m.pending = true; m.upload.set_sensitive(false); m.error.set_text("Excluindo…");
+                m.pending = true; m.upload.set_sensitive(false); m.error.set_text(crate::i18n::tr("Excluindo…"));
                 if let Some(w) = self.actions.confirmation.take() { w.close(); }
                 let sender = sender.clone(); tokio::spawn(async move { let result = api.delete_emoji(id).await;
                     sender.input(ChatMsg::Action(ActionMsg::EmojiSaved { token, result })); });
             }
             ActionMsg::EmojiSaved { token, result } => {
                 match result {
-                    Ok(()) => { if let Some(m) = self.actions.manager.as_mut().filter(|m| m.token == token) { m.pending = false; m.error.set_text("Concluído."); m.upload.set_sensitive(self.access.manage_server && m.bytes.is_some()); } self.request_emojis(sender); }
+                    Ok(()) => { if let Some(m) = self.actions.manager.as_mut().filter(|m| m.token == token) { m.pending = false; m.error.set_text(crate::i18n::tr("Concluído.")); m.upload.set_sensitive(self.access.manage_server && m.bytes.is_some()); } self.request_emojis(sender); }
                     Err(error) => { if let Some(m) = self.actions.manager.as_mut().filter(|m| m.token == token) { m.pending = false; m.error.set_text(&error.to_string()); m.upload.set_sensitive(self.access.manage_server && m.bytes.is_some()); } self.action_error(error, sender, false); }
                 }
             }
@@ -606,11 +611,11 @@ impl ChatModel {
         }
         if self.history.loading() || self.history_error.is_some() { return; }
         if !self.has_more || self.history.is_deleted(id) {
-            self.actions.navigation = None; self.draft.error = Some("Mensagem não disponível: excluída ou fora do histórico acessível.".into()); return;
+            self.actions.navigation = None; self.draft.error = Some(crate::i18n::tr("Mensagem não disponível: excluída ou fora do histórico acessível.").into()); return;
         }
         let cursor = self.history.messages.first().map(MessageCursor::from);
         if cursor.is_none() || cursor == self.actions.navigation_cursor {
-            self.actions.navigation = None; self.draft.error = Some("Não foi possível avançar no histórico para localizar a mensagem.".into()); return;
+            self.actions.navigation = None; self.draft.error = Some(crate::i18n::tr("Não foi possível avançar no histórico para localizar a mensagem.").into()); return;
         }
         self.actions.navigation_cursor = cursor;
         if let Some(channel) = &self.active_channel { let _ = sender.output(ChatOutput::LoadMoreMessages { channel_id: channel.id(), cursor }); }
@@ -624,7 +629,7 @@ impl ChatModel {
     }
     pub(super) fn open_composer_picker(&mut self,root:&gtk::Box,sender:&ComponentSender<Self>){
         if let Some((window,_))=self.actions.composer_picker.as_ref().filter(|(w,_)|w.is_visible()){window.present();return;}
-        let (window,list)=window(root,"Escolher emoji");window.set_default_size(360,420);
+        let (window,list)=window(root,crate::i18n::tr("Escolher emoji"));window.set_default_size(360,420);
         let output=sender.input_sender().clone();let epoch=self.actions.epoch;window.connect_close_request(move |_|{let _=output.send(ChatMsg::ComposerClosed(epoch));gtk::glib::Propagation::Proceed});
         let keys=gtk::EventControllerKey::new();let weak=window.downgrade();keys.connect_key_pressed(move |_,key,_,_|{if key==gtk::gdk::Key::Escape{if let Some(window)=weak.upgrade(){window.close();}gtk::glib::Propagation::Stop}else{gtk::glib::Propagation::Proceed}});window.add_controller(keys);
         let output=sender.input_sender().clone();let weak=window.downgrade();let picker=emoji::Picker::new(&list,&self.unicode_emojis,move|choice|{let _=output.send(ChatMsg::InsertEmoji(choice.text));if let Some(window)=weak.upgrade(){window.close();}});
@@ -634,10 +639,10 @@ impl ChatModel {
     pub(super) fn refresh_reaction_hints(&self){
         let mut hints=self.actions.reaction_hints.borrow_mut();hints.clear();
         for (message,groups) in &self.actions.reaction_groups{for group in groups{
-            let emoji=group.unicode.clone().or_else(||group.emoji_id.map(|id|self.actions.emoji_label(id))).unwrap_or_else(||"Emoji removido".into());
-            let mut names:Vec<_>=group.users.iter().take(15).map(|u|if Some(u.user_id)==self.user_id{"Você".into()}else{self.users_map.get(&u.user_id).map(|u|u.display_name().to_owned()).unwrap_or_else(||"Membro removido".into())}).collect();
+            let emoji=group.unicode.clone().or_else(||group.emoji_id.map(|id|self.actions.emoji_label(id))).unwrap_or_else(||crate::i18n::tr("Emoji removido").into());
+            let mut names:Vec<_>=group.users.iter().take(15).map(|u|if Some(u.user_id)==self.user_id{crate::i18n::tr("Você").into()}else{self.users_map.get(&u.user_id).map(|u|u.display_name().to_owned()).unwrap_or_else(||crate::i18n::tr("Membro removido").into())}).collect();
             if group.users.len()>15{names.push(format!("mais {} membros",group.users.len()-15));}
-            let text=if names.is_empty(){"Nenhum membro reagiu".into()}else{format!("{} reagiu/reagiram com {emoji}",names.join(", "))};
+            let text=if names.is_empty(){crate::i18n::tr("Nenhum membro reagiu").into()}else{format!("{} reagiu/reagiram com {emoji}",names.join(", "))};
             hints.insert((*message,group.emoji_id,group.unicode.clone()),text);
         }}
     }
@@ -659,7 +664,7 @@ impl ChatModel {
             if let Some(image)=self.actions.emoji_image(e.id,24){row.append(&image);}
             let name = label(&format!(":{}:", e.name)); name.set_hexpand(true); row.append(&name);
             if self.user_id.is_some_and(|user| self.access.can_delete_emoji(user, e.created_by)) {
-                let id = e.id; let delete = button("Excluir", sender, move || ActionMsg::ConfirmDeleteEmoji(id)); delete.set_sensitive(!m.pending); row.append(&delete);
+                let id = e.id; let delete = button(crate::i18n::tr("Excluir"), sender, move || ActionMsg::ConfirmDeleteEmoji(id)); delete.set_sensitive(!m.pending); row.append(&delete);
             } m.list.append(&row);
         }
     }

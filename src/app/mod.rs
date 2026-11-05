@@ -13,6 +13,7 @@ pub use branding::APP_ID;
 /// EN-US: Launches the graphical user interface.
 /// PT-BR: Ponto de entrada chamado a partir de `main`. Inicia a interface gráfica do usuário.
 pub fn run() {
+    crate::i18n::init(crate::config::AppConfig::load().language);
     // EN-US: Initialize libadwaita — required for dark mode, animations, and system color scheme support.
     // PT-BR: Inicializa a libadwaita — obrigatório para suporte a modo escuro, animações e esquema de cores do sistema.
     adw::init().expect("Failed to initialize libadwaita");

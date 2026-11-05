@@ -2,6 +2,7 @@
 //! PT-BR: Processo nativo de mídia com comunicação limitada e liberação determinística dos recursos de captura.
 use serde::Deserialize;
 use serde_json::Value;
+use uuid::Uuid;
 use tokio::{io::{AsyncWriteExt,BufReader},sync::{mpsc,oneshot},process::Command};
 use std::{process::Stdio,time::Duration};
 use crate::platform::{capture::WORKER,worker::{self,Worker}};
@@ -10,6 +11,9 @@ pub struct Device {pub id:String,pub name:String}
 #[derive(Clone,Deserialize)]
 #[serde(tag="type")]
 pub enum EngineEvent {
+    #[serde(rename="audio_level")]AudioLevel{level:f64},
+    #[serde(rename="audio_device")]AudioDevice{request:Uuid,kind:String,success:bool,device:Option<String>},
+    #[serde(rename="test_state")]TestState{state:String},
     #[serde(rename="microphone_gain")]MicrophoneGain{
         #[cfg_attr(not(test), expect(dead_code, reason = "Retained voice worker protocol metadata; decoding still validates its required type."))]
         gain:f64},
@@ -41,6 +45,7 @@ impl std::fmt::Debug for EngineEvent{fn fmt(&self,f:&mut std::fmt::Formatter<'_>
 const IPC_LIMIT:usize=128*1024;
 fn command()->Command{let mut c=crate::media::runtime::python();c.args(["-u","-c",worker::BOOTSTRAP]).env("GST_DEBUG","0").stderr(Stdio::null());c}
 pub async fn devices()->anyhow::Result<Vec<Device>>{list_devices("--devices").await}
+pub async fn outputs()->anyhow::Result<Vec<Device>>{list_devices("--outputs").await}
 pub async fn cameras()->anyhow::Result<Vec<Device>>{list_devices("--cameras").await}
 async fn list_devices(flag:&str)->anyhow::Result<Vec<Device>>{
     let result=tokio::time::timeout(Duration::from_secs(15),async {
@@ -50,11 +55,11 @@ async fn list_devices(flag:&str)->anyhow::Result<Vec<Device>>{
         let line=worker::read_line(&mut output,&mut pending,IPC_LIMIT).await?.ok_or_else(||std::io::Error::other("missing device list"))?;
         if !child.wait().await?.success(){return Err(std::io::Error::other("device enumeration failed"));}
         Ok::<_,std::io::Error>(line)
-    }).await.map_err(|_|anyhow::anyhow!("A lista de dispositivos demorou demais."))?
-        .map_err(|_|anyhow::anyhow!("Não foi possível listar dispositivos. Verifique Python GI e GStreamer."))?;
+    }).await.map_err(|_|anyhow::anyhow!(crate::i18n::fmt("A lista de dispositivos demorou demais.", &[])))?
+        .map_err(|_|anyhow::anyhow!(crate::i18n::fmt("Não foi possível listar dispositivos. Verifique Python GI e GStreamer.", &[])))?;
     #[derive(Deserialize)]struct List {devices:Vec<Device>}
-    let list:List=serde_json::from_slice(&result).map_err(|_|anyhow::anyhow!("Resposta inválida ao listar dispositivos."))?;
-    if list.devices.len()>256||list.devices.iter().any(|d|d.id.is_empty()||d.id.len()>4096||d.name.len()>4096){anyhow::bail!("Lista de dispositivos inválida.");}
+    let list:List=serde_json::from_slice(&result).map_err(|_|anyhow::anyhow!(crate::i18n::fmt("Resposta inválida ao listar dispositivos.", &[])))?;
+    if list.devices.len()>256||list.devices.iter().any(|d|d.id.is_empty()||d.id.len()>4096||d.name.len()>4096){anyhow::bail!(crate::i18n::fmt("Lista de dispositivos inválida.", &[]));}
     Ok(list.devices)
 }
 async fn write(input:&mut tokio::process::ChildStdin,value:&Value)->std::io::Result<()>{
@@ -73,7 +78,7 @@ impl Engine {
     pub fn start(config:Value,report:impl Fn(EngineEvent)+Send+'static)->Self{
         let(commands,mut rx)=mpsc::channel::<Value>(64);let(cancel,mut cancelled)=oneshot::channel();
         tokio::spawn(async move{
-            let mut child=match Worker::spawn(command().stdin(Stdio::piped()).stdout(Stdio::piped())){Ok(c)=>c,Err(_)=>{report(EngineEvent::Error{message:"Não foi possível iniciar o processo de áudio com segurança.".into()});return;}};
+            let mut child=match Worker::spawn(command().stdin(Stdio::piped()).stdout(Stdio::piped())){Ok(c)=>c,Err(_)=>{report(EngineEvent::Error{message:crate::i18n::tr("Não foi possível iniciar o processo de áudio com segurança.").into()});return;}};
             let mut input=child.stdin.take().unwrap();let mut output=BufReader::new(child.stdout.take().unwrap());let mut pending=Vec::new();
             let startup=async{worker::source(&mut input,WORKER).await?;write(&mut input,&config).await};
             let ready=tokio::select!{_=&mut cancelled=>false,result=tokio::time::timeout(Duration::from_secs(10),startup)=>matches!(result,Ok(Ok(())))};
@@ -83,10 +88,10 @@ impl Engine {
                 loop{tokio::select!{
                     biased;
                     _=&mut cancelled=>break,
-                    _=&mut deadline,if !started=>{report(EngineEvent::Error{message:"O processo de áudio demorou demais para iniciar.".into()});break;},
+                    _=&mut deadline,if !started=>{report(EngineEvent::Error{message:crate::i18n::tr("O processo de áudio demorou demais para iniciar.").into()});break;},
                     line=worker::read_line(&mut output,&mut pending,IPC_LIMIT)=>match line{
-                        Ok(Some(line))=>match serde_json::from_slice::<EngineEvent>(&line){Ok(event)=>{started|=matches!(event,EngineEvent::Started{..});report(event);},Err(_)=>{report(EngineEvent::Error{message:"Resposta inválida do processo de áudio.".into()});break;}},
-                        _=>{report(EngineEvent::Error{message:"O processo de áudio foi encerrado.".into()});break;}
+                        Ok(Some(line))=>match serde_json::from_slice::<EngineEvent>(&line){Ok(event)=>{started|=matches!(event,EngineEvent::Started{..});report(event);},Err(_)=>{report(EngineEvent::Error{message:crate::i18n::tr("Resposta inválida do processo de áudio.").into()});break;}},
+                        _=>{report(EngineEvent::Error{message:crate::i18n::tr("O processo de áudio foi encerrado.").into()});break;}
                     },
                     command=rx.recv()=>match command{Some(c)=>{
                         // EN-US: Share is a foreground app action; grant only its owned worker permission to show the system picker.
@@ -94,11 +99,11 @@ impl Engine {
                         #[cfg(windows)] if c["type"]=="media"&&c["kind"]=="screen"&&c["on"]==true {
                             if let Some(pid)=child.id(){unsafe{windows_sys::Win32::UI::WindowsAndMessaging::AllowSetForegroundWindow(pid);}}
                         }
-                        if write(&mut input,&c).await.is_err(){report(EngineEvent::Error{message:"O processo de áudio não responde.".into()});break;}
+                        if write(&mut input,&c).await.is_err(){report(EngineEvent::Error{message:crate::i18n::tr("O processo de áudio não responde.").into()});break;}
                     },None=>break},
                 }}
             }else if cancelled.try_recv()==Err(oneshot::error::TryRecvError::Empty){
-                report(EngineEvent::Error{message:"Não foi possível configurar o processo de áudio.".into()});
+                report(EngineEvent::Error{message:crate::i18n::tr("Não foi possível configurar o processo de áudio.").into()});
             }
             // EN-US: Request native NULL/monitor cleanup, then enforce a bounded process-tree shutdown.
             // PT-BR: Solicita liberação nativa e do monitor, depois limita o encerramento da árvore de processos.

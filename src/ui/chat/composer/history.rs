@@ -52,7 +52,7 @@ impl Composer {
         let group=gtk::gio::SimpleActionGroup::new();let undo=gtk::gio::SimpleAction::new("undo",None);let redo=gtk::gio::SimpleAction::new("redo",None);
         for (action,is_redo) in [(&undo,false),(&redo,true)]{let composer=self.clone();let weak=entry.downgrade();action.connect_activate(move |_,_|{if let Some(entry)=weak.upgrade(){composer.restore_history(&entry,is_redo);}});group.add_action(action);}
         self.history.borrow_mut().actions=Some((undo.downgrade(),redo.downgrade()));self.history.borrow().update();entry.insert_action_group("draft",Some(&group));
-        let menu=gtk::gio::Menu::new();menu.append(Some("Desfazer"),Some("draft.undo"));menu.append(Some("Refazer"),Some("draft.redo"));entry.set_extra_menu(Some(&menu));
+        let menu=gtk::gio::Menu::new();menu.append(Some(crate::i18n::tr("Desfazer")),Some("draft.undo"));menu.append(Some(crate::i18n::tr("Refazer")),Some("draft.redo"));entry.set_extra_menu(Some(&menu));
         let shortcuts=gtk::ShortcutController::new();shortcuts.set_propagation_phase(gtk::PropagationPhase::Capture);
         use gtk::gdk::{Key,ModifierType as M};
         let primary=crate::platform::shortcuts::primary_modifier();

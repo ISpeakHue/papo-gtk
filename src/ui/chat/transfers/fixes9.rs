@@ -37,7 +37,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     assert_eq!(chat.model().transfers.sizes[&still],(32,16));
     let card=descendants(chat.widget().upcast_ref()).into_iter().find(|w|w.widget_name().starts_with(&format!("attachment-{still}-"))).unwrap();
     let frame=descendants(&card).into_iter().find_map(|w|w.downcast::<crate::media::frame::Frame>().ok()).unwrap();assert_eq!((frame.width(),frame.height()),(32,16));
-    assert!(!descendants(chat.widget().upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::Button>()).any(|b|b.tooltip_text().as_deref()==Some("Reproduzir vídeo")));
+    assert!(!descendants(chat.widget().upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::Button>()).any(|b|b.tooltip_text().as_deref()==Some(crate::i18n::tr("Reproduzir vídeo"))));
     let widgets=descendants(chat.widget().upcast_ref());
     assert_eq!(widgets.iter().filter(|w|w.has_css_class("papo-link-preview")).count(),1,"only the sender attribution keeps its compact rich card");
     assert!(!widgets.iter().any(|w|w.is::<gtk::Video>()||w.is::<gtk::LinkButton>()),"GIF chat surfaces have neither players nor source links");
@@ -47,7 +47,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let texts:Vec<_>=widgets.iter().filter_map(|w|w.downcast_ref::<gtk::TextView>()).map(|v|v.buffer().text(&v.buffer().start_iter(),&v.buffer().end_iter(),false).to_string()).collect();
     assert!(!texts.iter().any(|s|s.contains(url)),"the raw source URL must not survive in a reused text row or bot attribution");
     let media=widgets.iter().find(|w|w.widget_name().starts_with(&format!("preview-{klipy}-"))).unwrap();
-    let requests=backend.lock().unwrap().requests.len();find_button(media,"Abrir GIF").emit_clicked();until(context,||!chat.model().transfers.images.is_empty());
+    let requests=backend.lock().unwrap().requests.len();find_button(media,crate::i18n::tr("Abrir GIF")).emit_clicked();until(context,||!chat.model().transfers.images.is_empty());
     let viewer=chat.model().transfers.images[0].2.clone();
     assert_eq!(viewer.title().as_deref(),Some("GIF"));
     assert!(viewer::picture(&viewer).is_some(),"viewer helpers must still find the picture after GIF details are appended");
@@ -72,14 +72,14 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let msg:Message=serde_json::from_value(serde_json::json!({"id":broken_message,"channel_id":channel,"author_id":user,"created_at":now+chrono::Duration::seconds(1),"content":broken_url,"embeds":[broken_embed]})).unwrap();
     chat.emit(ChatMsg::AddMessage(msg));until(context,||chat.model().transfers.failed.contains_key(&broken)&&chat.model().media_render_pending.is_none());performance::settle(context);
     let widgets=descendants(chat.widget().upcast_ref());let tile=widgets.iter().find(|w|w.widget_name().starts_with(&format!("preview-{broken}-"))).unwrap();
-    let menu=descendants(tile).into_iter().find_map(|w|w.downcast::<gtk::MenuButton>().ok()).unwrap();assert!(menu.tooltip_text().unwrap().contains("indisponível"));
+    let menu=descendants(tile).into_iter().find_map(|w|w.downcast::<gtk::MenuButton>().ok()).unwrap();assert!(menu.tooltip_text().unwrap().contains(crate::i18n::tr("indisponível")));
     menu.popup();until(context,||menu.popover().unwrap().is_visible());let popover=menu.popover().unwrap();
     assert!(descendants(popover.upcast_ref()).iter().filter_map(|w|w.downcast_ref::<gtk::LinkButton>()).any(|b|b.uri()==broken_url));
-    assert!(find_button(popover.upcast_ref(),"Tentar novamente").is_sensitive());menu.popdown();
+    assert!(find_button(popover.upcast_ref(),crate::i18n::tr("Tentar novamente")).is_sensitive());menu.popdown();
     let count=backend.lock().unwrap().requests.iter().filter(|(_,p,_)|p==&format!("/embeds/{broken}/video")).count();
     assert_eq!(count,1);performance::settle(context);assert_eq!(backend.lock().unwrap().requests.iter().filter(|(_,p,_)|p==&format!("/embeds/{broken}/video")).count(),count);
     assert!(!chat.model().transfers.video_files.contains_key(&broken),"a failed animation must not retain an invalid rendition");
-    menu.popup();find_button(popover.upcast_ref(),"Tentar novamente").emit_clicked();
+    menu.popup();find_button(popover.upcast_ref(),crate::i18n::tr("Tentar novamente")).emit_clicked();
     until(context,||backend.lock().unwrap().requests.iter().filter(|(_,p,_)|p==&format!("/embeds/{broken}/video")).count()==2&&chat.model().transfers.failed.contains_key(&broken)&&chat.model().media_render_pending.is_none());
     window.set_content(None::<&gtk::Widget>);window.close();drop(chat);server.abort();pump(context);
 }

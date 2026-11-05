@@ -31,12 +31,15 @@ pub struct SidebarModel {
     direct_rows:std::collections::HashMap<Uuid,(String,gtk::Box)>,
     channel_rows:std::collections::HashMap<String,(String,gtk::ListBoxRow)>,
     channel_counts:std::collections::HashMap<Uuid,usize>,
+    drafts:std::collections::HashSet<Uuid>,
     pub unread_notifications: usize,
     pub more_notifications:bool,
     pub selected_channel_id: Option<Uuid>,
     pub direct: Vec<DirectConversation>,
     pub access: Access,
     pub setup: bool,
+    hosted:bool,
+    pub(crate) server_image:Option<gtk::gdk::Paintable>,pub(crate) server_icon_revision:Uuid,
     show_avatars:bool,
     pub direct_mode: bool,
     pub avatars: std::collections::HashMap<Uuid,gtk::gdk::Texture>,
@@ -49,6 +52,8 @@ impl Drop for SidebarModel{fn drop(&mut self){if let Some(job)=self.icon_job.tak
 
 #[derive(Debug)]
 pub enum SidebarMsg {
+    Hosted(bool),
+    Drafts(std::collections::HashSet<Uuid>),
     VoiceDock(gtk::Box),VoiceRooms{rooms:Vec<VoiceRoom>,selected:Option<Uuid>},OpenProfile(Uuid),WatchVoice{user:Uuid,kind:&'static str},
     SetServer(Server),
     IconReady{request:Uuid,image:Option<crate::media::PreparedImage>},
@@ -67,6 +72,7 @@ pub enum SidebarMsg {
     SetChannels(Vec<Channel>),
     SelectChannel(Uuid),
     MarkChannelRead(Uuid),
+    NotificationControls(Uuid),
     ChannelNotifications(Uuid,NotificationSettings),
     VoiceSelect(Uuid),
     SetSelection(Uuid),
@@ -80,6 +86,7 @@ pub enum SidebarOutput {
     DirectSelect(Uuid), HideDirect(Uuid), Blocks, Administration, Webhooks, Moderation,
     ChannelSelected(Channel),
     MarkChannelRead(Uuid),
+    NotificationControls(Uuid),
     ChannelNotifications(Uuid,NotificationSettings),
     VoiceSelect(Uuid),
     Logout,
@@ -105,9 +112,10 @@ impl Component for SidebarModel {
                 set_spacing: 10,
                 set_width_request: 64,
                 add_css_class: "papo-rail",
+                #[watch] set_visible:!model.hosted,
                 gtk::ToggleButton {
                     set_widget_name: "direct-navigation",
-                    #[watch] set_tooltip_text: Some(if model.unread_direct()>0{"Mensagens diretas não lidas (Alt+2)"}else{"Mensagens diretas (Alt+2)"}),
+                    #[watch] set_tooltip_text: Some(if model.unread_direct()>0{crate::i18n::tr("Mensagens diretas não lidas (Alt+2)")}else{crate::i18n::tr("Mensagens diretas (Alt+2)")}),
                     #[watch] set_active: model.direct_mode,
                     connect_clicked => SidebarMsg::ShowDirect,
                     gtk::Overlay {
@@ -139,12 +147,12 @@ impl Component for SidebarModel {
                 add_css_class: "papo-channel-panel",
                 gtk::MenuButton {
                     add_css_class:"flat",add_css_class:"papo-server-heading",
-                    set_tooltip_text:Some("Opções do servidor"),
+                    set_tooltip_text:Some(crate::i18n::tr("Opções do servidor")),
                     #[wrap(Some)]
                     set_child = &gtk::Box {
                         set_spacing:8,
                         gtk::Label {
-                            #[watch] set_text: if model.direct_mode{"Mensagens"}else{model.server.as_ref().map(|s|s.name.as_str()).unwrap_or("Papo")},
+                            #[watch] set_text: if model.direct_mode{crate::i18n::tr("Mensagens")}else{model.server.as_ref().map(|s|s.name.as_str()).unwrap_or("Papo")},
                             add_css_class:"heading",set_hexpand:true,set_xalign:0.0,
                             set_ellipsize:pango::EllipsizeMode::End,
                         },
@@ -157,18 +165,18 @@ impl Component for SidebarModel {
                             set_orientation:gtk::Orientation::Vertical,set_spacing:2,
                             gtk::Button {
                                 add_css_class:"flat",
-                                #[watch] set_label:if model.setup{"Criar servidor"}else{"Administração"},
+                                #[watch] set_label:if model.setup{crate::i18n::tr("Criar servidor")}else{crate::i18n::tr("Administração")},
                                 #[watch] set_visible:model.setup||model.access.manage_server||model.access.manage_roles||model.access.manage_channels,
                                 connect_clicked => SidebarMsg::Administration,
                             },
                             gtk::Button {set_label:"Webhooks",add_css_class:"flat",#[watch] set_visible:model.access.manage_webhooks,connect_clicked => SidebarMsg::Webhooks},
-                            gtk::Button {set_label:"Moderação e auditoria",add_css_class:"flat",#[watch] set_visible:model.access.manage_server,connect_clicked => SidebarMsg::Moderation},
-                            gtk::Button {set_label:"Usuários bloqueados",add_css_class:"flat",connect_clicked => SidebarMsg::Blocks},
+                            gtk::Button {set_label:crate::i18n::tr("Moderação e auditoria"),add_css_class:"flat",#[watch] set_visible:model.access.manage_server,connect_clicked => SidebarMsg::Moderation},
+                            gtk::Button {set_label:crate::i18n::tr("Usuários bloqueados"),add_css_class:"flat",connect_clicked => SidebarMsg::Blocks},
                         },
                     },
                 },
                 gtk::Label {
-                    #[watch] set_text:if model.direct_mode{"MENSAGENS DIRETAS"}else{"CANAIS"},
+                    #[watch] set_text:if model.direct_mode{crate::i18n::tr("MENSAGENS DIRETAS")}else{crate::i18n::tr("CANAIS")},
                     set_xalign:0.0,add_css_class:"caption-heading",add_css_class:"dim-label",add_css_class:"papo-section-heading",
                 },
                 gtk::Stack {
@@ -192,7 +200,7 @@ impl Component for SidebarModel {
                     #[watch] set_visible_child_name:if model.direct_mode{"direct"}else{"channels"},
                 },
                 gtk::Label {
-                    set_text:"Foi detectada reutilização de uma sessão anterior. Revise suas sessões e altere a senha em Segurança.",
+                    set_text:crate::i18n::tr("Foi detectada reutilização de uma sessão anterior. Revise suas sessões e altere a senha em Segurança."),
                     set_wrap:true,add_css_class:"warning",set_margin_start:12,set_margin_end:12,
                     #[watch] set_visible:model.current_user.connection_violation.unwrap_or(false),
                 },
@@ -202,7 +210,7 @@ impl Component for SidebarModel {
                 gtk::Box {
                     set_spacing:4,add_css_class:"papo-user-footer",
                     gtk::Button {
-                        set_has_frame:false,set_hexpand:true,set_tooltip_text:Some("Meu perfil"),
+                        set_has_frame:false,set_hexpand:true,set_tooltip_text:Some(crate::i18n::tr("Meu perfil")),
                         connect_clicked => SidebarMsg::Profile,
                         gtk::Box {
                             set_spacing:8,
@@ -222,19 +230,19 @@ impl Component for SidebarModel {
                                     set_xalign:0.0,add_css_class:"heading",set_ellipsize:pango::EllipsizeMode::End,
                                 },
                                 gtk::Label {
-                                    #[watch] set_text:match model.current_user.status {Some(UserStatus::Away)=>"Ausente",Some(UserStatus::Busy)=>"Ocupado",_=>"Disponível"},
+                                    #[watch] set_text:match model.current_user.status {Some(UserStatus::Away)=>crate::i18n::tr("Ausente"),Some(UserStatus::Busy)=>crate::i18n::tr("Ocupado"),_=>crate::i18n::tr("Disponível")},
                                     set_xalign:0.0,add_css_class:"caption",add_css_class:"dim-label",
                                 },
                             },
                         },
                     },
                     gtk::Button {
-                        set_icon_name:"papo-emblem-system-symbolic",set_has_frame:false,set_tooltip_text:Some("Configurações da conta"),
+                        set_icon_name:"papo-emblem-system-symbolic",set_has_frame:false,set_tooltip_text:Some(crate::i18n::tr("Configurações da conta")),
                         connect_clicked => SidebarMsg::Settings,
                     },
                     gtk::Button {
                         set_icon_name:"papo-system-log-out-symbolic",
-                        set_tooltip_text:Some("Desconectar"),
+                        set_tooltip_text:Some(crate::i18n::tr("Desconectar")),
                         set_valign:gtk::Align::Center,
                         add_css_class:"destructive-action",
                         connect_clicked => SidebarMsg::LogoutClicked,
@@ -253,8 +261,8 @@ impl Component for SidebarModel {
             selected_channel_id: first_channel_id,
             channel_counts:Default::default(),unread_notifications: 0,
             more_notifications:false,
-            direct:Vec::new(), access:Access::default(),setup:false,show_avatars:true,direct_mode:false,avatars:Default::default(),presence:Default::default(),
-            icon_request:None,icon_job:None,logout_dialog:None,
+            direct:Vec::new(), access:Access::default(),setup:false,hosted:false,server_image:None,server_icon_revision:Uuid::nil(),show_avatars:true,direct_mode:false,avatars:Default::default(),presence:Default::default(),
+            icon_request:None,icon_job:None,logout_dialog:None,drafts:Default::default(),
         };
 
         let widgets = view_output!();
@@ -281,6 +289,8 @@ impl Component for SidebarModel {
         _root: &Self::Root,
     ) {
         match message {
+            SidebarMsg::Hosted(value)=>{self.hosted=value;_root.set_width_request(if value{256}else{320});},
+            SidebarMsg::Drafts(ids)=>{self.drafts=ids;},
             SidebarMsg::VoiceDock(panel)=>{if panel.parent().is_none(){widgets.voice_slot.append(&panel);}},
             SidebarMsg::VoiceRooms{rooms,selected}=>{if self.voice_rooms!=rooms||self.selected_voice_id!=selected{self.voice_rooms=rooms;self.selected_voice_id=selected;rebuild_channel_list(&widgets.channels_list,&self.channels,self.selected_channel_id,self.selected_voice_id,&self.voice_rooms,&self.avatars,self.show_avatars,&self.channel_counts,&mut self.channel_rows,&sender);}},
             SidebarMsg::OpenProfile(id)=>{let _=sender.output(SidebarOutput::Profile(id));},
@@ -307,9 +317,9 @@ impl Component for SidebarModel {
             SidebarMsg::SetServer(server) => {
                 let changed=self.server.as_ref().is_none_or(|old|old.id!=server.id||old.icon_blob!=server.icon_blob);
                 self.server = Some(server);
-                if changed{widgets.server_icon.set_icon_name(Some("papo-network-server-symbolic"));self.load_icon(&sender);}
+                if changed{self.server_image=None;self.server_icon_revision=Uuid::new_v4();widgets.server_icon.set_icon_name(Some("papo-network-server-symbolic"));self.load_icon(&sender);}
             }
-            SidebarMsg::IconReady{request,image}=>{if self.icon_request==Some(request){self.icon_request=None;self.icon_job=None;if let Some(image)=image{widgets.server_icon.set_paintable(Some(&image.texture()));}else{widgets.server_icon.set_icon_name(Some("papo-network-server-symbolic"));}}},
+            SidebarMsg::IconReady{request,image}=>{if self.icon_request==Some(request){self.icon_request=None;self.icon_job=None;self.server_icon_revision=request;if let Some(image)=image{let texture=image.texture();widgets.server_icon.set_paintable(Some(&texture));self.server_image=Some(texture.upcast());}else{self.server_image=None;widgets.server_icon.set_icon_name(Some("papo-network-server-symbolic"));}}},
             SidebarMsg::SetChannels(channels) => {
                 if !channels.iter().any(|channel| Some(channel.id) == self.selected_channel_id) && !self.direct.iter().any(|d|Some(d.id)==self.selected_channel_id) {
                     self.selected_channel_id = channels.iter().find(|channel| channel.supports_messages()).map(|channel| channel.id);
@@ -330,13 +340,14 @@ impl Component for SidebarModel {
                 self.rebuild_direct(&widgets.direct_list,&sender);
             }
             SidebarMsg::MarkChannelRead(id)=>{if self.channels.iter().any(|c|c.id==id&&c.supports_messages()&&!self.voice_rooms.iter().any(|r|r.id==id&&!r.can_chat)){let _=sender.output(SidebarOutput::MarkChannelRead(id));}},
+            SidebarMsg::NotificationControls(id)=>{let _=sender.output(SidebarOutput::NotificationControls(id));},
             SidebarMsg::ChannelNotifications(id,value)=>{if self.channels.iter().any(|c|c.id==id&&c.supports_messages()&&!self.voice_rooms.iter().any(|r|r.id==id&&!r.can_chat)){let _=sender.output(SidebarOutput::ChannelNotifications(id,value));}},
             SidebarMsg::LogoutClicked => {
                 if let Some(dialog)=&self.logout_dialog {
                     dialog.present(Some(_root));
                 } else {
-                    let dialog=adw::AlertDialog::new(Some("Desconectar da sessão?"),Some("Você quer encerrar sua sessão neste servidor?"));
-                    dialog.add_responses(&[("cancel","Cancelar"),("disconnect","Desconectar")]);
+                    let dialog=adw::AlertDialog::new(Some(crate::i18n::tr("Desconectar da sessão?")),Some(crate::i18n::tr("Você quer encerrar sua sessão neste servidor?")));
+                    dialog.add_responses(&[("cancel",crate::i18n::tr("Cancelar")),("disconnect",crate::i18n::tr("Desconectar"))]);
                     dialog.set_default_response(Some("cancel"));
                     dialog.set_close_response("cancel");
                     dialog.set_response_appearance("disconnect",adw::ResponseAppearance::Destructive);
@@ -352,6 +363,8 @@ impl Component for SidebarModel {
                 }
             }
         }
+        update_draft_indicators(widgets.channels_list.upcast_ref(),&self.drafts);
+        update_draft_indicators(widgets.direct_list.upcast_ref(),&self.drafts);
         self.update_view(widgets, sender);
     }
 }
@@ -383,7 +396,7 @@ fn rebuild_channel_list(
         row.set_activatable(!is_category);
         row.set_selectable(!is_category && can_chat);
         if channel.has_unread() {row.add_css_class("papo-channel-unread");}
-        if is_voice { row.set_tooltip_text(Some(if can_connect{"Abrir controles de voz"}else{"Abrir chat da chamada"})); }
+        if is_voice { row.set_tooltip_text(Some(if can_connect{crate::i18n::tr("Abrir controles de voz")}else{crate::i18n::tr("Abrir chat da chamada")})); }
 
         let box_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         box_row.set_margin_top(6);
@@ -417,27 +430,28 @@ fn rebuild_channel_list(
             label.set_hexpand(true);
             label.set_ellipsize(pango::EllipsizeMode::End);
             box_row.append(&label);
+            box_row.append(&draft_indicator(channel.id));
 
             if muted{
                 let icon=gtk::Image::from_icon_name("papo-audio-volume-muted-symbolic");icon.set_pixel_size(14);icon.add_css_class("dim-label");
-                icon.set_widget_name(&format!("muted-{}",channel.id));icon.set_tooltip_text(Some("Canal silenciado"));box_row.append(&icon);
+                icon.set_widget_name(&format!("muted-{}",channel.id));icon.set_tooltip_text(Some(crate::i18n::tr("Canal silenciado")));box_row.append(&icon);
             }
             if channel.has_unread() {
                 let badge=gtk::Label::new(Some("●"));badge.add_css_class("accent");
                 badge.set_widget_name(&format!("unread-{}",channel.id));
-                badge.set_tooltip_text(Some("Novas mensagens"));badge.set_valign(gtk::Align::Center);
+                badge.set_tooltip_text(Some(crate::i18n::tr("Novas mensagens")));badge.set_valign(gtk::Align::Center);
                 box_row.append(&badge);
             }
             if let Some(count)=counts.get(&channel.id).filter(|n|**n>0){
                 let badge=gtk::Label::new(Some(&if *count>99{"99+".into()}else{count.to_string()}));
                 badge.add_css_class("papo-notification-count");badge.set_widget_name(&format!("notifications-{}",channel.id));
-                badge.set_tooltip_text(Some("Notificações não lidas neste canal"));badge.set_valign(gtk::Align::Center);
+                badge.set_tooltip_text(Some(crate::i18n::tr("Notificações não lidas neste canal")));badge.set_valign(gtk::Align::Center);
                 box_row.append(&badge);
             }
         }
 
         if is_voice&&can_chat{
-            let chat=gtk::Button::from_icon_name("papo-chat-bubbles-text-symbolic");chat.add_css_class("flat");chat.set_widget_name(&format!("voice-chat-{}",channel.id));chat.set_tooltip_text(Some("Abrir chat da chamada"));chat.update_property(&[gtk::accessible::Property::Label("Abrir chat da chamada")]);
+            let chat=gtk::Button::from_icon_name("papo-chat-bubbles-text-symbolic");chat.add_css_class("flat");chat.set_widget_name(&format!("voice-chat-{}",channel.id));chat.set_tooltip_text(Some(crate::i18n::tr("Abrir chat da chamada")));chat.update_property(&[gtk::accessible::Property::Label(crate::i18n::tr("Abrir chat da chamada"))]);
             let input=sender.input_sender().clone();let id=channel.id;chat.connect_clicked(move |_|{let _=input.send(SidebarMsg::SelectChannel(id));});box_row.append(&chat);
         }
         row.set_child(Some(&box_row));
@@ -448,9 +462,10 @@ fn rebuild_channel_list(
                 let Some(row)=weak.upgrade()else{return;};gesture.set_state(gtk::EventSequenceState::Claimed);
                 let popover=gtk::Popover::new();popover.set_parent(&row);popover.set_pointing_to(Some(&gtk::gdk::Rectangle::new(x as i32,y as i32,1,1)));
                 let menu=gtk::Box::new(gtk::Orientation::Vertical,4);
-                let mark=gtk::Button::with_label("Marcar canal como lido");let s=input.clone();let weak=popover.downgrade();mark.connect_clicked(move |_|{let _=s.send(SidebarMsg::MarkChannelRead(id));if let Some(p)=weak.upgrade(){p.popdown();}});menu.append(&mark);
-                let mute=gtk::Button::with_label(if muted{"Ativar notificações do canal"}else{"Silenciar canal"});let s=input.clone();let weak=popover.downgrade();
+                let mark=gtk::Button::with_label(crate::i18n::tr("Marcar canal como lido"));let s=input.clone();let weak=popover.downgrade();mark.connect_clicked(move |_|{let _=s.send(SidebarMsg::MarkChannelRead(id));if let Some(p)=weak.upgrade(){p.popdown();}});menu.append(&mark);
+                let mute=gtk::Button::with_label(if muted{crate::i18n::tr("Ativar notificações do canal")}else{crate::i18n::tr("Silenciar canal")});let s=input.clone();let weak=popover.downgrade();
                 mute.connect_clicked(move |_|{let _=s.send(SidebarMsg::ChannelNotifications(id,if muted{NotificationSettings::OnlyMentions}else{NotificationSettings::Off}));if let Some(p)=weak.upgrade(){p.popdown();}});menu.append(&mute);
+                let timed=gtk::Button::with_label(crate::i18n::tr("Silenciar temporariamente…"));let s=input.clone();let weak=popover.downgrade();timed.connect_clicked(move |_|{let _=s.send(SidebarMsg::NotificationControls(id));if let Some(p)=weak.upgrade(){p.popdown();}});menu.append(&timed);
                 popover.set_child(Some(&menu));
                 popover.connect_closed(|p|p.unparent());let weak=popover.downgrade();row.connect_destroy(move |_|{if let Some(p)=weak.upgrade(){if p.parent().is_some(){p.unparent();}}});popover.popup();
             });row.add_controller(click);
@@ -467,9 +482,9 @@ fn rebuild_channel_list(
                 desired.push((signature,old.clone()));continue;
             }
             let row=gtk::ListBoxRow::new();row.set_widget_name(&format!("voice-member-{}-{}",channel.id,member.id));row.set_activatable(false);row.set_selectable(false);row.add_css_class("papo-voice-member");
-            let line=gtk::Box::new(gtk::Orientation::Horizontal,4);let open=gtk::Button::new();open.add_css_class("flat");open.set_hexpand(true);open.set_tooltip_text(Some("Abrir perfil"));let content=gtk::Box::new(gtk::Orientation::Horizontal,6);
-            let avatar=crate::media::member_avatar(member.id,avatars.get(&member.id),24);avatar.set_text(Some(&member.name));let avatar_box=gtk::Overlay::new();avatar_box.set_child(Some(&avatar));avatar_box.set_visible(show_avatars);let speaking=gtk::Image::from_icon_name("papo-microphone-sensitivity-high-symbolic");speaking.set_pixel_size(10);speaking.set_halign(gtk::Align::End);speaking.set_valign(gtk::Align::End);speaking.add_css_class("papo-voice-speaking-badge");speaking.set_widget_name("voice-speaking-icon");speaking.set_tooltip_text(Some("Falando"));speaking.set_visible(member.speaking&&!member.muted);avatar_box.add_overlay(&speaking);content.append(&avatar_box);let fallback=gtk::Image::from_icon_name("papo-microphone-sensitivity-high-symbolic");fallback.set_widget_name("voice-speaking-fallback");fallback.set_pixel_size(16);fallback.set_tooltip_text(Some("Falando"));fallback.add_css_class("papo-voice-speaking");fallback.set_visible(member.speaking&&!member.muted);content.append(&fallback);let name=gtk::Label::new(Some(&member.name));name.set_xalign(0.0);name.set_hexpand(true);name.set_ellipsize(pango::EllipsizeMode::End);name.add_css_class("caption");name.set_widget_name("voice-member-name");if member.speaking&&!member.muted{name.add_css_class("papo-voice-speaking");}content.append(&name);if member.muted{content.append(&gtk::Image::from_icon_name("papo-microphone-disabled-symbolic"));}open.set_child(Some(&content));let s=sender.clone();let id=member.id;open.connect_clicked(move |_|s.input(SidebarMsg::OpenProfile(id)));line.append(&open);
-            for (active,kind,icon,label) in [(member.camera,"video","papo-camera-video-symbolic","Ver câmera"),(member.screen,"screen","papo-video-display-symbolic","Ver tela")]{if active{let watch=gtk::Button::from_icon_name(icon);watch.add_css_class("flat");watch.set_tooltip_text(Some(label));let s=sender.clone();watch.connect_clicked(move |_|s.input(SidebarMsg::WatchVoice{user:id,kind}));line.append(&watch);}}
+            let line=gtk::Box::new(gtk::Orientation::Horizontal,4);let open=gtk::Button::new();open.add_css_class("flat");open.set_hexpand(true);open.set_tooltip_text(Some(crate::i18n::tr("Abrir perfil")));let content=gtk::Box::new(gtk::Orientation::Horizontal,6);
+            let avatar=crate::media::member_avatar(member.id,avatars.get(&member.id),24);avatar.set_text(Some(&member.name));let avatar_box=gtk::Overlay::new();avatar_box.set_child(Some(&avatar));avatar_box.set_visible(show_avatars);let speaking=gtk::Image::from_icon_name("papo-microphone-sensitivity-high-symbolic");speaking.set_pixel_size(10);speaking.set_halign(gtk::Align::End);speaking.set_valign(gtk::Align::End);speaking.add_css_class("papo-voice-speaking-badge");speaking.set_widget_name("voice-speaking-icon");speaking.set_tooltip_text(Some(crate::i18n::tr("Falando")));speaking.set_visible(member.speaking&&!member.muted);avatar_box.add_overlay(&speaking);content.append(&avatar_box);let fallback=gtk::Image::from_icon_name("papo-microphone-sensitivity-high-symbolic");fallback.set_widget_name("voice-speaking-fallback");fallback.set_pixel_size(16);fallback.set_tooltip_text(Some(crate::i18n::tr("Falando")));fallback.add_css_class("papo-voice-speaking");fallback.set_visible(member.speaking&&!member.muted);content.append(&fallback);let name=gtk::Label::new(Some(&member.name));name.set_xalign(0.0);name.set_hexpand(true);name.set_ellipsize(pango::EllipsizeMode::End);name.add_css_class("caption");name.set_widget_name("voice-member-name");if member.speaking&&!member.muted{name.add_css_class("papo-voice-speaking");}content.append(&name);if member.muted{content.append(&gtk::Image::from_icon_name("papo-microphone-disabled-symbolic"));}open.set_child(Some(&content));let s=sender.clone();let id=member.id;open.connect_clicked(move |_|s.input(SidebarMsg::OpenProfile(id)));line.append(&open);
+            for (active,kind,icon,label) in [(member.camera,"video","papo-camera-video-symbolic",crate::i18n::tr("Ver câmera")),(member.screen,"screen","papo-video-display-symbolic",crate::i18n::tr("Ver tela"))]{if active{let watch=gtk::Button::from_icon_name(icon);watch.add_css_class("flat");watch.set_tooltip_text(Some(label));let s=sender.clone();watch.connect_clicked(move |_|s.input(SidebarMsg::WatchVoice{user:id,kind}));line.append(&watch);}}
             row.set_child(Some(&line));
             desired.push((signature,row));
         }}}
@@ -509,8 +524,8 @@ impl SidebarModel {
     }
     fn rebuild_direct(&mut self,list:&gtk::Box,sender:&ComponentSender<Self>){
         let mut ordered=vec![];
-        if self.direct.is_empty(){let empty=gtk::Label::new(Some("O seu papo começa aqui.
-Abra o perfil de um membro para enviar uma mensagem."));empty.set_wrap(true);empty.set_margin_start(16);empty.set_margin_end(16);empty.set_margin_top(20);empty.add_css_class("dim-label");ordered.push(empty.upcast::<gtk::Widget>());}
+        if self.direct.is_empty(){let empty=gtk::Label::new(Some(crate::i18n::tr("O seu papo começa aqui.
+Abra o perfil de um membro para enviar uma mensagem.")));empty.set_wrap(true);empty.set_margin_start(16);empty.set_margin_end(16);empty.set_margin_top(20);empty.add_css_class("dim-label");ordered.push(empty.upcast::<gtk::Widget>());}
         for dm in &self.direct {
             let signature=format!("{}|{}|{:?}|{}|{}",dm.user.display_name(),dm.unread_count,self.presence.get(&dm.user.id),self.selected_channel_id==Some(dm.id),self.show_avatars);
             if let Some((_,row))=self.direct_rows.get(&dm.id).filter(|(old,_)|*old==signature){ordered.push(row.clone().upcast());continue;}
@@ -523,9 +538,10 @@ Abra o perfil de um membro para enviar uma mensagem."));empty.set_wrap(true);emp
             let presence=crate::ui::status::image(self.presence.get(&dm.user.id).copied().unwrap_or(crate::ws::PresenceStatus::Offline));
             if self.show_avatars{let avatar=gtk::Overlay::new();let image=crate::media::member_avatar(dm.user.id,self.avatars.get(&dm.user.id),28);image.set_text(Some(dm.user.display_name()));avatar.set_child(Some(&image));presence.set_halign(gtk::Align::End);presence.set_valign(gtk::Align::End);avatar.add_overlay(&presence);content.append(&avatar);}else{content.append(&presence);}
             let label=gtk::Label::new(Some(dm.user.display_name()));label.set_xalign(0.0);label.set_ellipsize(pango::EllipsizeMode::End);label.set_hexpand(true);content.append(&label);
+            content.append(&draft_indicator(dm.id));
             if dm.unread_count>0{let badge=gtk::Label::new(Some(&dm.unread_count.to_string()));badge.add_css_class("papo-notification-count");content.append(&badge);}
             open.set_child(Some(&content));let s=sender.clone();let id=dm.id;open.connect_clicked(move |_|s.input(SidebarMsg::DirectSelect(id)));row.append(&open);
-            let hide=gtk::Button::from_icon_name("papo-window-close-symbolic");hide.add_css_class("flat");hide.set_tooltip_text(Some("Ocultar conversa; o histórico é preservado"));let s=sender.clone();hide.connect_clicked(move |_|s.input(SidebarMsg::HideDirect(id)));row.append(&hide);self.direct_rows.insert(id,(signature,row.clone()));ordered.push(row.upcast());
+            let hide=gtk::Button::from_icon_name("papo-window-close-symbolic");hide.add_css_class("flat");hide.set_tooltip_text(Some(crate::i18n::tr("Ocultar conversa; o histórico é preservado")));let s=sender.clone();hide.connect_clicked(move |_|s.input(SidebarMsg::HideDirect(id)));row.append(&hide);self.direct_rows.insert(id,(signature,row.clone()));ordered.push(row.upcast());
         }
         self.direct_rows.retain(|id,_|self.direct.iter().any(|d|d.id==*id));
         let keep:std::collections::HashSet<_>=ordered.iter().cloned().collect();
@@ -564,4 +580,13 @@ Abra o perfil de um membro para enviar uma mensagem."));empty.set_wrap(true);emp
     sidebar.emit(SidebarMsg::PeerAvatars(Default::default()));pump(context);for row in &after{assert!(descendants(row).iter().filter_map(|w|w.downcast_ref::<adw::Avatar>()).all(|a|a.custom_image().is_none()));}
     sidebar.emit(SidebarMsg::Presence(Default::default()));pump(context);assert!(before.iter().all(|w|w.parent().is_some()));
     window.set_content(None::<&gtk::Widget>);window.close();
+}
+
+fn draft_indicator(id:Uuid)->gtk::Image{
+    let icon=gtk::Image::from_icon_name("papo-document-edit-symbolic");icon.set_widget_name(&format!("draft-indicator-{id}"));icon.set_pixel_size(14);
+    icon.set_visible(false);icon.set_tooltip_text(Some(crate::i18n::tr("Rascunho")));icon.update_property(&[gtk::accessible::Property::Label(crate::i18n::tr("Rascunho"))]);icon
+}
+fn update_draft_indicators(widget:&gtk::Widget,drafts:&std::collections::HashSet<Uuid>){
+    if let Some(id)=widget.widget_name().strip_prefix("draft-indicator-").and_then(|s|Uuid::parse_str(s).ok()){widget.set_visible(drafts.contains(&id));return;}
+    let mut child=widget.first_child();while let Some(current)=child{child=current.next_sibling();update_draft_indicators(&current,drafts);}
 }

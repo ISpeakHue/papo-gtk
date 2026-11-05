@@ -36,14 +36,15 @@ impl Drop for Layout {
 
 pub(super) fn shortcuts(root:&gtk::Box,s:&ComponentSender<MainWindowModel>){
     let actions=gtk::gio::SimpleActionGroup::new();
-    for (name,kind) in [("search",0),("preferences",1),("notifications",2),("navigation",3),("members",4),("channels",5),("direct",6)]{
+    for (name,kind) in [("shortcuts",8),("updates",9),("history",10),("composer",11),("switcher",7),("search",0),("preferences",1),("notifications",2),("navigation",3),("members",4),("channels",5),("direct",6)]{
         let action=gtk::gio::SimpleAction::new(name,None);let s=s.clone();action.connect_activate(move |_,_|s.input(match kind{
-            0=>MainWindowMsg::Search(SearchMsg::Open),1=>MainWindowMsg::Account(AccountMsg::Preferences),2=>MainWindowMsg::Notification(NoticeMsg::Open),3=>MainWindowMsg::ToggleNavigation,4=>MainWindowMsg::ToggleUserList,5=>MainWindowMsg::SidebarMode(false),_=>MainWindowMsg::SidebarMode(true),
+            8=>MainWindowMsg::Utility(utilities::UtilityMsg::Shortcuts),9=>MainWindowMsg::Utility(utilities::UtilityMsg::Updates),10=>MainWindowMsg::FocusHistory,11=>MainWindowMsg::FocusComposer,
+            0=>MainWindowMsg::Search(SearchMsg::Open),1=>MainWindowMsg::Account(AccountMsg::Preferences),2=>MainWindowMsg::Notification(NoticeMsg::Open),3=>MainWindowMsg::ToggleNavigation,4=>MainWindowMsg::ToggleUserList,5=>MainWindowMsg::SidebarMode(false),7=>MainWindowMsg::Switcher(SwitchMsg::Open),_=>MainWindowMsg::SidebarMode(true),
         }));actions.add_action(&action);
     }
     root.insert_action_group("papo",Some(&actions));
     let controller=gtk::ShortcutController::new();controller.set_scope(gtk::ShortcutScope::Managed);
-    for (trigger,action) in [("<Control>k","search"),("<Control>f","search"),("<Control>comma","preferences"),("<Control><Shift>m","members"),("<Alt>1","channels"),("<Alt>2","direct"),("F9","navigation")]{
+    for (trigger,action) in [("<Control>F1","shortcuts"),("<Control><Shift>n","notifications"),("<Control><Shift>h","history"),("<Control><Shift>l","composer"),("<Control>k","switcher"),("<Control>f","search"),("<Control>comma","preferences"),("<Control><Shift>m","members"),("<Alt>1","channels"),("<Alt>2","direct"),("F9","navigation")]{
         controller.add_shortcut(gtk::Shortcut::new(gtk::ShortcutTrigger::parse_string(&trigger.replace("<Control>",&crate::platform::shortcuts::accelerator(""))),Some(gtk::NamedAction::new(&format!("papo.{action}")))));
     }
     root.add_controller(controller);
@@ -75,7 +76,7 @@ pub(crate) mod tests {
     }
 
     pub(crate) fn exercise_header(main:&Controller<MainWindowModel>,window:&adw::ApplicationWindow,context:&gtk::glib::MainContext){
-        until(context,||main.model().active_channel_id.is_some()&&main.model().background_started);
+        until(context,||main.model().active_channel_id.is_some()&&main.model().connection.state.background_started);
         let header=descendants(main.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<adw::HeaderBar>().ok()).unwrap();
         let title=descendants(header.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::Box>().ok().filter(|w|w.widget_name()=="conversation-title")).unwrap();
         let name=||title.first_child().and_downcast::<gtk::Label>().unwrap().text();
@@ -111,7 +112,7 @@ pub(crate) mod tests {
             assert!((bar.y()-pane.y()).abs()<=1.0,"header starts at the top of the application");
             assert!(chat.y()>=bar.y()+bar.height()-1.0);
             assert!((bar.x()+bar.width()-pane.x()-pane.width()).abs()<=1.0,"header spans the member pane to the window controls");
-            for tooltip in ["Fixadas","Buscar mensagens (Ctrl+K)","Notificações","Lista de Membros"]{
+            for tooltip in ["Fixadas","Buscar mensagens (Ctrl+F)","Notificações","Lista de Membros"]{
                 let button=find_button(header.upcast_ref(),tooltip);
                 let limit=720.0+if !model.layout.members.is_collapsed()&&model.layout.members.shows_sidebar(){224.0}else{0.0};
                 assert_eq!(button.is_mapped(),header.width() as f64>limit||tooltip=="Notificações");
@@ -136,7 +137,7 @@ pub(crate) mod tests {
         for visible in [false,true]{
             main.model().layout.navigation.set_show_sidebar(visible);settle(context);assert_chat_center(main,&title,&header);
         }
-        for (tooltip,name) in [("Buscar mensagens (Ctrl+K)","Pesquisar mensagens"),("Notificações","Notificações")]{
+        for (tooltip,name) in [("Buscar mensagens (Ctrl+F)","Pesquisar mensagens"),("Notificações","Notificações")]{
             find_button(header.upcast_ref(),tooltip).emit_clicked();pump(context);
             let popup=gtk::Window::list_toplevels().into_iter().find_map(|w|w.downcast::<gtk::Window>().ok().filter(|w|w.title().as_deref()==Some(name))).unwrap();assert!(popup.is_visible());popup.close();pump(context);
         }

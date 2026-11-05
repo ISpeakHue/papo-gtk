@@ -151,4 +151,38 @@ class ReleaseAcceptanceTests(unittest.TestCase):
         self.assertFalse(checker.evaluate(receipt,'test-source',ci)['automated_acceptance'])
 
 
+class GuiCaseRunnerTests(unittest.TestCase):
+    def run_program(self, source, timeout=5):
+        import os
+        import sys
+        return module('run-gui-case').execute([sys.executable, '-c', source], os.environ.copy(), timeout)
+
+    def test_exact_single_test_success_is_accepted(self):
+        result = self.run_program("print('test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out')")
+        self.assertEqual(result['status'], 'pass')
+        self.assertFalse(result['timed_out'])
+
+    def test_zero_tests_and_missing_summary_are_rejected(self):
+        for line in ('test result: ok. 0 passed; 0 failed;', 'native process exited cleanly'):
+            self.assertEqual(self.run_program(f'print({line!r})')['status'], 'fail')
+
+    def test_nonzero_exit_cannot_be_overridden_by_success_output(self):
+        result = self.run_program("print('test result: ok. 1 passed; 0 failed;');raise SystemExit(7)")
+        self.assertEqual(result['status'], 'fail')
+        self.assertEqual(result['exit_code'], 7)
+
+    def test_timeout_retains_checkpoints_and_kills_descendants(self):
+        import time
+        with tempfile.TemporaryDirectory() as directory:
+            marker = Path(directory) / 'surviving-child'
+            child = f"import time;from pathlib import Path;print('descendant ready',flush=True);time.sleep(3);Path({str(marker)!r}).write_text('alive')"
+            parent = f"import subprocess,sys,time;subprocess.Popen([sys.executable,'-c',{child!r}]);time.sleep(30)"
+            result = self.run_program(parent, timeout=2)
+            self.assertEqual(result['status'], 'fail')
+            self.assertTrue(result['timed_out'])
+            self.assertIn('descendant ready', result['output'])
+            time.sleep(2)
+            self.assertFalse(marker.exists(), 'a timed-out GUI case must not leave a native worker running')
+
+
 if __name__ == "__main__": unittest.main()

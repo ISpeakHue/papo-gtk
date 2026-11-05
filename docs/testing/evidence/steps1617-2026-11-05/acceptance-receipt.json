@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "source_fingerprint": "a011e214574114944cc4221dbead3e0b81e6350a54dbb64c9016fa59e03af908",
+  "source_fingerprint": "034c2a74061e459634b9de1b058cc3b28e2b5619cf69a17cca49332247270e82",
   "platforms": {
     "linux-appimage": {
       "tested_by": "",
@@ -42,5 +42,5 @@
     "windows-installer": {},
     "windows-portable": {}
   },
-  "source_commit": "2ccba799cccede012ce00454f057c8f85e9f3da4"
+  "source_commit": "5c255b1196714c6635f37a3cc14c677f31c30144"
 }

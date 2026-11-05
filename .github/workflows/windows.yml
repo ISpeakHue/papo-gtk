@@ -241,22 +241,22 @@ jobs:
           G_DEBUG: fatal-criticals
         run: |
           python -m unittest discover -s tests -p desktop_input_test.py -v
-          PAPO_UI_CASE=desktop-input PAPO_NATIVE_INPUT_TEST=1 GTK_A11Y=test cargo test --locked ui_smoke -- --ignored --test-threads=1
-          PAPO_UI_CASE=login-input cargo test --locked ui_smoke -- --ignored --test-threads=1
-          PAPO_UI_CASE=edit-mentions cargo test --locked ui_smoke -- --ignored --test-threads=1
+          PAPO_NATIVE_INPUT_TEST=1 GTK_A11Y=test python scripts/run-gui-case.py desktop-input
+          python scripts/run-gui-case.py login-input
+          python scripts/run-gui-case.py edit-mentions
           for papo_case in multi-server multi-account-restart recovery notification-controls release-discovery accessibility accessibility-contrast search-recycling account-settings account-scope conversation-switcher media-policies media-preferences disk-thumbnails media-browser audio-setup translations draft-recovery outgoing-queue voice-controls; do
             printf 'Running GTK case: %s\n' "$papo_case"
-            PAPO_UI_CASE="$papo_case" GTK_A11Y=test cargo test --locked ui_smoke -- --ignored --test-threads=1
+            GTK_A11Y=test python scripts/run-gui-case.py "$papo_case"
           done
           for papo_case in window-scrolling notification-filters emoji-grid backend-update; do
             printf 'Running GTK case: %s\n' "$papo_case"
-            PAPO_UI_CASE="$papo_case" PAPO_NATIVE_INPUT_TEST=1 GTK_A11Y=test cargo test --locked ui_smoke -- --ignored --test-threads=1
+            PAPO_NATIVE_INPUT_TEST=1 GTK_A11Y=test python scripts/run-gui-case.py "$papo_case"
           done
           # EN-US: Cover the recent shared renderer, unread deletion and bounded image-cache changes natively.
           # PT-BR: Testa nativamente as mudanças recentes do renderizador, exclusão de não lidas e cache limitado.
           for papo_case in report8 report10 mentions mention-suggestions embeds retention; do
             printf 'Running GTK case: %s\n' "$papo_case"
-            PAPO_UI_CASE="$papo_case" cargo test --locked ui_smoke -- --ignored --test-threads=1
+            python scripts/run-gui-case.py "$papo_case"
           done
       - name: Test media classification, decoded bounds and cache budgets
         if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only
@@ -332,6 +332,7 @@ jobs:
             target/windows-build/storage/
             target/windows-build/media/
             target/windows-build/performance/
+            target/windows-build/gui/
           if-no-files-found: warn
       - name: Retain native rebuild inputs separately from the preview ZIP
         if: ${{ always() && hashFiles('target/windows-native-inputs/NATIVE-INPUTS.json') != '' }}

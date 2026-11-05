@@ -6,44 +6,44 @@
   "comparisons": {
     "startup_ui_ready": {
       "reference_us": 303394,
-      "median_us": 146235,
+      "median_us": 150367,
       "limit_us": 906788.0
     },
     "cold_channel_text": {
       "reference_us": 145423,
-      "median_us": 208555,
+      "median_us": 207457,
       "limit_us": 590846.0
     },
     "cold_channel_media": {
       "reference_us": 911381,
-      "median_us": 899736,
+      "median_us": 901396,
       "limit_us": 2122762.0
     },
     "warm_channel": {
       "reference_us": 61726,
-      "median_us": 66714,
+      "median_us": 63728,
       "limit_us": 223452.0
     },
     "scrolling": {
       "reference_us": 5381052,
-      "median_us": 5407900,
+      "median_us": 5450444,
       "limit_us": 9071578.0
     },
     "long_history": {
       "reference_us": 7287439,
-      "median_us": 7502298,
+      "median_us": 7636565,
       "limit_us": 14753018.25
     },
     "media_residency": {
       "reference_us": 151030,
-      "median_us": 138619,
+      "median_us": 150617,
       "limit_us": 602060.0
     }
   },
   "binary_source_verified": false,
   "profile_asserted_by_operator": "release",
   "scope": "Synthetic CPU/request/cache regression envelope, not compositor latency, leak detection or release/device acceptance",
-  "report_sha256": "ae85186da67bbd4ba66537976b92b5981dd33b40cf8cc71f0db07689561d57dd",
+  "report_sha256": "311e351b73156680eb8fe9ce8cb7d10f6da5a926d26511dab2cbc4320914066e",
   "reference_sha256": "f05c89cd632e18ac55477ae12787bf8d2d4af0d14e3fb91bc4caf37c4ef4bc1e",
   "budgets_sha256": "a797346bc7f6c882823e0749585cfe1dba654f640ade4e833396d16b05206c9a"
 }

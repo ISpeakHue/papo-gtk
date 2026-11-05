@@ -3,11 +3,11 @@
   "date": "2026-11-05",
   "status": "automated_validation_incomplete",
   "scope": "Recovered implementation steps 16\u201317 and continued local/cross-platform validation; no release acceptance inferred",
-  "source_fingerprint": "a011e214574114944cc4221dbead3e0b81e6350a54dbb64c9016fa59e03af908",
+  "source_fingerprint": "034c2a74061e459634b9de1b058cc3b28e2b5619cf69a17cca49332247270e82",
   "source_fingerprint_algorithm": "scripts/performance-baseline.py source_fingerprint(); SHA-256 of the sorted JSON path-to-SHA256 manifest for Cargo inputs and src/tests/assets/locales/scripts/packaging files",
   "local_head": "b6b880e069b572409440a8b1f80292fc5d5e7e52",
   "source_dirty": true,
-  "test_binary_sha256": "870219e47089bef2bd94948c729b774e0530e51dd450d7cdf3af48a2c8ae2a08",
+  "test_binary_sha256": "b981a18177b950e2df2de4c868d7fca2bb47dfc8b963ac05d280b05573afa3d7",
   "compiler_artifacts": [
     {
       "target": {
@@ -40,10 +40,10 @@
     "failed": 0,
     "ignored": 6,
     "log": {
-      "path": "target/resume-unit.log",
-      "sha256": "16ed08d96c78bfbb8c1f999d2d4d93a465e8e6aec5ba46b578a2e7a723e45c5e",
+      "path": "target/resume-timestamp-unit.log",
+      "sha256": "44f7a5292d3c1c6982a2d45b6af18fbcfa7330538be3ded23dee5fe15a3ee7be",
       "result_lines": [
-        "test result: ok. 347 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 29.46s"
+        "test result: ok. 347 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 29.43s"
       ]
     }
   },
@@ -51,7 +51,7 @@
     "status": "passed_without_warnings",
     "log": {
       "path": "target/resume-check.log",
-      "sha256": "22e0df986057b9ba5be07526ac5fb348862a3dedef42108383cc3e088acbb889",
+      "sha256": "a3dff9283859bf00f78dc770ea6a6e078a0738b2d1e45113a6c5f2392ec58acd",
       "result_lines": []
     }
   },
@@ -66,7 +66,8 @@
         "Ran 181 tests in 9.719s",
         "OK (skipped=7)"
       ]
-    }
+    },
+    "source_fingerprint": "a011e214574114944cc4221dbead3e0b81e6350a54dbb64c9016fa59e03af908"
   },
   "implementation_tools": {
     "passed": 15,
@@ -77,7 +78,8 @@
         "Ran 15 tests in 0.006s",
         "OK"
       ]
-    }
+    },
+    "source_fingerprint": "a011e214574114944cc4221dbead3e0b81e6350a54dbb64c9016fa59e03af908"
   },
   "matching_translation_entries": 1010,
   "gtk": {
@@ -605,7 +607,9 @@
           "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 3.10s"
         ]
       }
-    ]
+    ],
+    "source_fingerprint": "a011e214574114944cc4221dbead3e0b81e6350a54dbb64c9016fa59e03af908",
+    "test_binary_sha256": "870219e47089bef2bd94948c729b774e0530e51dd450d7cdf3af48a2c8ae2a08"
   },
   "native_worker_cleanup": {
     "passed": 3,
@@ -624,7 +628,9 @@
           "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 351 filtered out; finished in 0.74s"
         ]
       }
-    ]
+    ],
+    "source_fingerprint": "a011e214574114944cc4221dbead3e0b81e6350a54dbb64c9016fa59e03af908",
+    "test_binary_sha256": "870219e47089bef2bd94948c729b774e0530e51dd450d7cdf3af48a2c8ae2a08"
   },
   "voice_sfu": {
     "status": "pass",
@@ -639,7 +645,8 @@
         "TURN relay: bidirectional decoded audio, routes, active speakers, mute and leave passed",
         "Missing capture device: reported and resources released"
       ]
-    }
+    },
+    "source_fingerprint": "a011e214574114944cc4221dbead3e0b81e6350a54dbb64c9016fa59e03af908"
   },
   "known_native_playback": {
     "status": "unresolved",
@@ -671,7 +678,13 @@
         "cycles_passed": 200
       }
     ],
-    "probe_limitations": "Simpler standalone probes did not reproduce the failing application playback workflows; the native stack alone does not establish the full cause."
+    "probe_limitations": "Simpler standalone probes did not reproduce the failing application playback workflows; the native stack alone does not establish the full cause.",
+    "legacy_playbin_diagnostic": {
+      "option": "GST_PLAY_USE_PLAYBIN3=0",
+      "case": "recent-media",
+      "result": "SIGSEGV after four completed fullscreen/latest/history eviction cycles",
+      "default_changed": false
+    }
   },
   "recovered_prior_instance": {
     "source_fingerprint": "708c989c92259d9c13328f354df748883738def5870e9cc09710d1d483255313",
@@ -698,21 +711,25 @@
   "ci_snapshot": {
     "path": "/tmp/papo-finish-plan-ci-waymzjam",
     "branch": "ci/finish-plan-20261105-73a7e4a",
-    "commit": "2ccba799cccede012ce00454f057c8f85e9f3da4",
+    "commit": "5c255b1196714c6635f37a3cc14c677f31c30144",
     "base": "b6b880e069b572409440a8b1f80292fc5d5e7e52",
     "included_files": 802,
-    "run_id": 42096295223,
-    "run_url": "https://github.com/ISpeakHue/papo-gtk/actions/runs/42096295223",
-    "source_fingerprint": "a011e214574114944cc4221dbead3e0b81e6350a54dbb64c9016fa59e03af908",
-    "verified_source_fingerprint": "a011e214574114944cc4221dbead3e0b81e6350a54dbb64c9016fa59e03af908",
+    "source_fingerprint": "034c2a74061e459634b9de1b058cc3b28e2b5619cf69a17cca49332247270e82",
+    "previous_commit": "2ccba799cccede012ce00454f057c8f85e9f3da4",
+    "previous_run_id": 42096295223,
+    "previous_run_url": "https://github.com/ISpeakHue/papo-gtk/actions/runs/42096295223",
+    "run_id": 42100245205,
+    "run_url": "https://github.com/ISpeakHue/papo-gtk/actions/runs/42100245205",
+    "verified_source_fingerprint": "034c2a74061e459634b9de1b058cc3b28e2b5619cf69a17cca49332247270e82",
     "workflow_sha256": {
-      ".github/workflows/windows.yml": "044db3e142b6c7e4ef3bc39f2158269d9f1bde5f0e8abb49a90973f1a8f82e47",
+      ".github/workflows/windows.yml": "e63c3c18d8d53feaad3cef745a6c7a85f12ca1f0b604e272547e468647193901",
       ".github/workflows/test.yml": "d2acccea5f2927bc39845f8b7c9a9ac6dc187c31fca9de6fdd8dbc1127d9f76c"
     }
   },
   "cross_platform_ci": {
     "status": "in_progress",
-    "url": "https://github.com/ISpeakHue/papo-gtk/actions/runs/42096295223"
+    "url": "https://github.com/ISpeakHue/papo-gtk/actions/runs/42100245205",
+    "commit": "5c255b1196714c6635f37a3cc14c677f31c30144"
   },
   "physical_linux_acceptance": "pending",
   "release_certified": false,
@@ -727,48 +744,79 @@
       "comparisons": {
         "startup_ui_ready": {
           "reference_us": 303394,
-          "median_us": 146235,
+          "median_us": 150367,
           "limit_us": 906788.0
         },
         "cold_channel_text": {
           "reference_us": 145423,
-          "median_us": 208555,
+          "median_us": 207457,
           "limit_us": 590846.0
         },
         "cold_channel_media": {
           "reference_us": 911381,
-          "median_us": 899736,
+          "median_us": 901396,
           "limit_us": 2122762.0
         },
         "warm_channel": {
           "reference_us": 61726,
-          "median_us": 66714,
+          "median_us": 63728,
           "limit_us": 223452.0
         },
         "scrolling": {
           "reference_us": 5381052,
-          "median_us": 5407900,
+          "median_us": 5450444,
           "limit_us": 9071578.0
         },
         "long_history": {
           "reference_us": 7287439,
-          "median_us": 7502298,
+          "median_us": 7636565,
           "limit_us": 14753018.25
         },
         "media_residency": {
           "reference_us": 151030,
-          "median_us": 138619,
+          "median_us": 150617,
           "limit_us": 602060.0
         }
       },
       "binary_source_verified": false,
       "profile_asserted_by_operator": "release",
       "scope": "Synthetic CPU/request/cache regression envelope, not compositor latency, leak detection or release/device acceptance",
-      "report_sha256": "ae85186da67bbd4ba66537976b92b5981dd33b40cf8cc71f0db07689561d57dd",
+      "report_sha256": "311e351b73156680eb8fe9ce8cb7d10f6da5a926d26511dab2cbc4320914066e",
       "reference_sha256": "f05c89cd632e18ac55477ae12787bf8d2d4af0d14e3fb91bc4caf37c4ef4bc1e",
       "budgets_sha256": "a797346bc7f6c882823e0749585cfe1dba654f640ade4e833396d16b05206c9a"
     },
-    "baseline_sha256": "ae85186da67bbd4ba66537976b92b5981dd33b40cf8cc71f0db07689561d57dd"
+    "baseline_sha256": "311e351b73156680eb8fe9ce8cb7d10f6da5a926d26511dab2cbc4320914066e"
   },
-  "compiler_artifact_paths": "Normalized relative to the project; the original compiler JSON remains under target/resume-build.jsonl."
+  "compiler_artifact_paths": "Normalized relative to the project; the original compiler JSON remains under target/resume-build.jsonl.",
+  "final_fixture_change": {
+    "scope": "Deterministic file timestamps in the disk-cache eviction unit test; GTK dependency artifact pin refreshed with all verification intact. No runtime cache/playback code changed.",
+    "previous_source_fingerprint": "a011e214574114944cc4221dbead3e0b81e6350a54dbb64c9016fa59e03af908",
+    "rust_suite_rerun": true,
+    "performance_runs_refreshed": true,
+    "gtk_runtime_sources_unchanged": true
+  },
+  "ci_attempts": [
+    {
+      "run_id": 42096295223,
+      "url": "https://github.com/ISpeakHue/papo-gtk/actions/runs/42096295223",
+      "commit": "2ccba799cccede012ce00454f057c8f85e9f3da4",
+      "windows": "failure: byte_budget_evicts_old_files_and_keeps_recent_hits assumed distinct rapid-write timestamps",
+      "macos": "success",
+      "linux": {
+        "status": "failure",
+        "gtk_total": 58,
+        "gtk_passed": 57,
+        "failed": [
+          {
+            "case": "recent-media",
+            "exit_code": 101
+          }
+        ],
+        "native_failure": "recent-media: SIGSEGV",
+        "aggregate_default": "passed (310.09 s)",
+        "results": "linux-ci-first-results.tsv",
+        "results_sha256": "aca7bb3d64540ebdadf438e47c084953dce7928bfd978c43ba17943973c12b3e"
+      }
+    }
+  ]
 }

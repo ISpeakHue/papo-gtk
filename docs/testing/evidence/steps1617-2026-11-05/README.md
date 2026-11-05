@@ -21,17 +21,29 @@ and artifact-bound acceptance receipts. The final continuation corrected:
 - A reduced-motion fixture still expecting an animation object.
 - The conversation-switcher focus fixture running without a window manager and
   checking focus before native activation settled.
+- The disk-cache eviction fixture assuming rapid writes have distinct timestamps.
+  Windows CI exposed tied clock ticks; the fixture now seeds distinct past
+  modification times and still verifies that a real cache hit refreshes recency.
+  Cache behavior and limits are unchanged.
 
 The Windows workflow now prints each looped case name so native aborts identify
-their fixture. The working branch remains uncommitted. The corrected source was
+their fixture. Its retained GTK dependency source was refreshed to the first
+continuation run; complete inventory and recipe checks still decide whether
+reuse is allowed, and no test result is reused. The working branch remains uncommitted. The corrected source was
 submitted on an isolated CI branch; no release or merge was performed.
 
-Fresh cross-platform validation is [run 42096295223](https://github.com/ISpeakHue/papo-gtk/actions/runs/42096295223)
-on commit `2ccba799cccede012ce00454f057c8f85e9f3da4`, branch
+Fresh cross-platform validation is [run 42100245205](https://github.com/ISpeakHue/papo-gtk/actions/runs/42100245205)
+on commit `5c255b1196714c6635f37a3cc14c677f31c30144`, branch
 `ci/finish-plan-20261105-73a7e4a`. The local snapshot's implementation fingerprint
 and both workflow files match the tested checkout. The earlier
 [interrupted run](https://github.com/ISpeakHue/papo-gtk/actions/runs/42076952395)
-finished with failures; it was not accepted as passing Windows evidence.
+finished with failures; it was not accepted as passing Windows evidence. The
+[first continuation run](https://github.com/ISpeakHue/papo-gtk/actions/runs/42096295223)
+then exposed the timestamp-dependent Windows fixture before the final correction.
+That run passed **57/58 Linux GTK cases**: its aggregate `default` case passed
+in 310.09 seconds; only `recent-media` failed with native SIGSEGV. Its
+[case receipt](linux-ci-first-results.tsv) is retained separately from the local
+56/58 result.
 
 ## Automated evidence
 

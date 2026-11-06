@@ -433,7 +433,7 @@ pub(crate) fn exercise_denied(main:&Controller<MainWindowModel>,context:&gtk::gl
     main.emit(MainWindowMsg::WsReceived(WsEvent::NewMessage(message.clone())));until(context,||badge.text()=="3");
     main.emit(MainWindowMsg::WsReceived(WsEvent::NewMessage(message.clone())));pump(context);assert_eq!(badge.text(),"3","duplicate messages cannot inflate the badge");
     main.emit(MainWindowMsg::HistoryObserved{channel_id:dm,messages:vec![crate::models::MessageObservation::from(&message)],latest:true});pump(context);assert_eq!(badge.text(),"3","fetching messages is not a read acknowledgement");
-    let request=main.state().get_mut().model.notifications.reads.begin(&message).unwrap();
+    until(context,||main.model().notifications.reads.idle());let request={let mut state=main.state().get_mut();state.model.notifications.reads.reset_pending();state.model.notifications.reads.begin(&message).unwrap()};
     main.emit(MainWindowMsg::ChannelRead{request,message,result:Ok(())});until(context,||!badge.is_visible());
     main.emit(MainWindowMsg::Notification(NoticeMsg::Open));until(context,||main.model().notifications.request.is_none()&&main.model().notifications.marks.is_empty()&&main.model().notifications.view.is_some());
     let server_notice=Uuid::new_v4();let direct_notice=Uuid::new_v4();let channel=main.model().channels[0].id;

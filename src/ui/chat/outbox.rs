@@ -104,7 +104,7 @@ impl Rows {
                 Status::Failed{message,..}=>(format!("{}{}",message,entry.draft.recovery_notice.as_ref().map(|n|format!(" {n}")).unwrap_or_default()),false,true),
             };
             row.status.set_text(&text);row.progress.set_visible(uploading&&total>0);row.retry.set_visible(failed&&entry.draft.recovery_notice.is_none()&&!entry.draft.reply_unresolved);
-            row.feedback.set_visible(failed||entry.queued_at.elapsed()>=std::time::Duration::from_millis(500));
+            row.feedback.set_visible(failed||(uploading&&total>0)||entry.queued_at.elapsed()>=std::time::Duration::from_millis(500));
             row.edit.set_visible(failed);row.cancel.set_label(crate::i18n::tr(if failed{"Descartar"}else{"Cancelar envio"}));
             if failed{row.status.add_css_class("error");}else{row.status.remove_css_class("error");}
         }

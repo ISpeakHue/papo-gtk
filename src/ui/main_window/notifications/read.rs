@@ -14,6 +14,7 @@ fn key(cursor:MessageCursor)->(chrono::DateTime<chrono::Utc>,Uuid){(cursor.creat
 impl Reads {
     #[cfg(test)]pub(super) fn idle(&self)->bool{self.pending.is_none()}
     #[cfg(test)]pub(super) fn retry_now(&mut self,channel:Uuid){self.retry.insert(channel,Instant::now());}
+    #[cfg(test)]pub(super) fn reset_pending(&mut self){self.pending=None;}
     pub(super) fn covers(&self,message:&Message)->bool{
         self.covers_cursor(message.channel_id,MessageCursor::from(message))
     }

@@ -1820,7 +1820,7 @@ fn show_context_menu(row:&gtk::Widget,point:Option<(f64,f64)>){
     fn reveal(menu:&gtk::MenuButton,row:&gtk::Widget){
         let mut parent=menu.parent();while let Some(widget)=parent{
             if widget==*row{break;}
-            if let Some(reveal)=widget.downcast_ref::<gtk::Revealer>(){reveal.set_opacity(1.0);reveal.set_reveal_child(true);break;}
+            if let Some(reveal)=widget.downcast_ref::<gtk::Revealer>(){reveal.set_transition_duration(0);reveal.set_opacity(1.0);reveal.set_reveal_child(true);break;}
             parent=widget.parent();
         }
     }
@@ -1835,7 +1835,7 @@ fn show_context_menu(row:&gtk::Widget,point:Option<(f64,f64)>){
         let Some(row)=current else{return gtk::glib::ControlFlow::Break;};
         if let Some(menu)=menu_in(&row){
             reveal(&menu,&row);
-            if !menu.is_mapped()||menu.width()==0{return if frames.get()<12{gtk::glib::ControlFlow::Continue}else{gtk::glib::ControlFlow::Break};}
+            if (!menu.is_mapped()||menu.width()==0)&&frames.get()<60{return gtk::glib::ControlFlow::Continue;}
             if let Some(popover)=menu.popover(){
                 let anchor=point.and_then(|(x,y)|row.compute_point(&menu,&gtk::graphene::Point::new(x as f32,y as f32)));
                 popover.set_pointing_to(anchor.as_ref().map(|p|gtk::gdk::Rectangle::new(p.x().round() as i32,p.y().round() as i32,1,1)).as_ref());popover.set_position(gtk::PositionType::Bottom);

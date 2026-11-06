@@ -91,7 +91,10 @@ def aggregate(info_path, reports, jobs, commit, repository, run_id, attempt):
     for name in ("python-native.json", "python-workers.json"):
         path = info_path.parent / name
         tests = read(path)
-        allowed = {"call_sound_test.CallSoundTests.test_auto_output_children_get_papos_identity_before_playback"} if name == "python-workers.json" else set()
+        allowed = {
+            "call_sound_test.CallSoundTests.test_auto_output_children_get_papos_identity_before_playback",
+            "voice_worker_test.AudioSetupTests.test_local_default_devices_have_papo_identity_and_explicit_audio_server_routing",
+        } if name == "python-workers.json" else set()
         require(tests["status"] == "pass" and tests["run"] > 0 and tests["discovered"]
                 and all(n > 0 for n in tests["discovered"].values()) and not tests["failures"]
                 and not tests["errors"] and not tests["unexpected_skips"]

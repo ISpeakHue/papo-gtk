@@ -104,6 +104,18 @@ class ReleaseGate(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Python checks"):
                 self.aggregate()
 
+    def test_linux_audio_routing_exclusion_does_not_allow_skipping_windows_audio(self):
+        path = self.root / "python-workers.json"
+        original = gate.read(path)
+        linux_only = "voice_worker_test.AudioSetupTests.test_local_default_devices_have_papo_identity_and_explicit_audio_server_routing"
+        write_json(path, {**original, "skipped": [{"test": linux_only, "reason": "PulseAudio routing is Linux-specific"}]})
+        self.assertEqual(self.aggregate()["automated_status"], "pass")
+        for test in ("voice_worker_test.AudioSetupTests.test_local_record_replay_is_bounded_and_never_creates_webrtc",
+                     "voice_worker_test.AudioSetupTests.test_output_test_never_opens_a_microphone_and_stop_releases_capture"):
+            write_json(path, {**original, "skipped": [{"test": test, "reason": "no device"}]})
+            with self.subTest(test=test), self.assertRaisesRegex(RuntimeError, "Python checks"):
+                self.aggregate()
+
     def test_dirty_or_packaging_only_build_cannot_pass(self):
         for path, key, value in (((), "source_dirty", True), (("source",), "status", " M src.rs"),
                                   (("source",), "untracked_sha256", {"new.rs": "0" * 64}),

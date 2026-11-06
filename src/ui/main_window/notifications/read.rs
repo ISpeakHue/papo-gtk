@@ -15,6 +15,7 @@ impl Reads {
     #[cfg(test)]pub(super) fn idle(&self)->bool{self.pending.is_none()}
     #[cfg(test)]pub(super) fn retry_now(&mut self,channel:Uuid){self.retry.insert(channel,Instant::now());}
     #[cfg(test)]pub(super) fn reset_pending(&mut self){self.pending=None;}
+    #[cfg(test)]pub(super) fn reset_channel(&mut self,channel:Uuid){self.pending=None;self.acknowledged.remove(&channel);self.retry.remove(&channel);}
     pub(super) fn covers(&self,message:&Message)->bool{
         self.covers_cursor(message.channel_id,MessageCursor::from(message))
     }

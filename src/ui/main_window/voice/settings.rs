@@ -7,10 +7,11 @@ pub(super) struct Controls {
     pub body: gtk::Box,
     pub devices: adw::ComboRow,
     pub gain: gtk::Scale,
+    pub audio:audio::Controls,
 }
 
 pub(super) fn device_row(initial: &str) -> adw::ComboRow {
-    let row = adw::ComboRow::builder().title("Dispositivo").model(&gtk::StringList::new(&[initial])).build();
+    let row = adw::ComboRow::builder().title(crate::i18n::tr("Dispositivo")).model(&gtk::StringList::new(&[initial])).build();
     row.set_title_lines(0);
     // Keep the native popup while allowing longer device names in the row.
     row.set_list_factory(row.factory().as_ref());
@@ -49,11 +50,11 @@ pub(super) fn group(body: &gtk::Box, title: &str, refresh_label: &str, sender: &
 }
 
 pub(super) fn new(sender: &ComponentSender<MainWindowModel>) -> Controls {
-    let native = adw::Window::builder().title("Configurar chamada").default_width(760).default_height(640).hide_on_close(true).build();
+    let native = adw::Window::builder().title(crate::i18n::tr("Configurar chamada")).default_width(760).default_height(640).hide_on_close(true).build();
     native.set_size_request(320,360);
     let toolbar = adw::ToolbarView::new();
     let header = adw::HeaderBar::new();
-    header.set_title_widget(Some(&adw::WindowTitle::new("Configurar chamada", "")));
+    header.set_title_widget(Some(&adw::WindowTitle::new(crate::i18n::tr("Configurar chamada"), "")));
     toolbar.add_top_bar(&header);
     let body = gtk::Box::new(gtk::Orientation::Vertical, 24);
     body.set_valign(gtk::Align::Start);
@@ -67,18 +68,18 @@ pub(super) fn new(sender: &ComponentSender<MainWindowModel>) -> Controls {
     clamp.set_child(Some(&body));
     let scroll = gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).child(&clamp).build();
     toolbar.set_content(Some(&scroll));
-    let info = gtk::Label::new(Some("O microfone começa silenciado. Trocar o dispositivo encerra a chamada para liberar o microfone anterior."));
+    let info = gtk::Label::new(Some(crate::i18n::tr("O microfone começa silenciado. A troca de dispositivo preserva a chamada e o estado do microfone.")));
     info.set_wrap(true);
     info.set_xalign(0.0);
     info.add_css_class("dim-label");
     body.append(&info);
 
-    let microphone = group(&body, "Microfone", "Atualizar microfones", sender, || VoiceMsg::ReloadDevices);
-    let devices = device_row("Microfone padrão do sistema");
+    let microphone = group(&body, crate::i18n::tr("Microfone"), crate::i18n::tr("Atualizar microfones"), sender, || VoiceMsg::ReloadDevices);
+    let devices = device_row(crate::i18n::tr("Microfone padrão do sistema"));
     let input = sender.input_sender().clone();
     devices.connect_selected_notify(move |_| { let _ = input.send(MainWindowMsg::Voice(VoiceMsg::Device)); });
     microphone.add(&devices);
-    let row = adw::ActionRow::builder().title("Volume do microfone").title_lines(0).build();
+    let row = adw::ActionRow::builder().title(crate::i18n::tr("Volume do microfone")).title_lines(0).build();
     let volume = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     volume.set_hexpand(true);
     volume.set_valign(gtk::Align::Center);
@@ -93,20 +94,23 @@ pub(super) fn new(sender: &ComponentSender<MainWindowModel>) -> Controls {
     gain.set_draw_value(true);
     gain.set_value_pos(gtk::PositionType::Right);
     gain.set_format_value_func(|_, value| format!("{value:.0}%"));
-    gain.set_tooltip_text(Some("Ajuste a amplificação do microfone. 100% mantém o nível original."));
-    gain.update_property(&[gtk::accessible::Property::Label("Volume do microfone")]);
+    gain.set_tooltip_text(Some(crate::i18n::tr("Ajuste a amplificação do microfone. 100% mantém o nível original.")));
+    gain.update_property(&[gtk::accessible::Property::Label(crate::i18n::tr("Volume do microfone"))]);
     let input = sender.input_sender().clone();
     gain.connect_value_changed(move |_| { let _ = input.send(MainWindowMsg::Voice(VoiceMsg::Gain)); });
     volume.append(&gain);
     row.add_suffix(&volume);
     microphone.add(&row);
+    let audio=audio::new(&microphone,&body,sender);
+    // Test progress and failures stay visible while scrolling either device row.
+    toolbar.add_top_bar(&audio.status);
 
     let actions = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     actions.add_css_class("papo-call-actions");
     let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     spacer.set_hexpand(true);
     actions.append(&spacer);
-    let done = gtk::Button::with_label("Concluir");
+    let done = gtk::Button::with_label(crate::i18n::tr("Concluir"));
     done.add_css_class("suggested-action");
     let window = native.downgrade();
     done.connect_clicked(move |_| { if let Some(window) = window.upgrade() { window.close(); } });
@@ -117,5 +121,6 @@ pub(super) fn new(sender: &ComponentSender<MainWindowModel>) -> Controls {
     compact.add_setter(&body, "margin-start", Some(&16i32.to_value()));
     compact.add_setter(&body, "margin-end", Some(&16i32.to_value()));
     native.add_breakpoint(compact);
-    Controls { window: native.upcast(), body, devices, gain }
+    let input=sender.input_sender().clone();native.connect_close_request(move |_|{let _=input.send(MainWindowMsg::Voice(VoiceMsg::Audio(audio::AudioMsg::Closed)));gtk::glib::Propagation::Proceed});
+    Controls { window: native.upcast(), body, devices, gain,audio }
 }

@@ -13,24 +13,24 @@ impl ApiClient {
     async fn poster_range(&self,path:&str,start:u64,end:u64)->Result<(Vec<u8>,u64)> {
         let response=Self::check_response(self.inner.get(self.url(path))
             .header(reqwest::header::RANGE,format!("bytes={start}-{end}"))
-            .timeout(Duration::from_secs(8)).send_paced(&self.requests).await?,"carregar prévia do vídeo").await?;
+            .timeout(Duration::from_secs(8)).send_paced(&self.requests).await?,crate::i18n::tr("carregar prévia do vídeo")).await?;
         let maximum=end-start+1;
         let total=if response.status()==StatusCode::PARTIAL_CONTENT {
             let value=response.headers().get(reqwest::header::CONTENT_RANGE).context("Resposta sem Content-Range")?.to_str()?;
-            let (range,total)=value.strip_prefix("bytes ").context("Intervalo de vídeo inválido")?.split_once('/').context("Intervalo de vídeo inválido")?;
-            let (first,last)=range.split_once('-').context("Intervalo de vídeo inválido")?;
+            let (range,total)=value.strip_prefix("bytes ").context(crate::i18n::tr("Intervalo de vídeo inválido"))?.split_once('/').context(crate::i18n::tr("Intervalo de vídeo inválido"))?;
+            let (first,last)=range.split_once('-').context(crate::i18n::tr("Intervalo de vídeo inválido"))?;
             let (first,last,total):(u64,u64,u64)=(first.parse()?,last.parse()?,total.parse()?);
-            anyhow::ensure!(first==start&&last>=first&&last<=end&&last<total&&total<=MAX_VIDEO,"Intervalo de vídeo fora dos limites");
+            anyhow::ensure!(first==start&&last>=first&&last<=end&&last<total&&total<=MAX_VIDEO,crate::i18n::fmt("Intervalo de vídeo fora dos limites", &[]));
             Some((total,last-first+1))
         }else {
             // A server ignoring Range is safe only for a genuinely small file.
-            anyhow::ensure!(response.status()==StatusCode::OK&&start==0,"Servidor não suporta prévia parcial");None
+            anyhow::ensure!(response.status()==StatusCode::OK&&start==0,crate::i18n::fmt("Servidor não suporta prévia parcial", &[]));None
         };
-        anyhow::ensure!(response.content_length().is_none_or(|n|n<=maximum),"Servidor retornou vídeo inteiro para uma prévia");
+        anyhow::ensure!(response.content_length().is_none_or(|n|n<=maximum),crate::i18n::fmt("Servidor retornou vídeo inteiro para uma prévia", &[]));
         let mut stream=response.bytes_stream();let mut bytes=Vec::new();
-        while let Some(chunk)=stream.next().await{let chunk=chunk?;anyhow::ensure!(bytes.len() as u64+chunk.len() as u64<=maximum,"Prévia do vídeo excede o limite");bytes.extend_from_slice(&chunk);}
-        anyhow::ensure!(!bytes.is_empty(),"Vídeo vazio");
-        if let Some((total,length))=total{anyhow::ensure!(bytes.len() as u64==length,"Intervalo de vídeo incompleto");Ok((bytes,total))}else{let size=bytes.len() as u64;Ok((bytes,size))}
+        while let Some(chunk)=stream.next().await{let chunk=chunk?;anyhow::ensure!(bytes.len() as u64+chunk.len() as u64<=maximum,crate::i18n::fmt("Prévia do vídeo excede o limite", &[]));bytes.extend_from_slice(&chunk);}
+        anyhow::ensure!(!bytes.is_empty(),crate::i18n::fmt("Vídeo vazio", &[]));
+        if let Some((total,length))=total{anyhow::ensure!(bytes.len() as u64==length,crate::i18n::fmt("Intervalo de vídeo incompleto", &[]));Ok((bytes,total))}else{let size=bytes.len() as u64;Ok((bytes,size))}
     }
 
     pub(crate) async fn video_preview_file(&self,path:&str)->Result<features::TemporaryFile> {
@@ -45,7 +45,7 @@ impl ApiClient {
         if total>prefix.len() as u64 {
             let start=(total.saturating_sub(TAIL)).max(prefix.len() as u64);
             let (tail,length)=self.poster_range(path,start,total-1).await?;
-            anyhow::ensure!(length==total,"Leitura parcial de outro vídeo");
+            anyhow::ensure!(length==total,crate::i18n::fmt("Leitura parcial de outro vídeo", &[]));
             output.seek(std::io::SeekFrom::Start(start)).await?;output.write_all(&tail).await?;
         }
         output.flush().await?;Ok(file)

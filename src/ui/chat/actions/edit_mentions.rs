@@ -58,7 +58,7 @@ impl Mentions {
             for user in members.iter().take(50){let id=user.id;let token=self.token;let input=self.input.clone();
                 self.choices.append(&mentions::choice(user,avatars.get(&id),show,move ||{let _=input.send(ChatMsg::Action(ActionMsg::EditMentionSelected(token,Some(id))));}));}
             if everyone{let input=self.input.clone();let token=self.token;let button=gtk::Button::with_label("@everyone");button.add_css_class("flat");button.connect_clicked(move |_|{let _=input.send(ChatMsg::Action(ActionMsg::EditMentionSelected(token,None)));});self.choices.append(&button);}
-            if members.is_empty()&&!everyone{let empty=label("Nenhum membro encontrado");empty.add_css_class("dim-label");self.choices.append(&empty);}
+            if members.is_empty()&&!everyone{let empty=label(crate::i18n::tr("Nenhum membro encontrado"));empty.add_css_class("dim-label");self.choices.append(&empty);}
         }
         self.panel.set_vscrollbar_policy(if self.choices.measure(gtk::Orientation::Vertical,-1).1>200{gtk::PolicyType::Automatic}else{gtk::PolicyType::External});
         self.panel.set_visible(true);

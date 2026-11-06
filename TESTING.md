@@ -81,5 +81,48 @@ All ordinary fixtures use synthetic data; real device/server checks are opt-in.
 
 The [CI workflow](.github/workflows/test.yml) lists the current focused GUI cases.
 Use `PAPO_UI_CASE=<case>` with the GUI command above to run one case.
+
+Implementation-plan steps 7–9 add `conversation-switcher` (local ranking,
+keyboard selection, permissions and restored focus), `media-policies` (explicit
+loading, processing/moderation feedback, targeted image/video/file retries and
+cache limits), and `media-preferences` (local persistence, usage/clear controls
+and no device settings in the backend payload). These use synthetic loopback
+backends and isolated configuration. See the
+[validation record](docs/testing/evidence/steps789-2026-11-05/README.md) for local
+results and native playback/Windows limitations.
+
+Steps 10–12 add `disk-thumbnails` (fresh-client request reuse and invalidation),
+`media-browser` (typed filters, bounded discovery, viewer navigation and access
+loss), and `audio-setup` (explicit synthetic local tests, cleanup and device
+confirmation). `tests/voice_worker_test.py` uses generated audio/fake outputs;
+`python3 tests/voice_probe.py --switch-audio` additionally verifies live synthetic
+microphone changes through the local direct-ICE/TURN SFU fixture. These commands
+never select a physical microphone implicitly. See the
+[feature guide](docs/media-browser-and-call-setup.md) for manual hardware checks.
 [Performance measurements](PERFORMANCE.md), [security review](SECURITY_REVIEW.md)
 and [remaining follow-ups](docs/FOLLOW_UPS.md) record scope and limitations.
+
+
+Steps 13–15 add `notification-controls`, `release-discovery`, `accessibility` and
+`accessibility-contrast` to Linux/Windows GUI checks, plus Linux-only
+`accessibility-atspi`. All use synthetic data and isolated configuration. The
+AT-SPI case requires `GTK_A11Y=atspi PAPO_ACCESSIBILITY_TEST=1`, a private D-Bus
+session/virtual display, `python3-gobject` and the Atspi typelib; it checks only
+the named fixture process. Other accessibility cases use GTK's test backend.
+The update GUI fixture injects synthetic release results; private loopback Rust
+tests cover successful and failed HTTP responses without contacting GitHub.
+See [behavior and remaining native reader acceptance](docs/notifications-accessibility-and-updates.md).
+
+Steps 16–17 add `multi-server` and `multi-account-restart` on Linux and Windows.
+They use colliding IDs across two loopback backends and two users on one backend
+to verify separate credentials, restored conversations/drafts/scroll, unread
+indicators, scoped disconnection/removal, pending sends and stale callbacks.
+The [account guide](docs/multi-server.md) documents bounded saved/live accounts.
+
+CI checks structural performance budgets on both platforms. Linux additionally
+compares three fresh-process release runs with the original measurements.
+See [regression budgets and acceptance](docs/testing/release-acceptance.md) for
+commands, tolerances and artifact-bound receipts. The user accepted native
+Windows CI for this implementation; real device/screen-reader checks are not
+inferred from automated results. Linux physical-device and installed-upgrade
+acceptance remains separate from the synthetic suite.

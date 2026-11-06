@@ -2,7 +2,8 @@
 # PT-BR: Executa a mídia nativa das chamadas e troca sinalização com o GTK por comunicação privada em linhas JSON.
 """Native GStreamer audio/video worker. stdin/stdout are private JSON-line IPC.
 
-No sockets for application signaling, credential arguments, recording, or webview.
+No sockets for application signaling, credential arguments or webview.
+Only an explicit local microphone test buffers a short recording in memory.
 Only the GTK process talks to the authenticated owning WebSocket.
 """
 import json
@@ -135,9 +136,9 @@ def select_device(identifier, entries):
     return selected
 
 
-if "--devices" in sys.argv or "--cameras" in sys.argv:
+if "--devices" in sys.argv or "--cameras" in sys.argv or "--outputs" in sys.argv:
     try:
-        emit({"type": "devices", "devices": [{"id": i, "name": n} for i, n, _ in devices("Video/Source" if "--cameras" in sys.argv else "Audio/Source")]})
+        emit({"type": "devices", "devices": [{"id": i, "name": n} for i, n, _ in devices("Video/Source" if "--cameras" in sys.argv else "Audio/Sink" if "--outputs" in sys.argv else "Audio/Source")]})
     except Exception:
         emit({"type": "error", "message": "Não foi possível listar dispositivos."})
         sys.exit(1)
@@ -160,7 +161,14 @@ def link_camera(source, codec, capture, failed):
         raise ValueError("camera source could not link")
 
 
-class Engine:
+if "AudioTools" not in globals():
+    # EN-US: Direct development/probe execution; packaged workers embed this source.
+    # PT-BR: Execução direta de desenvolvimento/testes; workers empacotados incorporam este código.
+    from pathlib import Path
+    exec(compile(Path(__file__).with_name("audio.py").read_text(), "papo-audio-tools", "exec"), globals())
+
+
+class Engine(AudioTools):
     def __init__(self):
         self.loop = GLib.MainLoop()
         self.pipeline = None
@@ -195,6 +203,7 @@ class Engine:
         self.microphone_id = None
         self.camera_id = None
         self.default_microphone = False
+        self.init_audio_tools()
 
 
     def fail(self, message):
@@ -206,6 +215,24 @@ class Engine:
         if self.closed:
             return
         self.closed = True
+        for timer in self.audio_timers:
+            if GLib.MainContext.default().find_source_by_id(timer):
+                GLib.source_remove(timer)
+        self.audio_timers.clear()
+        self.recording.clear()
+        if self.audio_pending and self.audio_pending.get("timer"):
+            GLib.source_remove(self.audio_pending["timer"])
+        pending = self.audio_pending
+        self.audio_pending = None
+        if pending:
+            for branch in list(pending.get("outputs", {}).values()) + ([pending["capture"]] if "capture" in pending else []):
+                self.drop_branch(branch)
+        if self.audio_capture:
+            self.drop_branch(self.audio_capture)
+            self.audio_capture = None
+        for branch in self.output_branches.values():
+            self.drop_branch(branch)
+        self.output_branches.clear()
         self.capture_generation += 1
         if self.monitor:
             if self.monitor_bus:
@@ -219,10 +246,10 @@ class Engine:
             self.portal = None
         self.loop.quit()
 
-    def monitor_devices(self):
+    def monitor_devices(self, *kinds):
         if self.monitor:
             return
-        self.monitor = device_monitor("Audio/Source", "Video/Source")
+        self.monitor = device_monitor(*(kinds or ("Audio/Source", "Audio/Sink", "Video/Source")))
         self.device_ids = {key for key, _, _ in device_snapshot(self.monitor)}
         self.monitor_bus = self.monitor.get_bus()
         self.monitor_bus.add_signal_watch()
@@ -255,10 +282,13 @@ class Engine:
         removed = message.type == Gst.MessageType.DEVICE_REMOVED
         affected = {identifier, device_identifier(old)} if changed else {identifier}
         if "Audio/Source" in device.get_device_class() and (
-                ((removed or changed) and self.microphone_id in affected) or self.default_microphone):
+                ((removed or changed) and self.microphone_id in affected)
+                or (self.default_microphone and (removed or changed or not self.local_test))):
             # EN-US: Never switch a live microphone silently or resume it unmuted.
             # PT-BR: Nunca troca um microfone ativo silenciosamente nem o retoma sem silenciamento.
             self.fail("Os dispositivos de áudio mudaram. Escolha o microfone e entre novamente na chamada.")
+        elif (removed or changed) and self.output_device in affected:
+            self.fail("A saída de áudio foi desconectada. Escolha outra saída e entre novamente.")
         elif (removed or changed) and self.camera_id in affected:
             self.media_failed("video", "A câmera foi desconectada. Escolha uma câmera disponível.")
 
@@ -270,6 +300,8 @@ class Engine:
             self.fail("Faltam plugins GStreamer: WebRTC, libnice, Opus ou áudio.")
             return
         self.test_sink = bool(config.get("test_sink"))
+        self.synthetic_source = bool(config.get("test_source"))
+        self.output_device = config.get("output_device")
         if not config.get("test_source"):
             self.monitor_devices()
         self.pipeline = Gst.Pipeline.new("papo-audio")
@@ -324,6 +356,9 @@ class Engine:
         caps = capture.get_by_name("rtpcaps").get_property("caps").copy()
         caps = Gst.Caps.from_string(caps.to_string() + ",ssrc=(uint)" + str(ssrc))
         capture.get_by_name("rtpcaps").set_property("caps", caps)
+        self.source = source
+        source = self.bridge_capture(source)
+        self.capture = capture
         self.pipeline.add(source)
         self.pipeline.add(capture)
         if not source.link(capture):
@@ -365,7 +400,7 @@ class Engine:
         bus.connect("message", self.bus_message)
         emit({"type": "started", "pid": os.getpid()})
         emit({"type": "microphone_gain", "gain": self.microphone.get_property("volume")})
-        if self.pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
+        if self.pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE or self.audio_capture["pipeline"].set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
             self.fail("Não foi possível iniciar áudio. Verifique o microfone e a saída.")
 
     def offer(self, *_):
@@ -479,9 +514,10 @@ class Engine:
             transceiver = pad.get_property("transceiver")
             mid = transceiver.get_property("mid")
             track = self.track_ids.get(mid, "")
-            suffix = "appsink name=playback emit-signals=true sync=false" if self.test_sink else "autoaudiosink"
-            playback = Gst.parse_bin_from_description("queue ! rtpopusdepay ! opusdec ! audioconvert ! audioresample ! audio/x-raw,format=F32LE ! volume name=output ! " + suffix, True)
+            playback = Gst.parse_bin_from_description("queue ! rtpopusdepay ! opusdec ! audioconvert ! audioresample ! audio/x-raw,format=F32LE ! volume name=output ! appsink name=playback emit-signals=true sync=false max-buffers=2 drop=true", True)
             volume = playback.get_by_name("output")
+            if not self.test_sink:
+                playback.get_by_name("playback").connect("new-sample", lambda sink: self.receive_audio_sample(sink, playback))
             volume.set_property("mute", track not in self.routes)
             self.outputs.append((track, volume))
             self.pipeline.add(playback)
@@ -740,12 +776,16 @@ class Engine:
             emit({"type": "speaking", "active": active})
 
     def bus_message(self, _, message):
+        if self.audio_bus_message(message):
+            return
         if message.type == Gst.MessageType.ELEMENT and message.src.get_name() == "local_level":
             structure = message.get_structure()
             if structure and structure.get_name() == "level":
                 rms = structure.get_value("rms")
                 now = time.monotonic()
                 muted = self.microphone.get_property("mute")
+                level = 0.0 if muted or not rms else min(1.0, max(0.0, 10 ** (max(rms) / 20.0)))
+                emit({"type": "audio_level", "level": level})
                 if not muted and rms and max(rms) > -45:
                     self.last_speech = now
                 self.set_speaking(not muted and now - getattr(self, "last_speech", 0) < 0.3)
@@ -767,7 +807,11 @@ class Engine:
             return False
         try:
             kind = event["type"]
-            if kind == "start":
+            if kind == "test_start":
+                self.start_audio_test(event)
+            elif kind == "audio_device":
+                self.switch_audio(event)
+            elif kind == "start":
                 self.start(event)
             elif kind == "stop":
                 self.close()

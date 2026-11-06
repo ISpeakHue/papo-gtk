@@ -2,13 +2,13 @@
 
 use adw::prelude::*;
 use relm4::prelude::*;
-use tracing::info;
 
+mod workspace;
 use crate::api::ApiClient;
 use crate::config::AppConfig;
 use crate::models::WhoamiResponse;
 use crate::ui::login::{LoginModel, LoginOutput, LoginMsg};
-use crate::ui::main_window::{MainWindowInit, MainWindowModel, MainWindowOutput};
+use crate::ui::main_window::{MainWindowInit, MainWindowModel};
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
@@ -47,9 +47,13 @@ mod tests {
     #[test]
     #[ignore = "requires a GTK display; CI runs this under Xvfb"]
     fn ui_smoke_window_has_header_controls_and_server_password() {
+        let baseline_started=std::time::Instant::now();
+        let baseline_memory=crate::performance::resident_bytes();
         let _config=IsolatedConfig::new();
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("translations"){crate::i18n::init(crate::i18n::Language::English);}
         let _report=crate::performance::Report;
         crate::platform::runtime::configure();
+        if std::env::var("PAPO_UI_CASE").is_ok_and(|c|c.starts_with("accessibility")){if std::env::var_os("PAPO_ACCESSIBILITY_TEST").is_none(){std::env::set_var("GTK_A11Y","test");}if std::env::var("PAPO_UI_CASE").as_deref()==Ok("accessibility-contrast"){std::env::set_var("ADW_DEBUG_HIGH_CONTRAST","1");}}
         adw::init().unwrap();
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let _guard = runtime.enter();
@@ -90,6 +94,29 @@ mod tests {
             let brand = widgets.iter().find(|widget| widget.widget_name() == "papo-app-icon")
                 .unwrap().downcast_ref::<gtk::Image>().unwrap();
             assert_eq!(brand.icon_name().as_deref(), Some(crate::app::APP_ID));
+        }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("multi-account-restart"){workspace::accounts_restart(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("multi-server"){workspace::exercise(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("conversation-switcher"){crate::ui::main_window::switcher::exercise(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("disk-thumbnails"){crate::ui::chat::transfers::disk_tests::exercise(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("media-browser"){crate::ui::main_window::media_browser::exercise(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").is_ok_and(|c|c.starts_with("accessibility")){crate::ui::main_window::accessibility::exercise(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("notification-controls"){crate::ui::main_window::notifications::exercise_controls(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("release-discovery"){crate::ui::main_window::utilities::exercise(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("audio-setup"){crate::ui::main_window::voice::audio::exercise(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("chat-behavior"){crate::ui::chat::behavior_tests::exercise(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("media-policies"){crate::ui::chat::transfers::policy::exercise(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("media-preferences"){crate::ui::main_window::account::exercise_media_preferences(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("draft-recovery"){crate::ui::chat::steps456_tests::drafts(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("outgoing-queue"){crate::ui::chat::steps456_tests::outgoing(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("translations"){crate::ui::chat::steps456_tests::translations(&context,window);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("account-scope"){crate::ui::chat::account_tests::exercise(&context);window.close();return;}
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("performance-baselines"){
+            let first_paint=std::rc::Rc::new(std::cell::Cell::new(false));let seen=first_paint.clone();
+            let clock=window.frame_clock().unwrap();let handler=clock.connect_after_paint(move |_|seen.set(true));window.queue_draw();
+            crate::ui::chat::actions::tests::until(&context,||first_paint.get());clock.disconnect(handler);
+            crate::ui::chat::baseline::measurement("startup_ui_ready",baseline_started,baseline_memory,serde_json::json!({"scope":"test entry to login-window paint; excludes process loader and authentication","renderer":window.renderer().map(|r|r.type_().name().to_string()),"gtk":format!("{}.{}.{}",gtk::major_version(),gtk::minor_version(),gtk::micro_version())}));
+            crate::ui::chat::baseline::run(&context);window.close();return;
         }
         if std::env::var("PAPO_UI_CASE").as_deref() == Ok("symbolic-icons") {
             crate::app::branding::exercise_symbols();
@@ -507,6 +534,7 @@ mod tests {
 /// PT-BR: Coordenador de estado raiz contendo referências aos controladores filhos e identidade da sessão.
 pub struct RootModel {
     view: View,
+    workspace:workspace::Workspace,
     login_controller: Controller<LoginModel>,
     main_controller: Option<Controller<MainWindowModel>>,
     // Authenticated session state
@@ -521,20 +549,25 @@ pub struct RootModel {
 /// PT-BR: Mensagens que realizam a transição do estado de nível superior da aplicação.
 #[derive(Debug)]
 pub enum RootMsg {
+    LoginAuthenticated{scope:uuid::Uuid,whoami:WhoamiResponse,client:ApiClient},
+    WorkspaceStart, AddAccount, DirectNavigation, CancelAccountLogin, SelectAccount(crate::account::AccountId),
+    AccountOutput{id:crate::account::AccountId,session:uuid::Uuid,output:crate::ui::main_window::MainWindowOutput},
+    AccountResumed{id:crate::account::AccountId,ticket:uuid::Uuid,result:anyhow::Result<Option<(WhoamiResponse,ApiClient)>>},
+    RemoveAccount(crate::account::AccountId), RemoveAccountConfirmed(crate::account::AccountId), DirectorySaved(Result<(),String>),
     /// Received from Login component upon successful auth
     /// EN-US: Emitted when authentication succeeds with user profile and authenticated API client.
     /// PT-BR: Emitido após autenticação bem-sucedida contendo o perfil do usuário e cliente de API autenticado.
-    Authenticated {
+    #[cfg(test)] Authenticated {
         whoami: WhoamiResponse,
         client: ApiClient,
     },
     /// Log out and return to the login screen
     /// EN-US: Triggered by user requesting manual logout.
     /// PT-BR: Disparado quando o usuário solicita desconexão manual.
-    Logout,
+    #[cfg(test)] Logout,
     /// EN-US: Triggered when token validation fails or session expires, redirecting to login.
     /// PT-BR: Disparado quando a validação de token falha ou a sessão expira, redirecionando para a tela de login.
-    SessionExpired,
+    #[cfg(test)] SessionExpired,
     #[cfg(windows)] NativeActivation(crate::platform::activation::Activation),
 }
 
@@ -560,6 +593,11 @@ impl Component for RootModel {
                     #[watch] set_visible:model.view==View::Login,
                     set_show_start_title_buttons: true,
                     set_show_end_title_buttons: true,
+                    pack_start = &gtk::Button {
+                        set_label:crate::i18n::tr("Voltar ao servidor"),
+                        #[watch] set_visible:model.main_controller.is_some(),
+                        connect_clicked=>RootMsg::CancelAccountLogin,
+                    },
                     #[wrap(Some)]
                     set_title_widget = &adw::WindowTitle {
                         set_title: "Papo",
@@ -569,9 +607,13 @@ impl Component for RootModel {
                     },
                 },
 
-                #[name = "stack"]
                 #[wrap(Some)]
-                set_content = &gtk::Stack {
+                set_content = &gtk::Box {
+                    set_orientation:gtk::Orientation::Horizontal,
+                    #[local_ref] workspace_rail -> gtk::Box {},
+                #[name = "stack"]
+                gtk::Stack {
+                    set_hexpand:true,
                     set_vexpand: true,
                     set_hhomogeneous:false,set_vhomogeneous:false,
                     // Each view owns its header; avoid crossfading two sets
@@ -585,6 +627,7 @@ impl Component for RootModel {
                         View::Login => "login",
                         View::Main => "main",
                     },
+                },
                 },
             },
         }
@@ -604,7 +647,9 @@ impl Component for RootModel {
         crate::app::branding::install();
         crate::ui::style::install();
         crate::ui::chat::input::configure_desktop_im();
-        let config = AppConfig::load();
+        let mut config = AppConfig::load();
+        let workspace=workspace::Workspace::new(&sender);
+        if !workspace.directory.accounts.is_empty(){config.remember_session=Some(false);}
         crate::media::animation::set_motion(config.motion);
 
         // Initialize Login child component controller
@@ -612,16 +657,16 @@ impl Component for RootModel {
             .launch(config)
             .forward(sender.input_sender(), |output| match output {
                 LoginOutput::Authenticated {
-                    whoami,
+                    scope,whoami,
                     client,
-                } => RootMsg::Authenticated {
-                    whoami,
+                } => RootMsg::LoginAuthenticated {
+                    scope,whoami,
                     client,
                 },
             });
 
         let model = RootModel {
-            view: View::Login,
+            view: View::Login,workspace,
             login_controller,
             main_controller: None,
             current_user: None,
@@ -629,7 +674,10 @@ impl Component for RootModel {
             #[cfg(windows)] native_activation:Default::default(),
         };
 
+        let workspace_rail=&model.workspace.rail;
         let widgets = view_output!();
+        widgets.stack.add_named(&model.workspace.pages,Some("main"));
+        sender.input(RootMsg::WorkspaceStart);
         ComponentParts { model, widgets }
     }
 
@@ -641,88 +689,20 @@ impl Component for RootModel {
         _root: &Self::Root,
     ) {
         match message {
-            RootMsg::Authenticated {
-                whoami,
-                client,
-            } => {
-                info!("Root transitioning to main window for user {}", whoami.username);
-
-                #[cfg(windows)]if let(Some(previous),Some(user))=(&self.api_client,&self.current_user){
-                    if previous.base_url()!=client.base_url()||user.id!=whoami.id||previous.session_owner()!=client.session_owner(){
-                        crate::platform::notifications::forget(crate::platform::activation::Account{server:previous.base_url().into(),user:user.id,session:previous.session_owner()});
-                    }
+            RootMsg::LoginAuthenticated{scope,whoami,client}=>{if scope==self.workspace.login_scope{let local=AppConfig::load();self.attach_account(whoami,client,local.remember_session.unwrap_or(false),true,&sender);}},
+            #[cfg(test)] RootMsg::Authenticated{whoami,client}=>{
+                let local=AppConfig::load();let remember=local.server_url.as_deref()==Some(client.base_url())&&local.last_username.as_deref()==Some(&whoami.username)&&local.remember_session.unwrap_or(false);
+                self.attach_account(whoami,client,remember,true,&sender);
+            },
+            #[cfg(test)] RootMsg::Logout|RootMsg::SessionExpired=>{
+                if let Some(controller)=&self.main_controller{let id=controller.model().connection.account.clone();let session=self.workspace.generations[&id];let output=if matches!(message,RootMsg::Logout){crate::ui::main_window::MainWindowOutput::Logout}else{crate::ui::main_window::MainWindowOutput::SessionExpired};self.workspace_message(RootMsg::AccountOutput{id,session,output},&sender,_root);}
+            },
+            #[cfg(windows)]RootMsg::NativeActivation(activation)=>{
+                _root.present();if let crate::platform::activation::Activation::Ticket(id)=activation{self.native_activation=Some(id);
+                    for c in self.main_controller.iter().chain(self.workspace.inactive.values()){c.emit(crate::ui::main_window::MainWindowMsg::Notification(crate::ui::main_window::notifications::NoticeMsg::NativeTicket(id)));}
                 }
-                // Initialize MainWindow component
-                let main_controller = MainWindowModel::builder()
-                    .launch(MainWindowInit {
-                        current_user: whoami.clone(),
-                        api_client: client.clone(),
-                    })
-                    .forward(sender.input_sender(), |output| match output {
-                        MainWindowOutput::Logout => RootMsg::Logout,
-                        MainWindowOutput::SessionExpired => RootMsg::SessionExpired,
-                    });
-
-                if let Some(old_mc) = self.main_controller.take() {
-                    widgets.stack.remove(old_mc.widget());
-                } else if let Some(old_child) = widgets.stack.child_by_name("main") {
-                    widgets.stack.remove(&old_child);
-                }
-
-                widgets.stack.add_named(main_controller.widget(), Some("main"));
-
-                self.main_controller = Some(main_controller);
-                #[cfg(windows)]if let Some(id)=self.native_activation.take(){if let Some(controller)=self.main_controller.as_ref(){controller.emit(crate::ui::main_window::MainWindowMsg::Notification(crate::ui::main_window::notifications::NoticeMsg::NativeTicket(id)));}}
-                self.current_user = Some(whoami);
-                self.api_client = Some(client);
-                self.view = View::Main;
-            }
-            RootMsg::SessionExpired => {
-                #[cfg(windows)]{
-                    self.native_activation=None;
-                    if let(Some(client),Some(user))=(&self.api_client,&self.current_user){crate::platform::notifications::forget(crate::platform::activation::Account{server:client.base_url().into(),user:user.id,session:client.session_owner()});}
-                }
-                if let (Some(client),Some(user))=(&self.api_client,&self.current_user){let client=client.clone();let user=user.username.clone();tokio::spawn(async move{let _=crate::session::forget(&client,&user).await;});}
-                if let Some(controller) = self.main_controller.take() { widgets.stack.remove(controller.widget()); }
-                self.current_user = None;
-                self.api_client = None;
-                self.view = View::Login;
-                self.login_controller.emit(LoginMsg::ClearCredentials);
-                self.login_controller.emit(LoginMsg::AuthFailed(
-                    "Sua sessão terminou. Entre novamente e informe a senha atual do servidor, se necessário.".into()));
-            }
-            RootMsg::Logout => {
-                #[cfg(windows)]{
-                    self.native_activation=None;
-                    if let(Some(client),Some(user))=(&self.api_client,&self.current_user){crate::platform::notifications::forget(crate::platform::activation::Account{server:client.base_url().into(),user:user.id,session:client.session_owner()});}
-                }
-                info!("Root logging out");
-                self.login_controller.emit(LoginMsg::ClearCredentials);
-                if let Some(client) = &self.api_client {
-                    let client = client.clone();
-                    let user=self.current_user.as_ref().map(|u|u.username.clone());
-                    tokio::spawn(async move {
-                        if let Some(user)=user{let _=crate::session::forget(&client,&user).await;}
-                        let _ = client.logout().await;
-                    });
-                }
-
-                if let Some(mc) = self.main_controller.take() {
-                    widgets.stack.remove(mc.widget());
-                }
-
-                self.current_user = None;
-                self.api_client = None;
-                self.view = View::Login;
-            }
-            #[cfg(windows)] RootMsg::NativeActivation(activation)=>{
-                _root.present();
-                if let crate::platform::activation::Activation::Ticket(id)=activation {
-                    if let Some(controller)=self.main_controller.as_ref(){
-                        controller.emit(crate::ui::main_window::MainWindowMsg::Notification(crate::ui::main_window::notifications::NoticeMsg::NativeTicket(id)));
-                    }else{self.native_activation=Some(id);}
-                }
-            }
+            },
+            message=>self.workspace_message(message,&sender,_root),
         }
         self.update_view(widgets, sender);
     }

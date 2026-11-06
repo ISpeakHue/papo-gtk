@@ -67,7 +67,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     chat.emit(ChatMsg::Latest);until(context,||!chat.model().history_detached&&chat.model().history.messages.iter().any(|m|m.id==latest.id));
     chat.emit(ChatMsg::Action(ActionMsg::NavigateAt(MessageCursor::from(&old))));until(context,||chat.model().actions.highlight==Some(old.id));
     let mut sent=latest.clone();sent.id=Uuid::new_v4();sent.content=Some("New message".into());sent.created_at+=chrono::Duration::seconds(2);{let mut b=backend.lock().unwrap();b.message["id"]=serde_json::json!(sent.id);b.message["content"]=serde_json::json!(sent.content);b.message["created_at"]=serde_json::json!(sent.created_at);}
-    chat.emit(ChatMsg::InputChanged("New message".into()));pump(context);let request=chat.state().get_mut().model.draft.begin().unwrap();
+    chat.emit(ChatMsg::InputChanged("New message".into()));pump(context);let request=chat.state().get_mut().model.begin_test_send();
     chat.emit(ChatMsg::SendFinished{request_id:request,channel_id:channel,result:Ok(sent.clone())});
     until(context,||!chat.model().history_detached&&chat.model().history.messages.iter().any(|m|m.id==sent.id));
     assert!(!chat.model().history.messages.iter().any(|m|m.id==old.id),"sending from a dated page returns to the head instead of joining disjoint ranges");

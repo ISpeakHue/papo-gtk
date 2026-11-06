@@ -25,7 +25,7 @@ impl CreateEmojiRequest {
     pub fn from_image(name: &str, bytes: &[u8]) -> anyhow::Result<Self> {
         use base64::Engine;
         anyhow::ensure!(!name.trim().is_empty() && name.chars().count() <= 32, "O nome deve ter entre 1 e 32 caracteres.");
-        anyhow::ensure!(!bytes.is_empty() && bytes.len() <= 256 * 1024, "A imagem deve ter até 256 KB.");
+        anyhow::ensure!(!bytes.is_empty() && bytes.len() <= 256 * 1024, crate::i18n::fmt("A imagem deve ter até 256 KB.", &[]));
         let format = image::guess_format(bytes)?;
         let declared = match format {
             image::ImageFormat::Png => "PNG", image::ImageFormat::Jpeg => "JPEG",
@@ -35,7 +35,7 @@ impl CreateEmojiRequest {
         // Validate dimensions before allocating a full decoded image.
         let reader = image::ImageReader::with_format(std::io::Cursor::new(bytes), format);
         let (width, height) = reader.into_dimensions()?;
-        anyhow::ensure!(width > 0 && height > 0 && width <= 512 && height <= 512, "A imagem deve ter no máximo 512 × 512 pixels.");
+        anyhow::ensure!(width > 0 && height > 0 && width <= 512 && height <= 512, crate::i18n::fmt("A imagem deve ter no máximo 512 × 512 pixels.", &[]));
         Ok(Self { name: name.to_owned(), format: declared.into(), image_blob: base64::engine::general_purpose::STANDARD.encode(bytes) })
     }
 }

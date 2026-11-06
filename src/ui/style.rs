@@ -1,6 +1,7 @@
 //! EN-US: App-specific geometry and surfaces; Adwaita supplies theme/accent/contrast.
 //! PT-BR: Geometria e superfícies específicas do aplicativo; tema, cores de destaque e contraste vêm do Adwaita.
 mod accents;
+mod accessible_color;
 #[cfg(test)] pub(crate) use accents::{exercise as exercise_accents,sample as sample_accent};
 pub(super) use accents::apply as embed_accent;
 use std::cell::Cell;
@@ -63,7 +64,9 @@ pub(crate) fn exercise_windows_text(){
 
 pub fn role_color(label:&gtk::Label,roles:&[crate::models::RoleSummary]){
     use gtk::prelude::*;
-    if let Some((r,g,b))=crate::models::role::role_rgb(roles){let attributes=gtk::pango::AttrList::new();attributes.insert(gtk::pango::AttrColor::new_foreground(r,g,b));label.set_attributes(Some(&attributes));label.add_css_class("papo-role-name");}
+    let attrs=crate::models::role::role_rgb(roles).map(|(r,g,b)|{let attributes=gtk::pango::AttrList::new();attributes.insert(gtk::pango::AttrColor::new_foreground(r,g,b));attributes});
+    if attrs.is_some(){label.add_css_class("papo-role-name");}else{label.remove_css_class("papo-role-name");}
+    accessible_color::set(label,attrs);
 }
 
 /// Custom popover buttons close their menu before opening a dialog or navigating.

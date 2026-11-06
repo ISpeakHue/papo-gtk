@@ -35,12 +35,12 @@ impl Store {
     pub(crate) fn unavailable()->Self{Self{probe:None,unavailable:true}}
     fn service(self)->String{self.probe.map_or_else(||SERVICE.to_owned(),|id|format!("{SERVICE}.test.{id}"))}
     pub(crate) fn read(self,key:&str)->Result<Option<String>>{
-        anyhow::ensure!(!self.unavailable,"Chaveiro indisponível.");
+        anyhow::ensure!(!self.unavailable,crate::i18n::fmt("Chaveiro indisponível.", &[]));
         #[cfg(not(test))] {crate::platform::credentials::read(&self.service(),key)}
         #[cfg(test)] {let key=format!("{}\n{key}",self.service());Ok(MEMORY.lock().unwrap().as_ref().and_then(|m|m.get(&key).cloned()))}
     }
     pub(crate) fn write(self,key:&str,value:Option<&str>)->Result<()>{
-        anyhow::ensure!(!self.unavailable,"Chaveiro indisponível.");
+        anyhow::ensure!(!self.unavailable,crate::i18n::fmt("Chaveiro indisponível.", &[]));
         #[cfg(not(test))] {crate::platform::credentials::write(&self.service(),key,value)}
         #[cfg(test)] {let key=format!("{}\n{key}",self.service());let mut memory=MEMORY.lock().unwrap();let map=memory.get_or_insert_with(Default::default);if let Some(value)=value{map.insert(key,value.into());}else{map.remove(&key);}Ok(())}
     }
@@ -62,15 +62,15 @@ impl Store {
 pub(crate) async fn save(self,api:&ApiClient,user:&str)->Result<()>{
     let Some(auth)=api.auth_cookie()else{return Ok(());};
     let saved=SavedSession{version:1,base:api.base_url().into(),username:user.into(),auth,owner:Some(api.session_owner())};
-    let key=account(&saved.base,user);let encoded=serde_json::to_string(&saved).map_err(|_|anyhow!("Não foi possível preparar a sessão."))?;
-    tokio::task::spawn_blocking(move ||{let _guard=STORAGE.lock().map_err(|_|anyhow!("Chaveiro indisponível."))?;self.write(&key,Some(&encoded))}).await.map_err(|_|anyhow!("Chaveiro indisponível."))?
+    let key=account(&saved.base,user);let encoded=serde_json::to_string(&saved).map_err(|_|anyhow!(crate::i18n::fmt("Não foi possível preparar a sessão.", &[])))?;
+    tokio::task::spawn_blocking(move ||{let _guard=STORAGE.lock().map_err(|_|anyhow!(crate::i18n::fmt("Chaveiro indisponível.", &[])))?;self.write(&key,Some(&encoded))}).await.map_err(|_|anyhow!(crate::i18n::fmt("Chaveiro indisponível.", &[])))?
 }
 
 /// Explicit user choice (e.g. unchecking Remember) clears any saved account.
 /// EN-US: Explicitly removes any saved credential for this account from the keyring.
 /// PT-BR: Escolha explícita do usuário (ex: desmarcar Lembrar-me) remove qualquer conta salva do chaveiro.
 pub(crate) async fn forget_account(self,api:&ApiClient,user:&str)->Result<()>{
-    let key=account(api.base_url(),user);tokio::task::spawn_blocking(move ||{let _guard=STORAGE.lock().map_err(|_|anyhow!("Chaveiro indisponível."))?;self.write(&key,None)}).await.map_err(|_|anyhow!("Chaveiro indisponível."))?
+    let key=account(api.base_url(),user);tokio::task::spawn_blocking(move ||{let _guard=STORAGE.lock().map_err(|_|anyhow!(crate::i18n::fmt("Chaveiro indisponível.", &[])))?;self.write(&key,None)}).await.map_err(|_|anyhow!(crate::i18n::fmt("Chaveiro indisponível.", &[])))?
 }
 
 /// Delayed logout may remove only the credential owned by this session.
@@ -79,12 +79,12 @@ pub(crate) async fn forget_account(self,api:&ApiClient,user:&str)->Result<()>{
 pub(crate) async fn forget(self,api:&ApiClient,user:&str)->Result<()>{
     let key=account(api.base_url(),user);let owner=api.session_owner();let auth=api.auth_cookie();
     tokio::task::spawn_blocking(move ||{
-        let _guard=STORAGE.lock().map_err(|_|anyhow!("Chaveiro indisponível."))?;
+        let _guard=STORAGE.lock().map_err(|_|anyhow!(crate::i18n::fmt("Chaveiro indisponível.", &[])))?;
         let Some(encoded)=self.read(&key)? else{return Ok(());};
         let Ok(saved)=serde_json::from_str::<SavedSession>(&encoded) else{return Ok(());};
         if saved.owner==Some(owner)||(saved.owner.is_none()&&Some(saved.auth)==auth){self.write(&key,None)?;}
         Ok(())
-    }).await.map_err(|_|anyhow!("Chaveiro indisponível."))?
+    }).await.map_err(|_|anyhow!(crate::i18n::fmt("Chaveiro indisponível.", &[])))?
 }
 
 /// Keep the remembered cookie in sync with refresh rotation. A late refresh
@@ -94,18 +94,18 @@ pub(crate) async fn forget(self,api:&ApiClient,user:&str)->Result<()>{
 pub(crate) async fn rotated(self,api:&ApiClient,user:&str,previous:&str)->Result<()>{
     let Some(auth)=api.auth_cookie()else{return Ok(());};let base=api.base_url().to_owned();let user=user.to_owned();let key=account(&base,&user);let previous=previous.to_owned();let owner=api.session_owner();
     tokio::task::spawn_blocking(move ||{
-        let _guard=STORAGE.lock().map_err(|_|anyhow!("Chaveiro indisponível."))?;
+        let _guard=STORAGE.lock().map_err(|_|anyhow!(crate::i18n::fmt("Chaveiro indisponível.", &[])))?;
         let Some(encoded)=self.read(&key)?else{return Ok(());};let Ok(mut saved)=serde_json::from_str::<SavedSession>(&encoded)else{return Ok(());};
         if saved.version!=1||saved.base!=base||saved.username!=user||saved.auth!=previous||saved.owner.is_some_and(|id|id!=owner){return Ok(());}
-        saved.auth=auth;saved.owner=Some(owner);let encoded=serde_json::to_string(&saved).map_err(|_|anyhow!("Não foi possível preparar a sessão."))?;self.write(&key,Some(&encoded))
-    }).await.map_err(|_|anyhow!("Chaveiro indisponível."))?
+        saved.auth=auth;saved.owner=Some(owner);let encoded=serde_json::to_string(&saved).map_err(|_|anyhow!(crate::i18n::fmt("Não foi possível preparar a sessão.", &[])))?;self.write(&key,Some(&encoded))
+    }).await.map_err(|_|anyhow!(crate::i18n::fmt("Chaveiro indisponível.", &[])))?
 }
 
 /// EN-US: Resume a saved session from the keyring, validating and proactively refreshing tokens.
 /// PT-BR: Retoma uma sessão salva do chaveiro, validando-a e renovando proativamente os tokens.
 pub(crate) async fn resume(self,api:&ApiClient,user:&str)->Result<Option<WhoamiResponse>>{
     let key=account(api.base_url(),user);let copy=key.clone();
-    let Some(encoded)=tokio::task::spawn_blocking(move ||self.read(&copy)).await.map_err(|_|anyhow!("Chaveiro indisponível."))?? else{return Ok(None);};
+    let Some(encoded)=tokio::task::spawn_blocking(move ||self.read(&copy)).await.map_err(|_|anyhow!(crate::i18n::fmt("Chaveiro indisponível.", &[])))?? else{return Ok(None);};
     let saved=serde_json::from_str::<SavedSession>(&encoded).ok().filter(|s|s.version==1&&s.base==api.base_url()&&s.username==user);
     let Some(saved)=saved else{return Ok(None);};
     if let Some(owner)=saved.owner{api.adopt_session_owner(owner);}
@@ -119,12 +119,12 @@ pub(crate) async fn resume(self,api:&ApiClient,user:&str)->Result<Option<WhoamiR
             match api.refresh().await{
                 Ok(_)=>{if self.rotated(api,user,&saved.auth).await.is_err(){tracing::warn!("Could not update remembered session in desktop keyring");}Ok(Some(profile))},
                 Err(error) if crate::api::is_session_error(&error)=>{self.forget(api,user).await?;Ok(None)},
-                Err(_)=>Err(anyhow!("Não foi possível renovar a sessão salva. Verifique a conexão e tente novamente.")),
+                Err(_)=>Err(anyhow!(crate::i18n::fmt("Não foi possível renovar a sessão salva. Verifique a conexão e tente novamente.", &[]))),
             }
         },
         Ok(_)=>{self.forget(api,user).await?;Ok(None)},
         Err(error) if crate::api::is_session_error(&error)=>{self.forget(api,user).await?;Ok(None)},
-        Err(_)=>Err(anyhow!("Não foi possível retomar a sessão salva. Verifique a conexão e tente novamente.")),
+        Err(_)=>Err(anyhow!(crate::i18n::fmt("Não foi possível retomar a sessão salva. Verifique a conexão e tente novamente.", &[]))),
     }
 }
 

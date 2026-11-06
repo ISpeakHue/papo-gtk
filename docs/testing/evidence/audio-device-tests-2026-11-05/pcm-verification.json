@@ -1,0 +1,20 @@
+{
+  "status": "pass",
+  "gtk_exit_code": 0,
+  "captured_samples": 626400,
+  "peak": 0.3323974609375,
+  "frequencies": {
+    "880": {
+      "audible_seconds": 3.1
+    },
+    "660": {
+      "audible_seconds": 2.3
+    }
+  },
+  "schema": 1,
+  "version": "1.1.2",
+  "binary_sha256": "a157810faed699a03271e9238f17b4852d5698a526a7c584e16805ae7e28021f",
+  "gtk_log_sha256": "438146f96c0bd70b38ea6b4ccf10dda3cd36a1eafd2617814afc37f6b2304279",
+  "physical_devices_used": false,
+  "raw_pcm_retained": false
+}

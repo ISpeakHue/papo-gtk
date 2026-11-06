@@ -43,6 +43,9 @@ pub(crate) fn exercise_scroll_frames(context:&gtk::glib::MainContext){
     assert_eq!(passes,chat.model().render_passes,"scrolling within materialized history must reuse rows");
     assert!(values.borrow().windows(2).all(|v|v[1]<=v[0]+1.0),"upward input must not jump backwards");
     let distance=start_value-adj.value();
+    if std::env::var("PAPO_UI_CASE").as_deref()==Ok("performance-baselines"){
+        eprintln!("Papo baseline: {}",serde_json::json!({"scenario":"scroll_frames","details":{"events":events,"frames":frames.len(),"paint_p50_us":frames[frames.len()/2],"paint_p95_us":frames[frames.len()*95/100],"paint_max_us":frames.last(),"over_16ms":frames.iter().filter(|v|**v>16667).count(),"distance":distance,"scope":"GTK CPU work, not compositor/GPU presentation"}}));
+    }
     eprintln!("Papo scroll frames: {}",serde_json::json!({"events":events,"frames":frames.len(),"paint_p50_us":frames[frames.len()/2],"paint_p95_us":frames[frames.len()*95/100],"paint_max_us":frames.last(),"over_16ms":frames.iter().filter(|v|**v>16667).count(),"distance":distance}));
     window.set_content(None::<&gtk::Widget>);window.close();drop(chat);pump(context);
 }
@@ -364,7 +367,7 @@ pub(crate) fn exercise(context: &gtk::glib::MainContext) {
     let mut sent = messages.last().unwrap().clone();
     sent.id = Uuid::new_v4(); sent.created_at += chrono::Duration::seconds(1);
     sent.content = Some("New outgoing message\nwith another line".into());
-    let pending = { let mut state=chat.state().get_mut(); state.model.draft.text=sent.content.clone().unwrap(); state.model.draft.begin().unwrap() };
+    let pending = { let mut state=chat.state().get_mut(); state.model.draft.text=sent.content.clone().unwrap(); state.model.begin_test_send() };
     chat.emit(ChatMsg::SendFinished { request_id: pending, channel_id: channel, result: Ok(sent.clone()) });
     settle(context);
     let adj = scroll.vadjustment();
@@ -426,6 +429,9 @@ pub(crate) fn exercise_corrections(context:&gtk::glib::MainContext){
         let mut new=messages.last().unwrap().clone();new.id=Uuid::new_v4();new.created_at+=chrono::Duration::seconds(1);new.attachments=None;FORMATTED_ROWS.with(|n|n.set(0));chat.emit(ChatMsg::AddMessage(new));pump(context);assert!(FORMATTED_ROWS.with(|n|n.get())<=3);
         let memory=std::fs::read_to_string("/proc/self/status").ok().and_then(|s|s.lines().find(|l|l.starts_with("VmRSS:")).map(str::to_owned)).unwrap_or_default();
         eprintln!("chat benchmark: messages={count}, widgets={}, reaction_format_rows={formatted}, reaction_update_us={}, {memory}",chat.model().rendered.len(),reaction_time.as_micros());
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("performance-baselines"){
+            eprintln!("Papo baseline: {}",serde_json::json!({"scenario":"history_memory_checkpoint","details":{"messages":count,"mounted_rows":chat.model().rendered.len(),"reaction_update_us":reaction_time.as_micros(),"process_resident_bytes":crate::performance::resident_bytes()}}));
+        }
         if count==5000{
             // Media-only viewport updates must stay independent of cached
             // history length. The already cached picture needs no HTTP fixture.

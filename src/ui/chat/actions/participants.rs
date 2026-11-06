@@ -21,9 +21,9 @@ impl Drop for View{fn drop(&mut self){self.window.close();}}
 impl View{
     pub fn new(root:&gtk::Box,id:Uuid,sender:&ComponentSender<ChatModel>)->Self{
         let token=Uuid::new_v4();
-        let window:gtk::Window=adw::Window::builder().title("Reações").default_width(500).default_height(540).modal(true).build().upcast();window.set_widget_name("reaction-participants");window.add_css_class("papo-reaction-browser");window.set_size_request(320,260);
+        let window:gtk::Window=adw::Window::builder().title(crate::i18n::tr("Reações")).default_width(500).default_height(540).modal(true).build().upcast();window.set_widget_name("reaction-participants");window.add_css_class("papo-reaction-browser");window.set_size_request(320,260);
         if let Some(parent)=root.root().and_downcast::<gtk::Window>(){window.set_transient_for(Some(&parent));}
-        let toolbar=adw::ToolbarView::new();let header=adw::HeaderBar::new();header.set_title_widget(Some(&adw::WindowTitle::new("Reações","")));
+        let toolbar=adw::ToolbarView::new();let header=adw::HeaderBar::new();header.set_title_widget(Some(&adw::WindowTitle::new(crate::i18n::tr("Reações"),"")));
         toolbar.add_top_bar(&header);
         let body=gtk::Box::new(gtk::Orientation::Horizontal,0);
         let navigation=gtk::Box::new(gtk::Orientation::Horizontal,0);navigation.add_css_class("papo-reaction-filters");
@@ -32,10 +32,10 @@ impl View{
         let stack=gtk::Stack::new();stack.set_hexpand(true);stack.set_vexpand(true);stack.set_hhomogeneous(false);stack.set_vhomogeneous(false);body.append(&stack);
         let loading=gtk::Box::new(gtk::Orientation::Vertical,12);loading.set_halign(gtk::Align::Center);loading.set_valign(gtk::Align::Center);loading.set_margin_start(16);loading.set_margin_end(16);
         let spinner=gtk::Spinner::new();spinner.set_size_request(28,28);spinner.start();loading.append(&spinner);
-        let status=gtk::Label::new(Some("Carregando reações…"));status.set_wrap(true);status.set_justify(gtk::Justification::Center);status.add_css_class("dim-label");loading.append(&status);stack.add_named(&loading,Some("status"));
+        let status=gtk::Label::new(Some(crate::i18n::tr("Carregando reações…")));status.set_wrap(true);status.set_justify(gtk::Justification::Center);status.add_css_class("dim-label");loading.append(&status);stack.add_named(&loading,Some("status"));
         let content=gtk::Box::new(gtk::Orientation::Vertical,4);content.set_margin_start(8);content.set_margin_end(8);content.set_margin_top(8);content.set_margin_bottom(8);
         let list=gtk::ListBox::new();list.set_selection_mode(gtk::SelectionMode::None);list.add_css_class("papo-reaction-members");content.append(&list);
-        let more_button=gtk::Button::with_label("Mostrar mais membros");more_button.add_css_class("flat");let input=sender.input_sender().clone();more_button.connect_clicked(move |_|{let _=input.send(ChatMsg::Action(ActionMsg::MoreParticipants(token)));});content.append(&more_button);
+        let more_button=gtk::Button::with_label(crate::i18n::tr("Mostrar mais membros"));more_button.add_css_class("flat");let input=sender.input_sender().clone();more_button.connect_clicked(move |_|{let _=input.send(ChatMsg::Action(ActionMsg::MoreParticipants(token)));});content.append(&more_button);
         let scroll=gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).child(&content).build();scroll.set_vexpand(true);crate::ui::smooth_scroll::connect(&scroll,&Default::default());stack.add_named(&scroll,Some("members"));
         let outer=gtk::Box::new(gtk::Orientation::Vertical,0);outer.append(&body);body.set_vexpand(true);
         let error=gtk::Label::new(None);error.set_wrap(true);error.set_lines(3);error.set_ellipsize(pango::EllipsizeMode::End);error.set_xalign(0.0);error.add_css_class("error");error.set_margin_start(12);error.set_margin_end(12);error.set_margin_bottom(8);error.set_visible(false);outer.append(&error);
@@ -48,20 +48,20 @@ impl View{
     pub fn more(&mut self){self.limit=self.limit.saturating_add(PAGE);}
     pub fn retry(&mut self){self.requested.clear();self.error.set_visible(false);}
     pub fn loaded(&self){self.error.set_visible(false);}
-    pub fn error(&self,text:&str){self.spinner.stop();self.spinner.set_visible(false);self.error.set_text(text);self.error.set_visible(true);if self.filter_signature.is_empty(){self.status.set_text("Reações indisponíveis. Feche esta janela e tente novamente.");}}
+    pub fn error(&self,text:&str){self.spinner.stop();self.spinner.set_visible(false);self.error.set_text(text);self.error.set_visible(true);if self.filter_signature.is_empty(){self.status.set_text(crate::i18n::tr("Reações indisponíveis. Feche esta janela e tente novamente."));}}
     pub fn render(&mut self,groups:Option<&[ReactionGroup]>,users:&HashMap<Uuid,UserSummary>,avatars:&HashMap<Uuid,gtk::gdk::Texture>,actions:&Actions,own:Option<Uuid>,sender:&ComponentSender<ChatModel>)->Vec<Uuid>{
         let Some(groups)=groups else{self.navigation.set_visible(false);return vec![];};
         self.spinner.stop();self.spinner.set_visible(false);self.navigation.set_visible(!groups.is_empty());
-        if groups.is_empty(){self.status.set_text("Nenhuma reação nesta mensagem.");self.stack.set_visible_child_name("status");self.members.clear();while let Some(row)=self.list.first_child(){self.list.remove(&row);}self.selected=None;}
+        if groups.is_empty(){self.status.set_text(crate::i18n::tr("Nenhuma reação nesta mensagem."));self.stack.set_visible_child_name("status");self.members.clear();while let Some(row)=self.list.first_child(){self.list.remove(&row);}self.selected=None;}
         if !groups.iter().any(|g|Some(Key::of(g))==self.selected){self.selected=groups.first().map(Key::of);self.limit=PAGE;}
         let signature:Vec<_>=groups.iter().map(|group|{
-            let name=group.unicode.clone().or_else(||group.emoji_id.map(|id|actions.emoji_label(id))).unwrap_or_else(||"Emoji removido".into());
+            let name=group.unicode.clone().or_else(||group.emoji_id.map(|id|actions.emoji_label(id))).unwrap_or_else(||crate::i18n::tr("Emoji removido").into());
             (Key::of(group),group.users.len(),name,group.emoji_id.and_then(|id|actions.emoji_paintable(id)).map_or(0,|p|p.as_ptr() as usize))
         }).collect();
         if signature!=self.filter_signature{
             self.buttons.clear();while let Some(child)=self.filters.first_child(){self.filters.remove(&child);}
             for (key,count,name,_) in &signature{
-                let button=gtk::ToggleButton::new();if let Some((_,first))=self.buttons.first(){button.set_group(Some(first));}button.add_css_class("flat");button.add_css_class("papo-reaction-filter");button.set_tooltip_text(Some(name));let accessible=format!("{name} · {count} reações");button.update_property(&[gtk::accessible::Property::Label(&accessible)]);
+                let button=gtk::ToggleButton::new();if let Some((_,first))=self.buttons.first(){button.set_group(Some(first));}button.add_css_class("flat");button.add_css_class("papo-reaction-filter");button.set_tooltip_text(Some(name));let accessible=format!("{name} · {}",crate::i18n::plural("reaction_count",*count));button.update_property(&[gtk::accessible::Property::Label(&accessible)]);
                 let content=gtk::Box::new(gtk::Orientation::Horizontal,8);content.set_halign(gtk::Align::Center);
                 if let Some(id)=key.0{if let Some(image)=actions.emoji_image(id,24){content.append(&image);}else{let image=gtk::Image::from_icon_name("papo-face-smile-symbolic");image.set_pixel_size(24);content.append(&image);}}
                 else if let Some(unicode)=key.1.as_deref(){let emoji=gtk::Label::new(Some(unicode));emoji.add_css_class("title-3");content.append(&emoji);}
@@ -80,7 +80,7 @@ impl View{
             let member=self.members.entry(*id).or_insert_with(||Member::new(*id,own,&self.window,sender));member.update(users.get(id),avatars.get(id));
             if self.list.row_at_index(index as i32).as_ref()!=Some(&member.row){if member.row.parent().is_some(){self.list.remove(&member.row);}self.list.insert(&member.row,index as i32);}
         }
-        if ids.is_empty(){self.status.set_text("Nenhum membro nesta reação.");self.stack.set_visible_child_name("status");}else{self.stack.set_visible_child_name("members");}
+        if ids.is_empty(){self.status.set_text(crate::i18n::tr("Nenhum membro nesta reação."));self.stack.set_visible_child_name("status");}else{self.stack.set_visible_child_name("members");}
         ids.into_iter().filter(|id|self.requested.insert(*id)).collect()
     }
 }
@@ -91,12 +91,12 @@ impl Member{
         let body=gtk::Box::new(gtk::Orientation::Horizontal,12);let avatar=crate::media::member_avatar(id,None,36);avatar.set_show_initials(true);body.append(&avatar);
         let labels=gtk::Box::new(gtk::Orientation::Vertical,2);labels.set_hexpand(true);labels.set_valign(gtk::Align::Center);let heading=gtk::Box::new(gtk::Orientation::Horizontal,6);
         let name=gtk::Label::new(None);name.set_xalign(0.0);name.set_ellipsize(pango::EllipsizeMode::End);name.set_max_width_chars(30);name.add_css_class("heading");heading.append(&name);
-        if own==Some(id){let own=gtk::Label::new(Some("(você)"));own.add_css_class("caption");own.add_css_class("dim-label");heading.append(&own);}labels.append(&heading);
+        if own==Some(id){let own=gtk::Label::new(Some(crate::i18n::tr("(você)")));own.add_css_class("caption");own.add_css_class("dim-label");heading.append(&own);}labels.append(&heading);
         let username=gtk::Label::new(None);username.set_xalign(0.0);username.set_ellipsize(pango::EllipsizeMode::End);username.add_css_class("caption");username.add_css_class("dim-label");labels.append(&username);body.append(&labels);button.set_child(Some(&body));row.set_child(Some(&button));Self{row,button,avatar,name,username}
     }
     fn update(&self,user:Option<&UserSummary>,texture:Option<&gtk::gdk::Texture>){
-        let name=user.map(UserSummary::display_name).unwrap_or("Membro indisponível");self.name.set_text(name);self.name.set_attributes(None);self.name.remove_css_class("papo-role-name");if let Some(roles)=user.and_then(|u|u.roles.as_deref()){crate::ui::style::role_color(&self.name,roles);}
-        self.username.set_text(&user.map(|u|format!("@{}",u.username)).unwrap_or_else(||"Perfil não carregado".into()));self.avatar.set_text(Some(name));crate::media::set_avatar(&self.avatar,texture);self.button.set_tooltip_text(Some(&format!("Abrir perfil de {name}")));
+        let name=user.map(UserSummary::display_name).unwrap_or(crate::i18n::tr("Membro indisponível"));self.name.set_text(name);self.name.set_attributes(None);self.name.remove_css_class("papo-role-name");if let Some(roles)=user.and_then(|u|u.roles.as_deref()){crate::ui::style::role_color(&self.name,roles);}
+        self.username.set_text(&user.map(|u|format!("@{}",u.username)).unwrap_or_else(||crate::i18n::tr("Perfil não carregado").into()));self.avatar.set_text(Some(name));crate::media::set_avatar(&self.avatar,texture);self.button.set_tooltip_text(Some(&crate::i18n::fmt("Abrir perfil de {name}", &[("name", format!("{}", name))])));
     }
 }
 

@@ -38,26 +38,26 @@ impl MainWindowModel {
                 if let Some((_,timer))=self.search.debounce.take(){if let Some(source)=gtk::glib::MainContext::default().find_source_by_id(&timer){source.destroy();}}
                 if let Some(job)=self.search.job.take(){job.abort();} self.search.token=None;
                 let view_token=Uuid::new_v4();
-                let native=adw::Window::builder().title("Pesquisar mensagens").default_width(760).default_height(720).build();
+                let native=adw::Window::builder().title(crate::i18n::tr("Pesquisar mensagens")).default_width(760).default_height(720).build();
                 let window:gtk::Window=native.clone().upcast();
                 if let Some(parent)=root.root().and_downcast::<gtk::Window>(){window.set_transient_for(Some(&parent));}
-                let toolbar=adw::ToolbarView::new();let header=adw::HeaderBar::new();header.set_title_widget(Some(&adw::WindowTitle::new("Pesquisar mensagens","")));toolbar.add_top_bar(&header);native.set_content(Some(&toolbar));
+                let toolbar=adw::ToolbarView::new();let header=adw::HeaderBar::new();header.set_title_widget(Some(&adw::WindowTitle::new(crate::i18n::tr("Pesquisar mensagens"),"")));toolbar.add_top_bar(&header);native.set_content(Some(&toolbar));
                 let body=gtk::Box::new(gtk::Orientation::Vertical,12);body.set_margin_top(16);body.set_margin_bottom(16);body.set_margin_start(16);body.set_margin_end(16);toolbar.set_content(Some(&body));
-                let fields:Vec<_>=["Pesquisar nas mensagens", "De (AAAA-MM-DD)", "Até (AAAA-MM-DD)"].iter().map(|label|{let e=gtk::Entry::new();e.set_placeholder_text(Some(label));e.set_tooltip_text(Some(label));e.update_property(&[gtk::accessible::Property::Label(label)]);e}).collect();
+                let fields:Vec<_>=[crate::i18n::tr("Pesquisar nas mensagens"), "De (AAAA-MM-DD)", crate::i18n::tr("Até (AAAA-MM-DD)")].iter().map(|label|{let e=gtk::Entry::new();e.set_placeholder_text(Some(label));e.set_tooltip_text(Some(label));e.update_property(&[gtk::accessible::Property::Label(label)]);e}).collect();
                 fields[0].set_primary_icon_name(Some("papo-edit-find-symbolic"));fields[0].set_hexpand(true);let input=sender.input_sender().clone();fields[0].connect_activate(move |_|{let _=input.send(MainWindowMsg::Search(SearchMsg::Submit));});body.append(&fields[0]);
                 let members=|label:&str|Choice::members(label,&self.users,&self.avatars.textures,sender.input_sender().clone(),view_token);
-                let author=members("Qualquer autor");let mention=members("Qualquer menção");let mut channel=Choice::new();channel.append(Some(""),"Todos os canais permitidos");for c in &self.channels{channel.append(Some(&c.id.to_string()),&c.name);}for d in &self.direct.items{channel.append(Some(&d.id.to_string()),&format!("DM · {}",d.user.display_name()));}channel.set_active(Some(0));
-                let links=gtk::CheckButton::with_label("Contém link");
-                let mut files=Choice::new();for (id,label) in [("any","Com ou sem anexos"),("yes","Com anexos"),("no","Sem anexos")]{files.append(Some(id),label);}files.set_active(Some(0));
-                let mut order=Choice::new();order.append(Some("desc"),"Mais recentes primeiro");order.append(Some("asc"),"Mais antigas primeiro");order.set_active(Some(0));
+                let author=members(crate::i18n::tr("Qualquer autor"));let mention=members(crate::i18n::tr("Qualquer menção"));let mut channel=Choice::new();channel.append(Some(""),crate::i18n::tr("Todos os canais permitidos"));for c in &self.channels{channel.append(Some(&c.id.to_string()),&c.name);}for d in &self.direct.items{channel.append(Some(&d.id.to_string()),&format!("DM · {}",d.user.display_name()));}channel.set_active(Some(0));
+                let links=gtk::CheckButton::with_label(crate::i18n::tr("Contém link"));
+                let mut files=Choice::new();for (id,label) in [("any",crate::i18n::tr("Com ou sem anexos")),("yes",crate::i18n::tr("Com anexos")),("no",crate::i18n::tr("Sem anexos"))]{files.append(Some(id),label);}files.set_active(Some(0));
+                let mut order=Choice::new();order.append(Some("desc"),crate::i18n::tr("Mais recentes primeiro"));order.append(Some("asc"),crate::i18n::tr("Mais antigas primeiro"));order.set_active(Some(0));
                 let filter=gtk::FlowBox::new();filter.set_selection_mode(gtk::SelectionMode::None);filter.set_min_children_per_line(1);filter.set_max_children_per_line(2);filter.set_column_spacing(12);filter.set_row_spacing(10);filter.set_margin_top(12);
-                for (label,widget) in [("Autor",author.widget.upcast_ref::<gtk::Widget>()),("Canal",channel.widget.upcast_ref()),("Menção",mention.widget.upcast_ref()),("Anexos",files.widget.upcast_ref()),("Data inicial",fields[1].upcast_ref()),("Data final",fields[2].upcast_ref()),("Ordenação",order.widget.upcast_ref()),("Conteúdo",links.upcast_ref())]{let field=gtk::Box::new(gtk::Orientation::Vertical,4);let title=gtk::Label::new(Some(label));title.set_xalign(0.0);title.add_css_class("caption");field.append(&title);field.append(widget);filter.insert(&field,-1);}
-                let filters=gtk::Expander::new(Some("Filtros avançados"));filters.set_child(Some(&filter));body.append(&filters);
+                for (label,widget) in [(crate::i18n::tr("Autor"),author.widget.upcast_ref::<gtk::Widget>()),(crate::i18n::tr("Canal"),channel.widget.upcast_ref()),(crate::i18n::tr("Menção"),mention.widget.upcast_ref()),(crate::i18n::tr("Anexos"),files.widget.upcast_ref()),(crate::i18n::tr("Data inicial"),fields[1].upcast_ref()),(crate::i18n::tr("Data final"),fields[2].upcast_ref()),(crate::i18n::tr("Ordenação"),order.widget.upcast_ref()),(crate::i18n::tr("Conteúdo"),links.upcast_ref())]{let field=gtk::Box::new(gtk::Orientation::Vertical,4);let title=gtk::Label::new(Some(label));title.set_xalign(0.0);title.add_css_class("caption");field.append(&title);field.append(widget);filter.insert(&field,-1);}
+                let filters=gtk::Expander::new(Some(crate::i18n::tr("Filtros avançados")));filters.set_child(Some(&filter));body.append(&filters);
                 let actions=gtk::Box::new(gtk::Orientation::Horizontal,8);
-                for (label,submit) in [("Pesquisar",true),("Cancelar pesquisa",false)]{let b=gtk::Button::with_label(label);if submit{b.add_css_class("suggested-action");}let input=sender.input_sender().clone();b.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Search(if submit{SearchMsg::Submit}else{SearchMsg::Cancel(view_token)}));});actions.append(&b);}body.append(&actions);
-                let status=gtk::Label::new(Some("Digite um termo ou escolha filtros para pesquisar."));status.set_wrap(true);status.set_xalign(0.0);status.add_css_class("dim-label");body.append(&status);
+                for (label,submit) in [(crate::i18n::tr("Pesquisar"),true),(crate::i18n::tr("Cancelar pesquisa"),false)]{let b=gtk::Button::with_label(label);if submit{b.add_css_class("suggested-action");}let input=sender.input_sender().clone();b.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Search(if submit{SearchMsg::Submit}else{SearchMsg::Cancel(view_token)}));});actions.append(&b);}body.append(&actions);
+                let status=gtk::Label::new(Some(crate::i18n::tr("Digite um termo ou escolha filtros para pesquisar.")));status.set_wrap(true);status.set_xalign(0.0);status.add_css_class("dim-label");body.append(&status);
                 let(results,result_view)=rows::view(&sender,view_token);let scroll=gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).child(&result_view).build();scroll.set_widget_name("message-search-results");body.append(&scroll);
-                let more=gtk::Button::with_label("Mais resultados");more.set_visible(false);let input=sender.input_sender().clone();more.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Search(SearchMsg::More));});body.append(&more);
+                let more=gtk::Button::with_label(crate::i18n::tr("Mais resultados"));more.set_visible(false);let input=sender.input_sender().clone();more.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Search(SearchMsg::More));});body.append(&more);
                 // EN-US: Bubble after the native IM and filter popovers handle Escape.
                 // PT-BR: Propaga após o método de entrada nativo e os popovers de filtro tratarem Escape.
                 let keys=gtk::EventControllerKey::new();let weak=window.downgrade();
@@ -68,7 +68,7 @@ impl MainWindowModel {
                 let input=sender.input_sender().clone();links.connect_toggled(move |_|{let _=input.send(MainWindowMsg::Search(SearchMsg::Changed));});
                 self.search.view=Some(SearchView{token:view_token,window,fields,author,channel,mention,links,files,order,results,status,more});self.search.rows.clear();self.search.ids.clear();self.search.cursor=None;self.search.more=false;self.search.avatar_pending.clear();self.search.avatar_batch=None;
             }
-            SearchMsg::Cancel(view_token) => {if !self.search.view.as_ref().is_some_and(|v|v.token==view_token){return;}if let Some((_,timer))=self.search.debounce.take(){if let Some(source)=gtk::glib::MainContext::default().find_source_by_id(&timer){source.destroy();}}if let Some(job)=self.search.job.take(){job.abort();}self.search.token=None;if let Some(v)=&self.search.view{v.status.set_text("Pesquisa cancelada.");v.more.set_sensitive(self.search.more);}}
+            SearchMsg::Cancel(view_token) => {if !self.search.view.as_ref().is_some_and(|v|v.token==view_token){return;}if let Some((_,timer))=self.search.debounce.take(){if let Some(source)=gtk::glib::MainContext::default().find_source_by_id(&timer){source.destroy();}}if let Some(job)=self.search.job.take(){job.abort();}self.search.token=None;if let Some(v)=&self.search.view{v.status.set_text(crate::i18n::tr("Pesquisa cancelada."));v.more.set_sensitive(self.search.more);}}
             SearchMsg::MemberVisible{view,id}=>{
                 if !self.search.view.as_ref().is_some_and(|v|v.token==view&&v.window.is_visible())||self.avatars.textures.contains_key(&id){return;}
                 self.search.avatar_pending.insert(id);
@@ -106,7 +106,7 @@ impl MainWindowModel {
                         self.search.more=page.has_more&&next.is_some()&&next!=self.search.cursor;
                         self.search.cursor=next.or(self.search.cursor);
                         for r in page.results {if self.search.ids.insert(r.id){self.search.rows.push(r);}}
-                        v.status.set_text(if self.search.rows.is_empty(){"Nenhuma mensagem encontrada."}else{"Selecione uma mensagem para abrir no chat."});
+                        v.status.set_text(if self.search.rows.is_empty(){crate::i18n::tr("Nenhuma mensagem encontrada.")}else{crate::i18n::tr("Selecione uma mensagem para abrir no chat.")});
                     }
                     Err(e)=>{v.status.set_text(&e.to_string());sender.input(MainWindowMsg::ActionError(e));}
                 }v.more.set_visible(self.search.more);v.more.set_sensitive(self.search.more);self.render_search(&sender);
@@ -122,21 +122,21 @@ impl MainWindowModel {
         let (revision,renderer)=self.chat.model().text_renderer(users.clone());
         let desired=self.search.rows.iter().filter(|r|self.can_read_target(r.channel_id)).map(|r|rows::Row{
             external:r.external().cloned(),avatar:r.external().and_then(|a|self.chat.model().external_avatar(a)),id:r.id,channel:r.channel_id,revision,renderer:renderer.clone(),display:crate::ui::chat::mentions::render(r.content.as_deref().unwrap_or("[Anexo]"),&users),
-            heading:format!("#{} · {} · {}",r.channel_name,r.external().map(|a|a.name.as_str()).or(r.author_username.as_deref()).unwrap_or(if r.webhook_id.is_some(){"Webhook"}else{"Usuário removido"}),r.created_at.with_timezone(&chrono::Local).format("%d/%m/%Y %H:%M")),
+            heading:format!("#{} · {} · {}",r.channel_name,r.external().map(|a|a.name.as_str()).or(r.author_username.as_deref()).unwrap_or(if r.webhook_id.is_some(){"Webhook"}else{crate::i18n::tr("Usuário removido")}),r.created_at.with_timezone(&chrono::Local).format(crate::i18n::datetime_pattern())),
             text:r.content.as_deref().unwrap_or("[Anexo]").to_owned(),
         }).collect();rows::update(&v.results,desired);
     }
     fn start_search(&mut self,sender:ComponentSender<Self>){
         let Some(request)=self.search.request.clone() else{return;};if let Some(job)=self.search.job.take(){job.abort();}
-        let token=Uuid::new_v4();self.search.token=Some(token);let cursor=self.search.cursor;let api=self.api_client.clone();
-        if let Some(v)=&self.search.view{v.status.set_text("Pesquisando…");v.more.set_sensitive(false);}
+        let token=Uuid::new_v4();self.search.token=Some(token);let cursor=self.search.cursor;let api=self.connection.api.clone();
+        if let Some(v)=&self.search.view{v.status.set_text(crate::i18n::tr("Pesquisando…"));v.more.set_sensitive(false);}
         self.search.job=Some(tokio::spawn(async move{let result=api.search(&request,cursor).await;sender.input(MainWindowMsg::Search(SearchMsg::Loaded{token,result}));}));
     }
 }
 #[cfg(test)]
 pub(crate) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::MainContext){
     use crate::ui::chat::actions::tests::{find_button,pump,until};
-    find_button(main.widget().upcast_ref(),"Buscar mensagens (Ctrl+K)").emit_clicked();pump(context);let w=main.model().search.view.as_ref().unwrap().window.clone();
+    find_button(main.widget().upcast_ref(),"Buscar mensagens (Ctrl+F)").emit_clicked();pump(context);let w=main.model().search.view.as_ref().unwrap().window.clone();
     find_button(w.upcast_ref(),"Pesquisar").emit_clicked();pump(context);assert!(main.model().search.view.as_ref().unwrap().status.text().contains("filtro"));
     main.model().search.view.as_ref().unwrap().fields[0].set_text("hello");find_button(w.upcast_ref(),"Pesquisar").emit_clicked();until(context,||main.model().search.token.is_none()&&main.model().search.view.as_ref().unwrap().status.text().contains("Search failed"));assert_eq!(main.model().search.view.as_ref().unwrap().fields[0].text(),"hello");
     find_button(w.upcast_ref(),"Pesquisar").emit_clicked();until(context,||main.model().search.token.is_none()&&main.model().search.rows.len()==1);
@@ -165,7 +165,7 @@ pub(crate) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::Mai
     let emoji=Uuid::new_v4();backend.lock().unwrap().emojis=vec![serde_json::json!({"id":emoji,"name":"searchdance","format":"PNG","image_blob":crate::ui::chat::actions::tests::tiny_png_base64(),"created_at":"2026-10-03T00:00:00Z"})];
     let current_user=api.clone();let user=tokio::runtime::Handle::current().block_on(current_user.whoami()).unwrap();
     let main=MainWindowModel::builder().launch(MainWindowInit{current_user:user,api_client:api}).detach();
-    let host=adw::Window::builder().default_width(1000).default_height(720).content(main.widget()).build();host.present();until(context,||main.model().background_started&&main.model().access_request.is_none());
+    let host=adw::Window::builder().default_width(1000).default_height(720).content(main.widget()).build();host.present();until(context,||main.model().connection.state.background_started&&main.model().access_request.is_none());
     choice::exercise_scroll_reset(context,main.sender().clone());
     exercise(&main,context);
     main.emit(MainWindowMsg::Search(SearchMsg::Open));pump(context);
@@ -220,7 +220,7 @@ pub(crate) fn exercise(main:&Controller<MainWindowModel>,context:&gtk::glib::Mai
     }
     let own=tokio::runtime::Handle::current().block_on(api.whoami()).unwrap();
     let main=MainWindowModel::builder().launch(MainWindowInit{current_user:own,api_client:api}).detach();
-    let host=adw::Window::builder().default_width(1000).default_height(720).content(main.widget()).build();host.present();until(context,||main.model().background_started&&main.model().access_request.is_none());
+    let host=adw::Window::builder().default_width(1000).default_height(720).content(main.widget()).build();host.present();until(context,||main.model().connection.state.background_started&&main.model().access_request.is_none());
     main.emit(MainWindowMsg::Search(SearchMsg::Open));pump(context);let window=main.model().search.view.as_ref().unwrap().window.clone();
     main.model().search.view.as_ref().unwrap().fields[0].set_text("Metadata");main.emit(MainWindowMsg::Search(SearchMsg::Submit));until(context,||main.model().search.rows.len()==1);
     until(context,||main.model().chat.model().external_avatar(&author).is_some());crate::ui::chat::performance::settle(context);

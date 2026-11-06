@@ -10,6 +10,10 @@ uses an adaptive server/channel sidebar and native GNOME controls.
 
 Webhook integration and permissions are described in [WEBHOOKS.md](WEBHOOKS.md).
 
+Timed mutes, device-local notification sounds, keyboard shortcuts and manual
+release checks are described in the
+[notification, accessibility and update guide](docs/notifications-accessibility-and-updates.md).
+
 ## Diagnostics
 
 Terminal logging defaults to warnings and errors, written to stderr. Enable
@@ -21,8 +25,8 @@ transport logging directive. Authentication models and cookie header values
 also redact secrets in debug output.
 
 Windows-first port development and macOS groundwork are described in
-[MULTIPLATFORM.md](MULTIPLATFORM.md). Version **1.1.1** provides stable Linux packages
-and unsigned [experimental Windows downloads](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.1.1).
+[MULTIPLATFORM.md](MULTIPLATFORM.md). Version **1.1.2** provides updated Linux packages.
+Unsigned [experimental Windows downloads](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.1.1) remain available from version 1.1.1.
 The Windows packages provide a per-user installer and portable ZIP; see the
 [verified build and remaining acceptance](docs/testing/windows-preview.md).
 Windows remains experimental. The
@@ -83,9 +87,9 @@ See [SECURITY_REVIEW.md](SECURITY_REVIEW.md) for media isolation and supported c
 
 ## Downloads
 
-[Version 1.1.1](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.1.1) provides
-stable Linux x86_64 AppImage and Flatpak bundles, experimental Windows x86_64
-installer/portable downloads, SHA-256 checksums and matching source.
+[Version 1.1.2](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.1.2) provides
+Linux x86_64 AppImage and Flatpak bundles, SHA-256 checksums and matching source.
+The [Windows 1.1.1 installer and portable preview](https://github.com/ISpeakHue/papo-gtk/releases/tag/v1.1.1) remain available separately.
 Windows remains unsigned and experimental; macOS has no downloadable bundle.
 See [APPIMAGE.md](APPIMAGE.md) for the modern Fedora/Arch baseline and
 [FLATPAK.md](FLATPAK.md) for installation and runtime details.
@@ -108,9 +112,23 @@ Real SFU integration can be enabled through the workflow's manual inputs.
 See [TESTING.md](TESTING.md) for dependencies, commands and manual checks,
 [DESIGN.md](DESIGN.md) for interface decisions, and
 [follow-ups](docs/FOLLOW_UPS.md) for unresolved investigations and deferred work.
+The [UX implementation plan](implementation_plan_order.md) tracks implementation and acceptance;
+[account ownership](docs/account-state.md), [performance baselines](PERFORMANCE.md)
+and [backend contracts](docs/backend/ux-contracts.md) document its initial groundwork.
+Use the left rail to [switch servers and accounts](docs/multi-server.md), keeping
+independent sessions, drafts, unread indicators and conversations. The
+[regression and acceptance guide](docs/testing/release-acceptance.md) describes
+automated budgets and the remaining physical-device checks.
 See [EMBEDS.md](EMBEDS.md) for the updated embed API, custom-card controls and
 current backend media limitations.
 
 ## License
 
 GNU General Public License version 3. See [LICENSE](LICENSE).
+
+Interface language and draft recovery: [translations](docs/translations.md),
+[drafts and outgoing queue](docs/drafts-and-outbox.md).
+See [conversation navigation and media controls](docs/navigation-and-media.md)
+for the quick switcher, per-item retries and device-local cache preferences.
+The [media browser and call setup guide](docs/media-browser-and-call-setup.md)
+describes restart thumbnail reuse, media navigation and local audio-device tests.

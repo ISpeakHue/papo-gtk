@@ -1,0 +1,17 @@
+{
+  "id": 42123069510,
+  "name": "Windows release checks",
+  "status": "in_progress",
+  "conclusion": null,
+  "head_sha": "c847ed119fbe1974ea2232144912acb47d68ff1c",
+  "html_url": "https://github.com/ISpeakHue/papo-gtk/actions/runs/42123069510",
+  "path": ".github/workflows/windows.yml",
+  "event": "workflow_dispatch",
+  "created_at": "2026-11-05T22:37:33Z",
+  "updated_at": "2026-11-05T22:37:38Z",
+  "run_attempt": 1,
+  "repository": {
+    "full_name": "ISpeakHue/papo-gtk"
+  },
+  "handoff_note": "Last observed API status; Windows dependency download failed and user chose to close implementation without further retries."
+}

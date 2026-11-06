@@ -37,8 +37,8 @@ fn windows_suggestion(name:&str)->String{
 }
 
 pub fn validate_destination(path:&Path)->Result<()>{
-    let name=path.file_name().context("Nome de arquivo inválido.")?;
-    if cfg!(windows){anyhow::ensure!(name.to_str().is_some_and(windows_name),"Nome de arquivo inválido no Windows.");}
+    let name=path.file_name().context(crate::i18n::tr("Nome de arquivo inválido."))?;
+    if cfg!(windows){anyhow::ensure!(name.to_str().is_some_and(windows_name),crate::i18n::fmt("Nome de arquivo inválido no Windows.", &[]));}
     Ok(())
 }
 
@@ -49,7 +49,7 @@ impl Drop for Stage{fn drop(&mut self){self.file.take();let _=std::fs::remove_fi
 /// PT-BR: Fecha antes de substituir/remover para falhar sem perda de dados em arquivos bloqueados.
 pub fn atomic_write(destination:&Path,bytes:&[u8])->Result<()>{
     validate_destination(destination)?;
-    let parent=destination.parent().context("Pasta de destino inválida.")?;
+    let parent=destination.parent().context(crate::i18n::tr("Pasta de destino inválida."))?;
     let path=parent.join(format!(".papo-config-{}",uuid::Uuid::new_v4()));
     let mut options=std::fs::OpenOptions::new();options.write(true).create_new(true);
     #[cfg(unix)] {use std::os::unix::fs::OpenOptionsExt;options.mode(0o600);}

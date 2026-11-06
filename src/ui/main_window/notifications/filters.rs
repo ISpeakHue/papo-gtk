@@ -15,9 +15,9 @@ pub(super) struct Channels {
 }
 impl Channels {
     pub fn new(body:&gtk::Box,sender:&ComponentSender<MainWindowModel>)->Self{
-        let line=gtk::Box::new(gtk::Orientation::Horizontal,8);let label=gtk::Label::new(Some("Canal"));line.append(&label);
-        let widget=gtk::DropDown::from_strings(&["Todos os canais"]);widget.set_hexpand(true);widget.set_widget_name("notification-channel-filter");
-        widget.update_property(&[gtk::accessible::Property::Label("Filtrar notificações por canal")]);line.append(&widget);body.append(&line);
+        let line=gtk::Box::new(gtk::Orientation::Horizontal,8);let label=gtk::Label::new(Some(crate::i18n::tr("Canal")));line.append(&label);
+        let widget=gtk::DropDown::from_strings(&[crate::i18n::tr("Todos os canais")]);widget.set_hexpand(true);widget.set_widget_name("notification-channel-filter");
+        widget.update_property(&[gtk::accessible::Property::Label(crate::i18n::tr("Filtrar notificações por canal"))]);line.append(&widget);body.append(&line);
         let updating=Rc::new(Cell::new(false));let active=updating.clone();let input=sender.input_sender().clone();
         widget.connect_selected_notify(move |_|{if !active.get(){let _=input.send(MainWindowMsg::Notification(NoticeMsg::FilterChanged));}});
         Self{widget,ids:RefCell::new(vec![None]),updating}
@@ -26,7 +26,7 @@ impl Channels {
     pub fn update(&self,channels:&[(Uuid,String)]){
         let selected=self.selected();let mut choices=channels.to_vec();choices.sort_by_cached_key(|(id,name)|(name.to_lowercase(),*id));
         let ids:Vec<_>=std::iter::once(None).chain(choices.iter().map(|(id,_)|Some(*id))).collect();
-        let names:Vec<_>=std::iter::once("Todos os canais".to_string()).chain(choices.iter().map(|(_,name)|format!("# {name}"))).collect();
+        let names:Vec<_>=std::iter::once(crate::i18n::tr("Todos os canais").to_string()).chain(choices.iter().map(|(_,name)|format!("# {name}"))).collect();
         let same_names=self.widget.model().and_downcast::<gtk::StringList>().is_some_and(|model|model.n_items()==names.len() as u32&&names.iter().enumerate().all(|(i,name)|model.string(i as u32).as_deref()==Some(name.as_str())));
         if *self.ids.borrow()==ids&&same_names{return;}
         self.updating.set(true);let labels:Vec<_>=names.iter().map(String::as_str).collect();self.widget.set_model(Some(&gtk::StringList::new(&labels)));
@@ -57,7 +57,7 @@ impl Rows {
         if let Some(author)=author{self.title.set_tooltip_text(Some(&format!("@{}",author.username)));if let Some(roles)=author.roles.as_deref(){crate::ui::style::role_color(&self.title,roles);}}
         if let Some(avatar)=&self.avatar{avatar.set_text(Some(name));avatar.set_custom_image(texture);}
         self.badge.set_text(&unread.to_string());self.badge.set_visible(unread>0);
-        let label=format!("{unread} notificações não lidas carregadas. Outras páginas podem não estar nesta janela.");
+        let label=crate::i18n::fmt("{unread} notificações não lidas carregadas. Outras páginas podem não estar nesta janela.", &[("unread", format!("{}", unread))]);
         self.badge.update_property(&[gtk::accessible::Property::Label(&label)]);self.badge.set_tooltip_text(Some(&label));
     }
 }

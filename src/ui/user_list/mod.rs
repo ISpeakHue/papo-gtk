@@ -72,7 +72,7 @@ impl Component for UserListModel {
                 set_margin_bottom: 4,
                 set_margin_start: 12,
                 set_margin_end: 12,
-                set_tooltip_text: Some("Alterar meu status"),
+                set_tooltip_text: Some(crate::i18n::tr("Alterar meu status")),
                 #[watch]
                 set_sensitive: !model.status_pending,
                 #[wrap(Some)]
@@ -110,7 +110,7 @@ impl Component for UserListModel {
 
                 gtk::Label {
                     #[watch]
-                    set_text: &format!("Membros · {}", model.users.len()),
+                    set_text: &crate::i18n::fmt("Membros · {}", &[("0", format!("{}", model.users.len()))]),
                     add_css_class: "heading",
                     set_xalign: 0.0,
                 },
@@ -149,7 +149,7 @@ impl Component for UserListModel {
 
         let widgets = view_output!();
         crate::ui::smooth_scroll::connect(&widgets.members_scroll,&model.wheel);
-        widgets.status_button.update_property(&[gtk::accessible::Property::Label("Alterar meu status")]);
+        widgets.status_button.update_property(&[gtk::accessible::Property::Label(crate::i18n::tr("Alterar meu status"))]);
         let popover=gtk::Popover::new();
         let options=gtk::Box::new(gtk::Orientation::Vertical,2);
         for status in [None,Some(UserStatus::Busy),Some(UserStatus::Away)] {
@@ -237,7 +237,7 @@ impl Drop for UserListModel {
 }
 
 fn status_label(status:Option<&UserStatus>)->&'static str {
-    match status {None=>"Online",Some(UserStatus::Busy)=>"Ocupado",Some(UserStatus::Away)=>"Ausente"}
+    match status {None=>"Online",Some(UserStatus::Busy)=>crate::i18n::tr("Ocupado"),Some(UserStatus::Away)=>crate::i18n::tr("Ausente")}
 }
 
 const MEMBER_GROUPS: [&str;4] = ["ONLINE","OCUPADOS","AUSENTES","OFFLINE"];
@@ -256,7 +256,7 @@ fn rebuild_members_list(list_box: &gtk::ListBox, users: &[UserSummary],
         let is_online=presence.get(&user.id).is_some_and(PresenceEntry::online);
         if group!=Some(category){
             group=Some(category);let key=format!("group-{category}");
-            let text=format!("{} — {}",MEMBER_GROUPS[category],counts[category]);
+            let text=format!("{} — {}",crate::i18n::tr(MEMBER_GROUPS[category]),counts[category]);
             let row=cache.entry(key.clone()).or_insert_with(||{let heading=gtk::Label::new(None);heading.add_css_class("caption-heading");heading.add_css_class("dim-label");heading.add_css_class("papo-section-heading");heading.set_xalign(0.0);let row=gtk::ListBoxRow::new();row.set_widget_name(&key);row.set_activatable(false);row.set_selectable(false);row.set_child(Some(&heading));(String::new(),row)});
             if row.0!=text{row.1.child().and_downcast::<gtk::Label>().unwrap().set_text(&text);row.0=text;}
             ordered.push(row.1.clone());

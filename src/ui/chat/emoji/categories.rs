@@ -23,9 +23,9 @@ impl Category {
     }
     pub(super) fn title(self)->&'static str {
         match self {
-            Self::Smileys=>"Carinhas e emoções",Self::People=>"Pessoas e corpo",Self::Nature=>"Animais e natureza",
-            Self::Food=>"Comidas e bebidas",Self::Travel=>"Viagens e lugares",Self::Activities=>"Atividades",
-            Self::Objects=>"Objetos",Self::Symbols=>"Símbolos",Self::Flags=>"Bandeiras",
+            Self::Smileys=>crate::i18n::tr("Carinhas e emoções"),Self::People=>crate::i18n::tr("Pessoas e corpo"),Self::Nature=>crate::i18n::tr("Animais e natureza"),
+            Self::Food=>crate::i18n::tr("Comidas e bebidas"),Self::Travel=>crate::i18n::tr("Viagens e lugares"),Self::Activities=>crate::i18n::tr("Atividades"),
+            Self::Objects=>crate::i18n::tr("Objetos"),Self::Symbols=>crate::i18n::tr("Símbolos"),Self::Flags=>crate::i18n::tr("Bandeiras"),
         }
     }
     fn icon(self)->&'static str {
@@ -44,7 +44,7 @@ pub(super) fn navigation()->(gtk::ScrolledWindow,Vec<(Option<Category>,gtk::Togg
         buttons.push((Some(category),button));
     }
     for (category,button) in &buttons {
-        let title=category.map_or("Todos os emojis",Category::title);
+        let title=category.map_or(crate::i18n::tr("Todos os emojis"),Category::title);
         button.set_tooltip_text(Some(title));button.update_property(&[gtk::accessible::Property::Label(title)]);
         button.set_widget_name(&format!("emoji-category-{}",category.map_or("all",Category::name)));
         button.add_css_class("flat");button.add_css_class("papo-emoji-category");bar.append(button);

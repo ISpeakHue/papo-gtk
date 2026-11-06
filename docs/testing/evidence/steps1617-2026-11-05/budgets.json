@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "status": "pass",
+  "violations": [],
+  "timing_checked": true,
+  "comparisons": {
+    "startup_ui_ready": {
+      "reference_us": 303394,
+      "median_us": 142186,
+      "limit_us": 906788.0
+    },
+    "cold_channel_text": {
+      "reference_us": 145423,
+      "median_us": 165374,
+      "limit_us": 590846.0
+    },
+    "cold_channel_media": {
+      "reference_us": 911381,
+      "median_us": 901664,
+      "limit_us": 2122762.0
+    },
+    "warm_channel": {
+      "reference_us": 61726,
+      "median_us": 65194,
+      "limit_us": 223452.0
+    },
+    "scrolling": {
+      "reference_us": 5381052,
+      "median_us": 5442418,
+      "limit_us": 9071578.0
+    },
+    "long_history": {
+      "reference_us": 7287439,
+      "median_us": 7425386,
+      "limit_us": 14753018.25
+    },
+    "media_residency": {
+      "reference_us": 151030,
+      "median_us": 140059,
+      "limit_us": 602060.0
+    }
+  },
+  "binary_source_verified": false,
+  "profile_asserted_by_operator": "release",
+  "scope": "Synthetic CPU/request/cache regression envelope, not compositor latency, leak detection or release/device acceptance",
+  "report_sha256": "820ca7ab1e31d2cd8ccb6d72a2498757c822036a8176d6f7a5caa653ac33157a",
+  "reference_sha256": "f05c89cd632e18ac55477ae12787bf8d2d4af0d14e3fb91bc4caf37c4ef4bc1e",
+  "budgets_sha256": "a797346bc7f6c882823e0749585cfe1dba654f640ade4e833396d16b05206c9a"
+}

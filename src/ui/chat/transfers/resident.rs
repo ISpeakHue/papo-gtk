@@ -20,13 +20,19 @@ pub(in crate::ui::chat) struct Cache {
     order: VecDeque<(Uuid, Uuid)>,
     channels: VecDeque<Uuid>,
     bytes: u64,
+    low_memory:bool,
 }
 impl Cache {
+    pub fn collect_usage(&self,textures:&mut HashMap<usize,u64>){for entry in self.entries.values(){textures.insert(entry.texture.as_ptr() as usize,entry.bytes);}}
+    pub fn set_low_memory(&mut self,low:bool){self.low_memory=low;while self.bytes>self.byte_limit(){if let Some(key)=self.order.front().copied(){self.remove(key);}else{break;}}while self.channels.len()>self.channel_limit(){if let Some(id)=self.channels.front().copied(){self.invalidate_channel(id);}else{break;}}self.maintain();}
+    fn byte_limit(&self)->u64{if self.low_memory{16<<20}else{BYTE_LIMIT}}
+    fn channel_limit(&self)->usize{if self.low_memory{2}else{CHANNEL_LIMIT}}
+
     pub fn contains(&self, channel: Uuid, key: Uuid) -> bool { self.entries.contains_key(&(channel,key)) }
     pub fn select(&mut self, channel: Uuid, keys: &HashMap<Uuid, HashSet<Uuid>>) {
         self.channels.retain(|id| *id != channel);
         self.channels.push_back(channel);
-        while self.channels.len() > CHANNEL_LIMIT {
+        while self.channels.len() > self.channel_limit() {
             if let Some(old) = self.channels.pop_front() { self.invalidate_channel(old); }
         }
         self.recent.insert(channel,keys.keys().copied().collect());
@@ -45,13 +51,13 @@ impl Cache {
     pub fn insert(&mut self, channel: Uuid, key: Uuid, messages: &HashSet<Uuid>, texture: &gtk::gdk::Texture) {
         self.remove((channel,key));
         let bytes = texture.width() as u64 * texture.height() as u64 * 4;
-        if bytes > BYTE_LIMIT { return; }
+        if bytes > self.byte_limit() { return; }
         self.bytes += bytes;
         self.entries.insert((channel,key),Entry { texture:texture.clone(),messages:messages.clone(),bytes,touched:Instant::now() });
         self.order.push_back((channel,key));
         // EN-US: Evict older previews first, but keep the hard memory limit even when every entry is recent.
         // PT-BR: Descarta primeiro as prévias antigas, mantendo o limite rígido de memória mesmo se todas forem recentes.
-        while self.bytes > BYTE_LIMIT || self.entries.len() > ENTRY_LIMIT {
+        while self.bytes > self.byte_limit() || self.entries.len() > ENTRY_LIMIT {
             let Some(key) = self.order.iter().find(|(channel,key)|!self.recent.get(channel).is_some_and(|keys|keys.contains(key))).or_else(||self.order.front()).copied() else { break; };
             self.remove(key);
         }
@@ -63,7 +69,7 @@ impl Cache {
         let mut bytes:u64=old.iter().filter_map(|key|self.entries.get(key)).map(|e|e.bytes).sum();let mut count=old.len();
         for key in old{
             let Some(entry)=self.entries.get(&key)else{continue;};
-            if bytes>OLD_BYTES||count>OLD_ENTRIES||entry.touched.elapsed().as_secs()>=120{
+            if bytes>if self.low_memory{4<<20}else{OLD_BYTES}||count>OLD_ENTRIES||entry.touched.elapsed().as_secs()>=120{
                 bytes-=entry.bytes;count-=1;self.remove(key);
             }
         }
@@ -106,7 +112,12 @@ impl Cache {
             _ => {},
         }
     }
-    pub fn clear(&mut self) { *self = Self::default(); }
+    pub fn clear(&mut self) { let low=self.low_memory;*self=Self::default();self.low_memory=low; }
+}
+
+#[cfg(test)]mod policy_tests{
+    use super::*;
+    #[test]fn account_reset_preserves_device_retention_limits(){let mut cache=Cache::default();cache.set_low_memory(true);cache.clear();assert_eq!(cache.byte_limit(),16<<20);assert_eq!(cache.channel_limit(),2);}
 }
 
 impl Transfers {
@@ -144,7 +155,7 @@ impl Transfers {
         }
         // Only mount the visible portion now. Other recent previews remain in
         // the resident cache and need neither another download nor a decode.
-        let restore: Vec<_> = self.visible_keys.iter().copied().filter(|key|!self.textures.contains_key(key)).collect();
+        let restore: Vec<_> = self.visible_keys.iter().copied().filter(|key|!self.textures.contains_key(key)&&self.allows(*key)).collect();
         for key in restore {
             if let Some(texture) = self.resident.get(channel,key) {
                 self.dirty.insert(key);
@@ -177,6 +188,9 @@ impl Transfers {
             resident.insert(channel,*key,owners,&texture);
             encoded.insert(*key,channel,*owners.iter().next().unwrap(),vec![index as u8;1<<20].into());
             actions::tests::pump(context);
+        }
+        if std::env::var("PAPO_UI_CASE").as_deref()==Ok("performance-baselines"){
+            eprintln!("Papo baseline: {}",serde_json::json!({"scenario":"media_memory_checkpoint","details":{"channels":index+1,"resident_cache_bytes":resident.bytes,"encoded_cache_bytes":encoded.memory_bytes(),"process_resident_bytes":crate::performance::resident_bytes()}}));
         }
     }
     let after=rss();

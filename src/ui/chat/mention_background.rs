@@ -11,7 +11,7 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let bodies=["Uma mensagem normal.".into(),format!("Olá {token}, tudo bem?"),"Olá @ISpeakHue!".into(),"Bom dia @everyone!".into(),format!("Olá {other}!"),format!("Exemplo: `{token}`"),"https://example.test/@ISpeakHue".into(),format!("Minha própria mensagem: {token}"),"Mais uma mensagem normal.".into()];
     let messages:Vec<Message>=bodies.into_iter().enumerate().map(|(i,content)|serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"channel_id":channel_id,"author_id":if i==7{own}else{peer},"content":content,"created_at":date+chrono::Duration::seconds(i as i64)})).unwrap()).collect();
     let ids:Vec<_>=messages.iter().map(|m|m.id).collect();
-    let channel:Channel=serde_json::from_value(serde_json::json!({"id":channel_id,"name":"menções","type":"text","created_at":date})).unwrap();
+    let channel:Channel=serde_json::from_value(serde_json::json!({"id":channel_id,"name":crate::i18n::tr("menções"),"type":"text","created_at":date})).unwrap();
     let chat=ChatModel::builder().launch(ChatInit{active_channel:Some(channel.clone()),messages,user_id:Some(own),..Default::default()}).detach();
     chat.emit(ChatMsg::SetAccess{user_id:own,access:crate::models::Access::resolve(own,Some(own),&[],&[],&[])});
     let window=adw::Window::builder().default_width(950).default_height(700).content(chat.widget()).build();window.present();
@@ -32,8 +32,8 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     let epoch=chat.model().actions.epoch;let generation=chat.model().highlight_generation;
     chat.emit(ChatMsg::ExpireHighlight{epoch,id:ids[1],generation});until(context,||!row(ids[1]).unwrap().has_css_class("papo-message-highlight"));
     assert!(highlighted(ids[1]));assert_eq!(row(ids[1]).unwrap(),original,"the persistent mention background survives navigation highlight expiry");
-    chat.emit(ChatMsg::ApplyChange(Change::Edit(live,"Menção removida.".into(),Some(date.into()))));until(context,||!highlighted(live));
-    let mut renamed=own_user.clone();renamed.nickname=Some("Outro nome".into());chat.emit(ChatMsg::SetUsers(vec![renamed,peer_user.clone()]));until(context,||!highlighted(ids[2]));assert!(highlighted(ids[1]));
+    chat.emit(ChatMsg::ApplyChange(Change::Edit(live,crate::i18n::tr("Menção removida.").into(),Some(date.into()))));until(context,||!highlighted(live));
+    let mut renamed=own_user.clone();renamed.nickname=Some(crate::i18n::tr("Outro nome").into());chat.emit(ChatMsg::SetUsers(vec![renamed,peer_user.clone()]));until(context,||!highlighted(ids[2]));assert!(highlighted(ids[1]));
     let mut duplicate=peer_user.clone();duplicate.nickname=Some("ISpeakHue".into());chat.emit(ChatMsg::SetUsers(vec![own_user.clone(),duplicate]));pump(context);assert!(!highlighted(ids[2]),"ambiguous nicknames cannot highlight the wrong recipient");
     chat.emit(ChatMsg::SetUsers(vec![own_user,peer_user]));until(context,||highlighted(ids[2]));
     let other_channel:Channel=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"name":"outro","type":"text","created_at":date})).unwrap();

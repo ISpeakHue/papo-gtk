@@ -1,0 +1,89 @@
+//! EN-US: Two loopback servers deliberately share user/channel IDs; no real accounts are used.
+//! PT-BR: Dois servidores locais usam os mesmos IDs de usuário/canal; nenhuma conta real é usada.
+use super::*;
+use crate::ui::chat::{ChatMsg,composer,InputExt};
+use crate::ui::chat::actions::tests::{mock,pump,until,descendants,USER,CHANNEL};
+use crate::ui::main_window::MainWindowMsg;
+use uuid::Uuid;
+fn chat(root:&Controller<RootModel>,id:&AccountId)->(relm4::Sender<MainWindowMsg>,relm4::Sender<ChatMsg>,gtk::Box){let model=root.model();let controller=model.account_controller(id).unwrap();let value=(controller.sender().clone(),controller.model().test_chat().sender().clone(),controller.model().test_chat().widget().clone());value}
+// EN-US: Native window borders must not leave the full header wider than its available allocation.
+// PT-BR: Bordas nativas não devem deixar o cabeçalho completo maior que a área disponível.
+fn assert_layout_fits(window:&adw::ApplicationWindow){
+    for bin in descendants(window.upcast_ref()).into_iter().filter_map(|w|w.downcast::<adw::BreakpointBin>().ok()).filter(|b|b.is_mapped()){
+        if let Some(toolbar)=bin.child().and_downcast::<adw::ToolbarView>(){let minimum=toolbar.measure(gtk::Orientation::Horizontal,-1).0;assert!(minimum<=bin.width(),"header needs {minimum}px with only {}px available",bin.width());}
+    }
+}
+pub(in crate::ui::root) fn exercise(context:&gtk::glib::MainContext){
+    let (a,ba,sa)=tokio::runtime::Handle::current().block_on(mock());let(b,bb,sb)=tokio::runtime::Handle::current().block_on(mock());
+    a.restore_auth_cookie("synthetic-account-a").unwrap();b.restore_auth_cookie("synthetic-account-b").unwrap();
+    let own_a=tokio::runtime::Handle::current().block_on(a.whoami()).unwrap();let own_b=tokio::runtime::Handle::current().block_on(b.whoami()).unwrap();assert_eq!(own_a.id,own_b.id);
+    let aid=AccountId::new(&a,own_a.id);let bid=AccountId::new(&b,own_b.id);assert_ne!(aid,bid);
+    for (backend,name)in [(&ba,"Alpha"),(&bb,"Beta")]{let mut state=backend.lock().unwrap();state.server_value["name"]=serde_json::json!(name);state.fail_upload=false;
+        let messages=(0..100).map(|i|serde_json::json!({"id":Uuid::new_v4(),"channel_id":CHANNEL,"author_id":USER,"content":format!("{name} synthetic message {i}"),"created_at":chrono::Utc::now()-chrono::Duration::seconds(200-i)})).collect();state.channel_messages.insert(CHANNEL.into(),messages);}
+    let root=RootModel::builder().launch(()).detach();let window=root.widget().clone();window.present();root.emit(RootMsg::Authenticated{whoami:own_a.clone(),client:a.clone()});
+    until(context,||root.model().active_id().as_ref()==Some(&aid));let (ma,ca,wa)=chat(&root,&aid);ma.send(MainWindowMsg::StartLoading).unwrap();
+    until(context,||root.model().account_controller(&aid).unwrap().model().active_channel_id.is_some());crate::ui::chat::performance::settle(context);
+    let field_a=composer::field(wa.upcast_ref());field_a.set_text("Alpha unsent á é ç");pump(context);
+    let scroll=descendants(wa.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::ScrolledWindow>().ok().filter(|s|s.widget_name()=="chat-scroll")).or_else(||descendants(wa.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::ScrolledWindow>().ok().filter(|s|s.vadjustment().upper()>s.vadjustment().page_size()+100.0))).unwrap();
+    until(context,||scroll.vadjustment().upper()>scroll.vadjustment().page_size()+300.0);scroll.vadjustment().set_value(200.0);crate::ui::chat::performance::settle(context);let before=scroll.vadjustment().value();
+    root.emit(RootMsg::Authenticated{whoami:own_b.clone(),client:b.clone()});until(context,||root.model().active_id().as_ref()==Some(&bid));let(mb,cb,wb)=chat(&root,&bid);mb.send(MainWindowMsg::StartLoading).unwrap();until(context,||root.model().account_controller(&bid).unwrap().model().active_channel_id.is_some());crate::ui::chat::performance::settle(context);
+    let field_b=composer::field(wb.upcast_ref());field_b.set_text("Beta independent draft");pump(context);
+    root.emit(RootMsg::DirectNavigation);until(context,||root.model().workspace.direct.is_active());assert_eq!(field_b.text(),"Beta independent draft");root.emit(RootMsg::DirectNavigation);until(context,||!root.model().workspace.direct.is_active());
+    for id in [&aid,&bid,&aid]{root.emit(RootMsg::SelectAccount(id.clone()));until(context,||root.model().active_id().as_ref()==Some(id));crate::ui::chat::performance::settle(context);}
+    assert_layout_fits(&window);
+    assert_eq!(field_a.text(),"Alpha unsent á é ç");assert_eq!(field_b.text(),"Beta independent draft");assert!((scroll.vadjustment().value()-before).abs()<4.0,"server switch must preserve the scroll anchor: before {before}, now {}",scroll.vadjustment().value());
+    {let model=root.model();assert_eq!(model.account_controller(&aid).unwrap().model().connection.api.auth_cookie().as_deref(),Some("synthetic-account-a"));assert_eq!(model.account_controller(&bid).unwrap().model().connection.api.auth_cookie().as_deref(),Some("synthetic-account-b"));assert_eq!(model.workspace.directory.accounts.len(),2);}
+    // A delayed send remains on Alpha while Beta's composer and connection work.
+    ba.lock().unwrap().upload_delay=std::time::Duration::from_millis(700);ba.lock().unwrap().fail_upload=true;field_a.set_text("Alpha pending send");pump(context);ca.send(ChatMsg::SendClicked).unwrap();until(context,||root.model().account_controller(&aid).unwrap().model().test_chat().model().pending_count()==1&&field_a.text().is_empty());field_a.set_text("Alpha next draft");pump(context);
+    root.emit(RootMsg::SelectAccount(bid.clone()));until(context,||root.model().active_id().as_ref()==Some(&bid));assert_eq!(field_b.text(),"Beta independent draft");assert_eq!(root.model().account_controller(&bid).unwrap().model().test_chat().model().pending_count(),0);
+    let post_a=||ba.lock().unwrap().requests.iter().filter(|(m,p,_)|m=="POST"&&p=="/messages").count();until(context,||post_a()==1);crate::ui::chat::performance::settle(context);assert!(!bb.lock().unwrap().requests.iter().any(|(m,p,_)|m=="POST"&&p=="/messages"));
+    let hidden_image=Uuid::new_v4();let media_before=ba.lock().unwrap().requests.iter().filter(|(_,p,_)|p.contains(&hidden_image.to_string())).count();
+    let unseen=serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"channel_id":CHANNEL,"author_id":Uuid::new_v4(),"content":"Hidden Alpha message","created_at":chrono::Utc::now(),"attachments":[{"id":hidden_image,"mime_type":"image/png","original_file_name":"hidden.png","moderation_status":"clean","size_bytes":100,"created_at":chrono::Utc::now()}]})).unwrap();ma.send(MainWindowMsg::WsReceived(crate::ws::WsEvent::NewMessage(unseen))).unwrap();ma.send(MainWindowMsg::WsReceived(crate::ws::WsEvent::Disconnected)).unwrap();ma.send(MainWindowMsg::TickCleanup).unwrap();
+    until(context,||root.model().workspace.items[&aid].badge.is_visible());assert_eq!(root.model().active_id().as_ref(),Some(&bid));assert_eq!(field_b.text(),"Beta independent draft");
+    let reads=||ba.lock().unwrap().requests.iter().filter(|(m,p,_)|m=="PUT"&&p.contains("/read")).count();let read_count=reads();ma.send(MainWindowMsg::TickCleanup).unwrap();crate::ui::chat::performance::settle(context);assert_eq!(reads(),read_count,"a hidden server cannot acknowledge its newest messages");assert_eq!(ba.lock().unwrap().requests.iter().filter(|(_,p,_)|p.contains(&hidden_image.to_string())).count(),media_before,"hidden accounts must defer new media requests");
+    // Permission loss and expiry are scoped to the source account, even with colliding IDs.
+    ba.lock().unwrap().admin_channels.clear();ma.send(MainWindowMsg::RefreshAccess).unwrap();until(context,||root.model().account_controller(&aid).unwrap().model().channels.is_empty());assert_eq!(root.model().active_id().as_ref(),Some(&bid));assert_eq!(field_b.text(),"Beta independent draft");assert_eq!(post_a(),1,"uncertain sends cannot automatically retry after reconnect/access changes");
+    let old=root.model().workspace.generations[&aid];root.emit(RootMsg::Authenticated{whoami:own_a,client:a.clone()});until(context,||root.model().workspace.generations[&aid]!=old);root.emit(RootMsg::AccountOutput{id:aid.clone(),session:old,output:MainWindowOutput::SessionExpired});pump(context);assert!(root.model().account_controller(&aid).is_some(),"a callback from a replaced controller must not expire its successor");
+    root.emit(RootMsg::SelectAccount(bid.clone()));until(context,||root.model().active_id().as_ref()==Some(&bid));let epoch=root.model().workspace.generations[&aid];root.emit(RootMsg::AccountOutput{id:aid.clone(),session:epoch,output:MainWindowOutput::SessionExpired});until(context,||root.model().account_controller(&aid).is_none());assert_eq!(root.model().active_id().as_ref(),Some(&bid));assert_eq!(field_b.text(),"Beta independent draft");
+    // A stale login completion cannot replace the current account or fill a new form.
+    root.emit(RootMsg::AddAccount);until(context,||root.model().view==View::Login);root.model().login_controller.emit(LoginMsg::Finished{request:Uuid::new_v4(),result:Ok((own_b,b.clone()))});pump(context);assert_eq!(root.model().view,View::Login);root.emit(RootMsg::CancelAccountLogin);until(context,||root.model().view==View::Main);
+    let directory=Directory::path().unwrap();until(context,||Directory::load(&directory).is_ok_and(|d|d.accounts.len()==2&&d.selected.as_ref()==Some(&bid)));
+    let other="12345678-1234-4234-8234-123456789ac2".parse().unwrap();let channel=root.model().account_controller(&bid).unwrap().model().channels.iter().find(|c|c.id==other).unwrap().clone();mb.send(MainWindowMsg::ChannelSelected(channel)).unwrap();until(context,||Directory::load(&directory).is_ok_and(|d|d.accounts.iter().find(|a|a.id==bid).is_some_and(|a|a.conversation==Some(other))));
+    root.emit(RootMsg::Logout);until(context,||root.model().main_controller.is_none());assert_eq!(root.model().workspace.directory.accounts.len(),2);window.close();drop(root);sa.abort();sb.abort();pump(context);drop(cb);drop(ca);
+    println!("Papo multi-server acceptance: isolated cookies, colliding IDs, live drafts/scroll, hidden reads/unread, pending sends, disconnected/access-revoked server and stale callbacks passed");
+}
+
+
+pub(in crate::ui::root) fn accounts_restart(context:&gtk::glib::MainContext){
+    eprintln!("Papo account restart stage: start fixture");
+    let(a,backend,server)=tokio::runtime::Handle::current().block_on(mock());let b=ApiClient::new(a.base_url()).unwrap();a.restore_auth_cookie("synthetic-alice").unwrap();b.restore_auth_cookie("synthetic-bob").unwrap();let second=Uuid::new_v4();
+    {let mut state=backend.lock().unwrap();let mut bob=state.profile.clone();bob["id"]=serde_json::json!(second);bob["username"]=serde_json::json!("bob");bob["nickname"]=serde_json::json!("Bob");state.identities.insert("synthetic-bob".into(),bob);state.server_value["name"]=serde_json::json!("Shared server");}
+    let own_a=tokio::runtime::Handle::current().block_on(a.whoami()).unwrap();let own_b=tokio::runtime::Handle::current().block_on(b.whoami()).unwrap();assert_ne!(own_a.id,own_b.id);let aid=AccountId::new(&a,own_a.id);let bid=AccountId::new(&b,own_b.id);
+    eprintln!("Papo account restart stage: attach Alice");
+    let root=RootModel::builder().launch(()).detach();let window=root.widget().clone();window.present();root.emit(RootMsg::Authenticated{whoami:own_a,client:a.clone()});until(context,||root.model().active_id().as_ref()==Some(&aid));let(ma,_ca,wa)=chat(&root,&aid);ma.send(MainWindowMsg::StartLoading).unwrap();until(context,||root.model().account_controller(&aid).unwrap().model().active_channel_id.is_some());let fa=composer::field(wa.upcast_ref());fa.set_text("Alice saved draft");pump(context);
+    eprintln!("Papo account restart stage: attach Bob");
+    root.emit(RootMsg::Authenticated{whoami:own_b.clone(),client:b.clone()});until(context,||root.model().active_id().as_ref()==Some(&bid));let(mb,_cb,wb)=chat(&root,&bid);mb.send(MainWindowMsg::StartLoading).unwrap();until(context,||root.model().account_controller(&bid).unwrap().model().channels.len()==2);
+    let other="12345678-1234-4234-8234-123456789ac2".parse().unwrap();let channel=root.model().account_controller(&bid).unwrap().model().channels.iter().find(|c|c.id==other).unwrap().clone();mb.send(MainWindowMsg::ChannelSelected(channel)).unwrap();until(context,||root.model().account_controller(&bid).unwrap().model().active_channel_id==Some(other));let fb=composer::field(wb.upcast_ref());fb.set_text("Bob saved other-channel draft");pump(context);
+    eprintln!("Papo account restart stage: save remembered sessions");
+    tokio::runtime::Handle::current().block_on(async{crate::session::save(&a,"alice").await.unwrap();crate::session::save(&b,"bob").await.unwrap();});
+    {let mut state=root.state().get_mut();for account in &mut state.model.workspace.directory.accounts{account.remember=true;}state.model.workspace.save();}
+    eprintln!("Papo account restart stage: await persisted directory and drafts");
+    let path=Directory::path().unwrap();until(context,||Directory::load(&path).is_ok_and(|d|d.accounts.iter().all(|a|a.remember)&&d.accounts.iter().find(|a|a.id==bid).is_some_and(|a|a.conversation==Some(other))));
+    until(context,||crate::drafts::load_at(&crate::drafts::path(&aid).unwrap(),&aid).is_ok_and(|s|!s.drafts.is_empty())&&crate::drafts::load_at(&crate::drafts::path(&bid).unwrap(),&bid).is_ok_and(|s|!s.drafts.is_empty()));
+    eprintln!("Papo account restart stage: reject stale login");
+    root.emit(RootMsg::AddAccount);until(context,||root.model().view==View::Login);let stale=root.model().workspace.login_scope;root.emit(RootMsg::AddAccount);until(context,||root.model().workspace.login_scope!=stale);root.emit(RootMsg::LoginAuthenticated{scope:stale,whoami:own_b,client:b.clone()});pump(context);assert_eq!(root.model().view,View::Login);root.emit(RootMsg::CancelAccountLogin);until(context,||root.model().view==View::Main);
+    eprintln!("Papo account restart stage: close original workspace");
+    window.close();drop(root);pump(context);
+    eprintln!("Papo account restart stage: reopen workspace");
+    let reopened=RootModel::builder().launch(()).detach();let window=reopened.widget().clone();window.present();until(context,||reopened.model().account_controller(&aid).is_some()&&reopened.model().account_controller(&bid).is_some());
+    eprintln!("Papo account restart stage: restore conversations");
+    let(ma,_ca,wa)=chat(&reopened,&aid);let(mb,_cb,wb)=chat(&reopened,&bid);ma.send(MainWindowMsg::StartLoading).unwrap();mb.send(MainWindowMsg::StartLoading).unwrap();
+    crate::ui::chat::performance::settle(context);assert_layout_fits(&window);
+    let fa=composer::field(wa.upcast_ref());let fb=composer::field(wb.upcast_ref());until(context,||reopened.model().active_id().as_ref()==Some(&bid)&&reopened.model().account_controller(&bid).unwrap().model().active_channel_id==Some(other)&&fa.text()=="Alice saved draft"&&fb.text()=="Bob saved other-channel draft");
+    assert_eq!(reopened.model().account_controller(&aid).unwrap().model().connection.api.auth_cookie().as_deref(),Some("synthetic-alice"));assert_eq!(reopened.model().account_controller(&bid).unwrap().model().connection.api.auth_cookie().as_deref(),Some("synthetic-bob"));assert_eq!(reopened.model().account_controller(&bid).unwrap().model().connection.api.session_owner(),b.session_owner());
+    eprintln!("Papo account restart stage: remove only Alice");
+    reopened.emit(RootMsg::RemoveAccount(aid.clone()));until(context,||reopened.model().workspace.removal.is_some());reopened.model().workspace.removal.as_ref().unwrap().force_close();pump(context);assert_eq!(reopened.model().workspace.directory.accounts.len(),2);reopened.emit(RootMsg::RemoveAccountConfirmed(aid.clone()));until(context,||reopened.model().account_controller(&aid).is_none()&&reopened.model().workspace.directory.accounts.len()==1);assert_eq!(reopened.model().active_id().as_ref(),Some(&bid));assert_eq!(fb.text(),"Bob saved other-channel draft");
+    eprintln!("Papo account restart stage: verify Bob remains remembered");
+    let fresh=ApiClient::new(b.base_url()).unwrap();assert!(tokio::runtime::Handle::current().block_on(crate::session::resume(&fresh,"bob")).unwrap().is_some());window.close();drop(reopened);server.abort();pump(context);
+    println!("Papo account restart acceptance: same-server users, distinct keyring slots, last conversation, persisted drafts, stale login scope and account removal passed");
+}

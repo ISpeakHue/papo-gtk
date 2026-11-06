@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "date": "2026-11-05",
+  "scope": "Local Linux validation of implementation steps 10–12; native Windows and physical hardware not run",
+  "source_fingerprint": "be2e28a3d5351159a6b5df3d8bff4e4de8e2cf59371d8b2011ddd5ec728e1495",
+  "test_binary_sha256": "bc275cbf3a5d3f5e5939087aa65a957ce81568b34ed0839ec4b92a991184c769",
+  "rust": {
+    "passed": 339,
+    "failed": 0,
+    "ignored": 6
+  },
+  "python_native_audio_tests": {
+    "passed": 27,
+    "physical_capture": false,
+    "outputs": "fake"
+  },
+  "python_tool_checks_passed": 9,
+  "matching_translation_entries": 935,
+  "all_targets_check": "passed_without_warnings",
+  "actionlint": "passed",
+  "focused_gtk": {
+    "disk-thumbnails": "passed",
+    "media-browser": "passed",
+    "audio-setup": "passed",
+    "media-policies": "passed",
+    "media-preferences": "passed",
+    "media-loading": "passed",
+    "media-cache": "passed",
+    "backend-gifs": "passed",
+    "attachment-media": "passed",
+    "status-viewer": "passed",
+    "pins-media": "passed",
+    "account-scope": "passed",
+    "translations": "passed",
+    "outgoing-queue": "passed",
+    "voice-controls": "passed",
+    "channel-cache": "passed"
+  },
+  "native_voice_worker_cleanup": "passed",
+  "synthetic_live_switch_sfu": {
+    "command": "python3 tests/voice_probe.py --transport both --switch-audio",
+    "direct_ice": "passed",
+    "turn_relay": "passed",
+    "after_switch": "acknowledged device changes, resumed decoded/audible audio, mute, routing and leave"
+  },
+  "post_change_baseline": "passed; one isolated final run, diagnostic timings only",
+  "media_history_backend": "existing attachment/link search plus limit=1 exact-message lookups; historically unindexed embed-only messages remain undiscoverable",
+  "backend_source_comparison": "matches_reviewed_source",
+  "backend_modified": false,
+  "aggregate_gtk_run": false,
+  "native_windows_run": false,
+  "physical_hardware_run": false,
+  "remote_ci_run": false
+}

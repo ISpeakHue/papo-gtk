@@ -42,10 +42,10 @@ fn entry(body:&gtk::Box,label:&str,value:&str)->gtk::Entry{let l=gtk::Label::new
 fn checks(body:&gtk::Box,values:&[(&str,bool)])->Vec<gtk::CheckButton>{values.iter().map(|(label,value)|{let c=gtk::CheckButton::with_label(label);c.set_active(*value);body.append(&c);c}).collect()}
 fn button(body:&gtk::Box,label:&str,sender:&ComponentSender<MainWindowModel>,f:impl Fn()->AdminMsg+'static){let b=gtk::Button::with_label(label);let s=sender.clone();b.connect_clicked(move |_|s.input(MainWindowMsg::Administration(f())));body.append(&b);}
 fn clear(body:&gtk::Box){while let Some(c)=body.first_child(){body.remove(&c);}}
-fn valid_name(name:&str)->anyhow::Result<()>{anyhow::ensure!(!name.trim().is_empty()&&name.chars().count()<=32,"Use um nome de 1 a 32 caracteres.");Ok(())}
+fn valid_name(name:&str)->anyhow::Result<()>{anyhow::ensure!(!name.trim().is_empty()&&name.chars().count()<=32,crate::i18n::fmt("Use um nome de 1 a 32 caracteres.", &[]));Ok(())}
 fn role_request(f:&RoleForm)->anyhow::Result<CreateRoleRequest>{
     let name=f.name.text().trim().to_owned();valid_name(&name)?;let color=f.color.text().trim().to_owned();
-    anyhow::ensure!(color.is_empty()||color.len()==7&&color.starts_with('#')&&color[1..].bytes().all(|c|c.is_ascii_hexdigit()),"Use uma cor #RRGGBB ou deixe vazio.");
+    anyhow::ensure!(color.is_empty()||color.len()==7&&color.starts_with('#')&&color[1..].bytes().all(|c|c.is_ascii_hexdigit()),crate::i18n::fmt("Use uma cor #RRGGBB ou deixe vazio.", &[]));
     let b:Vec<_>=f.checks.iter().map(|c|Some(c.is_active())).collect();
     Ok(CreateRoleRequest{name,color:(!color.is_empty()).then_some(color),permissions:Some(RolePermissions{manage_server:b[0],manage_channels:b[1],manage_roles:b[2],ban_members:b[3],pin_message:b[4],everyone_message:b[5],send_attachment:b[6],manage_webhooks:b[7]})})
 }
@@ -55,7 +55,7 @@ fn server_request(f:&ServerForm)->anyhow::Result<ServerWrite>{
     if f.creating||f.baseline.as_ref().is_some_and(|s|s.name!=name){r.name=Some(name);}
     let public=f.public.is_active();if f.creating||f.baseline.as_ref().is_some_and(|s|s.public.unwrap_or(true)!=public){r.public=Some(public);}
     if f.change_password.is_active(){r.password=Some(f.password.text().to_string());}
-    if !public&&(f.creating||f.baseline.as_ref().is_some_and(|s|s.public.unwrap_or(true))){anyhow::ensure!(r.password.as_ref().is_some_and(|s|!s.is_empty()),"Defina uma senha para criar ou tornar o servidor privado.");}
+    if !public&&(f.creating||f.baseline.as_ref().is_some_and(|s|s.public.unwrap_or(true))){anyhow::ensure!(r.password.as_ref().is_some_and(|s|!s.is_empty()),crate::i18n::fmt("Defina uma senha para criar ou tornar o servidor privado.", &[]));}
     if let Some((blob,format))=&f.icon{r.icon_blob=Some(blob.clone());r.icon_format=Some(format.clone());}
     Ok(r)
 }
@@ -63,7 +63,7 @@ fn override_request(f:&ChannelForm)->ChannelPermissions{let b:Vec<_>=f.checks.it
 impl MainWindowModel {
     pub(super) fn admin_member_summary(&mut self){
         if let Some(f)=self.administration.view.as_ref().and_then(|v|v.member.as_ref()){
-            if let Some(u)=f.user.id().and_then(|id|self.users.iter().find(|u|u.id==id)){f.summary.set_text(&format!("Cargos atuais: {}",u.roles.iter().flatten().map(|r|r.name.as_str()).collect::<Vec<_>>().join(", ")));}
+            if let Some(u)=f.user.id().and_then(|id|self.users.iter().find(|u|u.id==id)){f.summary.set_text(&crate::i18n::fmt("Cargos atuais: {}", &[("0", format!("{}", u.roles.iter().flatten().map(|r|r.name.as_str()).collect::<Vec<_>>().join(", ")))]));}
         }
     }
     pub(super) fn admin_refresh_assignments(&mut self,sender:ComponentSender<Self>){if self.admin_visible()&&self.administration.pending.is_none(){self.admin_reload(sender);}}
@@ -83,45 +83,45 @@ impl MainWindowModel {
     }
     fn admin_error(&self,message:&str){if let Some(v)=&self.administration.view{v.status.set_text(message);}}
     fn admin_reload(&mut self,sender:ComponentSender<Self>){
-        let token=Uuid::new_v4();self.administration.load=Some(token);let api=self.api_client.clone();
+        let token=Uuid::new_v4();self.administration.load=Some(token);let api=self.connection.api.clone();
         self.administration.jobs.retain(|j|!j.is_finished());
         self.administration.jobs.push(tokio::spawn(async move{let result=async{Ok((api.list_roles().await?,api.list_channels().await?,api.list_all_users().await?))}.await;sender.input(MainWindowMsg::Administration(AdminMsg::Loaded{token,result}));}));
     }
     fn admin_lists(&mut self,sender:&ComponentSender<Self>){
         let Some(v)=&self.administration.view else{return;};clear(&v.role_list);clear(&v.channel_list);
-        for r in &self.administration.roles{let row=gtk::Box::new(gtk::Orientation::Horizontal,4);let id=r.id;button(&row,&format!("{} {}",r.name,r.color.as_deref().unwrap_or("")),sender,move ||AdminMsg::EditRole(Some(id)));button(&row,"Excluir cargo",sender,move ||AdminMsg::DeleteRole(id,false));v.role_list.append(&row);}
+        for r in &self.administration.roles{let row=gtk::Box::new(gtk::Orientation::Horizontal,4);let id=r.id;button(&row,&format!("{} {}",r.name,r.color.as_deref().unwrap_or("")),sender,move ||AdminMsg::EditRole(Some(id)));button(&row,crate::i18n::tr("Excluir cargo"),sender,move ||AdminMsg::DeleteRole(id,false));v.role_list.append(&row);}
         let mut channels=self.administration.channels.clone();channels.sort_by_key(|c|c.position.unwrap_or(0));
-        for c in channels{let row=gtk::Box::new(gtk::Orientation::Horizontal,4);let id=c.id;button(&row,&format!("{} · {} ({:?})",c.position.unwrap_or(0),c.name,c.channel_type),sender,move ||AdminMsg::EditChannel(Some(id)));button(&row,"Excluir canal",sender,move ||AdminMsg::DeleteChannel(id,false));v.channel_list.append(&row);}
+        for c in channels{let row=gtk::Box::new(gtk::Orientation::Horizontal,4);let id=c.id;button(&row,&format!("{} · {} ({:?})",c.position.unwrap_or(0),c.name,c.channel_type),sender,move ||AdminMsg::EditChannel(Some(id)));button(&row,crate::i18n::tr("Excluir canal"),sender,move ||AdminMsg::DeleteChannel(id,false));v.channel_list.append(&row);}
         self.sync_admin_access();
     }
     fn admin_mutation(&mut self,sender:ComponentSender<Self>,future:impl std::future::Future<Output=anyhow::Result<Outcome>>+Send+'static){
         if self.administration.pending.is_some(){return;}let Some(v)=&self.administration.view else{return;};let token=v.token;
-        self.administration.pending=Some(token);self.administration.load=None;self.admin_error("Salvando…");self.sync_admin_access();
+        self.administration.pending=Some(token);self.administration.load=None;self.admin_error(crate::i18n::tr("Salvando…"));self.sync_admin_access();
         self.administration.jobs.push(tokio::spawn(async move{let result=future.await;sender.input(MainWindowMsg::Administration(AdminMsg::Saved{token,result}));}));
     }
     pub(super) fn admin_event(&mut self,msg:AdminMsg,sender:ComponentSender<Self>,root:&gtk::Box){
         match msg {
             AdminMsg::Open=>{
                 if !self.setup&&!self.server_access.manage_server&&!self.server_access.manage_roles&&!self.server_access.manage_channels{return;}
-                if self.administration.pending.is_some(){self.admin_error("Aguarde a operação atual.");return;}
+                if self.administration.pending.is_some(){self.admin_error(crate::i18n::tr("Aguarde a operação atual."));return;}
                 if let Some(v)=self.administration.view.take(){v.window.close();}
                 self.administration.roles=self.roles.clone();self.administration.channels=self.managed_channels.clone();self.administration.users=self.users.clone();
-                let (window,body)=window(root,if self.setup{"Criar servidor"}else{"Administração"});window.set_default_size(650,700);
+                let (window,body)=window(root,if self.setup{crate::i18n::tr("Criar servidor")}else{crate::i18n::tr("Administração")});window.set_default_size(650,700);
                 let status=gtk::Label::new(None);status.set_wrap(true);body.append(&status);
                 let stack=gtk::Stack::new();let switcher=gtk::StackSwitcher::new();switcher.set_stack(Some(&stack));body.append(&switcher);
-                let pages:Vec<_>=["Servidor","Cargos","Canais","Membros"].iter().map(|title|{let page=gtk::Box::new(gtk::Orientation::Vertical,8);let scroll=gtk::ScrolledWindow::builder().vexpand(true).child(&page).build();stack.add_titled(&scroll,Some(title),title);page}).collect();body.append(&stack);
-                button(&body,"Atualizar administração",&sender,||AdminMsg::Reload);
-                let role_list=gtk::Box::new(gtk::Orientation::Vertical,4);let role_form=gtk::Box::new(gtk::Orientation::Vertical,4);button(&pages[1],"Novo cargo",&sender,||AdminMsg::EditRole(None));pages[1].append(&role_list);pages[1].append(&role_form);
-                let channel_list=gtk::Box::new(gtk::Orientation::Vertical,4);let channel_form=gtk::Box::new(gtk::Orientation::Vertical,4);button(&pages[2],"Novo canal",&sender,||AdminMsg::EditChannel(None));pages[2].append(&channel_list);pages[2].append(&channel_form);
-                let member_form=gtk::Box::new(gtk::Orientation::Vertical,4);button(&pages[3],"Escolher membro e cargo",&sender,||AdminMsg::Member);pages[3].append(&member_form);
-                let name=entry(&pages[0],"Nome do servidor",self.server.as_ref().map(|s|s.name.as_str()).unwrap_or(""));
-                let public=gtk::CheckButton::with_label("Servidor público");public.set_active(self.server.as_ref().and_then(|s|s.public).unwrap_or(true));pages[0].append(&public);
-                let change_password=gtk::CheckButton::with_label("Definir / alterar senha do servidor");pages[0].append(&change_password);
+                let pages:Vec<_>=["Servidor","Cargos","Canais","Membros"].iter().map(|title|{let page=gtk::Box::new(gtk::Orientation::Vertical,8);let scroll=gtk::ScrolledWindow::builder().vexpand(true).child(&page).build();stack.add_titled(&scroll,Some(title),crate::i18n::tr(title));page}).collect();body.append(&stack);
+                button(&body,crate::i18n::tr("Atualizar administração"),&sender,||AdminMsg::Reload);
+                let role_list=gtk::Box::new(gtk::Orientation::Vertical,4);let role_form=gtk::Box::new(gtk::Orientation::Vertical,4);button(&pages[1],crate::i18n::tr("Novo cargo"),&sender,||AdminMsg::EditRole(None));pages[1].append(&role_list);pages[1].append(&role_form);
+                let channel_list=gtk::Box::new(gtk::Orientation::Vertical,4);let channel_form=gtk::Box::new(gtk::Orientation::Vertical,4);button(&pages[2],crate::i18n::tr("Novo canal"),&sender,||AdminMsg::EditChannel(None));pages[2].append(&channel_list);pages[2].append(&channel_form);
+                let member_form=gtk::Box::new(gtk::Orientation::Vertical,4);button(&pages[3],crate::i18n::tr("Escolher membro e cargo"),&sender,||AdminMsg::Member);pages[3].append(&member_form);
+                let name=entry(&pages[0],crate::i18n::tr("Nome do servidor"),self.server.as_ref().map(|s|s.name.as_str()).unwrap_or(""));
+                let public=gtk::CheckButton::with_label(crate::i18n::tr("Servidor público"));public.set_active(self.server.as_ref().and_then(|s|s.public).unwrap_or(true));pages[0].append(&public);
+                let change_password=gtk::CheckButton::with_label(crate::i18n::tr("Definir / alterar senha do servidor"));pages[0].append(&change_password);
                 let password=gtk::PasswordEntry::new();password.set_show_peek_icon(true);pages[0].append(&password);
-                let notice=gtk::Label::new(Some("Alterar ou remover a senha encerra todas as sessões, incluindo a sua. Um servidor privado exige senha."));notice.set_wrap(true);pages[0].append(&notice);
+                let notice=gtk::Label::new(Some(crate::i18n::tr("Alterar ou remover a senha encerra todas as sessões, incluindo a sua. Um servidor privado exige senha.")));notice.set_wrap(true);pages[0].append(&notice);
                 let preview=gtk::Image::new();preview.set_pixel_size(64);pages[0].append(&preview);
-                button(&pages[0],"Escolher ícone",&sender,||AdminMsg::Icon(false));button(&pages[0],"Remover ícone",&sender,||AdminMsg::Icon(true));
-                button(&pages[0],if self.setup{"Criar servidor e canal inicial"}else{"Salvar servidor"},&sender,||AdminMsg::SaveServer);
+                button(&pages[0],crate::i18n::tr("Escolher ícone"),&sender,||AdminMsg::Icon(false));button(&pages[0],crate::i18n::tr("Remover ícone"),&sender,||AdminMsg::Icon(true));
+                button(&pages[0],if self.setup{crate::i18n::tr("Criar servidor e canal inicial")}else{crate::i18n::tr("Salvar servidor")},&sender,||AdminMsg::SaveServer);
                 let server=Some(ServerForm{name,public,password,change_password,baseline:self.server.clone(),icon:None,preview,preview_request:Uuid::new_v4(),icon_loading:false,creating:self.setup});
                 window.present();self.administration.view=Some(AdminView{token:Uuid::new_v4(),window,status,stack,server_body:pages[0].clone(),role_body:pages[1].clone(),channel_body:pages[2].clone(),member_body:pages[3].clone(),role_list,channel_list,role_form,channel_form,member_form,server,role:None,channel:None,member:None});
                 if let Some(v)=self.administration.view.as_ref(){if let Some(f)=v.server.as_ref(){
@@ -139,68 +139,68 @@ impl MainWindowModel {
                 if !self.server_access.manage_roles||self.administration.pending.is_some(){return;}
                 let role=id.and_then(|id|self.administration.roles.iter().find(|r|r.id==id));if id.is_some()&&role.is_none(){return;}
                 let Some(v)=self.administration.view.as_mut()else{return;};clear(&v.role_form);v.stack.set_visible_child_name("Cargos");
-                let name=entry(&v.role_form,"Nome do cargo",role.map(|r|r.name.as_str()).unwrap_or(""));let color=entry(&v.role_form,"Cor #RRGGBB (vazio remove)",role.and_then(|r|r.color.as_deref()).unwrap_or(""));
-                let p=role.map(|r|&r.permissions);let values=[("Gerenciar servidor",p.and_then(|p|p.manage_server)),("Gerenciar canais",p.and_then(|p|p.manage_channels)),("Gerenciar cargos",p.and_then(|p|p.manage_roles)),("Banir membros (o backend exige gerenciar servidor)",p.and_then(|p|p.ban_members)),("Fixar mensagens",p.and_then(|p|p.pin_message)),("Mencionar todos",p.and_then(|p|p.everyone_message)),("Enviar anexos",p.and_then(|p|p.send_attachment)),("Gerenciar webhooks",p.and_then(|p|p.manage_webhooks))];
-                let checks=checks(&v.role_form,&values.iter().map(|(l,b)|(*l,b.unwrap_or(false))).collect::<Vec<_>>());button(&v.role_form,"Salvar cargo",&sender,||AdminMsg::SaveRole);v.role=Some(RoleForm{id,name,color,checks});
+                let name=entry(&v.role_form,crate::i18n::tr("Nome do cargo"),role.map(|r|r.name.as_str()).unwrap_or(""));let color=entry(&v.role_form,crate::i18n::tr("Cor #RRGGBB (vazio remove)"),role.and_then(|r|r.color.as_deref()).unwrap_or(""));
+                let p=role.map(|r|&r.permissions);let values=[(crate::i18n::tr("Gerenciar servidor"),p.and_then(|p|p.manage_server)),(crate::i18n::tr("Gerenciar canais"),p.and_then(|p|p.manage_channels)),(crate::i18n::tr("Gerenciar cargos"),p.and_then(|p|p.manage_roles)),(crate::i18n::tr("Banir membros (o backend exige gerenciar servidor)"),p.and_then(|p|p.ban_members)),(crate::i18n::tr("Fixar mensagens"),p.and_then(|p|p.pin_message)),(crate::i18n::tr("Mencionar todos"),p.and_then(|p|p.everyone_message)),(crate::i18n::tr("Enviar anexos"),p.and_then(|p|p.send_attachment)),(crate::i18n::tr("Gerenciar webhooks"),p.and_then(|p|p.manage_webhooks))];
+                let checks=checks(&v.role_form,&values.iter().map(|(l,b)|(*l,b.unwrap_or(false))).collect::<Vec<_>>());button(&v.role_form,crate::i18n::tr("Salvar cargo"),&sender,||AdminMsg::SaveRole);v.role=Some(RoleForm{id,name,color,checks});
             }
             AdminMsg::SaveRole=>{
                 if !self.server_access.manage_roles||self.administration.pending.is_some(){return;}let Some(f)=self.administration.view.as_ref().and_then(|v|v.role.as_ref())else{return;};
-                let request=match role_request(f){Ok(r)=>r,Err(e)=>{self.admin_error(&e.to_string());return;}};let id=f.id;let api=self.api_client.clone();
+                let request=match role_request(f){Ok(r)=>r,Err(e)=>{self.admin_error(&e.to_string());return;}};let id=f.id;let api=self.connection.api.clone();
                 self.admin_mutation(sender,async move{let role=if let Some(id)=id{api.update_role(id,&UpdateRoleRequest{name:request.name,color:request.color,permissions:request.permissions}).await?}else{api.create_role(&request).await?};Ok(Outcome::RoleSaved(role))});
             }
             AdminMsg::Member=>{
                 if !self.server_access.manage_roles||self.administration.pending.is_some(){return;}let Some(v)=self.administration.view.as_mut()else{return;};clear(&v.member_form);v.stack.set_visible_child_name("Membros");
                 let user=Select::new(self.administration.users.iter().map(|u|(u.id,u.display_name().to_owned())));let role=Select::new(self.administration.roles.iter().map(|r|(r.id,r.name.clone())));
-                v.member_form.append(&gtk::Label::new(Some("Membro")));v.member_form.append(&user.widget);v.member_form.append(&gtk::Label::new(Some("Cargo")));v.member_form.append(&role.widget);
+                v.member_form.append(&gtk::Label::new(Some(crate::i18n::tr("Membro"))));v.member_form.append(&user.widget);v.member_form.append(&gtk::Label::new(Some(crate::i18n::tr("Cargo"))));v.member_form.append(&role.widget);
                 let summary=gtk::Label::new(None);summary.set_wrap(true);v.member_form.append(&summary);
-                let users=self.administration.users.clone();let ids=user.ids.clone();let label=summary.clone();user.widget.connect_selected_notify(move |w|{let u=ids.get(w.selected() as usize).and_then(|id|users.iter().find(|u|u.id==*id));label.set_text(&format!("Cargos atuais: {}",u.map(|u|u.roles.iter().flatten().map(|r|r.name.as_str()).collect::<Vec<_>>().join(", ")).unwrap_or_default()));});
-                button(&v.member_form,"Atribuir cargo",&sender,||AdminMsg::Assign(true));button(&v.member_form,"Remover cargo do membro",&sender,||AdminMsg::Assign(false));v.member=Some(MemberForm{user,role,summary});
-                if let Some(f)=&v.member{if let Some(u)=f.user.id().and_then(|id|self.administration.users.iter().find(|u|u.id==id)){f.summary.set_text(&format!("Cargos atuais: {}",u.roles.iter().flatten().map(|r|r.name.as_str()).collect::<Vec<_>>().join(", ")));}}
+                let users=self.administration.users.clone();let ids=user.ids.clone();let label=summary.clone();user.widget.connect_selected_notify(move |w|{let u=ids.get(w.selected() as usize).and_then(|id|users.iter().find(|u|u.id==*id));label.set_text(&crate::i18n::fmt("Cargos atuais: {}", &[("0", format!("{}", u.map(|u|u.roles.iter().flatten().map(|r|r.name.as_str()).collect::<Vec<_>>().join(", ")).unwrap_or_default()))]));});
+                button(&v.member_form,crate::i18n::tr("Atribuir cargo"),&sender,||AdminMsg::Assign(true));button(&v.member_form,crate::i18n::tr("Remover cargo do membro"),&sender,||AdminMsg::Assign(false));v.member=Some(MemberForm{user,role,summary});
+                if let Some(f)=&v.member{if let Some(u)=f.user.id().and_then(|id|self.administration.users.iter().find(|u|u.id==id)){f.summary.set_text(&crate::i18n::fmt("Cargos atuais: {}", &[("0", format!("{}", u.roles.iter().flatten().map(|r|r.name.as_str()).collect::<Vec<_>>().join(", ")))]));}}
             }
             AdminMsg::Assign(assign)=>{
-                if !self.server_access.manage_roles||self.administration.pending.is_some(){return;}let Some(f)=self.administration.view.as_ref().and_then(|v|v.member.as_ref())else{return;};let(Some(user),Some(role))=(f.user.id(),f.role.id())else{self.admin_error("Selecione um membro e um cargo.");return;};let api=self.api_client.clone();
+                if !self.server_access.manage_roles||self.administration.pending.is_some(){return;}let Some(f)=self.administration.view.as_ref().and_then(|v|v.member.as_ref())else{return;};let(Some(user),Some(role))=(f.user.id(),f.role.id())else{self.admin_error(crate::i18n::tr("Selecione um membro e um cargo."));return;};let api=self.connection.api.clone();
                 self.admin_mutation(sender,async move{if assign{api.assign_role(user,role).await?;}else{api.remove_role(user,role).await?;}Ok(Outcome::Saved)});
             }
             AdminMsg::EditChannel(id)=>{
                 if !self.server_access.manage_channels||self.administration.pending.is_some(){return;}
                 let channel=id.and_then(|id|self.administration.channels.iter().find(|c|c.id==id));if id.is_some()&&channel.is_none(){return;}
                 let Some(v)=self.administration.view.as_mut()else{return;};clear(&v.channel_form);v.stack.set_visible_child_name("Canais");
-                let name=entry(&v.channel_form,"Nome do canal",channel.map(|c|c.name.as_str()).unwrap_or(""));let topic=entry(&v.channel_form,"Tópico (até 512 caracteres; categoria sem tópico)",channel.and_then(|c|c.topic.as_deref()).unwrap_or(""));
-                let kind=gtk::DropDown::from_strings(&["Texto","Categoria","Voz"]);kind.set_selected(match channel.and_then(|c|c.channel_type.as_ref()){Some(ChannelType::Category)=>1,Some(ChannelType::Voice)=>2,_=>0});kind.set_sensitive(id.is_none());v.channel_form.append(&kind);
-                let old_position=channel.and_then(|c|c.position).unwrap_or(1);let position=gtk::SpinButton::with_range(1.0,self.administration.channels.len().max(1) as f64,1.0);position.set_value(old_position as f64);v.channel_form.append(&gtk::Label::new(Some("Posição na lista (1 até o número de canais)")));v.channel_form.append(&position);
-                button(&v.channel_form,"Salvar canal",&sender,||AdminMsg::SaveChannel);
+                let name=entry(&v.channel_form,crate::i18n::tr("Nome do canal"),channel.map(|c|c.name.as_str()).unwrap_or(""));let topic=entry(&v.channel_form,crate::i18n::tr("Tópico (até 512 caracteres; categoria sem tópico)"),channel.and_then(|c|c.topic.as_deref()).unwrap_or(""));
+                let kind=gtk::DropDown::from_strings(&[crate::i18n::tr("Texto"),crate::i18n::tr("Categoria"),crate::i18n::tr("Voz")]);kind.set_selected(match channel.and_then(|c|c.channel_type.as_ref()){Some(ChannelType::Category)=>1,Some(ChannelType::Voice)=>2,_=>0});kind.set_sensitive(id.is_none());v.channel_form.append(&kind);
+                let old_position=channel.and_then(|c|c.position).unwrap_or(1);let position=gtk::SpinButton::with_range(1.0,self.administration.channels.len().max(1) as f64,1.0);position.set_value(old_position as f64);v.channel_form.append(&gtk::Label::new(Some(crate::i18n::tr("Posição na lista (1 até o número de canais)"))));v.channel_form.append(&position);
+                button(&v.channel_form,crate::i18n::tr("Salvar canal"),&sender,||AdminMsg::SaveChannel);
                 let role=Select::new(self.administration.roles.iter().map(|r|(r.id,r.name.clone())));
-                let checks=checks(&v.channel_form,&[("Ler canal",false),("Enviar mensagens",false),("Excluir mensagens de outros",false),("Conectar à voz",false)]);
-                if id.is_some(){button(&v.channel_form,"Mover canal",&sender,||AdminMsg::MoveChannel);v.channel_form.append(&gtk::Label::new(Some("Permissões do cargo selecionado (substituição completa)")));v.channel_form.append(&role.widget);
+                let checks=checks(&v.channel_form,&[(crate::i18n::tr("Ler canal"),false),(crate::i18n::tr("Enviar mensagens"),false),(crate::i18n::tr("Excluir mensagens de outros"),false),(crate::i18n::tr("Conectar à voz"),false)]);
+                if id.is_some(){button(&v.channel_form,crate::i18n::tr("Mover canal"),&sender,||AdminMsg::MoveChannel);v.channel_form.append(&gtk::Label::new(Some(crate::i18n::tr("Permissões do cargo selecionado (substituição completa)"))));v.channel_form.append(&role.widget);
                     let permissions=channel.and_then(|c|c.permissions.clone()).unwrap_or_default();let ids=role.ids.clone();let buttons=checks.clone();role.widget.connect_selected_notify(move |w|{let p=ids.get(w.selected() as usize).and_then(|id|permissions.iter().find(|p|p.role_id==*id));let values=p.map(|p|[p.permissions.read_channel,p.permissions.send_messages,p.permissions.delete_messages,p.permissions.connect_voice]).unwrap_or([None;4]);for(c,b)in buttons.iter().zip(values){c.set_active(b.unwrap_or(false));}});
                     if let Some(p)=role.id().and_then(|id|channel.and_then(|c|c.permissions.as_ref()).and_then(|p|p.iter().find(|p|p.role_id==id))){for(c,b)in checks.iter().zip([p.permissions.read_channel,p.permissions.send_messages,p.permissions.delete_messages,p.permissions.connect_voice]){c.set_active(b.unwrap_or(false));}}
-                    button(&v.channel_form,"Salvar permissões do cargo",&sender,||AdminMsg::SaveOverride);button(&v.channel_form,"Remover permissões do cargo",&sender,||AdminMsg::RemoveOverride);
+                    button(&v.channel_form,crate::i18n::tr("Salvar permissões do cargo"),&sender,||AdminMsg::SaveOverride);button(&v.channel_form,crate::i18n::tr("Remover permissões do cargo"),&sender,||AdminMsg::RemoveOverride);
                 }
                 v.channel=Some(ChannelForm{id,name,topic,kind,position,old_position,role,checks});
             }
             AdminMsg::SaveChannel=>{
                 if !self.server_access.manage_channels||self.administration.pending.is_some(){return;}let Some(f)=self.administration.view.as_ref().and_then(|v|v.channel.as_ref())else{return;};let name=f.name.text().trim().to_owned();if let Err(e)=valid_name(&name){self.admin_error(&e.to_string());return;}
-                let topic=f.topic.text().to_string();if topic.chars().count()>512||f.kind.selected()==1&&!topic.is_empty(){self.admin_error("Use até 512 caracteres no tópico; categorias não têm tópico.");return;}
-                let id=f.id;let kind=match f.kind.selected(){1=>ChannelType::Category,2=>ChannelType::Voice,_=>ChannelType::Text};let api=self.api_client.clone();
+                let topic=f.topic.text().to_string();if topic.chars().count()>512||f.kind.selected()==1&&!topic.is_empty(){self.admin_error(crate::i18n::tr("Use até 512 caracteres no tópico; categorias não têm tópico."));return;}
+                let id=f.id;let kind=match f.kind.selected(){1=>ChannelType::Category,2=>ChannelType::Voice,_=>ChannelType::Text};let api=self.connection.api.clone();
                 self.admin_mutation(sender,async move{if let Some(id)=id{Ok(Outcome::ChannelSaved(api.update_channel(id,&UpdateChannelRequest{name,topic:Some(topic)}).await?))}else{Ok(Outcome::CreatedChannel(api.create_channel(&CreateChannelRequest{name,topic:Some(topic),channel_type:Some(kind)}).await?))}});
             }
             AdminMsg::MoveChannel=>{
-                if !self.server_access.manage_channels||self.administration.pending.is_some(){return;}let Some(f)=self.administration.view.as_ref().and_then(|v|v.channel.as_ref())else{return;};let Some(id)=f.id else{return;};let request=ChangeChannelPositionRequest{old_position:f.old_position,new_position:f.position.value_as_int()};let api=self.api_client.clone();self.admin_mutation(sender,async move{Ok(Outcome::ChannelSaved(api.move_channel(id,&request).await?))});
+                if !self.server_access.manage_channels||self.administration.pending.is_some(){return;}let Some(f)=self.administration.view.as_ref().and_then(|v|v.channel.as_ref())else{return;};let Some(id)=f.id else{return;};let request=ChangeChannelPositionRequest{old_position:f.old_position,new_position:f.position.value_as_int()};let api=self.connection.api.clone();self.admin_mutation(sender,async move{Ok(Outcome::ChannelSaved(api.move_channel(id,&request).await?))});
             }
             AdminMsg::SaveOverride|AdminMsg::RemoveOverride=>{
-                if !self.server_access.manage_channels||self.administration.pending.is_some(){return;}let Some(f)=self.administration.view.as_ref().and_then(|v|v.channel.as_ref())else{return;};let(Some(channel),Some(role))=(f.id,f.role.id())else{self.admin_error("Selecione um canal existente e um cargo.");return;};let remove=matches!(msg,AdminMsg::RemoveOverride);let request=override_request(f);let api=self.api_client.clone();self.admin_mutation(sender,async move{if remove{api.remove_override(channel,role).await?;}else{api.set_override(channel,role,&request).await?;}Ok(Outcome::Saved)});
+                if !self.server_access.manage_channels||self.administration.pending.is_some(){return;}let Some(f)=self.administration.view.as_ref().and_then(|v|v.channel.as_ref())else{return;};let(Some(channel),Some(role))=(f.id,f.role.id())else{self.admin_error(crate::i18n::tr("Selecione um canal existente e um cargo."));return;};let remove=matches!(msg,AdminMsg::RemoveOverride);let request=override_request(f);let api=self.connection.api.clone();self.admin_mutation(sender,async move{if remove{api.remove_override(channel,role).await?;}else{api.set_override(channel,role,&request).await?;}Ok(Outcome::Saved)});
             }
             AdminMsg::DeleteRole(id,confirmed)|AdminMsg::DeleteChannel(id,confirmed)=>{
                 let role=matches!(msg,AdminMsg::DeleteRole(..));if self.administration.pending.is_some()||if role{!self.server_access.manage_roles}else{!self.server_access.manage_channels}{return;}
-                if !confirmed{let (w,b)=window(root,if role{"Excluir cargo?"}else{"Excluir canal e seu histórico?"});let warning=gtk::Label::new(Some(if role{"A exclusão remove este cargo de todos os membros e pode mudar o acesso aos canais."}else{"A exclusão remove o canal e seu histórico de mensagens."}));warning.set_wrap(true);b.append(&warning);let s=sender.clone();let confirm=gtk::Button::with_label("Confirmar exclusão");let dialog=w.clone();confirm.connect_clicked(move |_|{dialog.close();s.input(MainWindowMsg::Administration(if role{AdminMsg::DeleteRole(id,true)}else{AdminMsg::DeleteChannel(id,true)}));});b.append(&confirm);let cancel=gtk::Button::with_label("Cancelar");let dialog=w.clone();cancel.connect_clicked(move |_|dialog.close());b.append(&cancel);w.present();self.administration.dialogs.retain(|w|w.is_visible());self.administration.dialogs.push(w);return;}
-                let api=self.api_client.clone();self.admin_mutation(sender,async move{if role{api.delete_role(id).await?;}else{api.delete_channel(id).await?;}Ok(Outcome::Saved)});
+                if !confirmed{let (w,b)=window(root,if role{crate::i18n::tr("Excluir cargo?")}else{crate::i18n::tr("Excluir canal e seu histórico?")});let warning=gtk::Label::new(Some(if role{crate::i18n::tr("A exclusão remove este cargo de todos os membros e pode mudar o acesso aos canais.")}else{crate::i18n::tr("A exclusão remove o canal e seu histórico de mensagens.")}));warning.set_wrap(true);b.append(&warning);let s=sender.clone();let confirm=gtk::Button::with_label(crate::i18n::tr("Confirmar exclusão"));let dialog=w.clone();confirm.connect_clicked(move |_|{dialog.close();s.input(MainWindowMsg::Administration(if role{AdminMsg::DeleteRole(id,true)}else{AdminMsg::DeleteChannel(id,true)}));});b.append(&confirm);let cancel=gtk::Button::with_label(crate::i18n::tr("Cancelar"));let dialog=w.clone();cancel.connect_clicked(move |_|dialog.close());b.append(&cancel);w.present();self.administration.dialogs.retain(|w|w.is_visible());self.administration.dialogs.push(w);return;}
+                let api=self.connection.api.clone();self.admin_mutation(sender,async move{if role{api.delete_role(id).await?;}else{api.delete_channel(id).await?;}Ok(Outcome::Saved)});
             }
             AdminMsg::SaveServer=>{
-                if !self.setup&&!self.server_access.manage_server||self.administration.pending.is_some(){return;}let Some(f)=self.administration.view.as_ref().and_then(|v|v.server.as_ref())else{return;};if f.icon_loading{self.admin_error("Aguarde a preparação do ícone.");return;}let creating=f.creating;let request=match server_request(f){Ok(r)=>r,Err(e)=>{self.admin_error(&e.to_string());return;}};let api=self.api_client.clone();
+                if !self.setup&&!self.server_access.manage_server||self.administration.pending.is_some(){return;}let Some(f)=self.administration.view.as_ref().and_then(|v|v.server.as_ref())else{return;};if f.icon_loading{self.admin_error(crate::i18n::tr("Aguarde a preparação do ícone."));return;}let creating=f.creating;let request=match server_request(f){Ok(r)=>r,Err(e)=>{self.admin_error(&e.to_string());return;}};let api=self.connection.api.clone();
                 self.admin_mutation(sender,async move{
                     if creating{
                         api.create_server(&request).await?;
-                        let warning=api.create_channel(&CreateChannelRequest{name:"geral".into(),channel_type:Some(ChannelType::Text),topic:None}).await.err().map(|e|format!("Servidor criado. Crie o canal inicial na aba Canais: {e}"));
+                        let warning=api.create_channel(&CreateChannelRequest{name:"geral".into(),channel_type:Some(ChannelType::Text),topic:None}).await.err().map(|e|crate::i18n::fmt("Servidor criado. Crie o canal inicial na aba Canais: {e}", &[("e", format!("{}", e))]));
                         Ok(Outcome::CreatedServer{warning})
                     }
                     else{let server=api.patch_server(&request).await?;let active=match api.whoami().await{Ok(_)=>true,Err(e)if crate::api::is_session_error(&e)=>false,Err(e)=>return Err(e)};Ok(Outcome::ServerSaved{active,server})}
@@ -219,7 +219,7 @@ impl MainWindowModel {
                             Outcome::ChannelSaved(c)|Outcome::CreatedChannel(c)=>{if let Some(f)=self.administration.view.as_mut().and_then(|v|v.channel.as_mut()){f.id=Some(c.id);f.old_position=c.position.unwrap_or(1);f.kind.set_sensitive(false);} },
                             _=>{},
                         }
-                        self.admin_error("Salvo. Atualizando permissões e membros…");self.refresh_channels(sender.clone());self.refresh_users(sender.clone(),None);self.admin_reload(sender);
+                        self.admin_error(crate::i18n::tr("Salvo. Atualizando permissões e membros…"));self.refresh_channels(sender.clone());self.refresh_users(sender.clone(),None);self.admin_reload(sender);
                     }
                     Err(e)=>{self.admin_error(&e.to_string());sender.input(MainWindowMsg::ActionError(e));}
                 }
@@ -229,13 +229,13 @@ impl MainWindowModel {
                 if remove{f.preview_request=Uuid::new_v4();f.icon_loading=false;f.icon=Some((String::new(),String::new()));f.preview.clear();return;}
                 f.preview_request=Uuid::new_v4();f.icon_loading=true;let token=f.preview_request;let view=v.token;let parent=v.window.clone();let s=sender.clone();
                 gtk::glib::spawn_future_local(async move {
-                    let dialog=gtk::FileDialog::builder().title("Ícone do servidor (até 2 MiB)").build();
+                    let dialog=gtk::FileDialog::builder().title(crate::i18n::tr("Ícone do servidor (até 2 MiB)")).build();
                     if let Ok(file)=dialog.open_future(Some(&parent)).await {
                         if let Some(path)=file.path(){tokio::spawn(async move {
                             let result=async {
                                 use tokio::io::AsyncReadExt;
                                 let file=tokio::fs::File::open(path).await?;let mut bytes=Vec::new();file.take((2<<20)+1).read_to_end(&mut bytes).await?;
-                                anyhow::ensure!(bytes.len()<=2<<20,"Ícone de até 2 MiB");Ok(Some(bytes))
+                                anyhow::ensure!(bytes.len()<=2<<20,crate::i18n::fmt("Ícone de até 2 MiB", &[]));Ok(Some(bytes))
                             }.await;
                             s.input(MainWindowMsg::Administration(AdminMsg::IconLoaded{view,token,result}));
                         });}else{s.input(MainWindowMsg::Administration(AdminMsg::IconLoaded{view,token,result:Ok(None)}));}
@@ -246,14 +246,14 @@ impl MainWindowModel {
                 let Some(v)=self.administration.view.as_mut().filter(|v|v.token==view)else{return;};let Some(f)=v.server.as_mut().filter(|f|f.preview_request==request)else{return;};
                 if upload.is_some(){f.icon_loading=false;}
                 if let Some(image)=image{f.preview.set_paintable(Some(&image.texture()));if let Some(upload)=upload{f.icon=Some(upload);}}
-                else if upload.is_some(){v.status.set_text("Imagem inválida ou dimensões excessivas.");}
+                else if upload.is_some(){v.status.set_text(crate::i18n::tr("Imagem inválida ou dimensões excessivas."));}
             },
             AdminMsg::IconLoaded{view,token,result}=>{
                 if self.administration.pending.is_some(){return;}let Some(v)=self.administration.view.as_mut().filter(|v|v.token==view)else{return;};let Some(f)=v.server.as_mut().filter(|f|f.preview_request==token)else{return;};
                 f.icon_loading=false;match result{Err(e)=>v.status.set_text(&e.to_string()),Ok(None)=>{},Ok(Some(bytes))=>{
                     use base64::Engine;
-                    let format=match image::guess_format(&bytes){Ok(image::ImageFormat::Png)=>"PNG",Ok(image::ImageFormat::Jpeg)=>"JPEG",Ok(image::ImageFormat::Gif)=>"GIF",Ok(image::ImageFormat::WebP)=>"WEBP",_=>{v.status.set_text("Escolha PNG, JPEG, GIF ou WebP.");return;}};
-                    if bytes.len()>2<<20{v.status.set_text("Ícone de até 2 MiB");return;}
+                    let format=match image::guess_format(&bytes){Ok(image::ImageFormat::Png)=>"PNG",Ok(image::ImageFormat::Jpeg)=>"JPEG",Ok(image::ImageFormat::Gif)=>"GIF",Ok(image::ImageFormat::WebP)=>"WEBP",_=>{v.status.set_text(crate::i18n::tr("Escolha PNG, JPEG, GIF ou WebP."));return;}};
+                    if bytes.len()>2<<20{v.status.set_text(crate::i18n::tr("Ícone de até 2 MiB"));return;}
                     let request=Uuid::new_v4();f.preview_request=request;f.icon_loading=true;let output=sender.input_sender().clone();
                     self.administration.jobs.push(tokio::spawn(async move{
                         let prepared=tokio::task::spawn_blocking(move||(base64::engine::general_purpose::STANDARD.encode(bytes),format.to_owned())).await;

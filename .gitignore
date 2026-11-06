@@ -1,5 +1,7 @@
 /target
 /dist
+/.cache/
+/.config/
 
 __pycache__/
 

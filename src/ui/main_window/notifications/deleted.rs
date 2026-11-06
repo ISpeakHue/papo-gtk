@@ -15,7 +15,7 @@ pub(super) fn exercise(context:&gtk::glib::MainContext){
     let current_user=serde_json::from_value(backend.lock().unwrap().profile.clone()).unwrap();
     let main=MainWindowModel::builder().launch(MainWindowInit{current_user,api_client:api}).detach();
     let window=adw::Window::builder().default_width(1100).default_height(700).content(main.widget()).build();window.present();
-    until(context,||main.model().active_channel_id.is_some()&&main.model().background_started&&main.model().access_request.is_none());
+    until(context,||main.model().active_channel_id.is_some()&&main.model().connection.state.background_started&&main.model().access_request.is_none());
     let active=main.model().active_channel_id;
     let unread=||main.model().channels.iter().find(|c|c.id==channel).unwrap().has_unread();
     let dot=||descendants(main.widget().upcast_ref()).iter().any(|w|w.widget_name()==format!("unread-{channel}"));

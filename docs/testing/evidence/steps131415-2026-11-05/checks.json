@@ -1,0 +1,67 @@
+{
+  "schema": 1,
+  "date": "2026-11-05",
+  "scope": "Local Linux validation for implementation steps 13–15; native Windows and real speech-reader acceptance not run",
+  "source_fingerprint": "680a75a1f5c2b8c30088cc482c17dbb7fc4b24d54293a35257565233487c4299",
+  "source_fingerprint_inputs": "Cargo.toml, Cargo.lock, build.rs, src/**/*.rs, src/**/*.py, locales/*.json; sorted paths and bytes separated by NUL",
+  "test_binary_sha256": "f4725fa16b37f8c44c0d3d97ad5ad25ccd8a2643cb00d62c8365de2841b2d1de",
+  "rust": {
+    "passed": 345,
+    "failed": 0,
+    "ignored": 6
+  },
+  "all_targets_check": "passed_without_warnings",
+  "python_tool_checks_passed": 9,
+  "matching_translation_entries": 994,
+  "actionlint": "passed",
+  "shell_syntax": "passed",
+  "focused_gtk": {
+    "notification-controls": "passed",
+    "release-discovery": "passed",
+    "accessibility": "passed",
+    "accessibility-contrast": "passed",
+    "account-settings": "passed",
+    "conversation-switcher": "passed",
+    "notification-filters": "passed",
+    "notification-window": "passed",
+    "voice-controls": "passed",
+    "media-preferences": "passed",
+    "syntax-highlighting": "passed",
+    "webhook-chat": "passed",
+    "style-palette": "passed",
+    "window-scrolling": "passed",
+    "desktop-input": "passed"
+  },
+  "native_linux_accessibility": {
+    "case": "accessibility-atspi",
+    "result": "passed",
+    "checks": [
+      "named multiline editable composer",
+      "named message rows",
+      "reply action exposed through private AT-SPI bus"
+    ],
+    "speech_reader_output_tested": false
+  },
+  "full_suite_artifact_before_final_localized_expiry_formatter": {
+    "source_fingerprint": "95203419e37fa762cc09c2fff160946ebf9ecab9e9c944be8bef298cf50b9e05",
+    "test_binary_sha256": "acc29505cfdbcfedf2a5a144f6fc1c07a9b67f764cf52440a771d17ddf341d2a",
+    "scope": "345 Rust tests, 15 focused GTK cases and native Linux AT-SPI probe before the final one-line localized mute-expiry formatter change"
+  },
+  "final_expiry_formatter_verification": {
+    "case": "notification-controls",
+    "result": "passed",
+    "regular_rust_suite_rerun": true
+  },
+  "windows": {
+    "native_execution": "not_run",
+    "gui_cases_added_to_ci": [
+      "notification-controls",
+      "release-discovery",
+      "accessibility",
+      "accessibility-contrast"
+    ],
+    "remote_ci_triggered": false
+  },
+  "backend_contracts": "matches_reviewed_source_eab626662bc4bfeb4ce1cd3165b01eccb4c2c5a5",
+  "github_metadata": "Public release feed inspected read-only to confirm actual AppImage/Flatpak/Windows asset naming; GUI tests use synthetic releases; HTTP tests use loopback fixtures"
+}

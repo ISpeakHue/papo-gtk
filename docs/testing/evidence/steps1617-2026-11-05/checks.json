@@ -1,0 +1,1083 @@
+{
+  "schema": 1,
+  "date": "2026-11-05",
+  "status": "implementation_complete_release_acceptance_pending",
+  "scope": "Recovered implementation steps 16\u201317 and continued local/cross-platform validation; no release acceptance inferred",
+  "source_fingerprint": "926add01a61c7a62204a24cd16639da9036a20dbe0eaddcd0eab7d3e65836802",
+  "source_fingerprint_algorithm": "scripts/performance-baseline.py source_fingerprint(); SHA-256 of the sorted JSON path-to-SHA256 manifest for Cargo inputs and src/tests/assets/locales/scripts/packaging files",
+  "local_head": "b6b880e069b572409440a8b1f80292fc5d5e7e52",
+  "source_dirty": true,
+  "test_binary_sha256": "4fdfe130ed6cf67a4f8c3e2f84bcb525109c883d243494f55f7d3fd790ee1978",
+  "compiler_artifacts": [
+    {
+      "target": {
+        "kind": [
+          "bin"
+        ],
+        "crate_types": [
+          "bin"
+        ],
+        "name": "papo-gtk",
+        "src_path": "src/main.rs",
+        "edition": "2021",
+        "doc": true,
+        "doctest": false,
+        "test": true
+      },
+      "profile": {
+        "opt_level": "3",
+        "debuginfo": 0,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": true
+      },
+      "executable": "target/release/deps/papo_gtk-aadb8b110d60da1c",
+      "fresh": true
+    }
+  ],
+  "rust": {
+    "passed": 347,
+    "failed": 0,
+    "ignored": 6,
+    "log": {
+      "path": "target/resume-context-unit.log",
+      "sha256": "caf2662e672e98c79fbe07c0f07847c6d4443145c4b55821342e4f55a3663148",
+      "result_lines": [
+        "test result: ok. 347 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 29.08s"
+      ]
+    }
+  },
+  "all_targets_check": {
+    "status": "passed_without_warnings",
+    "log": {
+      "path": "target/resume-check.log",
+      "sha256": "b25fccdeae7b43e36ae737ed69f8801388ed9dfc88574e2be28232f1732291c6",
+      "result_lines": []
+    }
+  },
+  "python": {
+    "tests": 185,
+    "skipped": 7,
+    "failures": 0,
+    "log": {
+      "path": "target/resume-context-python.log",
+      "sha256": "7576fccc7162a8ae55a67bbb09df13a0cb5da91c936e8c002739218a21f68d58",
+      "result_lines": [
+        "Ran 185 tests in 11.428s",
+        "OK (skipped=7)"
+      ]
+    },
+    "source_fingerprint": "926add01a61c7a62204a24cd16639da9036a20dbe0eaddcd0eab7d3e65836802"
+  },
+  "implementation_tools": {
+    "passed": 19,
+    "source_fingerprint": "926add01a61c7a62204a24cd16639da9036a20dbe0eaddcd0eab7d3e65836802",
+    "scope": "Included in the full final-source 185-test Python suite; focused subprocess checks are also retained separately",
+    "log": {
+      "path": "target/resume-context-python.log",
+      "sha256": "7576fccc7162a8ae55a67bbb09df13a0cb5da91c936e8c002739218a21f68d58",
+      "result_lines": [
+        "Ran 185 tests in 11.428s",
+        "OK (skipped=7)"
+      ]
+    },
+    "focused_before_context_fix": {
+      "path": "target/resume-bounded-tools.log",
+      "sha256": "80f39cdbf7e6f5ed10557b6a81943b448da20127a2f03c45793954584820d313",
+      "result_lines": [
+        "Ran 19 tests in 4.056s",
+        "OK"
+      ]
+    }
+  },
+  "matching_translation_entries": 1010,
+  "gtk": {
+    "total": 58,
+    "passed": 56,
+    "failed": 2,
+    "fatal_criticals": true,
+    "environment": "Cached Fedora 44 CI image, private Xvfb; Openbox for accessibility/conversation-switcher; Cairo",
+    "cases": [
+      {
+        "case": "symbolic-icons",
+        "exit_code": 0,
+        "path": "target/resume-gui-symbolic-icons.log",
+        "sha256": "52fb5e47a4de44dec469e0c43767f328331d29266483d612f8a3c141bab31b55",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.73s"
+        ]
+      },
+      {
+        "case": "security-icons",
+        "exit_code": 0,
+        "path": "target/resume-gui-security-icons.log",
+        "sha256": "acc2e9da7f5dc4832b48fd82408a61bba5ab7c9d1a87770e0bc8329adbaa735c",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 2.77s"
+        ]
+      },
+      {
+        "case": "syntax-highlighting",
+        "exit_code": 0,
+        "path": "target/resume-gui-syntax-highlighting.log",
+        "sha256": "3751f24afcc298c33ea726cf78861226dc411822a0abe4d984842e30d16283a1",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.82s"
+        ]
+      },
+      {
+        "case": "reaction-participants",
+        "exit_code": 0,
+        "path": "target/resume-gui-reaction-participants.log",
+        "sha256": "26d15a587e5255c717bc843e86cfe7e251f20cd83c13be931f147d7a0fb797a7",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 1.49s"
+        ]
+      },
+      {
+        "case": "default",
+        "exit_code": 139,
+        "path": "target/resume-gui-default.log",
+        "sha256": "9fc35d7cfcd61a0c7440e80c54fdfbd986c771bcbd58a3a7ad8165d6d47dad34",
+        "result_lines": []
+      },
+      {
+        "case": "desktop-input",
+        "exit_code": 0,
+        "path": "target/resume-gui-desktop-input.log",
+        "sha256": "790ebc7f240dc3acd35749110c6375ff4304ffef12c3255626552a81254d142a",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.51s"
+        ]
+      },
+      {
+        "case": "multiline",
+        "exit_code": 0,
+        "path": "target/resume-gui-multiline.log",
+        "sha256": "dd813b4c888c744cfac7235ba28bf372357cd7f041b3c70b5c772b4c644d2872",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 3.01s"
+        ]
+      },
+      {
+        "case": "full-app-input",
+        "exit_code": 0,
+        "path": "target/resume-gui-full-app-input.log",
+        "sha256": "a53899e4444623ae0cf32a648307ef8224c3c9b5baf27a0315ffafd0126ba98e",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 3.38s"
+        ]
+      },
+      {
+        "case": "login-input",
+        "exit_code": 0,
+        "path": "target/resume-gui-login-input.log",
+        "sha256": "18d0d10866a637917b1994773711d1a781e11c7f05941546924ef460754bfebe",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 3.69s"
+        ]
+      },
+      {
+        "case": "backend-update",
+        "exit_code": 0,
+        "path": "target/resume-gui-backend-update.log",
+        "sha256": "dc4f1369f3e83c9da5a2feb878ed7106479b1a3768195dc2a2bd05ab3e3d59da",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 13.46s"
+        ]
+      },
+      {
+        "case": "embeds",
+        "exit_code": 0,
+        "path": "target/resume-gui-embeds.log",
+        "sha256": "daa393c96ffb6c4838e9af75e00be71c403e2d03fd838882ce77126b3142e792",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 15.45s"
+        ]
+      },
+      {
+        "case": "style-palette",
+        "exit_code": 0,
+        "path": "target/resume-gui-style-palette.log",
+        "sha256": "ae4cb0916d361ced30bc31fe2f9577c23b80e27acbda8ddb7331ba6f210c009e",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 6.75s"
+        ]
+      },
+      {
+        "case": "attachment-media",
+        "exit_code": 0,
+        "path": "target/resume-gui-attachment-media.log",
+        "sha256": "8d9faebdc9f28a0831dee89450c69806c55b0f37712f1b61d36cc72c999ef742",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 1.16s"
+        ]
+      },
+      {
+        "case": "media-cache",
+        "exit_code": 0,
+        "path": "target/resume-gui-media-cache.log",
+        "sha256": "8761f2784859bce2ea0d7c3b6cdabdb8c50db568096fe576b547ef390a852bcb",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 2.86s"
+        ]
+      },
+      {
+        "case": "report8",
+        "exit_code": 0,
+        "path": "target/resume-gui-report8.log",
+        "sha256": "711f134ced0f9c5fcd26ebd47cae48a5f7d9c0fd081bc1dd5b0b34728dcb5cbb",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 19.49s"
+        ]
+      },
+      {
+        "case": "report10",
+        "exit_code": 0,
+        "path": "target/resume-gui-report10.log",
+        "sha256": "6463537c2582a216c235db0795540569587dbb06d993ed9b307e34d9995e0791",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 2.75s"
+        ]
+      },
+      {
+        "case": "report11",
+        "exit_code": 0,
+        "path": "target/resume-gui-report11.log",
+        "sha256": "febaa30912dd265b098851a853cafdfb099460b363f7081ecb192a9d26e6ade2",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 2.95s"
+        ]
+      },
+      {
+        "case": "emoji-grid",
+        "exit_code": 0,
+        "path": "target/resume-gui-emoji-grid.log",
+        "sha256": "0e13d910b654e305e672b0d5103129c8862f01669b4a5dc8deac39d398c2eb11",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 11.52s"
+        ]
+      },
+      {
+        "case": "notification-filters",
+        "exit_code": 0,
+        "path": "target/resume-gui-notification-filters.log",
+        "sha256": "80115266bd135d9939cef3aa22925aadbf3f07b5d804dde069a5a5b7cbbc4bc0",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 8.39s"
+        ]
+      },
+      {
+        "case": "account-notices",
+        "exit_code": 0,
+        "path": "target/resume-gui-account-notices.log",
+        "sha256": "abbbf9b975a9188450845355d99698eaba856147d239e161aefa03f1a2bd7357",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 7.90s"
+        ]
+      },
+      {
+        "case": "window-scrolling",
+        "exit_code": 0,
+        "path": "target/resume-gui-window-scrolling.log",
+        "sha256": "3c7608cc4ad67a74eeb1dee7eb136b1ee913700946705a86cea0346f2004c21f",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 2.02s"
+        ]
+      },
+      {
+        "case": "multi-server",
+        "exit_code": 0,
+        "path": "target/resume-gui-multi-server.log",
+        "sha256": "c880c437902e2292e344efd4bd07dc533425b9de19bae47435cf529cf9379135",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 7.87s"
+        ]
+      },
+      {
+        "case": "multi-account-restart",
+        "exit_code": 0,
+        "path": "target/resume-gui-multi-account-restart.log",
+        "sha256": "f85b758f3087518c957d4dfa0ae139b470264e0bbb29cb1a1e043a32934433fc",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 1.55s"
+        ]
+      },
+      {
+        "case": "notification-controls",
+        "exit_code": 0,
+        "path": "target/resume-gui-notification-controls.log",
+        "sha256": "ebea5d9e7e70f7b703bbd46ad2eabbbf46052ee5158a749c74d2c93ff52e7195",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.70s"
+        ]
+      },
+      {
+        "case": "release-discovery",
+        "exit_code": 0,
+        "path": "target/resume-gui-release-discovery.log",
+        "sha256": "adad7df3ecb74e43be3f2f7b653ee5cd32421a7d1466297c758a7eeaadb92275",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.38s"
+        ]
+      },
+      {
+        "case": "accessibility",
+        "exit_code": 0,
+        "path": "target/resume-gui-accessibility.log",
+        "sha256": "e8067f1f38c63b1bfbc28224d761883ec0614dded9f0db2330973d2b37c6b1de",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 1.28s"
+        ]
+      },
+      {
+        "case": "accessibility-contrast",
+        "exit_code": 0,
+        "path": "target/resume-gui-accessibility-contrast.log",
+        "sha256": "6d8b74bff04574cc9c26fc65f85bc234b4a67c3f50ba9f7c0d605c7cb785822b",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 1.30s"
+        ]
+      },
+      {
+        "case": "accessibility-atspi",
+        "exit_code": 0,
+        "path": "target/resume-gui-accessibility-atspi.log",
+        "sha256": "009b0fc07512bd4e8155c4bc475d1d31e7857c7c8e2e96c5ee114ddb02e3b309",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 5.77s"
+        ]
+      },
+      {
+        "case": "account-settings",
+        "exit_code": 0,
+        "path": "target/resume-gui-account-settings.log",
+        "sha256": "fd04119e15c2ecea877ac1b661c49c4cb1fc97548e806ab241c2abcd1cd62675",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 7.25s"
+        ]
+      },
+      {
+        "case": "account-scope",
+        "exit_code": 0,
+        "path": "target/resume-gui-account-scope.log",
+        "sha256": "ddc08acbaee19d5ba7d8861b1ec7a559c15b18db7fcf1db1c8aca08b3b2787da",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.74s"
+        ]
+      },
+      {
+        "case": "conversation-switcher",
+        "exit_code": 0,
+        "path": "target/resume-gui-conversation-switcher.log",
+        "sha256": "9eda648d0910ccacedf75b4da55778b87e34c476619f2487c2b9c2abba7b4b98",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 1.97s"
+        ]
+      },
+      {
+        "case": "media-policies",
+        "exit_code": 0,
+        "path": "target/resume-gui-media-policies.log",
+        "sha256": "f6892270552aa426de963e8ec623b8e669ab0f638f4af4d2af58297780bf7028",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 1.48s"
+        ]
+      },
+      {
+        "case": "media-preferences",
+        "exit_code": 0,
+        "path": "target/resume-gui-media-preferences.log",
+        "sha256": "55bd6294ac7090175fabcfda0da19f39f94a5702c7e86ca7d031a6d7a50a01e0",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.98s"
+        ]
+      },
+      {
+        "case": "disk-thumbnails",
+        "exit_code": 0,
+        "path": "target/resume-gui-disk-thumbnails.log",
+        "sha256": "d37d7d7e7be297de7fabe49cbdc6814f69b57c1bf1790fb5e452f6c73e98d95d",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 1.34s"
+        ]
+      },
+      {
+        "case": "media-browser",
+        "exit_code": 0,
+        "path": "target/resume-gui-media-browser.log",
+        "sha256": "4dcba28e60cd1e3662f4277643edb986e28c0285ec169694b31123aff45bd2cf",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 4.71s"
+        ]
+      },
+      {
+        "case": "audio-setup",
+        "exit_code": 0,
+        "path": "target/resume-gui-audio-setup.log",
+        "sha256": "bd0d3e4cb22f9ed58cfdc71cb1394047fcbc45b635d5e6a2fe6d1b47d2fea07a",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 5.15s"
+        ]
+      },
+      {
+        "case": "translations",
+        "exit_code": 0,
+        "path": "target/resume-gui-translations.log",
+        "sha256": "591a252a31ed5749f9a32590ec75eac7f0bab60567771001960b58d4680c48cc",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 1.74s"
+        ]
+      },
+      {
+        "case": "draft-recovery",
+        "exit_code": 0,
+        "path": "target/resume-gui-draft-recovery.log",
+        "sha256": "d7c8ac3d898ea933138c6f91e82888cfbe1f916a6c01a8e1ae49ddaa21a818d7",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.70s"
+        ]
+      },
+      {
+        "case": "outgoing-queue",
+        "exit_code": 0,
+        "path": "target/resume-gui-outgoing-queue.log",
+        "sha256": "c3bb569d017869c3917254ea7b930012ec0b2cb651db12859752dceb8d4c06a9",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 2.55s"
+        ]
+      },
+      {
+        "case": "webhook-chat",
+        "exit_code": 0,
+        "path": "target/resume-gui-webhook-chat.log",
+        "sha256": "5506beb01a0a7a76e1487303a93ff536bece154cd5ffbf52cad42b4946da9440",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 2.86s"
+        ]
+      },
+      {
+        "case": "report9",
+        "exit_code": 0,
+        "path": "target/resume-gui-report9.log",
+        "sha256": "7b3bc9d52d30023bc3a4b947d3c30483f2ec11abe28851f760fa5b8d6629a3a2",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 8.71s"
+        ]
+      },
+      {
+        "case": "edit-mentions",
+        "exit_code": 0,
+        "path": "target/resume-gui-edit-mentions.log",
+        "sha256": "019bba68e100fed53ebdfa537cfbe25bfe798b19491c65e2595e2946da0376cf",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 10.15s"
+        ]
+      },
+      {
+        "case": "emoji-details",
+        "exit_code": 0,
+        "path": "target/resume-gui-emoji-details.log",
+        "sha256": "5bafc5ae9213c28c171a84630db3ad2eb88567187c0e342bf4002ee2987c77f5",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.78s"
+        ]
+      },
+      {
+        "case": "backend-gifs",
+        "exit_code": 0,
+        "path": "target/resume-gui-backend-gifs.log",
+        "sha256": "d26736e4c8437b83be14407106b441e42f5b628cb8c18e7497296b07bade7277",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 6.71s"
+        ]
+      },
+      {
+        "case": "backend-contracts",
+        "exit_code": 0,
+        "path": "target/resume-gui-backend-contracts.log",
+        "sha256": "00389975429f00c87d1516a516a17c9f32c8b33388016513f8795f4c0b2720e7",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 6.31s"
+        ]
+      },
+      {
+        "case": "voice-chat",
+        "exit_code": 0,
+        "path": "target/resume-gui-voice-chat.log",
+        "sha256": "8e7f4a879280b961faa9d67e69d0b6a302e57a74bacfdaed11efdba400d8628c",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 5.73s"
+        ]
+      },
+      {
+        "case": "avatar-viewport",
+        "exit_code": 0,
+        "path": "target/resume-gui-avatar-viewport.log",
+        "sha256": "68ffb9c44d1dd556c7688c5e8012aacecc708289acb0023e2e42feee93c37b01",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 1.12s"
+        ]
+      },
+      {
+        "case": "search-recycling",
+        "exit_code": 0,
+        "path": "target/resume-gui-search-recycling.log",
+        "sha256": "f0cc78be43e8396ad47b8386995c6bd991002511a40535a795b631701f789084",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 9.27s"
+        ]
+      },
+      {
+        "case": "emoji-notifications",
+        "exit_code": 0,
+        "path": "target/resume-gui-emoji-notifications.log",
+        "sha256": "aefa35eacd7ffbb19f7f779231ff70b5889946b0ba7aaff287b7117f98c4254a",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 14.83s"
+        ]
+      },
+      {
+        "case": "notification-window",
+        "exit_code": 0,
+        "path": "target/resume-gui-notification-window.log",
+        "sha256": "160dd11cd1709a1e8a68a318d712b2f2ee46f3b7b3f69f1e1dc71de8313a0bd5",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 3.73s"
+        ]
+      },
+      {
+        "case": "recovery",
+        "exit_code": 0,
+        "path": "target/resume-gui-recovery.log",
+        "sha256": "028cfe0093b3e2c3865e2875b3c713b51efef4769882ec6af447a26ac155bfb1",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 4.38s"
+        ]
+      },
+      {
+        "case": "media-loading",
+        "exit_code": 0,
+        "path": "target/resume-gui-media-loading.log",
+        "sha256": "0b9c88e23fe73511c4114f93e06fbd021c2714d0ff5ebd228f4c8e116f991318",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.49s"
+        ]
+      },
+      {
+        "case": "recent-media",
+        "exit_code": 139,
+        "path": "target/resume-gui-recent-media.log",
+        "sha256": "4b2e9a8f66d61a1c9ba9942bc49b4f0f963398130df47755c1c1a24b5ffec279",
+        "result_lines": []
+      },
+      {
+        "case": "draft-previews",
+        "exit_code": 0,
+        "path": "target/resume-gui-draft-previews.log",
+        "sha256": "80dc124fcd49ecd2b4b8772b1117611fa894cdf1ff66e702ce64613bbeeb6105",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 1.61s"
+        ]
+      },
+      {
+        "case": "clipboard",
+        "exit_code": 0,
+        "path": "target/resume-gui-clipboard.log",
+        "sha256": "e570f0c66b9306d4dc35b9a188482dd06239f181ce12b131062f051efdd7db55",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.77s"
+        ]
+      },
+      {
+        "case": "emoji-categories",
+        "exit_code": 0,
+        "path": "target/resume-gui-emoji-categories.log",
+        "sha256": "486c697804ed27dc6009dc2184c83ed7bf13ccea138d872d7023b5c6f85839c5",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 6.41s"
+        ]
+      },
+      {
+        "case": "pins-media",
+        "exit_code": 0,
+        "path": "target/resume-gui-pins-media.log",
+        "sha256": "a81dcdc2b2ecf6f1ec965f8ed641e7108676b39c4e1dbb6113670fa64456ca5c",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 2.08s"
+        ]
+      },
+      {
+        "case": "windows-notifications",
+        "exit_code": 0,
+        "path": "target/resume-gui-windows-notifications.log",
+        "sha256": "42fc971b04c6fcc0f634966f6468e97612d983d57a10a67896f5cbcdc4181f2e",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 3.10s"
+        ]
+      }
+    ],
+    "source_fingerprint": "a011e214574114944cc4221dbead3e0b81e6350a54dbb64c9016fa59e03af908",
+    "test_binary_sha256": "870219e47089bef2bd94948c729b774e0530e51dd450d7cdf3af48a2c8ae2a08"
+  },
+  "native_worker_cleanup": {
+    "passed": 3,
+    "logs": [
+      {
+        "path": "target/resume-native-voice.log",
+        "sha256": "a52633dffff1bda23a851b18fc96a5179c0e735870d2c016b4ebddf65ba4de59",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.14s"
+        ]
+      },
+      {
+        "path": "target/resume-native-call.log",
+        "sha256": "0e4fe64c8b532a1f93cad78af2b32ec24392e9040ed40aa1c2d39c14566d9950",
+        "result_lines": [
+          "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 351 filtered out; finished in 0.74s"
+        ]
+      }
+    ],
+    "source_fingerprint": "a011e214574114944cc4221dbead3e0b81e6350a54dbb64c9016fa59e03af908",
+    "test_binary_sha256": "870219e47089bef2bd94948c729b774e0530e51dd450d7cdf3af48a2c8ae2a08"
+  },
+  "voice_sfu": {
+    "status": "pass",
+    "synthetic_audio": true,
+    "live_microphone_switch_requested": true,
+    "sfu_binary_sha256": "c2f9101bf69ad5ca9c963509975721bc512a7df988810819d3b1de0e4dd161de",
+    "log": {
+      "path": "target/resume-voice-sfu.log",
+      "sha256": "e814b805a00c2deb98f2be23aee6095c24e895def9abfe8423bfa26e010fc193",
+      "result_lines": [
+        "Direct ICE: bidirectional decoded audio, routes, active speakers, mute and leave passed",
+        "TURN relay: bidirectional decoded audio, routes, active speakers, mute and leave passed",
+        "Missing capture device: reported and resources released"
+      ]
+    },
+    "source_fingerprint": "a011e214574114944cc4221dbead3e0b81e6350a54dbb64c9016fa59e03af908"
+  },
+  "known_native_playback": {
+    "status": "unresolved",
+    "failed_cases": [
+      "default",
+      "recent-media"
+    ],
+    "signal": "SIGSEGV",
+    "stack": [
+      "g_type_check_instance_is_fundamentally_a",
+      "g_object_unref",
+      "gst_play_main"
+    ],
+    "native_library": "libgstplay-1.0.so.0, GStreamer 1.28.8",
+    "matches_previous_recorded_stack": true,
+    "root_cause_proven": false,
+    "suppressed_or_counted_as_pass": false,
+    "simple_dependency_only_teardown_probe": {
+      "cycles_passed": 50,
+      "scope": "No Papo imports; passing probe does not reproduce or resolve the failing application workflows"
+    },
+    "additional_dependency_only_probes": [
+      {
+        "probe": "GstPlay/fake-sink Python GI teardown",
+        "cycles_passed": 200
+      },
+      {
+        "probe": "Native C GTK looping media prepare/clear",
+        "cycles_passed": 200
+      }
+    ],
+    "probe_limitations": "Simpler standalone probes did not reproduce the failing application playback workflows; the native stack alone does not establish the full cause.",
+    "legacy_playbin_diagnostic": {
+      "option": "GST_PLAY_USE_PLAYBIN3=0",
+      "case": "recent-media",
+      "result": "SIGSEGV after four completed fullscreen/latest/history eviction cycles",
+      "default_changed": false
+    }
+  },
+  "recovered_prior_instance": {
+    "source_fingerprint": "708c989c92259d9c13328f354df748883738def5870e9cc09710d1d483255313",
+    "test_binary_sha256": "38b64536dbd8639b2b5e063234ad0819a69e1e8cfed9247515fe9aad930ed535",
+    "rust_passed": 347,
+    "python_tests": 181,
+    "python_skipped": 7,
+    "synthetic_audio_tests": 27,
+    "optimized_baseline_runs": 3,
+    "windows_ci": {
+      "url": "https://github.com/ISpeakHue/papo-gtk/actions/runs/42076952395",
+      "commit": "ac1aef7cb1e2a20934c10c34e58a9ba72d3134dd",
+      "conclusion": "failure",
+      "linux_failures": [
+        "default",
+        "account-notices",
+        "conversation-switcher",
+        "avatar-viewport"
+      ],
+      "windows_failure": "media-browser GTK parent assertion under fatal-criticals",
+      "macos": "success"
+    }
+  },
+  "ci_snapshot": {
+    "path": "/tmp/papo-finish-plan-ci-waymzjam",
+    "branch": "ci/finish-plan-20261105-73a7e4a",
+    "commit": "c847ed119fbe1974ea2232144912acb47d68ff1c",
+    "base": "b6b880e069b572409440a8b1f80292fc5d5e7e52",
+    "included_files": 807,
+    "source_fingerprint": "926add01a61c7a62204a24cd16639da9036a20dbe0eaddcd0eab7d3e65836802",
+    "previous_commit": "435a036882d3a609817c4e6c783329247e970c59",
+    "previous_run_id": 42105865219,
+    "previous_run_url": "https://github.com/ISpeakHue/papo-gtk/actions/runs/42105865219",
+    "run_id": 42123069510,
+    "run_url": "https://github.com/ISpeakHue/papo-gtk/actions/runs/42123069510",
+    "verified_source_fingerprint": "926add01a61c7a62204a24cd16639da9036a20dbe0eaddcd0eab7d3e65836802",
+    "workflow_sha256": {
+      ".github/workflows/windows.yml": "1c30d04abc6a818e7cd7afee15270905914cf7df9fc45c1da883da84ef0a4ae6",
+      ".github/workflows/test.yml": "d2acccea5f2927bc39845f8b7c9a9ac6dc187c31fca9de6fdd8dbc1127d9f76c"
+    }
+  },
+  "cross_platform_ci": {
+    "status_at_handoff": "in_progress",
+    "url": "https://github.com/ISpeakHue/papo-gtk/actions/runs/42123069510",
+    "commit": "c847ed119fbe1974ea2232144912acb47d68ff1c",
+    "windows": "failed_dependency_download_ignored_by_user",
+    "macos": "success",
+    "linux": "unit/structural/optimized budgets passed; full GTK suite still running at handoff"
+  },
+  "physical_linux_acceptance": "pending",
+  "release_certified": false,
+  "performance": {
+    "runs": 3,
+    "baseline_status": "pass",
+    "budgets": {
+      "schema": 1,
+      "status": "pass",
+      "violations": [],
+      "timing_checked": true,
+      "comparisons": {
+        "startup_ui_ready": {
+          "reference_us": 303394,
+          "median_us": 142186,
+          "limit_us": 906788.0
+        },
+        "cold_channel_text": {
+          "reference_us": 145423,
+          "median_us": 165374,
+          "limit_us": 590846.0
+        },
+        "cold_channel_media": {
+          "reference_us": 911381,
+          "median_us": 901664,
+          "limit_us": 2122762.0
+        },
+        "warm_channel": {
+          "reference_us": 61726,
+          "median_us": 65194,
+          "limit_us": 223452.0
+        },
+        "scrolling": {
+          "reference_us": 5381052,
+          "median_us": 5442418,
+          "limit_us": 9071578.0
+        },
+        "long_history": {
+          "reference_us": 7287439,
+          "median_us": 7425386,
+          "limit_us": 14753018.25
+        },
+        "media_residency": {
+          "reference_us": 151030,
+          "median_us": 140059,
+          "limit_us": 602060.0
+        }
+      },
+      "binary_source_verified": false,
+      "profile_asserted_by_operator": "release",
+      "scope": "Synthetic CPU/request/cache regression envelope, not compositor latency, leak detection or release/device acceptance",
+      "report_sha256": "820ca7ab1e31d2cd8ccb6d72a2498757c822036a8176d6f7a5caa653ac33157a",
+      "reference_sha256": "f05c89cd632e18ac55477ae12787bf8d2d4af0d14e3fb91bc4caf37c4ef4bc1e",
+      "budgets_sha256": "a797346bc7f6c882823e0749585cfe1dba654f640ade4e833396d16b05206c9a"
+    },
+    "baseline_sha256": "820ca7ab1e31d2cd8ccb6d72a2498757c822036a8176d6f7a5caa653ac33157a"
+  },
+  "compiler_artifact_paths": "Normalized relative to project; current compiler artifact verification is target/resume-context-build-verified.jsonl.",
+  "ci_attempts": [
+    {
+      "run_id": 42096295223,
+      "url": "https://github.com/ISpeakHue/papo-gtk/actions/runs/42096295223",
+      "commit": "2ccba799cccede012ce00454f057c8f85e9f3da4",
+      "windows": "failure: byte_budget_evicts_old_files_and_keeps_recent_hits assumed distinct rapid-write timestamps",
+      "macos": "success",
+      "linux": {
+        "status": "failure",
+        "gtk_total": 58,
+        "gtk_passed": 57,
+        "failed": [
+          {
+            "case": "recent-media",
+            "exit_code": 101
+          }
+        ],
+        "native_failure": "recent-media: SIGSEGV",
+        "aggregate_default": "passed (310.09 s)",
+        "results": "linux-ci-first-results.tsv",
+        "results_sha256": "aca7bb3d64540ebdadf438e47c084953dce7928bfd978c43ba17943973c12b3e"
+      }
+    },
+    {
+      "run_id": 42100245205,
+      "url": "https://github.com/ISpeakHue/papo-gtk/actions/runs/42100245205",
+      "commit": "5c255b1196714c6635f37a3cc14c677f31c30144",
+      "linux": "success: all 58 GTK cases, regular Rust tests and performance budgets",
+      "macos": "success",
+      "windows": "Regular Rust/lifecycle/structural checks passed; multi-account-restart stalled over twelve minutes; operator cancelled to retrieve logs",
+      "windows_log": {
+        "path": "target/resume-windows-final.log",
+        "sha256": "b6b14df54e0a7269bf8bdee4f2e128fc08939bf163a8c697e42d534441cfd8e6",
+        "result_lines": []
+      }
+    },
+    {
+      "run_id": 42105865219,
+      "url": "https://github.com/ISpeakHue/papo-gtk/actions/runs/42105865219",
+      "commit": "435a036882d3a609817c4e6c783329247e970c59",
+      "linux": "success: all GTK cases and regression checks",
+      "macos": "success",
+      "windows": "Bounded account restart passed; accessibility failed waiting for keyboard context popover",
+      "windows_cases": [
+        {
+          "schema": 1,
+          "case": "accessibility",
+          "test": "ui::root::tests::ui_smoke_window_has_header_controls_and_server_password",
+          "timeout_seconds": 240,
+          "binary_sha256": "a99905b365e020d9a308b5a65e44f15e766fe295fa83042bc2d62df604737935",
+          "log_sha256": "f8db61afd894ce02afecd834b92d232fa10c7425808494e5454563c439cb4a07",
+          "status": "fail",
+          "exit_code": 101,
+          "timed_out": false
+        },
+        {
+          "schema": 1,
+          "case": "desktop-input",
+          "test": "ui::root::tests::ui_smoke_window_has_header_controls_and_server_password",
+          "timeout_seconds": 240,
+          "binary_sha256": "a99905b365e020d9a308b5a65e44f15e766fe295fa83042bc2d62df604737935",
+          "log_sha256": "106d87cf9f4ed518580ae522ed4c0ea9d5c5b98029823724717719326b0eadd1",
+          "status": "pass",
+          "exit_code": 0,
+          "timed_out": false
+        },
+        {
+          "schema": 1,
+          "case": "edit-mentions",
+          "test": "ui::root::tests::ui_smoke_window_has_header_controls_and_server_password",
+          "timeout_seconds": 240,
+          "binary_sha256": "a99905b365e020d9a308b5a65e44f15e766fe295fa83042bc2d62df604737935",
+          "log_sha256": "6bf5e50aa7f0055acef8be6f76156d2649e63c78b96de4f3eef2e299240489c6",
+          "status": "pass",
+          "exit_code": 0,
+          "timed_out": false
+        },
+        {
+          "schema": 1,
+          "case": "login-input",
+          "test": "ui::root::tests::ui_smoke_window_has_header_controls_and_server_password",
+          "timeout_seconds": 240,
+          "binary_sha256": "a99905b365e020d9a308b5a65e44f15e766fe295fa83042bc2d62df604737935",
+          "log_sha256": "54d1e94808da324729134fa393d73f30800f4c5e4cb8065a43c885635d23203f",
+          "status": "pass",
+          "exit_code": 0,
+          "timed_out": false
+        },
+        {
+          "schema": 1,
+          "case": "multi-account-restart",
+          "test": "ui::root::tests::ui_smoke_window_has_header_controls_and_server_password",
+          "timeout_seconds": 240,
+          "binary_sha256": "a99905b365e020d9a308b5a65e44f15e766fe295fa83042bc2d62df604737935",
+          "log_sha256": "6162fff43aa83752ff415e689f59b34b2c29d26142742de75586ea5883a1bcb6",
+          "status": "pass",
+          "exit_code": 0,
+          "timed_out": false
+        },
+        {
+          "schema": 1,
+          "case": "multi-server",
+          "test": "ui::root::tests::ui_smoke_window_has_header_controls_and_server_password",
+          "timeout_seconds": 240,
+          "binary_sha256": "a99905b365e020d9a308b5a65e44f15e766fe295fa83042bc2d62df604737935",
+          "log_sha256": "6db390a273b6830133edb233e952b8ba802dfbd6261cf21c370c840bd0637bc4",
+          "status": "pass",
+          "exit_code": 0,
+          "timed_out": false
+        },
+        {
+          "schema": 1,
+          "case": "notification-controls",
+          "test": "ui::root::tests::ui_smoke_window_has_header_controls_and_server_password",
+          "timeout_seconds": 240,
+          "binary_sha256": "a99905b365e020d9a308b5a65e44f15e766fe295fa83042bc2d62df604737935",
+          "log_sha256": "a03d00515d1c3a423123c8350855c4f36df78fbd97a2655ebc384421f694ff0d",
+          "status": "pass",
+          "exit_code": 0,
+          "timed_out": false
+        },
+        {
+          "schema": 1,
+          "case": "recovery",
+          "test": "ui::root::tests::ui_smoke_window_has_header_controls_and_server_password",
+          "timeout_seconds": 240,
+          "binary_sha256": "a99905b365e020d9a308b5a65e44f15e766fe295fa83042bc2d62df604737935",
+          "log_sha256": "bd90ab37481beccf0eabefac66f8fa5054ed23773778dfab15fc71552213333f",
+          "status": "pass",
+          "exit_code": 0,
+          "timed_out": false
+        },
+        {
+          "schema": 1,
+          "case": "release-discovery",
+          "test": "ui::root::tests::ui_smoke_window_has_header_controls_and_server_password",
+          "timeout_seconds": 240,
+          "binary_sha256": "a99905b365e020d9a308b5a65e44f15e766fe295fa83042bc2d62df604737935",
+          "log_sha256": "82841a86479517ec8d016c5923114888295b641c045c0f9c78a18ec1e360c367",
+          "status": "pass",
+          "exit_code": 0,
+          "timed_out": false
+        }
+      ],
+      "windows_log": {
+        "path": "target/resume-windows-bounded.log",
+        "sha256": "2d79cd10c05ab270c49a1caf318d6b1075abf7fb9ead1b3d75796f854d956b79",
+        "result_lines": []
+      }
+    },
+    {
+      "run_id": 42123069510,
+      "attempt": 1,
+      "commit": "c847ed119fbe1974ea2232144912acb47d68ff1c",
+      "windows": "libwmf package-signature mirror timeout; no final app tests executed",
+      "log": {
+        "path": "target/resume-windows-context.log",
+        "sha256": "de6b424a3ee200700dddf913af9cd8a6b48a7970b3a10ab2bf8f4cb428f581a4"
+      },
+      "disposition": "User explicitly permitted ignoring this error; no more retries"
+    }
+  ],
+  "final_focused_gtk": {
+    "source_fingerprint": "926add01a61c7a62204a24cd16639da9036a20dbe0eaddcd0eab7d3e65836802",
+    "test_binary_sha256": "4fdfe130ed6cf67a4f8c3e2f84bcb525109c883d243494f55f7d3fd790ee1978",
+    "total": 9,
+    "passed": 9,
+    "cases": [
+      {
+        "case": "accessibility",
+        "exit_code": 0,
+        "path": "target/resume-context-gui-accessibility.log",
+        "sha256": "1ecbe8d0e76df9a2bb794521f4c31bec537562c7c22b8fb3b4b9e96b0aaf55cc",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 1.42s"
+        ]
+      },
+      {
+        "case": "accessibility-contrast",
+        "exit_code": 0,
+        "path": "target/resume-context-gui-accessibility-contrast.log",
+        "sha256": "b603e16de7907d905ea6b437dcd1094452d0b31a62a4f468a2ed7079a07a6012",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 1.39s"
+        ]
+      },
+      {
+        "case": "accessibility-atspi",
+        "exit_code": 0,
+        "path": "target/resume-context-gui-accessibility-atspi.log",
+        "sha256": "7fdbec0093fd6353bdf790cf33c688530e9fc42fba69952e70edc3f2e6f7902a",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 5.88s"
+        ]
+      },
+      {
+        "case": "multi-account-restart",
+        "exit_code": 0,
+        "path": "target/resume-context-gui-multi-account-restart.log",
+        "sha256": "aca84d75cb37efcea4e4a8608582cf86fb07109b30cb083f77b35e0aac91e62e",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 1.51s"
+        ]
+      },
+      {
+        "case": "media-browser",
+        "exit_code": 0,
+        "path": "target/resume-context-gui-media-browser.log",
+        "sha256": "8e3e6a80f7fc70acbe30b133f59a605bbb3d5c8a5a2cb46ed9909284e219a6f4",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 4.71s"
+        ]
+      },
+      {
+        "case": "report8",
+        "exit_code": 0,
+        "path": "target/resume-context-gui-report8.log",
+        "sha256": "89f857084d378f4e692be5238120d0f1ef724f5fe6018a8dc20df7f04baf8f3f",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 19.42s"
+        ]
+      },
+      {
+        "case": "report9",
+        "exit_code": 0,
+        "path": "target/resume-context-gui-report9.log",
+        "sha256": "a1c79005e1b6c97fc66e9362a64cee6b28db352a394e5343fedf495034d01597",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 8.61s"
+        ]
+      },
+      {
+        "case": "clipboard",
+        "exit_code": 0,
+        "path": "target/resume-context-gui-clipboard.log",
+        "sha256": "9e87aca289c5518a2946fb66899f36a68da9a089d6aca98cf40eebde7673e5b7",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.75s"
+        ]
+      },
+      {
+        "case": "pins-media",
+        "exit_code": 0,
+        "path": "target/resume-context-gui-pins-media.log",
+        "sha256": "ca0f3284a6a652346b19565a22414878182466a5a5c9c1ee91e545ed66311b87",
+        "result_lines": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 2.05s"
+        ]
+      }
+    ],
+    "fatal_criticals": true
+  },
+  "timestamp_fixture_change": {
+    "scope": "Deterministic file timestamps in the disk-cache eviction unit test; GTK dependency artifact pin refreshed with all verification intact. No runtime cache/playback code changed.",
+    "previous_source_fingerprint": "a011e214574114944cc4221dbead3e0b81e6350a54dbb64c9016fa59e03af908",
+    "rust_suite_rerun": true,
+    "performance_runs_refreshed": true,
+    "gtk_runtime_sources_unchanged": true
+  },
+  "context_menu_change": {
+    "scope": "Resolve the live message row/menu after layout, and make the accessibility fixture inspect the current row by message identity",
+    "regression": "Replace toolbar or whole message row between keyboard popup request and frame callback",
+    "before_fix": "Deterministic toolbar replacement failed in 5.29 seconds with original callback",
+    "before_fix_log": {
+      "path": "target/resume-context-before.log",
+      "sha256": "8dc33ffa5e554c129ecc0fa1a345e7d90b16099f4f6a718b8f8225ebcd52a32d",
+      "result_lines": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 352 filtered out; finished in 5.29s"
+      ]
+    },
+    "after_fix": "Both replacement paths pass in accessibility, high-contrast and native AT-SPI cases"
+  },
+  "windows_disposition": {
+    "status": "ignored_by_user",
+    "date": "2026-11-05",
+    "instruction": "Finish the Windows error or ignore it; stop spending further time on retries",
+    "actual_error": "MSYS2 mirror timed out retrieving libwmf package signature before application compilation/tests",
+    "application_fix_native_validation": "Incomplete on final commit; not represented as passed",
+    "further_retries_requested": false
+  }
+}

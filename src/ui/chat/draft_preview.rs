@@ -73,7 +73,7 @@ impl Previews {
             preview.set_child(Some(&picture));preview.add_overlay(&fallback);
             if kind==Kind::Video{let play=gtk::Image::from_icon_name("papo-media-playback-start-symbolic");play.set_halign(gtk::Align::Start);play.set_valign(gtk::Align::End);play.set_margin_start(6);play.set_margin_bottom(4);play.add_css_class("osd");preview.add_overlay(&play);}
             let remove=gtk::Button::from_icon_name("papo-window-close-symbolic");remove.set_widget_name(&format!("remove-draft-attachment-{index}"));remove.add_css_class("circular");remove.add_css_class("osd");remove.set_halign(gtk::Align::End);remove.set_valign(gtk::Align::Start);remove.set_margin_end(4);remove.set_margin_top(4);remove.set_sensitive(!sending);
-            remove.set_tooltip_text(Some(&format!("Remover {}",file.name)));let input=sender.input_sender().clone();remove.connect_clicked(move |_|{let _=input.send(ChatMsg::Transfer(TransferMsg::Remove(index)));});preview.add_overlay(&remove);card.append(&preview);
+            remove.set_tooltip_text(Some(&crate::i18n::fmt("Remover {}", &[("0", format!("{}", file.name))])));let input=sender.input_sender().clone();remove.connect_clicked(move |_|{let _=input.send(ChatMsg::Transfer(TransferMsg::Remove(index)));});preview.add_overlay(&remove);card.append(&preview);
             let name=gtk::Label::new(Some(&file.name));name.set_max_width_chars(16);name.set_ellipsize(pango::EllipsizeMode::Middle);name.add_css_class("caption");name.set_margin_bottom(4);card.append(&name);root.append(&card);
         }
     }
@@ -145,12 +145,14 @@ fn decode_image(path:&Path)->Option<crate::media::PreparedImage>{
     for widget in descendants(strip).iter().filter(|w|w.has_css_class("papo-draft-attachment")){assert!(widget.height()<=140&&widget.width()<=144);}
     let card=descendants(strip).into_iter().find(|w|w.widget_name()=="draft-attachment-0").unwrap();
     composer::field(chat.widget().upcast_ref()).set_text("A caption");pump(context);assert!(descendants(strip).contains(&card),"typing does not rebuild the attachment strip");
-    chat.emit(ChatMsg::SendClicked);until(context,||!chat.model().draft.is_sending()&&chat.model().draft.error.as_ref().is_some_and(|e|e.contains("Upload failed")));
-    assert_eq!(chat.model().draft.files.len(),6);assert_eq!(chat.model().draft_previews.entries[&Key::from(&files[0])].texture.as_ref(),Some(&cached));
+    chat.emit(ChatMsg::SendClicked);until(context,||chat.model().outbox.active.is_none()&&chat.model().outbox.entries.iter().any(|p|matches!(&p.status,outbox::Status::Failed{message,..} if message.contains("Upload failed"))));
+    assert!(chat.model().draft.files.is_empty());assert_eq!(chat.model().outbox.entries[0].draft.files.len(),6);
+    let failed=chat.model().outbox.entries[0].id;chat.emit(ChatMsg::EditPending(failed));
+    until(context,||chat.model().draft.files.len()==6&&chat.model().draft_previews.entries.get(&Key::from(&files[0])).is_some_and(|e|e.texture.is_some()));
     find_button(chat.widget().upcast_ref(),&format!("Remover {}",files[3].name)).emit_clicked();until(context,||chat.model().draft.files.len()==5);
     assert_eq!(chat.model().draft.files[3].path,broken,"removal targets the selected attachment");
     crate::ui::main_window::layout::tests::preview(&window,"draft-attachment-previews",context);
-    chat.emit(ChatMsg::SendClicked);until(context,||chat.model().draft.files.is_empty()&&!chat.model().draft.is_sending());
+    chat.emit(ChatMsg::SendClicked);until(context,||chat.model().draft.files.is_empty()&&!chat.model().outbox.active.is_some());
     assert!(chat.model().draft_previews.entries.is_empty());assert!(!strip.is_visible());assert_eq!(std::fs::read(&png).unwrap(),original,"previews never rewrite the original upload");
     // A queued local decode cannot populate a different conversation or a removed card.
     let permit=tokio::runtime::Handle::current().block_on(chat.model().draft_previews.limiter.clone().acquire_owned()).unwrap();

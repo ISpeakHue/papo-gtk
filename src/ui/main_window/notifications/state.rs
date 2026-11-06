@@ -8,7 +8,7 @@ pub struct Notice {
     pub id:Uuid,pub message_id:Uuid,pub channel_id:Option<Uuid>,pub author_id:Option<Uuid>,
     pub webhook_id:Option<Uuid>,pub external_author:Option<ExternalAuthor>,
     pub content:String,pub read:bool,pub persisted:bool,pub created_at:chrono::DateTime<chrono::Utc>,
-    pub pending_desktop:bool, pub seen_event:bool,
+    pub pending_desktop:bool, pub seen_event:bool, pub event_at:Option<chrono::DateTime<chrono::Utc>>,
 }
 impl Notice {
     pub fn external(&self)->Option<&ExternalAuthor>{if self.author_id.is_none()&&self.webhook_id.is_some(){self.external_author.as_ref()}else{None}}
@@ -24,9 +24,9 @@ impl Inbox {
     pub fn reset_pages(&mut self){self.rows.retain(|_,n|!n.persisted);}
     pub fn event(&mut self,event:NotificationEvent){
         if self.deleted.contains(&event.message_id){return;}
-        if let Some(row)=self.rows.get_mut(&event.id){if !row.seen_event{row.seen_event=true;row.pending_desktop=!row.read;}return;}
+        if let Some(row)=self.rows.get_mut(&event.id){if !row.seen_event{row.seen_event=true;row.event_at=Some(chrono::Utc::now());row.pending_desktop=!row.read;}return;}
         let channel_id=self.messages.get(&event.message_id).map(|m|m.channel_id);
-        self.rows.insert(event.id,Notice{id:event.id,message_id:event.message_id,channel_id,webhook_id:self.messages.get(&event.message_id).and_then(|m|m.webhook_id),external_author:self.messages.get(&event.message_id).and_then(|m|m.external()).cloned(),author_id:event.user_id,content:event.message_content,read:false,persisted:false,created_at:chrono::Utc::now(),pending_desktop:true,seen_event:true});
+        self.rows.insert(event.id,Notice{id:event.id,message_id:event.message_id,channel_id,webhook_id:self.messages.get(&event.message_id).and_then(|m|m.webhook_id),external_author:self.messages.get(&event.message_id).and_then(|m|m.external()).cloned(),author_id:event.user_id,content:event.message_content,read:false,persisted:false,created_at:chrono::Utc::now(),pending_desktop:true,seen_event:true,event_at:Some(chrono::Utc::now())});
         // Ephemeral events cannot be paged later; keep session memory bounded.
         let mut ephemeral:Vec<_>=self.rows.values().filter(|n|!n.persisted).map(|n|(n.created_at,n.id)).collect();ephemeral.sort();
         let excess=ephemeral.len().saturating_sub(500);for (_,id) in ephemeral.into_iter().take(excess){self.rows.remove(&id);}
@@ -41,8 +41,9 @@ impl Inbox {
             if self.deleted.contains(&n.message_id){continue;}
             let pending=self.rows.get(&n.id).is_some_and(|r|r.pending_desktop);
             let seen_event=self.rows.get(&n.id).is_some_and(|r|r.seen_event);
+            let event_at=self.rows.get(&n.id).and_then(|r|r.event_at);
             let read=n.read||self.read.contains(&n.id)||self.rows.get(&n.id).is_some_and(|r|r.read);
-            self.rows.insert(n.id,Notice{id:n.id,message_id:n.message_id,channel_id:Some(n.channel_id),webhook_id:n.webhook_id,external_author:n.external_author,author_id:n.author_id,content:n.message_content,read,persisted:true,created_at:n.created_at,pending_desktop:pending,seen_event});
+            self.rows.insert(n.id,Notice{id:n.id,message_id:n.message_id,channel_id:Some(n.channel_id),webhook_id:n.webhook_id,external_author:n.external_author,author_id:n.author_id,content:n.message_content,read,persisted:true,created_at:n.created_at,pending_desktop:pending,seen_event,event_at});
         }
     }
     pub fn observe(&mut self,m:impl Into<MessageObservation>){
@@ -78,13 +79,13 @@ pub fn delivery(n:&Notice,config:&UserConfig,channels:&[NoticeChannel],user:Uuid
     let reply=messages.get(&n.message_id).and_then(|m|m.reply_to).and_then(|id|messages.get(&id)).is_some_and(|m|m.author_id==Some(user));
     if !prefs.mentions.unwrap_or(true) && (mentioned||n.persisted&&!reply&&!messages.contains_key(&n.message_id)){return None;}
     if channel.notification_settings!=Some(NotificationSettings::All)&&!n.persisted&&!mentioned&&!reply{return None;}
-    let body=if prefs.message_preview.unwrap_or(true){n.content.clone()}else{"Nova mensagem no Papo".into()};
+    let body=if prefs.message_preview.unwrap_or(true){n.content.clone()}else{crate::i18n::tr("Nova mensagem no Papo").into()};
     Some((body,prefs.sound.unwrap_or(true)))
 }
 /// Reapply only observations newer than a channel snapshot's request.
 #[derive(Default)]
 pub struct ReadJournal {
-    pub version:u64,last:HashMap<Uuid,(u64,ChannelLastMessage)>,read:HashMap<Uuid,(u64,MessageCursor)>,
+    pub version:u64,last:HashMap<Uuid,(u64,ChannelLastMessage)>,read:HashMap<Uuid,(u64,MessageCursor,chrono::DateTime<chrono::Utc>)>,
     preferences:HashMap<Uuid,(u64,NotificationSettings)>,
     previous:HashMap<Uuid,(Uuid,Option<MessageCursor>)>,
     deleted:HashSet<Uuid>,deletion_order:VecDeque<Uuid>,
@@ -102,10 +103,10 @@ impl ReadJournal {
         let Some(newest)=messages.iter().filter(|m|m.channel_id==channel&&!self.deleted.contains(&m.id)).max_by_key(|m|(m.created_at,m.id)) else{return;};
         self.message(newest,channels);let Some(c)=channels.iter_mut().find(|c|c.id==channel)else{return;};
         let cursor=MessageCursor::from(newest);
-        if self.read.get(&channel).is_some_and(|(_,old)|(old.created_at,old.id)>=(cursor.created_at,cursor.id)){return;}
+        if self.read.get(&channel).is_some_and(|(_,old,_)|(old.created_at,old.id)>=(cursor.created_at,cursor.id)){return;}
         // An older history page must not regress a read marker already returned in the snapshot.
         if c.last_read_message==c.last_message.as_ref().map(|m|m.id)&&c.last_message.as_ref().is_some_and(|m|(m.created_at,m.id)>(cursor.created_at,cursor.id)){return;}
-        self.version+=1;c.last_read_message=Some(cursor.id);c.last_read_at=Some(chrono::Utc::now());self.read.insert(channel,(self.version,cursor));
+        let at=chrono::Utc::now();self.version+=1;c.last_read_message=Some(cursor.id);c.last_read_at=Some(at);self.read.insert(channel,(self.version,cursor,at));
     }
     pub fn delete(&mut self,id:Uuid,channels:&mut [Channel])->bool{
         let affected=channels.iter().any(|c|c.last_message.as_ref().is_some_and(|m|m.id==id)||c.last_read_message==Some(id));
@@ -115,7 +116,7 @@ impl ReadJournal {
         }
         // EN-US: A deleted head/read cursor must not override the server's surviving predecessor during reconciliation.
         // PT-BR: A última mensagem ou leitura apagada não pode sobrescrever sua antecessora retornada pelo servidor.
-        self.last.retain(|_,(_,last)|last.id!=id);self.read.retain(|_,(_,cursor)|cursor.id!=id);
+        self.last.retain(|_,(_,last)|last.id!=id);self.read.retain(|_,(_,cursor,_)|cursor.id!=id);
         for channel in channels.iter_mut().filter(|c|c.last_message.as_ref().is_some_and(|m|m.id==id)){
             if let Some((_,previous))=self.previous.remove(&channel.id).filter(|(head,p)|*head==id&&p.is_none_or(|m|!self.deleted.contains(&m.id))){
                 // EN-US: Restore the known predecessor immediately; keep only its cursor, never another message body.
@@ -132,7 +133,15 @@ impl ReadJournal {
             if c.last_message.as_ref().is_some_and(|m|self.deleted.contains(&m.id)){c.last_message=None;}
             if let Some((_,setting))=self.preferences.get(&c.id).filter(|(v,_)|*v>snapshot_version){c.notification_settings=Some(setting.clone());}
             if let Some((version,last))=self.last.get(&c.id).filter(|(v,_)|*v>snapshot_version){let _=version;if c.last_message.as_ref().map_or(true,|old|(old.created_at,old.id)<(last.created_at,last.id)){c.last_message=Some(last.clone());}}
-            if let Some((_,read))=self.read.get(&c.id).filter(|(v,_)|*v>snapshot_version){c.last_read_message=Some(read.id);c.last_read_at=Some(chrono::Utc::now());}
+            // A server snapshot may still carry an older read cursor even when
+            // requested after our acknowledgment. Keep reads monotonic, while
+            // accepting newer reads from another client.
+            if let Some((version,read,at))=self.read.get(&c.id){
+                let newer_head=c.last_read_message.is_some()&&c.last_read_message==c.last_message.as_ref().map(|m|m.id)&&c.last_message.as_ref().is_some_and(|m|(m.created_at,m.id)>(read.created_at,read.id));
+                if !newer_head&&(*version>snapshot_version||c.last_read_at.is_none_or(|server_at|server_at<=*at)){
+                    c.last_read_message=Some(read.id);c.last_read_at=Some(*at);
+                }
+            }
         }
     }
 }
@@ -157,6 +166,17 @@ impl ReadJournal {
     fn message(channel:Uuid,id:Uuid,second:i64)->Message{serde_json::from_value(serde_json::json!({"id":id,"channel_id":channel,"author_id":Uuid::nil(),"content":"hello","created_at":chrono::DateTime::from_timestamp(second,0).unwrap()})).unwrap()}
     fn channel(id:Uuid)->Channel{serde_json::from_value(serde_json::json!({"id":id,"name":"general","created_at":"2026-10-03T00:00:00Z"})).unwrap()}
     fn event(id:Uuid,message_id:Uuid)->NotificationEvent{NotificationEvent{id,message_id,user_id:Some(Uuid::nil()),message_content:"hello".into()}}
+    #[test]fn acknowledged_reads_survive_later_stale_snapshots_without_hiding_new_messages(){
+        let id=Uuid::new_v4();let first=message(id,Uuid::new_v4(),1);let second=message(id,Uuid::new_v4(),2);
+        let mut channels=vec![channel(id)];let mut journal=ReadJournal::default();
+        journal.message(&first,&mut channels);let stale=channels.clone();
+        journal.observed_read(id,&[first.clone()],&mut channels);let version=journal.version;
+        let mut later_snapshot=stale.clone();journal.reconcile(version,&mut later_snapshot);
+        assert!(!later_snapshot[0].has_unread(),"a later stale snapshot cannot resurrect the unread badge");
+        journal.message(&second,&mut later_snapshot);assert!(later_snapshot[0].has_unread(),"a genuinely newer message remains unread");
+        let mut newer_read=later_snapshot.clone();newer_read[0].last_read_message=Some(second.id);newer_read[0].last_read_at=Some(chrono::Utc::now());
+        journal.reconcile(version,&mut newer_read);assert_eq!(newer_read[0].last_read_message,Some(second.id));
+    }
     #[test]fn deleting_unseen_head_restores_read_state_and_cannot_be_resurrected(){
         let id=Uuid::new_v4();let first=message(id,Uuid::new_v4(),1);let deleted=message(id,Uuid::new_v4(),2);
         let mut channels=vec![channel(id)];let mut journal=ReadJournal::default();journal.observed_read(id,&[first.clone()],&mut channels);

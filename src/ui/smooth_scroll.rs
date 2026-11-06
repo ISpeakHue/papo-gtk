@@ -33,6 +33,8 @@ fn animate_axis(scroll:&gtk::ScrolledWindow,wheel:&RefCell<Option<adw::TimedAnim
     let to = (previous + dy * adj.page_size().max(1.0).powf(2.0 / 3.0))
         .clamp(adj.lower(), (adj.upper() - adj.page_size()).max(adj.lower()));
     stop_wheel(wheel);
+    let motion=crate::media::animation::motion();
+    if motion==crate::config::Motion::Reduced||gtk::Settings::default().is_some_and(|s|!s.is_gtk_enable_animations()){adj.set_value(to);return;}
     let target = adw::CallbackAnimationTarget::new(move |value| adj.set_value(value));
     let animation = adw::TimedAnimation::new(scroll, from, to, 160, target);
     animation.set_easing(adw::Easing::EaseOutCubic);

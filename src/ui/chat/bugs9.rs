@@ -62,8 +62,8 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     assert_eq!(chat.model().history.messages.iter().find(|m|m.id==message.id).unwrap().embeds.as_ref().unwrap()[0].title.as_deref(),Some("Keep this card"));
     // Expiry clears only the corresponding notice, never a newer notice/error.
     let epoch=chat.model().transfers.epoch;
-    chat.emit(ChatMsg::Transfer(TransferMsg::Saved{epoch,message:message.id,result:Ok(())}));pump(context);let old=chat.model().transfers.notice.as_ref().unwrap().0;
-    chat.emit(ChatMsg::Transfer(TransferMsg::Saved{epoch,message:message.id,result:Ok(())}));pump(context);let latest=chat.model().transfers.notice.as_ref().unwrap().0;
+    chat.emit(ChatMsg::Transfer(TransferMsg::Saved{epoch,message:message.id,key:None,result:Ok(())}));pump(context);let old=chat.model().transfers.notice.as_ref().unwrap().0;
+    chat.emit(ChatMsg::Transfer(TransferMsg::Saved{epoch,message:message.id,key:None,result:Ok(())}));pump(context);let latest=chat.model().transfers.notice.as_ref().unwrap().0;
     chat.emit(ChatMsg::Transfer(TransferMsg::DismissNotice{epoch,token:old}));pump(context);assert_eq!(chat.model().transfers.notice.as_ref().unwrap().0,latest);
     chat.emit(ChatMsg::OperationError("Preserve this error".into()));until(context,||chat.model().transfers.notice.is_none());assert_eq!(chat.model().draft.error.as_deref(),Some("Preserve this error"));
     window.set_content(None::<&gtk::Widget>);window.close();drop(chat);server.abort();pump(context);

@@ -23,15 +23,15 @@ pub(super) fn connect(entry: &gtk::TextView, sender: &ComponentSender<ChatModel>
 
 impl ChatModel {
     pub(super) fn paste_image(&mut self, epoch: u64, sender: &ComponentSender<Self>, root: &gtk::Box) {
-        if epoch!=self.viewport.input_epoch() || self.draft.is_sending() || !self.access.send || !self.access.attachments || self.transfers.clipboard_request.is_some() {return;}
+        if epoch!=self.viewport.input_epoch() || !self.access.send || !self.access.attachments || self.transfers.clipboard_request.is_some() {return;}
         let Some(channel)=self.active_channel.as_ref().map(|c|c.id()) else{return;};
-        if self.draft.files.len()>=10 {self.draft.error=Some("Escolha até 10 arquivos.".into());return;}
+        if self.draft.files.len()>=10 {self.draft.error=Some(crate::i18n::tr("Escolha até 10 arquivos.").into());return;}
         let request=Uuid::new_v4();self.transfers.clipboard_request=Some(request);
         let epoch=self.transfers.epoch;let clipboard=root.clipboard();let input=sender.input_sender().clone();
         gtk::glib::spawn_future_local(async move {
             let result=async {
                 let texture=tokio::time::timeout(std::time::Duration::from_secs(10),clipboard.read_texture_future()).await??;
-                texture.ok_or_else(||anyhow::anyhow!("Nenhuma imagem disponível na área de transferência."))
+                texture.ok_or_else(||anyhow::anyhow!(crate::i18n::fmt("Nenhuma imagem disponível na área de transferência.", &[])))
             }.await;
             let _=input.send(ChatMsg::Transfer(TransferMsg::ClipboardTexture{epoch,channel,request,result}));
         });
@@ -44,7 +44,7 @@ impl ChatModel {
             let result=async {
                 let texture=result?;
                 // Bound decoded pixels before encoding, and keep PNG compression off the UI thread.
-                anyhow::ensure!((texture.width() as u64)*(texture.height() as u64)*4<=MAX_FILE,"Imagem muito grande (máximo 100 MiB).");
+                anyhow::ensure!((texture.width() as u64)*(texture.height() as u64)*4<=MAX_FILE,crate::i18n::fmt("Imagem muito grande (máximo 100 MiB).", &[]));
                 let bytes=tokio::task::spawn_blocking(move ||texture.save_to_png_bytes()).await?;
                 Ok(vec![UploadFile::clipboard_png(bytes.as_ref()).await?])
             }.await;
@@ -83,9 +83,10 @@ pub(crate) fn exercise(context: &gtk::glib::MainContext) {
     let image=image::load_from_memory(&std::fs::read(&path).unwrap()).unwrap();assert_eq!((image.width(),image.height()),(2,2));
     assert_eq!(entry.text(),"caption retained");assert_eq!(chat.model().draft.files[0].name,"imagem-colada.png");
     assert!(backend.lock().unwrap().requests.iter().all(|(method,_,_)|method!="POST"),"paste must only stage an attachment");
-    chat.emit(ChatMsg::SendClicked);until(context,||!chat.model().draft.is_sending()&&chat.model().draft.error.as_ref().is_some_and(|e|e.contains("Upload failed")));
-    assert!(path.exists());assert_eq!(chat.model().draft.files.len(),1);assert_eq!(entry.text(),"caption retained");
-    chat.emit(ChatMsg::SendClicked);until(context,||chat.model().draft.files.is_empty()&&!path.exists());
+    chat.emit(ChatMsg::SendClicked);until(context,||chat.model().outbox.active.is_none()&&chat.model().outbox.entries.iter().any(|p|matches!(&p.status,outbox::Status::Failed{message,..} if message.contains("Upload failed"))));
+    assert!(path.exists());assert_eq!(chat.model().outbox.entries[0].draft.files.len(),1);assert!(entry.text().is_empty());
+    let failed=chat.model().outbox.entries[0].id;chat.emit(ChatMsg::EditPending(failed));until(context,||entry.text()=="caption retained"&&chat.model().draft.files.len()==1);
+    chat.emit(ChatMsg::SendClicked);until(context,||chat.model().draft.files.is_empty()&&chat.model().outbox.entries.is_empty()&&!path.exists());
     let uploads:Vec<_>=backend.lock().unwrap().requests.iter().filter(|(method,path,_)|method=="POST"&&path=="/messages").cloned().collect();
     assert_eq!(uploads.len(),2);assert!(uploads.iter().all(|(_,_,body)|body.as_str().unwrap().contains("filename=\"imagem-colada.png\"")));
 
@@ -111,7 +112,7 @@ pub(crate) fn exercise(context: &gtk::glib::MainContext) {
     entry.set_text("waiting for image");pump(context);
     let request=Uuid::new_v4();chat.state().get_mut().model.transfers.clipboard_request=Some(request);
     let before=backend.lock().unwrap().requests.len();chat.emit(ChatMsg::SendClicked);pump(context);
-    assert!(!chat.model().draft.is_sending());assert_eq!(backend.lock().unwrap().requests.len(),before);
+    assert!(!chat.model().outbox.active.is_some());assert_eq!(backend.lock().unwrap().requests.len(),before);
     let mut denied=access.clone();denied.attachments=false;chat.emit(ChatMsg::SetAccess{user_id:user,access:denied});pump(context);
     let late=tokio::runtime::Handle::current().block_on(UploadFile::clipboard_png(b"revoked clipboard data")).unwrap();let path=late.path.clone();
     let epoch=chat.model().transfers.epoch;

@@ -21,26 +21,26 @@ pub(super) struct VideoControls {
 }
 impl VideoControls {
     pub fn new(panel:&gtk::Box,dock:&gtk::Box,call_panel:&gtk::Box,s:&ComponentSender<MainWindowModel>)->Self{
-        let group=settings::group(panel,"Câmera","Atualizar câmeras",s,||VoiceMsg::Video(VideoMsg::Reload));
-        let camera=adw::SwitchRow::builder().title("Ligar câmera").sensitive(false).build();
+        let group=settings::group(panel,crate::i18n::tr("Câmera"),crate::i18n::tr("Atualizar câmeras"),s,||VoiceMsg::Video(VideoMsg::Reload));
+        let camera=adw::SwitchRow::builder().title(crate::i18n::tr("Ligar câmera")).sensitive(false).build();
         let camera_sync=std::rc::Rc::new(std::cell::Cell::new(false));let syncing=camera_sync.clone();let input=s.input_sender().clone();
         camera.connect_active_notify(move |row|{if !syncing.get(){let _=input.send(MainWindowMsg::Voice(VoiceMsg::Video(VideoMsg::Camera(row.is_active()))));}});group.add(&camera);
-        let devices=settings::device_row("Nenhuma câmera disponível");devices.set_sensitive(false);group.add(&devices);
-        let screen=gtk::Button::from_icon_name("papo-video-display-symbolic");screen.set_tooltip_text(Some("Compartilhar tela"));let input=s.input_sender().clone();screen.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Voice(VoiceMsg::Video(VideoMsg::Screen)));});dock.append(&screen);
+        let devices=settings::device_row(crate::i18n::tr("Nenhuma câmera disponível"));devices.set_sensitive(false);group.add(&devices);
+        let screen=gtk::Button::from_icon_name("papo-video-display-symbolic");screen.set_tooltip_text(Some(crate::i18n::tr("Compartilhar tela")));let input=s.input_sender().clone();screen.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Voice(VoiceMsg::Video(VideoMsg::Screen)));});dock.append(&screen);
         let sharing=gtk::Box::new(gtk::Orientation::Vertical,4);sharing.set_widget_name("screen-sharing-status");sharing.set_visible(false);
-        let live=gtk::Label::new(Some("Você está compartilhando sua tela"));live.add_css_class("success");live.add_css_class("caption-heading");live.set_wrap(true);sharing.append(&live);
-        let preview=gtk::Button::with_label("Prévia da minha tela");let input=s.input_sender().clone();preview.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Voice(VoiceMsg::Video(VideoMsg::Preview(true))));});sharing.append(&preview);call_panel.append(&sharing);
-        let preview_window=gtk::Window::builder().title("Prévia da sua tela").default_width(480).default_height(300).hide_on_close(true).build();
+        let live=gtk::Label::new(Some(crate::i18n::tr("Você está compartilhando sua tela")));live.add_css_class("success");live.add_css_class("caption-heading");live.set_wrap(true);sharing.append(&live);
+        let preview=gtk::Button::with_label(crate::i18n::tr("Prévia da minha tela"));let input=s.input_sender().clone();preview.connect_clicked(move |_|{let _=input.send(MainWindowMsg::Voice(VoiceMsg::Video(VideoMsg::Preview(true))));});sharing.append(&preview);call_panel.append(&sharing);
+        let preview_window=gtk::Window::builder().title(crate::i18n::tr("Prévia da sua tela")).default_width(480).default_height(300).hide_on_close(true).build();
         let preview_content=gtk::Box::new(gtk::Orientation::Vertical,6);preview_content.set_margin_top(12);preview_content.set_margin_bottom(12);preview_content.set_margin_start(12);preview_content.set_margin_end(12);
-        let preview_label=gtk::Label::new(Some("Aguardando prévia da tela…"));preview_label.set_wrap(true);preview_content.append(&preview_label);
+        let preview_label=gtk::Label::new(Some(crate::i18n::tr("Aguardando prévia da tela…")));preview_label.set_wrap(true);preview_content.append(&preview_label);
         let preview_picture=gtk::Picture::new();preview_picture.set_can_shrink(true);preview_picture.set_content_fit(gtk::ContentFit::Contain);preview_picture.set_hexpand(true);preview_picture.set_vexpand(true);preview_content.append(&preview_picture);preview_window.set_child(Some(&preview_content));
         let input=s.input_sender().clone();preview_window.connect_close_request(move |_|{let _=input.send(MainWindowMsg::Voice(VoiceMsg::Video(VideoMsg::Preview(false))));gtk::glib::Propagation::Proceed});
-        let viewer_window=gtk::Window::builder().title("Transmissões da chamada").default_width(800).default_height(560).hide_on_close(true).build();let streams=gtk::Box::new(gtk::Orientation::Vertical,8);streams.set_margin_top(12);streams.set_margin_bottom(12);streams.set_margin_start(12);streams.set_margin_end(12);viewer_window.set_child(Some(&streams));let s2=s.clone();viewer_window.connect_close_request(move |_|{let _=s2.input_sender().send(MainWindowMsg::Voice(VoiceMsg::Video(VideoMsg::StopWatching)));gtk::glib::Propagation::Proceed});
+        let viewer_window=gtk::Window::builder().title(crate::i18n::tr("Transmissões da chamada")).default_width(800).default_height(560).hide_on_close(true).build();let streams=gtk::Box::new(gtk::Orientation::Vertical,8);streams.set_margin_top(12);streams.set_margin_bottom(12);streams.set_margin_start(12);streams.set_margin_end(12);viewer_window.set_child(Some(&streams));let s2=s.clone();viewer_window.connect_close_request(move |_|{let _=s2.input_sender().send(MainWindowMsg::Voice(VoiceMsg::Video(VideoMsg::StopWatching)));gtk::glib::Propagation::Proceed});
         let choices=gtk::Box::new(gtk::Orientation::Vertical,3);let subscriptions=gtk::ScrolledWindow::builder().max_content_height(100).propagate_natural_height(true).child(&choices).build();streams.append(&subscriptions);
         let viewer=gtk::Box::new(gtk::Orientation::Vertical,4);viewer.set_visible(false);
         let label=gtk::Label::new(None);viewer.append(&label);
         let picture=gtk::Picture::new();picture.set_can_shrink(true);picture.set_vexpand(true);picture.set_hexpand(true);picture.set_size_request(240,135);viewer.set_vexpand(true);picture.set_content_fit(gtk::ContentFit::Contain);viewer.append(&picture);
-        let stop=gtk::Button::with_label("Parar de assistir");let s2=s.clone();stop.connect_clicked(move |_|s2.input(MainWindowMsg::Voice(VoiceMsg::Video(VideoMsg::StopWatching))));viewer.append(&stop);streams.append(&viewer);
+        let stop=gtk::Button::with_label(crate::i18n::tr("Parar de assistir"));let s2=s.clone();stop.connect_clicked(move |_|s2.input(MainWindowMsg::Voice(VoiceMsg::Video(VideoMsg::StopWatching))));viewer.append(&stop);streams.append(&viewer);
         Self{sharing,preview_window,preview_picture,preview_label,preview_epoch:0,preview_enabled:false,camera,camera_sync,camera_pending:None,screen,devices,viewer_window,list:vec![],request:None,picture,viewer,label,choices,sender:s.clone(),busy:false,negotiated:false,camera_on:false,screen_on:false,watching:None,epoch:0,started:Instant::now(),watch_started:Instant::now(),last_frame:None,pending_subscribe:false,problem:false}
     }
     pub fn clear(&mut self){self.preview_enabled=false;self.preview_epoch=0;self.preview_picture.set_paintable(None::<&gtk::gdk::Texture>);self.preview_window.set_visible(false);self.sharing.set_visible(false);self.problem=false;self.busy=false;self.negotiated=false;self.camera_on=false;self.camera_pending=None;self.screen_on=false;self.watching=None;self.pending_subscribe=false;self.epoch+=1;self.last_frame=None;self.picture.set_paintable(None::<&gtk::gdk::Texture>);self.viewer.set_visible(false);self.viewer_window.set_visible(false);while let Some(child)=self.choices.first_child(){self.choices.remove(&child);}}
@@ -50,7 +50,7 @@ impl MainWindowModel {
     fn video_command(&mut self,value:serde_json::Value)->bool{
         let Some(c)=self.voice.call.as_ref() else{return false;};
         #[cfg(test)]if self.voice.test_engine{return true;}
-        if c.engine.as_ref().is_some_and(|e|e.send(value)){true}else{self.stop_voice(true,"O processo de mídia não responde.");false}
+        if c.engine.as_ref().is_some_and(|e|e.send(value)){true}else{self.stop_voice(true,crate::i18n::tr("O processo de mídia não responde."));false}
     }
     pub(super) fn render_video(&self){
         let v=&self.voice.video;let connected=self.voice.call.as_ref().is_some_and(|c|c.phase==Phase::Connected);
@@ -60,14 +60,14 @@ impl MainWindowModel {
 
         v.camera.set_sensitive(ready&&(v.camera_on||!v.list.is_empty()));v.screen.set_sensitive(ready&&crate::platform::capture::available());
         v.devices.set_sensitive(!v.list.is_empty()&&!v.camera_on&&!v.busy);
-        v.camera_sync.set(true);v.camera.set_active(v.camera_pending.unwrap_or(v.camera_on));v.camera_sync.set(false);v.screen.set_tooltip_text(Some(if !crate::platform::capture::available(){"Compartilhamento de tela indisponível nesta plataforma"}else if v.screen_on{"Parar compartilhamento"}else{"Compartilhar tela"}));
+        v.camera_sync.set(true);v.camera.set_active(v.camera_pending.unwrap_or(v.camera_on));v.camera_sync.set(false);v.screen.set_tooltip_text(Some(if !crate::platform::capture::available(){crate::i18n::tr("Compartilhamento de tela indisponível nesta plataforma")}else if v.screen_on{crate::i18n::tr("Parar compartilhamento")}else{crate::i18n::tr("Compartilhar tela")}));
         let mut keep=HashSet::new();if let Some(call)=self.voice.call.as_ref().filter(|c|c.phase==Phase::Connected){for member in self.voice.members.get(&call.channel).into_iter().flat_map(|members|members.values()){if member.user_id==self.current_user.id{continue;}for (active,kind) in [(member.camera_on,"video"),(member.screen_sharing,"screen")]{if active{keep.insert(format!("watch-{}-{kind}",member.user_id));}}}}
         let mut child=v.choices.first_child();while let Some(w)=child{child=w.next_sibling();if !keep.contains(w.widget_name().as_str()){v.choices.remove(&w);}}
     }
     pub(super) fn video_member_buttons(&self,user:Uuid,state:Option<&VoiceMember>){
         if user==self.current_user.id||!self.voice.call.as_ref().is_some_and(|c|c.phase==Phase::Connected){return;}
         let Some(member)=state else{return;};
-        for (active,kind,text) in [(member.camera_on,"video","Ver câmera"),(member.screen_sharing,"screen","Ver tela")]{
+        for (active,kind,text) in [(member.camera_on,"video",crate::i18n::tr("Ver câmera")),(member.screen_sharing,"screen",crate::i18n::tr("Ver tela"))]{
             if !active{continue;}
             let name=self.users.iter().find(|u|u.id==user).map(|u|u.display_name().to_owned()).unwrap_or_else(||user.to_string());
             let key=format!("watch-{user}-{kind}");let label=format!("{text} · {name}");let mut child=self.voice.video.choices.first_child();let mut existing=None;while let Some(w)=child{child=w.next_sibling();if w.widget_name()==key{existing=w.downcast::<gtk::Button>().ok();break;}}
@@ -78,14 +78,14 @@ impl MainWindowModel {
     pub(super) fn video_event(&mut self,msg:VideoMsg,s:ComponentSender<Self>){
         match msg{
             VideoMsg::Reload=>{let request=Uuid::new_v4();self.voice.video.request=Some(request);self.voice.jobs.push(tokio::spawn(async move{let result=crate::voice::cameras().await;let _=s.input_sender().send(MainWindowMsg::Voice(VoiceMsg::Video(VideoMsg::Cameras{request,result})));}));}
-            VideoMsg::Cameras{request,result}=>{if self.voice.video.request!=Some(request){return;}self.voice.video.request=None;match result{Ok(list)=>{let v=&mut self.voice.video;let old=v.list.get(v.devices.selected() as usize).map(|d|d.id.clone());let mut labels:Vec<_>=list.iter().map(|d|d.name.as_str()).collect();if labels.is_empty(){labels.push("Nenhuma câmera disponível");}v.devices.set_model(Some(&gtk::StringList::new(&labels)));v.devices.set_selected(old.and_then(|id|list.iter().position(|d|d.id==id)).unwrap_or(0) as u32);v.list=list;},Err(e)=>self.voice.status.set_text(&e.to_string())}}
+            VideoMsg::Cameras{request,result}=>{if self.voice.video.request!=Some(request){return;}self.voice.video.request=None;match result{Ok(list)=>{let v=&mut self.voice.video;let old=v.list.get(v.devices.selected() as usize).map(|d|d.id.clone());let mut labels:Vec<_>=list.iter().map(|d|d.name.as_str()).collect();if labels.is_empty(){labels.push(crate::i18n::tr("Nenhuma câmera disponível"));}v.devices.set_model(Some(&gtk::StringList::new(&labels)));v.devices.set_selected(old.and_then(|id|list.iter().position(|d|d.id==id)).unwrap_or(0) as u32);v.list=list;},Err(e)=>self.voice.status.set_text(&e.to_string())}}
             VideoMsg::Camera(_)|VideoMsg::Screen=>{
                 if matches!(msg,VideoMsg::Screen)&&!crate::platform::capture::available(){return;}
                 let v=&self.voice.video;if v.busy||!v.negotiated||!self.voice.call.as_ref().is_some_and(|c|c.phase==Phase::Connected){self.render_voice();return;}
                 let camera=matches!(msg,VideoMsg::Camera(_));let on=if let VideoMsg::Camera(on)=msg{on}else{!v.screen_on};if camera&&on==v.camera_on{self.render_voice();return;}let kind=if camera{"video"}else{"screen"};let device=v.list.get(v.devices.selected() as usize).map(|d|d.id.clone());
-                if camera&&on&&device.is_none(){self.voice.status.set_text("Escolha uma câmera disponível.");self.render_voice();return;}
+                if camera&&on&&device.is_none(){self.voice.status.set_text(crate::i18n::tr("Escolha uma câmera disponível."));self.render_voice();return;}
                 if camera{self.voice.video.camera_pending=Some(on);}self.voice.video.problem=false;self.voice.video.busy=true;self.voice.video.started=Instant::now();
-                self.voice.status.set_text(if !camera&&on{"Escolha a janela ou tela no seletor do desktop…"}else{"Atualizando vídeo…"});
+                self.voice.status.set_text(if !camera&&on{crate::i18n::tr("Escolha a janela ou tela no seletor do desktop…")}else{crate::i18n::tr("Atualizando vídeo…")});
                 self.video_command(json!({"type":"media","kind":kind,"on":on,"device":device}));
             }
             VideoMsg::Preview(show)=>self.show_local_preview(show),
@@ -96,7 +96,7 @@ impl MainWindowModel {
                 if user==self.current_user.id||!self.voice.members.get(&c.channel).and_then(|m|m.get(&user)).is_some_and(|m|if kind=="video"{m.camera_on}else{m.screen_sharing}){return;}
                 self.stop_video_watch();if self.voice.call.is_none(){return;}
                 let v=&mut self.voice.video;v.epoch+=1;v.watching=Some((user,kind));v.pending_subscribe=true;v.watch_started=Instant::now();v.last_frame=None;
-                let name=self.users.iter().find(|u|u.id==user).map(|u|u.display_name().to_owned()).unwrap_or_else(||user.to_string());v.label.set_text(&format!("{} · {name} · aguardando vídeo…",if kind=="video"{"Câmera"}else{"Tela"}));v.viewer.set_visible(true);if let Some(parent)=self.sidebar.widget().root().and_downcast::<gtk::Window>(){v.viewer_window.set_transient_for(Some(&parent));}v.viewer_window.present();let epoch=v.epoch;
+                let name=self.users.iter().find(|u|u.id==user).map(|u|u.display_name().to_owned()).unwrap_or_else(||user.to_string());v.label.set_text(&crate::i18n::fmt("{} · {name} · aguardando vídeo…", &[("0", format!("{}", if kind=="video"{crate::i18n::tr("Câmera")}else{crate::i18n::tr("Tela")})), ("name", format!("{}", name))]));v.viewer.set_visible(true);if let Some(parent)=self.sidebar.widget().root().and_downcast::<gtk::Window>(){v.viewer_window.set_transient_for(Some(&parent));}v.viewer_window.present();let epoch=v.epoch;
                 // Send subscribe only after the worker resets its decoder.
                 self.video_command(json!({"type":"video_watch","enabled":true,"epoch":epoch}));
             }
@@ -108,7 +108,7 @@ impl MainWindowModel {
         let show=show&&self.voice.video.screen_on&&self.voice.call.as_ref().is_some_and(|c|c.phase==Phase::Connected);
         let v=&mut self.voice.video;v.preview_enabled=show;
         if show{
-            v.preview_label.set_text("Aguardando prévia da tela…");
+            v.preview_label.set_text(crate::i18n::tr("Aguardando prévia da tela…"));
             if let Some(parent)=self.sidebar.widget().root().and_downcast::<gtk::Window>(){v.preview_window.set_transient_for(Some(&parent));}
             v.preview_window.present();
         }else{v.preview_picture.set_paintable(None::<&gtk::gdk::Texture>);v.preview_window.set_visible(false);}
@@ -116,39 +116,39 @@ impl MainWindowModel {
     }
     pub(super) fn stop_video_watch(&mut self){
         let v=&mut self.voice.video;let old=v.watching.take();v.epoch+=1;v.pending_subscribe=false;v.last_frame=None;v.picture.set_paintable(None::<&gtk::gdk::Texture>);v.viewer.set_visible(false);v.viewer_window.set_visible(false);let epoch=v.epoch;
-        if let Some(c)=&self.voice.call{if let Some((user,kind))=old{if !self.voice_frame(c.connection,json!({"type":"track_unsubscribe","channel_id":c.channel,"publisher_id":user,"kind":kind})){self.stop_voice(true,"Não foi possível encerrar a assinatura de vídeo.");return;}}self.video_command(json!({"type":"video_watch","enabled":false,"epoch":epoch}));}
+        if let Some(c)=&self.voice.call{if let Some((user,kind))=old{if !self.voice_frame(c.connection,json!({"type":"track_unsubscribe","channel_id":c.channel,"publisher_id":user,"kind":kind})){self.stop_voice(true,crate::i18n::tr("Não foi possível encerrar a assinatura de vídeo."));return;}}self.video_command(json!({"type":"video_watch","enabled":false,"epoch":epoch}));}
     }
     pub(super) fn sync_video_watch(&mut self){
         if let Some((user,kind))=self.voice.video.watching{let active=self.voice.call.as_ref().and_then(|c|self.voice.members.get(&c.channel)).and_then(|m|m.get(&user)).is_some_and(|m|if kind=="video"{m.camera_on}else{m.screen_sharing});if !active{self.stop_video_watch();}}
     }
     pub(super) fn video_tick(&mut self){
-        if self.voice.video.busy&&self.voice.video.started.elapsed()>Duration::from_secs(135){self.stop_voice(true,"A negociação de vídeo demorou demais. Entre novamente.");return;}
+        if self.voice.video.busy&&self.voice.video.started.elapsed()>Duration::from_secs(135){self.stop_voice(true,crate::i18n::tr("A negociação de vídeo demorou demais. Entre novamente."));return;}
         if self.voice.video.watching.is_some(){
             if self.voice.video.last_frame.is_some_and(|t|t.elapsed()>Duration::from_secs(3)){self.voice.video.picture.set_paintable(None::<&gtk::gdk::Texture>);}
-            if self.voice.video.last_frame.is_none()&&self.voice.video.watch_started.elapsed()>Duration::from_secs(15){self.stop_video_watch();self.voice.status.set_text("A transmissão não enviou vídeo. Tente selecioná-la novamente.");}
+            if self.voice.video.last_frame.is_none()&&self.voice.video.watch_started.elapsed()>Duration::from_secs(15){self.stop_video_watch();self.voice.status.set_text(crate::i18n::tr("A transmissão não enviou vídeo. Tente selecioná-la novamente."));}
         }
     }
     pub(super) fn video_engine(&mut self,event:EngineEvent){
         match event{
             EngineEvent::Negotiated=>{self.voice.video.negotiated=true;self.voice.video.busy=false;self.render_voice();}
-            EngineEvent::MediaIntent{kind,on}=>{let Some(c)=&self.voice.call else{return;};let frame=if kind=="video"{json!({"type":"voice_camera","channel_id":c.channel,"on":on})}else{json!({"type":if on{"screen_share_start"}else{"screen_share_stop"},"channel_id":c.channel})};if !self.voice_frame(c.connection,frame){self.stop_voice(true,"Não foi possível atualizar o vídeo.");}}
+            EngineEvent::MediaIntent{kind,on}=>{let Some(c)=&self.voice.call else{return;};let frame=if kind=="video"{json!({"type":"voice_camera","channel_id":c.channel,"on":on})}else{json!({"type":if on{"screen_share_start"}else{"screen_share_stop"},"channel_id":c.channel})};if !self.voice_frame(c.connection,frame){self.stop_voice(true,crate::i18n::tr("Não foi possível atualizar o vídeo."));}}
             EngineEvent::LocalPreviewReset{epoch}=>{self.voice.video.preview_epoch=epoch;self.voice.video.preview_picture.set_paintable(None::<&gtk::gdk::Texture>);}
             EngineEvent::LocalPreviewFrame{epoch,jpeg}=>{
                 let v=&mut self.voice.video;
                 if epoch==v.preview_epoch&&v.screen_on&&v.preview_enabled&&jpeg.len()<=120000{
-                    if let Ok(bytes)=base64::engine::general_purpose::STANDARD.decode(jpeg){if let Some(image)=crate::media::PreparedImage::decode_thumbnail(&bytes,320,180){v.preview_picture.set_paintable(Some(&image.texture()));v.preview_label.set_text("Prévia da tela compartilhada");}}
+                    if let Ok(bytes)=base64::engine::general_purpose::STANDARD.decode(jpeg){if let Some(image)=crate::media::PreparedImage::decode_thumbnail(&bytes,320,180){v.preview_picture.set_paintable(Some(&image.texture()));v.preview_label.set_text(crate::i18n::tr("Prévia da tela compartilhada"));}}
                 }
                 self.video_command(json!({"type":"local_preview_ack","epoch":epoch}));
             }
-            EngineEvent::MediaState{kind,on}=>{if kind=="video"{self.voice.video.camera_on=on;self.voice.video.camera_pending=None;}else{self.voice.video.screen_on=on;if !on{self.show_local_preview(false);}}if !self.voice.video.problem{self.voice.status.set_text(if on{"Vídeo iniciado."}else{"Captura encerrada."});}self.render_voice();}
+            EngineEvent::MediaState{kind,on}=>{if kind=="video"{self.voice.video.camera_on=on;self.voice.video.camera_pending=None;}else{self.voice.video.screen_on=on;if !on{self.show_local_preview(false);}}if !self.voice.video.problem{self.voice.status.set_text(if on{crate::i18n::tr("Vídeo iniciado.")}else{crate::i18n::tr("Captura encerrada.")});}self.render_voice();}
             EngineEvent::MediaError{kind,message}=>{self.voice.video.problem=true;if kind=="video"{self.voice.video.camera_on=false;self.voice.video.camera_pending=None;}else{self.voice.video.screen_on=false;self.show_local_preview(false);}self.voice.status.set_text(&message);self.render_voice();}
             EngineEvent::VideoReset{epoch}=>{
-                if epoch==self.voice.video.epoch&&self.voice.video.pending_subscribe{self.voice.video.pending_subscribe=false;if let (Some(c),Some((user,kind)))=(&self.voice.call,self.voice.video.watching){if !self.voice_frame(c.connection,json!({"type":"track_subscribe","channel_id":c.channel,"publisher_id":user,"kind":kind})){self.stop_voice(true,"Não foi possível solicitar o vídeo.");}}}
+                if epoch==self.voice.video.epoch&&self.voice.video.pending_subscribe{self.voice.video.pending_subscribe=false;if let (Some(c),Some((user,kind)))=(&self.voice.call,self.voice.video.watching){if !self.voice_frame(c.connection,json!({"type":"track_subscribe","channel_id":c.channel,"publisher_id":user,"kind":kind})){self.stop_voice(true,crate::i18n::tr("Não foi possível solicitar o vídeo."));}}}
             }
             EngineEvent::VideoFrame{track_id,epoch,jpeg}=>{
                 // One outstanding frame per worker; acknowledge even stale frames.
                 if epoch==self.voice.video.epoch&&self.voice.video.watching.is_some()&&track_id=="papo-video-0"&&jpeg.len()<=120000{
-                    if let Ok(bytes)=base64::engine::general_purpose::STANDARD.decode(jpeg){if let Ok(texture)=gtk::gdk::Texture::from_bytes(&gtk::glib::Bytes::from_owned(bytes)){self.voice.video.picture.set_paintable(Some(&texture));self.voice.video.last_frame=Some(Instant::now());let label=self.voice.video.label.text();self.voice.video.label.set_text(label.trim_end_matches(" · aguardando vídeo…"));}}
+                    if let Ok(bytes)=base64::engine::general_purpose::STANDARD.decode(jpeg){if let Ok(texture)=gtk::gdk::Texture::from_bytes(&gtk::glib::Bytes::from_owned(bytes)){self.voice.video.picture.set_paintable(Some(&texture));self.voice.video.last_frame=Some(Instant::now());let label=self.voice.video.label.text();self.voice.video.label.set_text(label.trim_end_matches(crate::i18n::tr(" · aguardando vídeo…")));}}
                 }
                 self.video_command(json!({"type":"frame_ack"}));
             }
@@ -165,14 +165,15 @@ pub(super) fn exercise_configuration(main:&Controller<MainWindowModel>,context:&
     until(context,||main.model().voice.settings.is_mapped()&&main.model().voice.jobs.iter().all(|job|job.is_finished()));
     let window=main.model().voice.settings.clone();
     let combos:Vec<_>=descendants(window.upcast_ref()).into_iter().filter_map(|w|w.downcast::<adw::ComboRow>().ok()).collect();
-    assert_eq!(combos.len(),2);let camera=main.model().voice.video.camera.clone();
+    assert_eq!(combos.len(),3);let camera=main.model().voice.video.camera.clone();
     assert!(!camera.is_sensitive()&&!camera.is_active(),"the camera cannot start before joining a call");
     let done=find_button(window.upcast_ref(),"Concluir");
     let style=adw::StyleManager::default();let previous=style.color_scheme();
     for (scheme,name) in [(adw::ColorScheme::ForceDark,"call-settings"),(adw::ColorScheme::ForceLight,"call-settings-light")]{style.set_color_scheme(scheme);crate::ui::main_window::layout::tests::preview(&window,name,context);}
     crate::ui::chat::performance::settle(context);
-    let bounds=done.compute_bounds(&window).unwrap();let last=combos[1].compute_bounds(&window).unwrap();
-    assert!(last.y()+last.height()<=bounds.y(),"the camera controls fit above Concluir without scrolling: window={}x{}, camera={last:?}, button={bounds:?}",window.width(),window.height());
+    let scroll=descendants(window.upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::ScrolledWindow>().ok()).unwrap();let adjustment=scroll.vadjustment();adjustment.set_value(adjustment.upper()-adjustment.page_size());crate::ui::chat::performance::settle(context);
+    let bounds=done.compute_bounds(&window).unwrap();let last=combos.last().unwrap().compute_bounds(&window).unwrap();
+    assert!(last.y()+last.height()<=bounds.y(),"camera controls remain reachable by scrolling, above the fixed Concluir action: window={}x{}, camera={last:?}, button={bounds:?}",window.width(),window.height());
     main.model().voice.gain.set_value(200.0);pump(context);assert_eq!(main.model().voice.gain.value(),200.0);
     crate::ui::chat::actions::tests::resize_window(&window,390,600);until(context,||window.width()<=420);
     crate::ui::main_window::layout::tests::preview(&window,"call-settings-narrow",context);
@@ -190,9 +191,9 @@ pub(super) fn exercise_configuration(main:&Controller<MainWindowModel>,context:&
     camera.set_active(true);pump(context);assert!(camera.is_active()&&!camera.is_sensitive()&&main.model().voice.video.busy);
     assert_eq!(main.model().voice.video.camera_pending,Some(true));
     engine(EngineEvent::MediaState{kind:"video".into(),on:true});engine(EngineEvent::Negotiated);
-    assert!(camera.is_active()&&camera.is_sensitive()&&main.model().voice.video.camera_pending.is_none());assert!(!combos[1].is_sensitive());assert!(!main.model().voice.video.busy,"backend state updates must not trigger another camera request");
+    assert!(camera.is_active()&&camera.is_sensitive()&&main.model().voice.video.camera_pending.is_none());assert!(!combos.last().unwrap().is_sensitive());assert!(!main.model().voice.video.busy,"backend state updates must not trigger another camera request");
     camera.set_active(false);pump(context);assert!(!camera.is_active()&&main.model().voice.video.busy);
-    engine(EngineEvent::MediaState{kind:"video".into(),on:false});engine(EngineEvent::Negotiated);assert!(combos[1].is_sensitive());
+    engine(EngineEvent::MediaState{kind:"video".into(),on:false});engine(EngineEvent::Negotiated);assert!(combos.last().unwrap().is_sensitive());
     camera.set_active(true);pump(context);engine(EngineEvent::MediaError{kind:"video".into(),message:"Test camera unavailable".into()});engine(EngineEvent::Negotiated);
     assert!(!camera.is_active()&&camera.is_sensitive(),"camera errors restore the switch to the actual state");
     engine(EngineEvent::MediaState{kind:"screen".into(),on:true});engine(EngineEvent::Negotiated);

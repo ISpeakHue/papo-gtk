@@ -101,9 +101,13 @@ pub(crate) fn exercise(context:&gtk::glib::MainContext){
     chat.emit(ChatMsg::SetChannel(channel(Uuid::new_v4())));pump(context);chat.emit(ChatMsg::SetChannel(channel(id)));until(context,||field.text()==display);
     field.set_position(-1);field.grab_focus();
     if native{keys(&["Return"]);}else{chat.emit(ChatMsg::SendClicked);}
-    until(context,||!chat.model().draft.is_sending()&&chat.model().draft.error.is_some());assert_eq!(field.text(),display,"a rejected send preserves every line and mention");
+    until(context,||chat.model().outbox.active.is_none()&&chat.model().outbox.entries.iter().any(|p|matches!(p.status,outbox::Status::Failed{..})));
+    assert!(field.text().is_empty(),"submission releases the composer even when delivery fails");
+    let failed=chat.model().outbox.entries[0].id;assert_eq!(chat.model().outbox.entries[0].draft.text,wire);
+    chat.emit(ChatMsg::EditPending(failed));until(context,||field.text()==display);
+    assert_eq!(chat.model().draft.text,wire,"editing a failed send preserves every line and mention");
     if native{keys(&["Return"]);}else{chat.emit(ChatMsg::SendClicked);}
-    until(context,||field.text().is_empty()&&!chat.model().draft.is_sending());
+    until(context,||field.text().is_empty()&&!chat.model().outbox.active.is_some());
     let posts:Vec<_>=backend.lock().unwrap().requests.iter().filter(|(m,p,_)|m=="POST"&&p=="/messages").cloned().collect();assert_eq!(posts.len(),2);for(_,_,body) in posts{assert!(body.as_str().unwrap().contains(&wire));}
     until(context,||scroll.height()==initial);window.set_content(None::<&gtk::Widget>);window.close();drop(chat);server.abort();pump(context);
 }

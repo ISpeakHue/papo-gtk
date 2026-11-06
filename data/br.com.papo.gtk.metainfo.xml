@@ -14,6 +14,7 @@
   <provides><binary>papo-gtk</binary></provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.1.2" date="2026-11-05"><description><p>Repair local audio testing and visible device feedback. Add independent server accounts, recovered drafts and outgoing queues, file drops, conversation navigation and media browsing. Improve unread acknowledgments, history anchoring and custom emoji headers.</p></description></release>
     <release version="1.1.1" date="2026-11-04"><description><p>Smooth scrolling across windows, lower media-cache memory use, animated WebP/APNG, Reddit previews, screen-sharing preview, notification and unread fixes, and improved emoji, reply and composer behavior. Linux packages are stable; Windows downloads remain experimental and unsigned.</p></description></release>
     <release version="1.1.0" date="2026-11-03"><description><p>Shared multiplatform foundations, improved native call and media handling, and consistent desktop icons. Linux AppImage and Flatpak packages remain stable; Windows packages are experimental.</p></description></release>
     <release version="1.0.2" date="2026-10-20"><description><p>Embed application control icons for consistent rendering across desktop themes in AppImage and Flatpak packages.</p></description></release>

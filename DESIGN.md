@@ -100,7 +100,8 @@ shortcuts can reopen either pane. Theme scaling uses libadwaita's `Sp` units.
 
 | Shortcut | Action |
 | --- | --- |
-| Ctrl+K or Ctrl+F | Search messages |
+| Ctrl+K | Switch conversation |
+| Ctrl+F | Search messages |
 | Ctrl+, | Account preferences |
 | Ctrl+Shift+M | Toggle members |
 | Alt+1 | Server channels |

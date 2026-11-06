@@ -55,7 +55,7 @@ impl Choice {
         });
         let list=gtk::ListView::new(Some(popup_selection),Some(factory));list.set_single_click_activate(true);
         let scroll=gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).min_content_height(80).max_content_height(280).propagate_natural_height(true).child(&list).build();
-        let query=gtk::SearchEntry::new();query.set_placeholder_text(Some("Filtrar opções"));query.set_search_delay(0);
+        let query=gtk::SearchEntry::new();query.set_placeholder_text(Some(crate::i18n::tr("Filtrar opções")));query.set_search_delay(0);
         let body=gtk::Box::new(gtk::Orientation::Vertical,6);body.append(&query);body.append(&scroll);
         let popover=gtk::Popover::new();popover.set_child(Some(&body));
         let widget=gtk::MenuButton::new();widget.set_popover(Some(&popover));widget.set_hexpand(true);widget.set_always_show_arrow(true);

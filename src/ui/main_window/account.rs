@@ -11,6 +11,7 @@ use settings::{profile_values,preferences_values,watch_profile,watch_preferences
 use std::collections::HashSet;
 #[derive(Debug)]
 pub enum AccountMsg {
+    MediaUsage{token:Uuid,usage:crate::media::policy::Usage},
     Dirty, CloseSettings, CloseChoice(String), ProfileAccepted{token:Uuid,generation:Uuid,draft:Vec<String>,result:anyhow::Result<(UserProfile,Option<Vec<u8>>,Option<crate::media::PreparedImage>)>},
     Settings, SettingsTab(settings::Tab), SettingsProfile, SettingsPreferences,
     ChangeStatus(Option<UserStatus>),
@@ -38,7 +39,7 @@ pub enum AccountMsg {
 pub(super) struct Account {
     settings:Option<settings::View>,
     close_after_save:bool,
-    parked_profile:Option<ProfileView>,profile: Option<ProfileView>, preferences: Option<PreferencesView>, channel: Option<ChannelView>, jobs: Vec<tokio::task::JoinHandle<()>>, mutation: Option<Uuid>, settings_pending: bool, channel_pending: HashSet<Uuid>, pub config: UserConfig, css: Option<gtk::CssProvider>,
+    parked_profile:Option<ProfileView>,profile: Option<ProfileView>, preferences: Option<PreferencesView>, channel: Option<ChannelView>, jobs: Vec<tokio::task::JoinHandle<()>>, mutation: Option<Uuid>, settings_pending: bool, channel_pending: HashSet<Uuid>, css: Option<gtk::CssProvider>,
 }
 struct ChannelView {
     token:Uuid, window:gtk::Window, body:gtk::Box, error:gtk::Label,
@@ -63,8 +64,9 @@ struct ProfileFields {
 }
 struct PreferencesView {
     baseline:Vec<String>,save:gtk::Button,
+    media_loading:adw::ComboRow,low_memory:adw::SwitchRow,media_usage:adw::ActionRow,
     embedded:bool,
-    token: Uuid, window: gtk::Window, body: gtk::Box, error: gtk::Label, motion:adw::ComboRow, theme: adw::ComboRow, font: adw::ComboRow, density: adw::ComboRow, toggles: Vec<adw::SwitchRow>, pending: bool
+    token: Uuid, window: gtk::Window, body: gtk::Box, error: gtk::Label, initial_language:crate::i18n::Language, language:adw::ComboRow, motion:adw::ComboRow, theme: adw::ComboRow, font: adw::ComboRow, density: adw::ComboRow, toggles: Vec<adw::SwitchRow>, pending: bool
 }
 impl Drop for Account {
     fn drop(&mut self) {
@@ -92,6 +94,7 @@ fn dropdown(body: &gtk::Box, label: &str, values: &[&str], selected: u32)->gtk::
     l.set_xalign(0.0);
     body.append(&l);
     let e = gtk::DropDown::from_strings(values);
+    e.update_property(&[gtk::accessible::Property::Label(label)]);
     e.set_selected(selected);
     body.append(&e);
     e
@@ -122,11 +125,12 @@ impl MainWindowModel {
 
     pub(super) fn apply_config(&mut self, root: &gtk::Box) {
         use adw::prelude::*;
-        self.account.config = self.account.config.complete();
-        let config = &self.account.config;
-        adw::StyleManager::default().set_color_scheme(match config.theme {
+        self.connection.config = self.connection.config.complete();
+        let config = &self.connection.config;
+        if !self.workspace.hosted||self.workspace.active{adw::StyleManager::default().set_color_scheme(match config.theme {
             Some(Theme::Dark) => adw::ColorScheme::ForceDark, Some(Theme::Light) => adw::ColorScheme::ForceLight, _ => adw::ColorScheme::Default
         });
+        }
         self.chat.emit(ChatMsg::SetConfig(config.clone()));
         self.sidebar.emit(SidebarMsg::SetConfig(config.clone()));
         self.user_list.emit(UserListMsg::SetConfig(config.clone()));
@@ -135,7 +139,8 @@ impl MainWindowModel {
         };
         root.add_css_class("papo-app");
         let css = self.account.css.get_or_insert_with(gtk::CssProvider::new);
-        css.load_from_string(&format!(".papo-message-text {{font-size: {font};}}"));
+        let scope=format!("papo-{}",self.connection.account.namespace());root.add_css_class(&scope);
+        css.load_from_string(&format!(".{scope} .papo-message-text {{font-size: {font};}}"));
         if let Some(display) = gtk::gdk::Display::default() {
             gtk::style_context_add_provider_for_display(&display, css, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
         }
@@ -157,6 +162,7 @@ impl MainWindowModel {
     fn account_event_for_profile(&mut self, msg: AccountMsg, sender: &ComponentSender<Self>, root: &gtk::Box) {
         self.account.jobs.retain(|j|!j.is_finished());
         match msg {
+            AccountMsg::MediaUsage{token,usage}=>{if let Some(v)=self.account.preferences.as_ref().filter(|v|v.token==token){v.media_usage.set_subtitle(&crate::i18n::fmt("{memory} em memória · {temporary} temporários · {disk} em disco",&[("memory",crate::media::format_file_size(usage.memory_bytes as i64)),("temporary",crate::media::format_file_size(usage.temporary_bytes as i64)),("disk",crate::media::format_file_size(usage.disk_bytes as i64))]));}},
             AccountMsg::Dirty=>self.settings_dirty(),
             AccountMsg::CloseSettings=>self.request_settings_close(sender),
             AccountMsg::CloseChoice(choice)=>self.settings_close_choice(&choice,sender),
@@ -184,8 +190,8 @@ impl MainWindowModel {
                             if current.get(4)==draft.get(4){f.manual.set_selected(manual);}
                             v.baseline=accepted;
                         }}
-                        v.error.set_text("Salvo.");
-                    },Err(e)=>{v.error.set_text(&format!("Salvo; não foi possível atualizar o perfil: {e}"));self.account.close_after_save=false;}
+                        v.error.set_text(crate::i18n::tr("Salvo."));
+                    },Err(e)=>{v.error.set_text(&crate::i18n::fmt("Salvo; não foi possível atualizar o perfil: {e}", &[("e", format!("{}", e))]));self.account.close_after_save=false;}
                 }
                 self.settings_dirty();self.finish_settings_close();
             },
@@ -204,7 +210,7 @@ impl MainWindowModel {
                     v.body.set_sensitive(false);if let Some(save)=&v.save{save.set_sensitive(false);}
                 }
                 if let Some(v)=self.account.profile.as_mut(){v.reconcile=None;}
-                let api=self.api_client.clone();let id=self.current_user.id;let s=sender.clone();
+                let api=self.connection.api.clone();let id=self.current_user.id;let s=sender.clone();
                 self.account.jobs.push(tokio::spawn(async move {
                     let result=api.update_status(id,status.clone()).await;
                     s.input(MainWindowMsg::Account(AccountMsg::StatusSaved{token,status,result}));
@@ -231,7 +237,7 @@ impl MainWindowModel {
                         self.sidebar.emit(SidebarMsg::SetCurrentUser(self.current_user.clone()));
                     }
                     Err(e)=>{
-                        self.user_list.emit(UserListMsg::StatusError(format!("Não foi possível alterar o status: {e}")));
+                        self.user_list.emit(UserListMsg::StatusError(crate::i18n::fmt("Não foi possível alterar o status: {e}", &[("e", format!("{}", e))])));
                         sender.input(MainWindowMsg::OperationFailed(e));
                     }
                 }
@@ -274,12 +280,12 @@ impl MainWindowModel {
                 let token = Uuid::new_v4();
                 let own=embedded;
                 let mount=embedded.then(||self.settings_mount(settings::Tab::Profile).unwrap());
-                let w:gtk::Window=mount.as_ref().map(|(w,_)|w.clone()).unwrap_or_else(||adw::Window::builder().title(if own{"Editar perfil"}else{"Perfil"}).default_width(if own{620}else{460}).default_height(if own{780}else{-1}).modal(true).build().upcast());
+                let w:gtk::Window=mount.as_ref().map(|(w,_)|w.clone()).unwrap_or_else(||adw::Window::builder().title(if own{crate::i18n::tr("Editar perfil")}else{crate::i18n::tr("Perfil")}).default_width(if own{620}else{460}).default_height(if own{780}else{-1}).modal(true).build().upcast());
                 if !embedded{if let Some(parent)=root.root().and_downcast::<gtk::Window>(){w.set_transient_for(Some(&parent));}}
-                let toolbar=adw::ToolbarView::new();let header=adw::HeaderBar::new();let title=adw::WindowTitle::new(if own{"Editar perfil"}else{"Perfil"},"");header.set_title_widget(Some(&title));
+                let toolbar=adw::ToolbarView::new();let header=adw::HeaderBar::new();let title=adw::WindowTitle::new(if own{crate::i18n::tr("Editar perfil")}else{crate::i18n::tr("Perfil")},"");header.set_title_widget(Some(&title));
                 let actions=gtk::Box::new(gtk::Orientation::Horizontal,12);
                 if embedded{actions.add_css_class("papo-profile-actions");toolbar.add_bottom_bar(&actions);}else{toolbar.add_top_bar(&header);}
-                let save=own.then(||{let save=gtk::Button::with_label("Salvar perfil");save.add_css_class("suggested-action");save.set_valign(gtk::Align::Center);save.set_sensitive(false);let output=sender.input_sender().clone();save.connect_clicked(move |_|{let _=output.send(MainWindowMsg::Account(AccountMsg::SaveProfile(token)));});if embedded{actions.append(&save);}else{header.pack_end(&save);}save});
+                let save=own.then(||{let save=gtk::Button::with_label(crate::i18n::tr("Salvar perfil"));save.add_css_class("suggested-action");save.set_valign(gtk::Align::Center);save.set_sensitive(false);let output=sender.input_sender().clone();save.connect_clicked(move |_|{let _=output.send(MainWindowMsg::Account(AccountMsg::SaveProfile(token)));});if embedded{actions.append(&save);}else{header.pack_end(&save);}save});
                 let body=gtk::Box::new(gtk::Orientation::Vertical,0);toolbar.set_content(Some(&body));if let Some((_,page))=mount{page.append(&toolbar);}else{w.downcast_ref::<adw::Window>().unwrap().set_content(Some(&toolbar));}
                 let scroll = gtk::ScrolledWindow::new();
                 scroll.set_vexpand(own);scroll.set_hscrollbar_policy(gtk::PolicyType::Never);
@@ -293,7 +299,7 @@ impl MainWindowModel {
                 content.set_margin_top(if embedded{18}else{24});content.set_margin_bottom(if own{24}else{16});content.set_margin_start(if embedded{32}else{18});content.set_margin_end(if embedded{32}else{18});
                 let clamp=adw::Clamp::new();clamp.set_maximum_size(if embedded{768}else{560});clamp.set_tightening_threshold(if embedded{640}else{440});clamp.set_child(Some(&content));scroll.set_child(Some(&clamp));
                 body.append(&scroll);
-                let error = gtk::Label::new(Some("Carregando perfil…"));
+                let error = gtk::Label::new(Some(crate::i18n::tr("Carregando perfil…")));
                 error.set_wrap(true);
                 error.connect_notify_local(Some("label"),|label,_|label.set_visible(!label.text().is_empty()));
                 if embedded{error.set_xalign(0.0);let status=gtk::Box::new(gtk::Orientation::Vertical,0);status.set_hexpand(true);status.set_valign(gtk::Align::Center);status.append(&error);actions.prepend(&status);}else{body.append(&error);}
@@ -304,12 +310,12 @@ impl MainWindowModel {
                     text:vec![],
                     token, id, window: w, body: content, error, save, fields: None, pending: false, image_write: false,loading:true,refresh_again:false,refresh_scheduled:false
                 });
-                let api = self.api_client.clone();
+                let api = self.connection.api.clone();
                 let s = sender.clone();
                 self.account.jobs.push(tokio::spawn(async move {
                     let result = async {
                         let p = api.get_user_profile(id).await?;
-                        anyhow::ensure!(p.id==id, "Perfil retornado para outro usuário");
+                        anyhow::ensure!(p.id==id, crate::i18n::fmt("Perfil retornado para outro usuário", &[]));
                         let banner = if let Some(sha) = &p.banner_media {
                             api.media_bytes(&format!("/media/{sha}"), 2<<20).await.ok()
                         }
@@ -337,7 +343,7 @@ impl MainWindowModel {
                 v.loading=false;if std::mem::take(&mut v.refresh_again){sender.input(MainWindowMsg::Account(AccountMsg::RefreshProfile(v.id)));}
                 match result {
                     Err(e) => {
-                        v.error.set_text(&format!("Perfil indisponível: {e}"));
+                        v.error.set_text(&crate::i18n::fmt("Perfil indisponível: {e}", &[("e", format!("{}", e))]));
                         sender.input(MainWindowMsg::ActionError(e));
                     }, Ok((p, banner, image)) => {
                         v.error.set_text("");
@@ -365,31 +371,31 @@ impl MainWindowModel {
                             if badges.first_child().is_some(){v.body.append(&badges);}
                         }
                         if v.embedded {
-                            let appearance=adw::PreferencesGroup::new();appearance.set_title("Imagem do perfil");v.body.append(&appearance);
+                            let appearance=adw::PreferencesGroup::new();appearance.set_title(crate::i18n::tr("Imagem do perfil"));v.body.append(&appearance);
                             for (title,banner) in [("Avatar",false),("Banner",true)]{
-                                let row=adw::ActionRow::builder().title(title).subtitle(if banner{"Imagem no topo do seu perfil"}else{"Sua imagem nas mensagens e na lista de membros"}).build();
+                                let row=adw::ActionRow::builder().title(title).subtitle(if banner{crate::i18n::tr("Imagem no topo do seu perfil")}else{crate::i18n::tr("Sua imagem nas mensagens e na lista de membros")}).build();
                                 let buttons=gtk::Box::new(gtk::Orientation::Horizontal,0);buttons.add_css_class("linked");buttons.set_valign(gtk::Align::Center);
-                                for (label,remove) in [(if banner{"Alterar banner"}else{"Alterar avatar"},false),(if banner{"Remover banner"}else{"Remover avatar"},true)]{
-                                    let b=gtk::Button::with_label(if remove{"Remover"}else{"Alterar…"});b.set_tooltip_text(Some(label));b.update_property(&[gtk::accessible::Property::Label(label)]);let output=sender.input_sender().clone();b.connect_clicked(move |_|{let _=output.send(MainWindowMsg::Account(AccountMsg::Image{token,banner,remove}));});buttons.append(&b);
+                                for (label,remove) in [(if banner{crate::i18n::tr("Alterar banner")}else{crate::i18n::tr("Alterar avatar")},false),(if banner{crate::i18n::tr("Remover banner")}else{crate::i18n::tr("Remover avatar")},true)]{
+                                    let b=gtk::Button::with_label(if remove{crate::i18n::tr("Remover")}else{crate::i18n::tr("Alterar…")});b.set_tooltip_text(Some(label));b.update_property(&[gtk::accessible::Property::Label(label)]);let output=sender.input_sender().clone();b.connect_clicked(move |_|{let _=output.send(MainWindowMsg::Account(AccountMsg::Image{token,banner,remove}));});buttons.append(&b);
                                 }row.add_suffix(&buttons);appearance.add(&row);
                             }
-                            let identity=adw::PreferencesGroup::new();identity.set_title("Sobre você");v.body.append(&identity);
-                            let nickname=profile_entry(&identity,"Apelido",p.nickname.as_deref().unwrap_or(""),"Até 32 caracteres");
-                            let status=profile_entry(&identity,"Mensagem de status",p.status_message.as_deref().unwrap_or(""),"Até 64 caracteres");
-                            let about=adw::PreferencesGroup::new();about.set_title("Descrição");about.set_description(Some("Conte um pouco sobre você · até 512 caracteres"));v.body.append(&about);
+                            let identity=adw::PreferencesGroup::new();identity.set_title(crate::i18n::tr("Sobre você"));v.body.append(&identity);
+                            let nickname=profile_entry(&identity,crate::i18n::tr("Apelido"),p.nickname.as_deref().unwrap_or(""),crate::i18n::tr("Até 32 caracteres"));
+                            let status=profile_entry(&identity,crate::i18n::tr("Mensagem de status"),p.status_message.as_deref().unwrap_or(""),crate::i18n::tr("Até 64 caracteres"));
+                            let about=adw::PreferencesGroup::new();about.set_title(crate::i18n::tr("Descrição"));about.set_description(Some(crate::i18n::tr("Conte um pouco sobre você · até 512 caracteres")));v.body.append(&about);
                             let text=gtk::TextView::new();text.set_wrap_mode(gtk::WrapMode::WordChar);text.set_top_margin(12);text.set_bottom_margin(12);text.set_left_margin(12);text.set_right_margin(12);
                             let description=text.buffer();description.set_text(p.description.as_deref().unwrap_or(""));
                             let editor=gtk::ScrolledWindow::builder().min_content_height(110).hscrollbar_policy(gtk::PolicyType::Never).child(&text).build();let frame=gtk::Frame::new(None);frame.add_css_class("papo-profile-description");frame.set_overflow(gtk::Overflow::Hidden);frame.set_child(Some(&editor));about.add(&frame);
                             let preview=gtk::Box::new(gtk::Orientation::Vertical,6);preview.set_margin_top(8);preview.set_margin_bottom(8);preview.set_margin_start(12);preview.set_margin_end(12);
-                            let caption=gtk::Label::new(Some("Prévia"));caption.add_css_class("caption");caption.add_css_class("dim-label");caption.set_xalign(0.0);preview.append(&caption);
+                            let caption=gtk::Label::new(Some(crate::i18n::tr("Prévia")));caption.add_css_class("caption");caption.add_css_class("dim-label");caption.set_xalign(0.0);preview.append(&caption);
                             let content=gtk::Box::new(gtk::Orientation::Vertical,0);preview.append(&content);about.add(&preview);
                             v.text.push(ProfileText{container:content,value:p.description.as_deref().unwrap_or("").into(),preview:true});
                             let input=sender.input_sender().clone();description.connect_changed(move |_|{let _=input.send(MainWindowMsg::Account(AccountMsg::DescriptionChanged(token)));});
-                            let presence=adw::PreferencesGroup::new();presence.set_title("Presença");v.body.append(&presence);
-                            let typing=profile_entry(&presence,"Texto ao digitar",p.typing.as_deref().unwrap_or(""),"Até 64 caracteres");
+                            let presence=adw::PreferencesGroup::new();presence.set_title(crate::i18n::tr("Presença"));v.body.append(&presence);
+                            let typing=profile_entry(&presence,crate::i18n::tr("Texto ao digitar"),p.typing.as_deref().unwrap_or(""),crate::i18n::tr("Até 64 caracteres"));
                             // A status-only write can finish while this profile read is in flight.
-                            let manual=gtk::DropDown::from_strings(&["Automática","Ausente","Ocupado"]);manual.set_selected(match self.current_user.status{Some(UserStatus::Away)=>1,Some(UserStatus::Busy)=>2,_=>0});manual.set_valign(gtk::Align::Center);
-                            let row=adw::ActionRow::builder().title("Disponibilidade").subtitle("A presença automática acompanha sua atividade").build();row.add_suffix(&manual);row.set_activatable_widget(Some(&manual));presence.add(&row);
+                            let manual=gtk::DropDown::from_strings(&[crate::i18n::tr("Automática"),crate::i18n::tr("Ausente"),crate::i18n::tr("Ocupado")]);manual.set_selected(match self.current_user.status{Some(UserStatus::Away)=>1,Some(UserStatus::Busy)=>2,_=>0});manual.set_valign(gtk::Align::Center);
+                            let row=adw::ActionRow::builder().title(crate::i18n::tr("Disponibilidade")).subtitle(crate::i18n::tr("A presença automática acompanha sua atividade")).build();row.add_suffix(&manual);row.set_activatable_widget(Some(&manual));presence.add(&row);
                             v.fields = Some(ProfileFields {
                                 nickname, status, description, typing, manual
                             });
@@ -399,7 +405,7 @@ impl MainWindowModel {
 
                         }
                         else {
-                            for (label,action) in [("Mensagem direta",0),("Bloquear usuário",1)].into_iter().filter(|_|p.id!=self.current_user.id) {
+                            for (label,action) in [(crate::i18n::tr("Mensagem direta"),0),(crate::i18n::tr("Bloquear usuário"),1)].into_iter().filter(|_|p.id!=self.current_user.id) {
                                 let b=gtk::Button::with_label(label);let s=sender.clone();let id=p.id;
                                 b.connect_clicked(move |_|s.input(MainWindowMsg::Direct(if action==0{super::direct::DirectMsg::Open(id)}else{super::direct::DirectMsg::Block(id,true)})));v.body.append(&b);
                             }
@@ -435,9 +441,9 @@ impl MainWindowModel {
                 self.account.mutation = Some(token);
                 self.user_list.emit(UserListMsg::StatusPending(true));
                 v.body.set_sensitive(false);if let Some(save)=&v.save{save.set_sensitive(false);}
-                v.error.set_text("Salvando…");
+                v.error.set_text(crate::i18n::tr("Salvando…"));
                 let id = v.id;
-                let api = self.api_client.clone();
+                let api = self.connection.api.clone();
                 let s = sender.clone();
                 self.account.jobs.push(tokio::spawn(async move {
                     let result = async {
@@ -467,11 +473,11 @@ impl MainWindowModel {
                     let parent = v.window.clone();
                     let s = sender.clone();
                     gtk::glib::spawn_future_local(async move {
-                        if let Ok(file) = gtk::FileDialog::builder().title("Escolher imagem (até 2 MiB)").build().open_future(Some(&parent)).await {
+                        if let Ok(file) = gtk::FileDialog::builder().title(crate::i18n::tr("Escolher imagem (até 2 MiB)")).build().open_future(Some(&parent)).await {
                             if let Some(path) = file.path() {
                                 tokio::spawn(async move {
                                     let result = async {
-                                        anyhow::ensure!(tokio::fs::metadata(&path).await?.len()<=2<<20, "Use uma imagem de até 2 MiB");
+                                        anyhow::ensure!(tokio::fs::metadata(&path).await?.len()<=2<<20, crate::i18n::fmt("Use uma imagem de até 2 MiB", &[]));
                                         let bytes = tokio::fs::read(path).await?;
                                         crate::api::features::validate_profile_image(&bytes, banner)?;
                                         Ok(bytes)
@@ -501,9 +507,9 @@ impl MainWindowModel {
                         self.account.mutation = Some(token);
                         self.user_list.emit(UserListMsg::StatusPending(true));
                         v.body.set_sensitive(false);if let Some(save)=&v.save{save.set_sensitive(false);}
-                        v.error.set_text("Salvando imagem…");
+                        v.error.set_text(crate::i18n::tr("Salvando imagem…"));
                         let id = v.id;
-                        let api = self.api_client.clone();
+                        let api = self.connection.api.clone();
                         let s = sender.clone();
                         self.account.jobs.push(tokio::spawn(async move {
                             let result = api.update_image(id, banner, &bytes).await;
@@ -531,16 +537,16 @@ impl MainWindowModel {
                 v.body.set_sensitive(true);if let Some(save)=&v.save{save.set_sensitive(true);}
                 match result {
                     Err(e) => {
-                        v.error.set_text(&format!("Falha ao salvar: {e}"));self.account.close_after_save=false;
+                        v.error.set_text(&crate::i18n::fmt("Falha ao salvar: {e}",&[("e",e.to_string())]));self.account.close_after_save=false;
                         sender.input(MainWindowMsg::ActionError(e));
                     }, Ok(()) => {
-                        v.error.set_text("Salvo.");
+                        v.error.set_text(crate::i18n::tr("Salvo."));
                         let id=v.id;let generation=Uuid::new_v4();v.reconcile=Some(generation);
                         let draft=v.fields.as_ref().map(profile_values).unwrap_or_default();
                         if !v.image_write{v.baseline=draft.clone();}
-                        let images=v.image_write;let api=self.api_client.clone();let output=sender.clone();
+                        let images=v.image_write;let api=self.connection.api.clone();let output=sender.clone();
                         self.account.jobs.push(tokio::spawn(async move{
-                            let result=async{let p=api.get_user_profile(id).await?;anyhow::ensure!(p.id==id,"Perfil retornado para outro usuário");
+                            let result=async{let p=api.get_user_profile(id).await?;anyhow::ensure!(p.id==id,crate::i18n::fmt("Perfil retornado para outro usuário", &[]));
                                 let banner=if images{if let Some(sha)=&p.banner_media{Some(api.media_bytes(&format!("/media/{sha}"),2<<20).await?)}else{None}}else{None};
                                 let image=if images{crate::media::avatars::prepare_blob(p.avatar_blob.clone(),192).await}else{None};Ok((p,banner,image))}.await;
                             output.input(MainWindowMsg::Account(AccountMsg::ProfileAccepted{token,generation,draft,result}));
@@ -559,7 +565,7 @@ impl MainWindowModel {
                     Ok(mut user) => {
                         // Settings writes have their own accepted snapshot; an overlapping profile read cannot undo them.
                         user.settings = Some(WhoamiSettings {
-                            version: 1, config: self.account.config.clone()
+                            version: 1, config: self.connection.config.clone()
                         });
                         if self.current_user.avatar_blob!=user.avatar_blob{self.load_avatar_blob(user.id,user.avatar_blob.clone(),sender.clone());}
                         self.members.invalidate(user.id);
@@ -578,31 +584,43 @@ impl MainWindowModel {
                     if v.embedded{self.clear_settings_tab(settings::Tab::Preferences,&v.window);}else{v.window.close();}
                 }
                 let token = Uuid::new_v4();
-                let (w, body) = if embedded{self.settings_form(settings::Tab::Preferences).unwrap()}else{window(root, "Preferências")};
-                let c = self.account.config.complete();
+                let (w, body) = if embedded{self.settings_form(settings::Tab::Preferences).unwrap()}else{window(root, crate::i18n::tr("Preferências"))};
+                let c = self.connection.config.complete();
                 let d = c.display.as_ref().unwrap();
                 let n = c.notifications.as_ref().unwrap();
                 body.add_css_class("papo-preferences");body.set_spacing(16);body.set_margin_top(20);body.set_margin_bottom(20);
-                let appearance=preferences::group(&body,"Aparência");
-                let theme = preferences::choice(&appearance, "Tema", &["Sistema", "Claro", "Escuro"], match c.theme {
+                let appearance=preferences::group(&body,crate::i18n::tr("Aparência"));
+                let theme = preferences::choice(&appearance, crate::i18n::tr("Tema"), &[crate::i18n::tr("Sistema"), crate::i18n::tr("Claro"), crate::i18n::tr("Escuro")], match c.theme {
                     Some(Theme::Light) => 1, Some(Theme::Dark) => 2, _ => 0
                 });
-                let font = preferences::choice(&appearance, "Tamanho do texto", &["Pequeno", "Médio", "Grande"], match d.font_size {
+                let font = preferences::choice(&appearance, crate::i18n::tr("Tamanho do texto"), &[crate::i18n::tr("Pequeno"), crate::i18n::tr("Médio"), crate::i18n::tr("Grande")], match d.font_size {
                     Some(FontSize::Small) => 0, Some(FontSize::Huge) => 2, _ => 1
                 });
-                let density = preferences::choice(&appearance, "Espaçamento", &["Compacto", "Normal", "Confortável"], match d.message_density {
+                let density = preferences::choice(&appearance, crate::i18n::tr("Espaçamento"), &[crate::i18n::tr("Compacto"), "Normal", crate::i18n::tr("Confortável")], match d.message_density {
                     Some(MessageDensity::Compact) => 0, Some(MessageDensity::Comfortable) => 2, _ => 1
                 });
-                let motion=preferences::choice(&appearance,"Animações de GIFs e emojis (neste dispositivo)",&["Seguir o sistema","Sempre animar","Reduzir movimento"],crate::media::animation::motion().index());
-                let display=preferences::group(&body,"Exibição");
-                let notifications=preferences::group(&body,"Notificações");
+                let motion=preferences::choice(&appearance,crate::i18n::tr("Animações de GIFs e emojis (neste dispositivo)"),&[crate::i18n::tr("Seguir o sistema"),crate::i18n::tr("Sempre animar"),crate::i18n::tr("Reduzir movimento")],crate::media::animation::motion().index());
+                let language=preferences::choice(&appearance,crate::i18n::tr("Idioma (neste dispositivo)"),&[crate::i18n::tr("Seguir o sistema"),"Português (Brasil)","English (United States)"],crate::config::AppConfig::load().language.index());
+                language.set_subtitle(crate::i18n::tr("Idioma aplicado ao reiniciar o aplicativo."));
+                let storage=preferences::group(&body,crate::i18n::tr("Mídia e armazenamento (neste dispositivo)"));storage.set_description(Some(crate::i18n::tr("Uso contabilizado de prévias e arquivos em cache. Não é o uso total de RAM.")));let media_settings=crate::media::policy::Preferences::device();
+                let media_loading=preferences::choice(&storage,crate::i18n::tr("Carregamento de imagens e GIFs"),&[crate::i18n::tr("Automático"),crate::i18n::tr("Ao clicar")],media_settings.loading.index());
+                let low_memory=adw::SwitchRow::new();low_memory.set_title(crate::i18n::tr("Reduzir uso de memória"));low_memory.set_subtitle(crate::i18n::tr("Retém menos prévias e quadros de animação. A preferência de movimento é independente."));low_memory.set_active(media_settings.low_memory);storage.add(&low_memory);
+                let media_usage=adw::ActionRow::new();media_usage.set_title(crate::i18n::tr("Cache de mídia do chat"));media_usage.set_subtitle(crate::i18n::tr("Calculando…"));media_usage.set_subtitle_lines(0);storage.add(&media_usage);
+                let refresh=gtk::Button::from_icon_name("papo-view-refresh-symbolic");refresh.add_css_class("flat");refresh.set_valign(gtk::Align::Center);refresh.set_tooltip_text(Some(crate::i18n::tr("Atualizar uso do cache")));let chat=self.chat.sender().clone();refresh.connect_clicked(move |_|{let _=chat.send(ChatMsg::QueryMediaUsage(token));});media_usage.add_suffix(&refresh);
+                let clear=gtk::Button::with_label(crate::i18n::tr("Limpar cache de mídia"));clear.set_valign(gtk::Align::Center);clear.set_tooltip_text(Some(crate::i18n::tr("Mantém mídias abertas. Clique nas prévias para carregá-las novamente.")));let chat=self.chat.sender().clone();clear.connect_clicked(move |_|{let _=chat.send(ChatMsg::ClearMediaCache(token));});media_usage.add_suffix(&clear);
+                let display=preferences::group(&body,crate::i18n::tr("Exibição"));
+                let notifications=preferences::group(&body,crate::i18n::tr("Notificações"));
                 let mut toggles = Vec::new();
-                for (index,(label, value)) in [("Mostrar horários", d.show_timestamps), ("Mostrar avatares", d.show_avatars), ("Ativar notificações", n.enabled), ("Prévia nas notificações", n.message_preview), ("Som das notificações", n.sound), ("Notificar menções", n.mentions)].into_iter().enumerate() {
+                for (index,(label, value)) in [(crate::i18n::tr("Mostrar horários"), d.show_timestamps), (crate::i18n::tr("Mostrar avatares"), d.show_avatars), (crate::i18n::tr("Ativar notificações"), n.enabled), (crate::i18n::tr("Prévia nas notificações"), n.message_preview), (crate::i18n::tr("Som das notificações"), n.sound), (crate::i18n::tr("Notificar menções"), n.mentions)].into_iter().enumerate() {
                     let row=adw::SwitchRow::new();row.set_title(label);row.set_title_lines(0);row.set_active(value.unwrap_or(true));
+                    if index==4{row.set_subtitle(crate::i18n::tr("Padrão do servidor. Os sons locais podem ser configurados separadamente abaixo."));}
                     if index<2{display.add(&row);}else{notifications.add(&row);}
                     toggles.push(row);
                 }
-                let save = gtk::Button::with_label("Salvar preferências");
+                let controls=adw::ActionRow::new();controls.set_title(crate::i18n::tr("Sons e pausas de notificações"));let open=gtk::Button::with_label(crate::i18n::tr("Configurar"));open.set_valign(gtk::Align::Center);let s=sender.clone();open.connect_clicked(move |_|s.input(MainWindowMsg::Notification(NoticeMsg::Controls(None))));controls.add_suffix(&open);controls.set_activatable_widget(Some(&open));notifications.add(&controls);
+                let app=preferences::group(&body,crate::i18n::tr("Aplicativo"));
+                for (label,kind) in [(crate::i18n::tr("Atalhos de teclado"),false),(crate::i18n::tr("Sobre e atualizações"),true)]{let row=adw::ActionRow::new();row.set_title(label);let button=gtk::Button::with_label(crate::i18n::tr("Abrir"));button.set_valign(gtk::Align::Center);button.update_property(&[gtk::accessible::Property::Label(label)]);let s=sender.clone();button.connect_clicked(move |_|s.input(MainWindowMsg::Utility(if kind{utilities::UtilityMsg::Updates}else{utilities::UtilityMsg::Shortcuts})));row.add_suffix(&button);row.set_activatable_widget(Some(&button));app.add(&row);}
+                let save = gtk::Button::with_label(crate::i18n::tr("Salvar preferências"));
                 save.add_css_class("suggested-action");save.set_halign(gtk::Align::End);save.set_margin_top(4);
                 let s = sender.clone();
                 save.connect_clicked(move |_|s.input(MainWindowMsg::Account(AccountMsg::SavePreferences(token))));
@@ -618,10 +636,10 @@ impl MainWindowModel {
                 body.append(&error);
                 w.present();
                 self.account.preferences = Some(PreferencesView {
-                    baseline:vec![],save:save.clone(),embedded,
-                    token, window: w, body, error, motion, theme, font, density, toggles, pending: false
+                    baseline:vec![],save:save.clone(),media_loading,low_memory,media_usage,embedded,
+                    token, window: w, body, error, initial_language:crate::config::AppConfig::load().language, language, motion, theme, font, density, toggles, pending: false
                 });
-                let v=self.account.preferences.as_mut().unwrap();v.baseline=preferences_values(v);watch_preferences(v,sender);self.settings_dirty();
+                let v=self.account.preferences.as_mut().unwrap();v.baseline=preferences_values(v);watch_preferences(v,sender);self.settings_dirty();self.chat.emit(ChatMsg::QueryMediaUsage(token));
             }
             AccountMsg::SavePreferences(token) => {
                 if self.account.settings_pending {
@@ -630,7 +648,7 @@ impl MainWindowModel {
                 let Some(v) = self.account.preferences.as_mut().filter(|v|v.token==token&&!v.pending&&v.window.is_visible())else {
                     return;
                 };
-                let mut config = self.account.config.complete();
+                let mut config = self.connection.config.complete();
                 config.theme = Some(match v.theme.selected() {
                     1 => Theme::Light, 2 => Theme::Dark, _ => Theme::System
                 });
@@ -651,13 +669,16 @@ impl MainWindowModel {
                 v.pending = true;
                 self.account.settings_pending = true;
                 v.body.set_sensitive(false);
-                v.error.set_text("Salvando…");
+                v.error.set_text(crate::i18n::tr("Salvando…"));
                 let motion=crate::config::Motion::from_index(v.motion.selected());
-                let api = self.api_client.clone();
+                let language=crate::i18n::Language::from_index(v.language.selected());
+                let media=crate::media::policy::Preferences{loading:crate::media::policy::Loading::from_index(v.media_loading.selected()),low_memory:v.low_memory.is_active()};
+                let api = self.connection.api.clone();
                 let s = sender.clone();
                 self.account.jobs.push(tokio::spawn(async move {
                     let result=async{
-                        tokio::task::spawn_blocking(move ||{let mut local=crate::config::AppConfig::load();local.motion=motion;local.save()}).await??;
+                        tokio::task::spawn_blocking(move ||{crate::config::AppConfig::update(|local|{local.motion=motion;local.language=language;local.media=media;})}).await??;
+                        s.input(MainWindowMsg::MediaPreferences(media));
                         api.save_settings(&config).await
                     }.await;
                     s.input(MainWindowMsg::Account(AccountMsg::PreferencesSaved {
@@ -676,21 +697,21 @@ impl MainWindowModel {
                             return;
                         }
                         crate::media::animation::set_motion(motion);
-                        self.account.config = settings.config.complete();
+                        self.connection.config = settings.config.complete();
                         self.current_user.settings = Some(WhoamiSettings {
-                            version: settings.version, config: self.account.config.clone()
+                            version: settings.version, config: self.connection.config.clone()
                         });
                         self.apply_config(root);
                         if let Some(v) = self.account.preferences.as_mut().filter(|v|v.token==token) {
                             v.pending = false;
                             v.body.set_sensitive(true);
-                            v.error.set_text("Preferências salvas.");v.baseline=preferences_values(v);
+                            v.error.set_text(crate::i18n::tr(if crate::config::AppConfig::load().language!=v.initial_language{"Preferências salvas. Reinicie o aplicativo para aplicar o idioma."}else{"Preferências salvas."}));v.baseline=preferences_values(v);
                         }
                     }, Err(e) => {
                         if let Some(v) = self.account.preferences.as_mut().filter(|v|v.token==token) {
                             v.pending = false;
                             v.body.set_sensitive(true);
-                            v.error.set_text(&format!("Falha ao salvar: {e}"));self.account.close_after_save=false;
+                            v.error.set_text(&crate::i18n::fmt("Falha ao salvar: {e}",&[("e",e.to_string())]));self.account.close_after_save=false;
                         }
                         sender.input(MainWindowMsg::ActionError(e));
                     }
@@ -703,17 +724,17 @@ impl MainWindowModel {
                 if let Some(v)=self.account.channel.take(){v.window.close();}
                 let token=Uuid::new_v4();
                 let selected=channels.iter().position(|c|Some(c.id)==self.active_channel_id).unwrap_or(0);
-                let (w,body)=window(root,"Notificações dos canais");
-                let names:Vec<_>=channels.iter().map(|c|format!("{}{}",if c.channel_type==Some(ChannelType::Voice){"Voz · "}else{"#"},c.name)).collect();
-                let selector=dropdown(&body,"Canal",&names.iter().map(String::as_str).collect::<Vec<_>>(),selected as u32);
+                let (w,body)=window(root,crate::i18n::tr("Notificações dos canais"));
+                let names:Vec<_>=channels.iter().map(|c|format!("{}{}",if c.channel_type==Some(ChannelType::Voice){crate::i18n::tr("Voz · ")}else{"#"},c.name)).collect();
+                let selector=dropdown(&body,crate::i18n::tr("Canal"),&names.iter().map(String::as_str).collect::<Vec<_>>(),selected as u32);
                 selector.set_widget_name("notification-channel");
                 selector.set_enable_search(true);
-                let mode=dropdown(&body,"Notificar",&["Nunca","Somente menções","Todas as mensagens"],notification_index(channels[selected].notification_settings.as_ref()));
+                let mode=dropdown(&body,crate::i18n::tr("Notificar"),&[crate::i18n::tr("Nunca"),crate::i18n::tr("Somente menções"),crate::i18n::tr("Todas as mensagens")],notification_index(channels[selected].notification_settings.as_ref()));
                 mode.set_widget_name("channel-notification-mode");
                 let ids:Vec<_>=channels.iter().map(|c|c.id).collect();
                 let input=sender.input_sender().clone();
                 selector.connect_selected_notify(move |_|{let _=input.send(MainWindowMsg::Account(AccountMsg::SelectNotificationChannel(token)));});
-                let save=gtk::Button::with_label("Salvar notificações do canal");
+                let save=gtk::Button::with_label(crate::i18n::tr("Salvar notificações do canal"));
                 let s=sender.clone();let choice=selector.clone();let values=mode.clone();let choices=ids.clone();
                 save.connect_clicked(move |_|{
                     if let Some(channel)=choices.get(choice.selected() as usize){
@@ -747,9 +768,9 @@ impl MainWindowModel {
                 // PT-BR: Compartilha gravações confirmadas entre o seletor e o menu; evita requisições duplicadas por canal.
                 self.account.channel_pending.insert(channel);
                 if let Some(v)=self.account.channel.as_ref().filter(|v|v.selected()==Some(channel)){
-                    v.body.set_sensitive(false);v.error.set_text("Salvando…");
+                    v.body.set_sensitive(false);v.error.set_text(crate::i18n::tr("Salvando…"));
                 }
-                let api=self.api_client.clone();let user=self.current_user.id;let s=sender.clone();
+                let api=self.connection.api.clone();let user=self.current_user.id;let s=sender.clone();
                 self.account.jobs.push(tokio::spawn(async move{
                     let result=api.channel_notifications(channel,user,value.clone()).await;
                     s.input(MainWindowMsg::Account(AccountMsg::ChannelSaved{channel,value,result}));
@@ -768,12 +789,12 @@ impl MainWindowModel {
                             if self.active_channel_id==Some(channel){self.chat.emit(ChatMsg::UpdateChannel(c.clone()));}
                         }
                         if let Some(c)=self.managed_channels.iter_mut().find(|c|c.id==channel){c.notification_settings=Some(value.clone());}
-                        if let Some(v)=view{v.body.set_sensitive(true);v.mode.set_selected(notification_index(Some(&value)));v.error.set_text("Salvo.");}
+                        if let Some(v)=view{v.body.set_sensitive(true);v.mode.set_selected(notification_index(Some(&value)));v.error.set_text(crate::i18n::tr("Salvo."));}
                         self.publish_voice_channels();
                     }
                     Err(e)=>{
                         if let Some(v)=view{v.body.set_sensitive(true);v.error.set_text(&e.to_string());}
-                        else{self.chat.emit(ChatMsg::OperationError(format!("Falha ao salvar notificações do canal: {e}")));}
+                        else{self.chat.emit(ChatMsg::OperationError(crate::i18n::fmt("Falha ao salvar notificações do canal: {e}", &[("e", format!("{}", e))])));}
                         sender.input(MainWindowMsg::ActionError(e));
                     }
                 }
@@ -799,7 +820,7 @@ pub(crate) fn exercise_presence_selector(context:&gtk::glib::MainContext){
     let current_user=serde_json::from_value(backend.lock().unwrap().profile.clone()).unwrap();
     let main=MainWindowModel::builder().launch(MainWindowInit{current_user,api_client:api}).detach();
     let host=adw::Window::builder().default_width(1280).default_height(740).content(main.widget()).build();host.present();
-    until(context,||main.model().background_started&&main.model().access_request.is_none());
+    until(context,||main.model().connection.state.background_started&&main.model().access_request.is_none());
     let selector=descendants(main.model().user_list.widget().upcast_ref()).into_iter().find_map(|w|w.downcast::<gtk::MenuButton>().ok()).unwrap();
     let caption=||descendants(&selector.child().unwrap()).into_iter().find_map(|w|w.downcast::<gtk::Label>().ok()).unwrap().text().to_string();
     until(context,||selector.is_mapped()&&caption()=="Ocupado");
@@ -949,12 +970,12 @@ pub(crate) fn exercise_preferences_and_profiles(main: &Controller<MainWindowMode
     let w = main.model().account.preferences.as_ref().unwrap().window.clone();
     find_button(w.upcast_ref(), "Salvar preferências").emit_clicked();
     until(context, ||main.model().account.preferences.as_ref().is_some_and(|v|!v.pending&&v.error.text().contains("Settings failed")));
-    assert_eq!(main.model().account.config.theme, Some(Theme::System));
+    assert_eq!(main.model().connection.config.theme, Some(Theme::System));
     assert_eq!(main.model().account.preferences.as_ref().unwrap().theme.selected(), 2);
     find_button(w.upcast_ref(), "Salvar preferências").emit_clicked();
-    until(context, ||main.model().account.config.theme==Some(Theme::Dark));
-    assert!(!main.model().account.config.display.as_ref().unwrap().show_avatars.unwrap());
-    assert!(!main.model().account.config.notifications.as_ref().unwrap().sound.unwrap());
+    until(context, ||main.model().connection.config.theme==Some(Theme::Dark));
+    assert!(!main.model().connection.config.display.as_ref().unwrap().show_avatars.unwrap());
+    assert!(!main.model().connection.config.notifications.as_ref().unwrap().sound.unwrap());
     pump(context);
     assert!(descendants(main.widget().upcast_ref()).iter().filter_map(|w|w.downcast_ref::<adw::Avatar>()).all(|a|!a.is_visible()));
     w.close();
@@ -969,13 +990,26 @@ pub(crate) fn exercise_preferences_and_profiles(main: &Controller<MainWindowMode
     assert_eq!(main.model().channels[0].last_read_message, read);
     w.close();
     // Preferences returned by whoami survive a fresh application component.
-    let api = main.model().api_client.clone();
+    let api = main.model().connection.api.clone();
     let current_user = tokio::runtime::Handle::current().block_on(api.whoami()).unwrap();
     assert_eq!(current_user.id, id);
     let restored = MainWindowModel::builder().launch(MainWindowInit {
         current_user, api_client: api
     }).detach();
     pump(context);
-    assert_eq!(restored.model().account.config.theme, Some(Theme::Dark));
-    assert_eq!(restored.model().account.config.display.as_ref().unwrap().show_avatars, Some(false));
+    assert_eq!(restored.model().connection.config.theme, Some(Theme::Dark));
+    assert_eq!(restored.model().connection.config.display.as_ref().unwrap().show_avatars, Some(false));
+}
+
+#[cfg(test)]pub(crate) fn exercise_media_preferences(context:&gtk::glib::MainContext){
+    use crate::ui::chat::actions::tests::{mock,pump,until,find_button};
+    let (api,backend,server)=tokio::runtime::Handle::current().block_on(mock());let _=tokio::runtime::Handle::current().block_on(api.save_settings(&UserConfig::default()));let current_user=tokio::runtime::Handle::current().block_on(api.whoami()).unwrap();
+    let main=MainWindowModel::builder().launch(MainWindowInit{current_user,api_client:api}).detach();let window=adw::Window::builder().default_width(1100).default_height(800).content(main.widget()).build();window.present();main.emit(MainWindowMsg::StartLoading);until(context,||main.model().active_channel_id.is_some());
+    main.emit(MainWindowMsg::Account(AccountMsg::Preferences));until(context,||main.model().account.preferences.is_some());let settings=main.model().account.preferences.as_ref().unwrap().window.clone();
+    {let model=main.model();let v=model.account.preferences.as_ref().unwrap();v.media_loading.set_selected(1);v.low_memory.set_active(true);}
+    pump(context);find_button(settings.upcast_ref(),"Salvar preferências").emit_clicked();until(context,||!main.model().account.settings_pending&&crate::config::AppConfig::load().media.low_memory);
+    assert_eq!(crate::config::AppConfig::load().media.loading,crate::media::policy::Loading::OnClick);assert_eq!(crate::config::AppConfig::load().motion,crate::config::Motion::System);
+    let local=crate::config::AppConfig::load();assert!(local.media.low_memory);{let backend=backend.lock().unwrap();let writes:Vec<_>=backend.requests.iter().filter(|(method,path,_)|method=="PUT"&&path=="/users/settings").collect();assert!(writes.len()>=2);for (_,_,body) in writes{assert!(body.get("config").unwrap().get("media").is_none(),"device-only settings cannot enter the account API");}}
+    find_button(settings.upcast_ref(),"Atualizar uso do cache").emit_clicked();until(context,||main.model().account.preferences.as_ref().unwrap().media_usage.subtitle().as_deref().is_some_and(|t|t.contains("em memória")));find_button(settings.upcast_ref(),"Limpar cache de mídia").emit_clicked();pump(context);
+    settings.close();window.set_content(None::<&gtk::Widget>);window.close();drop(main);server.abort();pump(context);
 }

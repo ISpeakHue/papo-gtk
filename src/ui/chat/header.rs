@@ -2,21 +2,44 @@
 //! PT-BR: Títulos compactos dos canais com os mesmos paintables de emojis em cache das mensagens.
 use super::*;
 
-pub(super) fn render(container:&gtk::Box,target:Option<&ConversationTarget>,actions:&Actions,refresh_emojis:bool){
+#[derive(Default)]
+pub(super) struct Header {name:Option<Line>,topic:Option<Line>}
+#[derive(PartialEq)]
+struct Signature {text:String,images:Vec<(Uuid,gtk::gdk::Paintable)>}
+struct Line {signature:Signature,widget:gtk::Widget}
+
+impl Header {
+pub fn render(&mut self,container:&gtk::Box,target:Option<&ConversationTarget>,actions:&Actions){
     let name=match target{
         Some(c) if c.is_direct()=>c.name().to_owned(),
-        Some(c) if c.is_voice()=>format!("Voz · {}",c.name()),
+        Some(c) if c.is_voice()=>crate::i18n::fmt("Voz · {}", &[("0", format!("{}", c.name()))]),
         Some(c)=>format!("# {}",c.name()),
-        None=>"Selecione um canal".into(),
+        None=>crate::i18n::tr("Selecione um canal").into(),
     };
     let topic=target.and_then(|c|c.topic()).unwrap_or("");
-    let unchanged=container.first_child().is_some_and(|c|c.tooltip_text().as_deref()==Some(name.as_str()))
-        &&container.tooltip_text().as_deref().unwrap_or("")==topic;
-    if unchanged&&!refresh_emojis{return;}
-    while let Some(child)=container.first_child(){container.remove(&child);}
     container.set_tooltip_text(Some(topic));
-    container.append(&line(&name,actions,"papo-conversation-name"));
-    if !topic.is_empty(){container.append(&line(topic,actions,"papo-conversation-topic"));}
+    update_line(container,&mut self.name,Some(&name),actions,"papo-conversation-name",None);
+    let after=self.name.as_ref().map(|line|line.widget.clone());
+    update_line(container,&mut self.topic,(!topic.is_empty()).then_some(topic),actions,"papo-conversation-topic",after.as_ref());
+}
+}
+
+fn update_line(container:&gtk::Box,current:&mut Option<Line>,value:Option<&str>,actions:&Actions,class:&str,after:Option<&gtk::Widget>){
+    let Some(value)=value else{
+        if let Some(old)=current.take(){container.remove(&old.widget);}
+        return;
+    };
+    // Compare only paintables actually used by this line. Catalog pagination,
+    // stale responses and animation frames must not remap an unchanged topic.
+    let images=text::parts_index(&text::excerpt(value),&actions.emoji_names).into_iter().filter_map(|part|match part{
+        text::Part::Emoji(id,_)=>actions.emoji_paintable(id).map(|image|(id,image)),_=>None,
+    }).collect();
+    let signature=Signature{text:value.into(),images};
+    if current.as_ref().is_some_and(|line|line.signature==signature){return;}
+    let widget=line(value,actions,class);
+    container.insert_child_after(&widget,after);
+    if let Some(old)=current.take(){container.remove(&old.widget);}
+    *current=Some(Line{signature,widget});
 }
 
 fn line(value:&str,actions:&Actions,class:&str)->gtk::Widget{
@@ -98,6 +121,18 @@ fn line(value:&str,actions:&Actions,class:&str)->gtk::Widget{
     assert!(text.contains(":unknown: 🐈 <literal>"));assert!(!text.contains(":dance:"));
     let first=title.first_child().unwrap();chat.emit(ChatMsg::UpdateChannel(channel.clone()));pump(context);
     assert_eq!(title.first_child().unwrap(),first,"history metadata updates do not recreate header widgets");
+    let topic=title.last_child().unwrap();let unmaps=std::rc::Rc::new(std::cell::Cell::new(0));let seen=unmaps.clone();
+    topic.connect_unmap(move|_|seen.set(seen.get()+1));
+    let requests=||backend.lock().unwrap().requests.iter().filter(|(method,path,_)|method=="GET"&&path.starts_with("/emojis")).count();
+    for unrelated in [false,true]{
+        if unrelated{let mut backend=backend.lock().unwrap();let blob=backend.emojis[0]["image_blob"].clone();backend.emojis.push(serde_json::json!({"id":Uuid::new_v4(),"name":"unrelated","format":"PNG","image_blob":blob,"created_at":date}));}
+        let before=requests();chat.emit(ChatMsg::Action(ActionMsg::ReloadEmojis));
+        until(context,||requests()>before&&chat.model().actions.emojis_request.is_none());
+        assert_eq!(title.first_child().unwrap(),first,"catalog refreshes must preserve the unchanged name");
+        assert_eq!(title.last_child().unwrap(),topic,"unchanged and unrelated emoji responses must preserve the topic");
+        assert_eq!(unmaps.get(),0,"catalog updates cannot unmap a painted topic");
+        assert_eq!(pixels(&lines[1]),emoji,"animated inline paintables keep their identity and playback");
+    }
     crate::ui::main_window::layout::tests::preview(&window,"channel-header-emojis-wide",context);
     for width in [900,360]{
         actions::tests::resize_window(&window,width,600);super::performance::settle(context);
@@ -107,6 +142,25 @@ fn line(value:&str,actions:&Actions,class:&str)->gtk::Widget{
         for line in &lines{assert_eq!(line.wrap_mode(),gtk::WrapMode::None);let(_,height)=line.line_yrange(&line.buffer().start_iter());assert!(height<=line.height(),"the inline image and text need {height}px but were allocated {}px",line.height());}
     }
     crate::ui::main_window::layout::tests::preview(&window,"channel-header-emojis",context);
+    // Switch away and return at an unread boundary, then complete history and
+    // emoji refreshes while the new header is already visible.
+    let messages:Vec<Message>=(0..20).map(|i|serde_json::from_value(serde_json::json!({"id":Uuid::new_v4(),"channel_id":channel.id,"created_at":chrono::DateTime::from_timestamp(1700000000+i,0),"content":format!("Unread header fixture {i}")})).unwrap()).collect();
+    let history=Uuid::new_v4();chat.emit(ChatMsg::BeginHistory{request_id:history,cursor:None});
+    chat.emit(ChatMsg::HistoryLoaded{request_id:history,append:false,result:Ok(MessageListResponse{channel_id:channel.id,has_more:false,messages:messages.clone()})});pump(context);
+    chat.emit(ChatMsg::SetAccess{user_id:actions::tests::USER.parse().unwrap(),access:crate::models::Access::direct()});pump(context);
+    let mut other=channel.clone();other.id=Uuid::new_v4();other.name="Other channel".into();other.topic=None;
+    chat.emit(ChatMsg::SetChannel(other));pump(context);
+    channel.last_read_message=Some(messages[9].id);channel.last_message=Some(crate::models::channel::ChannelLastMessage{id:messages[19].id,created_at:messages[19].created_at,content:None,author_id:None,author_username:None});
+    chat.emit(ChatMsg::SetChannel(channel.clone()));super::performance::settle(context);
+    assert_eq!(chat.model().unread_start,Some(messages[10].id),"the returning chat opens at its unread boundary");
+    let current_topic=title.last_child().unwrap();let unmaps=std::rc::Rc::new(std::cell::Cell::new(0));let seen=unmaps.clone();current_topic.connect_unmap(move|_|seen.set(seen.get()+1));
+    let history=Uuid::new_v4();chat.emit(ChatMsg::BeginHistory{request_id:history,cursor:None});
+    chat.emit(ChatMsg::HistoryLoaded{request_id:history,append:false,result:Ok(MessageListResponse{channel_id:channel.id,has_more:false,messages})});
+    let before=requests();chat.emit(ChatMsg::Action(ActionMsg::ReloadEmojis));
+    until(context,||requests()>before&&chat.model().actions.emojis_request.is_none());super::performance::settle(context);
+    assert_eq!(title.last_child().unwrap(),current_topic,"unread history and emoji completions must keep the mapped description");assert_eq!(unmaps.get(),0);
+    channel.name="Renamed channel".into();chat.emit(ChatMsg::UpdateChannel(channel.clone()));pump(context);
+    assert_eq!(title.last_child().unwrap(),current_topic,"renaming the channel must not rebuild its description");
     channel.name="Another channel".into();channel.topic=None;chat.emit(ChatMsg::SetChannel(channel));pump(context);
     assert!(descendants(title.upcast_ref()).iter().all(|w|!w.is::<gtk::TextView>()),"switching channels removes previous header emojis");
     chat.emit(ChatMsg::ClearChannel);pump(context);assert_eq!(title.first_child().and_downcast::<gtk::Label>().unwrap().text(),"Selecione um canal");

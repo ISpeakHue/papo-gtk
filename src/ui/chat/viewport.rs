@@ -8,12 +8,13 @@ use std::{cell::{Cell,RefCell},rc::Rc};
 #[derive(Clone)]
 pub(super) enum Position { Bottom, Message(Uuid), Unread(Uuid), Anchor{ id:Option<Uuid>,offset:f64,value:f64 } }
 type Extent=(i32,i32,f64,f64,f64);
+struct Reflow {position:Position,stable:u8,ticket:Uuid}
 pub(super) struct Viewport {
     following:Rc<Cell<bool>>,pending:Rc<RefCell<Option<Position>>>,generation:Rc<Cell<u64>>,
     wheel:Rc<RefCell<Option<adw::TimedAnimation>>>,
     last_motion:Rc<Cell<Option<Instant>>>,idle_media:Rc<Cell<bool>>,
     opening:Rc<Cell<bool>>,opening_ready:Rc<Cell<bool>>,opening_callback:Rc<Cell<bool>>,
-    reflow:Rc<RefCell<Option<Position>>>,media_layout:Rc<Cell<bool>>,
+    reflow:Rc<RefCell<Option<Reflow>>>,media_layout:Rc<Cell<bool>>,
     cover:std::cell::OnceCell<gtk::glib::WeakRef<gtk::Widget>>,
     input_epoch:Rc<Cell<u64>>,
     reveal:Rc<RefCell<Option<(u64,Extent,bool)>>>,
@@ -98,14 +99,20 @@ impl Viewport {
             let handoff=handoff.clone();let reveal=reveal.clone();let generation=generation.clone();let opening=opening.clone();let ready=ready.clone();let active=active.clone();let following=following.clone();let cover=cover.clone();let input=input.clone();
             let id=clock.connect_local("layout",true,move |args|{
                 let(Some(scroll),Some(list))=(weak.upgrade(),rows.upgrade())else{return None;};let adj=scroll.vadjustment();
-                let correction=reflow.borrow_mut().take();
-                if let Some(Position::Anchor{id:Some(id),offset,value})=correction{
-                    if let Some(bounds)=find_row(&list,id).and_then(|row|row.compute_bounds(&list)){
-                        let shift=f64::from(bounds.y())-offset-value;
-                        if shift.abs()>0.5{let max=(adj.upper()-adj.page_size()).max(adj.lower());
-                            if let Some(animation)=wheel.borrow().as_ref().filter(|a|a.state()==adw::AnimationState::Playing){animation.set_value_from((animation.value_from()+shift).clamp(adj.lower(),max));animation.set_value_to((animation.value_to()+shift).clamp(adj.lower(),max));}
-                            adj.set_value((adj.value()+shift).clamp(adj.lower(),max));
+                {
+                    let mut correction=reflow.borrow_mut();
+                    if let Some(reflow)=correction.as_mut(){
+                        if let Position::Anchor{id:Some(id),offset,value}=&mut reflow.position{
+                            if let Some(bounds)=find_row(&list,*id).and_then(|row|row.compute_bounds(&list)){
+                                let shift=f64::from(bounds.y())-*offset-*value;
+                                if shift.abs()>0.5{let max=(adj.upper()-adj.page_size()).max(adj.lower());
+                                    if let Some(animation)=wheel.borrow().as_ref().filter(|a|a.state()==adw::AnimationState::Playing){animation.set_value_from((animation.value_from()+shift).clamp(adj.lower(),max));animation.set_value_to((animation.value_to()+shift).clamp(adj.lower(),max));}
+                                    adj.set_value((adj.value()+shift).clamp(adj.lower(),max));
+                                    *value+=shift;reflow.stable=0;
+                                }else{reflow.stable+=1;}
+                            }
                         }
+                        if reflow.stable>=3{correction.take();}
                     }
                 }
                 if let Some(position)=pending.borrow().as_ref(){set_position(&adj,&list,position,false);}
@@ -152,12 +159,13 @@ impl Viewport {
             if opening.get()||pending.borrow().is_some()||previous!=(adj.upper(),adj.page_size()){return;}
             motion.set(Some(Instant::now()));
             let at_bottom=(adj.upper()-adj.page_size()-adj.value()).max(0.0)<=24.0;
-            if following.replace(at_bottom)!=at_bottom||adj.value()<=120.0{let _=s.input_sender().send(ChatMsg::ViewportChanged(!at_bottom));}
+            if following.replace(at_bottom)!=at_bottom||at_bottom||adj.value()<=120.0{let _=s.input_sender().send(ChatMsg::ViewportChanged(!at_bottom));}
         });
         // Layout can finish long after a send or media update (especially for
         // TextView height-for-width). Follow the actual extent, not a frame count.
         let pending=self.pending.clone();let following=self.following.clone();let weak=scroll.downgrade();
         scroll.vadjustment().connect_changed(move |adj|{
+            extent.set((adj.upper(),adj.page_size()));
             if following.get() && pending.borrow().as_ref().is_none_or(|p|matches!(p,Position::Bottom)){
                 adj.set_value((adj.upper()-adj.page_size()).max(adj.lower()));
                 if let Some(scroll)=weak.upgrade(){scroll.queue_draw();}
@@ -203,6 +211,15 @@ impl Viewport {
     }
     pub fn capture(&self,scroll:&gtk::ScrolledWindow,list:&gtk::ListBox)->Position{
         if let Some(position)=self.pending.borrow().clone(){return position;}
+        // Several completions can arrive before GTK allocates prepended rows.
+        // Reuse the last allocated anchor until its correction has been applied.
+        if let Some(reflow)=self.reflow.borrow().as_ref(){
+            let mut position=reflow.position.clone();
+            if let Position::Anchor{offset,value,..}=&mut position{
+                let current=scroll.vadjustment().value();*offset-=current-*value;*value=current;
+            }
+            return position;
+        }
         let value=scroll.vadjustment().value();let mut child=list.first_child();
         while let Some(row)=child{
             if let Some(id)=row.widget_name().strip_prefix("message-").and_then(|id|Uuid::parse_str(id).ok()){
@@ -215,7 +232,21 @@ impl Viewport {
         // its geometry shift, adding it to the current position and animation
         // endpoints so an ongoing wheel gesture keeps its remaining travel.
         if self.scrolling(){if matches!(position,Position::Anchor{id:Some(_),..}){
-            *self.reflow.borrow_mut()=Some(position);list.queue_resize();scroll.queue_draw();return;
+            let mut correction=self.reflow.borrow_mut();
+            if let Some(reflow)=correction.as_mut(){reflow.stable=0;}
+            else{
+                let ticket=Uuid::new_v4();*correction=Some(Reflow{position,stable:0,ticket});
+                let pending=self.reflow.clone();let rows=list.downgrade();let frames=Cell::new(0);
+                scroll.add_tick_callback(move|scroll,_|{
+                    let mut correction=pending.borrow_mut();
+                    if !correction.as_ref().is_some_and(|r|r.ticket==ticket){return gtk::glib::ControlFlow::Break;}
+                    frames.set(frames.get()+1);
+                    if frames.get()>16{correction.take();return gtk::glib::ControlFlow::Break;}
+                    if let Some(list)=rows.upgrade(){list.queue_allocate();}scroll.queue_allocate();
+                    gtk::glib::ControlFlow::Continue
+                });
+            }
+            list.queue_resize();scroll.queue_draw();return;
         }}
         self.reflow.borrow_mut().take();
         stop_wheel(&self.wheel);

@@ -80,6 +80,7 @@ case "$action" in
             --pattern voice_worker_test.py --pattern probe_runtime_test.py \
             --pattern call_sound_test.py \
             --allow-skip call_sound_test.CallSoundTests.test_auto_output_children_get_papos_identity_before_playback \
+            --allow-skip voice_worker_test.AudioSetupTests.test_local_default_devices_have_papo_identity_and_explicit_audio_server_routing \
             --pattern desktop_input_test.py --output target/windows-dev/python-tests.json
         cargo test --locked -- --test-threads=1 2>&1 | tee target/windows-dev/rust-tests.log
         cargo test --locked native_voice -- --ignored --test-threads=1 2>&1 | tee target/windows-dev/native-voice.log

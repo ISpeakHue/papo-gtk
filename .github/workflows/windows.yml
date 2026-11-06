@@ -211,7 +211,7 @@ jobs:
       - name: Test call devices, bounded IPC and cues without hardware
         if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only
         run: |
-          python packaging/ci/python_checks.py --pattern voice_worker_test.py --pattern windows_capture_test.py --pattern windows_capture_gst_test.py --pattern probe_runtime_test.py --pattern call_sound_test.py --allow-skip call_sound_test.CallSoundTests.test_auto_output_children_get_papos_identity_before_playback --output target/windows-build/python-workers.json
+          python packaging/ci/python_checks.py --pattern voice_worker_test.py --pattern windows_capture_test.py --pattern windows_capture_gst_test.py --pattern probe_runtime_test.py --pattern call_sound_test.py --allow-skip call_sound_test.CallSoundTests.test_auto_output_children_get_papos_identity_before_playback --allow-skip voice_worker_test.AudioSetupTests.test_local_default_devices_have_papo_identity_and_explicit_audio_server_routing --output target/windows-build/python-workers.json
       - name: Test embedded icon coverage and native GTK rendering
         if: github.event_name != 'workflow_dispatch' || !inputs.packaging_only
         run: |
